@@ -7,6 +7,58 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-02 — Sesión 3: paranormal events es 1:1, y el sistema de cuartos
+
+**Sin código.** Diseño de spawn, dificultad y cuartos, más una corrección de evaluación.
+
+### La corrección: subestimé `[gm] paranormal events`
+
+En la sesión 2 lo describí como «banco de efectos, no sistema». **Era un error, y el autor lo
+señaló.** Leído con la lente de Phasmophobia, el mod implementa los mismos conceptos con los mismos
+nombres: **Ghost Orbs** (una evidencia entera), **favourite room**, **aggro → hunt**, interferencia
+de linterna, luces parpadeando, y los **tres tipos de manifestación** que nombra la wiki (visible,
+sombra, translúcida). Sus 24 convars son el mejor borrador que tenemos de las nuestras.
+
+Lo que está roto es la implementación, no el diseño. Tres defectos verificados a mano:
+
+- **`if !IsValid(pos)` sobre un `Vector`** (líneas 852, 860, 868): siempre falso, así que
+  `CreateGhostOrbs`, `CreateShadowLurker` y `CreateCockRoachSwarm` **nunca emiten su partícula**.
+  Además las tres pisan su propio argumento con `local pos = ...` en la línea anterior.
+- **`favoriteRoom = Vector(1000, 1000, 100)`** (línea 93), hardcodeado, con el comentario del autor
+  `-- change this based on your map`. Es exactamente la carencia que resuelve el sistema de cuartos.
+- **`GetConVar("gmpa_ghost_damage")` sin `CreateConVar`**: la función de daño es inalcanzable.
+
+`HuntPlayer()` mueve al fantasma con `SetPos(pos + dir * 10)` — teleporte por tick, atravesando
+paredes. Es la razón por la que este proyecto existe.
+
+### Diseñado
+
+- **Spawn por dos vías** (§12): `phantasmagoria_autospawn N` mantiene una población de tipos
+  sorteados —la vía que le sirve a un gamemode— y **un NPC por tipo en el menú**, generados en un
+  bucle sobre la tabla, no escritos a mano.
+- **Dificultad** (§13): una convar con cinco presets. No cambia al fantasma: cambia cuánta ayuda da
+  el juego. En amateur **se queda en su cuarto**; en Nightmare/Insanity se ocultan evidencias
+  *emitidas*, sin tocar el tipo real.
+- **Sistema de cuartos** (§14): flood fill sobre navareas con techo, cortando por puertas; toolgun
+  `phantasmagoria_rooms` para corregir a mano; persistencia por mapa en JSON con IDs de `CNavArea`;
+  y puntos marcados para los ítems malditos.
+
+### Encontrado: la primitiva de «cuarto» ya está escrita y probada
+
+`IsUnderSkyPos()` de HIM (`sv_zhomeless_shelter.lua:272`) hace un trace de 12.000 u hacia arriba con
+`CONTENTS_SOLID` y decide interior/intemperie; y lo envuelve en `IsUnderSky( area )` **cacheado por
+`CNavArea`**, que es justo el granulado que hace falta. Hay dos alternativas medidas: `get_env_state`
+de Better Movement (5 traces, más robusto contra huecos en el techo, ya networkeado como
+`ply:GetBmEnvIsInside()`) y `GetNookScore` de la base (mide *encierro*, no techo).
+
+### Decidido
+
+- Si un mapa no tiene cuartos marcados, **el addon degrada, no se rompe** (§14.5): la favourite room
+  pasa a ser la navarea con mayor `GetNookScore`. El 99 % de los mapas de GMod nunca va a tener
+  mapeo, y arrancar igual no es opcional.
+
+---
+
 ## 2026-08-01 — Sesión 2: el giro a Phasmophobia, y el repo
 
 ### El cambio de rumbo

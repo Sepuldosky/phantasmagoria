@@ -421,7 +421,13 @@ con el equipamiento, porque depende de qué props terminen portados.
 
 ## 9. Qué se recicla de `[gm] paranormal events`
 
-Se queda como **banco de efectos**, no como sistema. Sus funciones son globales y se llaman directo:
+> **⚠ Esta sección subestimó al mod. Leer §11 antes que esto.** Decir «banco de efectos, no sistema»
+> fue un error de evaluación: el mod implementa los mismos conceptos que Phasmophobia, con los mismos
+> nombres —orbes, favourite room, aggro, hunt, los tres tipos de manifestación—. Lo que está roto es
+> la implementación, no el diseño. Lo de abajo sigue siendo cierto como inventario de *funciones
+> llamables*; §11 es la lectura correcta del mod.
+
+Sus funciones son globales y se llaman directo:
 
 ```lua
 CreateShadowFigure( pos )         -- manifestación tipo "shadow" (la sana; respeta el argumento)
@@ -456,3 +462,265 @@ El documento hermano proponía un fantasma «que te observa y se aleja» con des
 Ese último punto es el que más gana con el cambio: en Phasmophobia el hunt que te alcanza **te mata**,
 y una muerte en GMod es barata y aburrida. **Que te mande a la dimensión vacía en lugar de matarte**
 es más memorable, es reversible, y reutiliza la maquinaria de HIM que ya está escrita y estudiada.
+
+---
+
+## 11. `[gm] paranormal events` es 1:1 con Phasmophobia — corrección
+
+> **Corrección de §9.** En la primera pasada lo describí como «banco de efectos, no sistema». **Me
+> quedé corto y el autor tenía razón.** Leído con la lente de Phasmophobia, el mod no es un banco de
+> efectos: es **un mini-Phasmophobia entero**, con los mismos conceptos y hasta los mismos nombres.
+> Lo que está roto es la implementación, no el diseño.
+
+### 11.1 El paralelismo, concepto por concepto **[verificado]**
+
+| Concepto de Phasmophobia | En el mod | Estado del código |
+|---|---|---|
+| **Ghost Orbs** (evidencia) | `CreateGhostOrbs()` + partícula `gmpa_ghost_orb_green` | **muerto** (§11.2) |
+| **Favourite Room** | convar `gmpa_favorite_room` + var `favoriteRoom` | **hardcodeado** (§11.2) |
+| **Hunt** | `gmpa_aggro_threshold`, `CheckPlayerAggro()`, `HuntPlayer()` | primitivo, sin pathfinding |
+| **Cordura / aggro** | `aggroLevels[ply]`, sube por cercanía y por linterna apagada | vivo y usable como modelo |
+| **Interferencia electrónica** | `gmpa_flashlight_effect`, `FlashlightFlicker()`, `gmpa_flashlight_flicker_chance` | vivo |
+| **Luces parpadeando** | `gmpa_flickering_lights` | vivo |
+| **Ghost event: manifestación** | `CreateGhostApparition()` (visible), `CreateShadowFigure()` (sombra), `CreateShadowLurker()` (translúcida) | **son los tres tipos que nombra la wiki** |
+| **Interacción con puertas** | `GhostInteractWithDoor()` | vivo |
+| **Tirar / romper objetos** | `FlingNearbyPhysicsProps()`, `BreakNearbyProps()` | vivo |
+| **Acecho** | `GhostStalkingBehavior()`, `GhostPeekAroundCorner()` | vivo |
+| **Sonidos paranormales** | `PlayCreepySound()`, `gmpa_sounds` | vivo |
+| **Radio de eventos** | `gmpa_radius` = **2048 u** (≈39 m) | vivo |
+| **Frecuencia de actividad** | `gmpa_frequency`, `gmpa_delay_event_min/max` | vivo |
+
+Los tres tipos de manifestación son literalmente los de la wiki: *«the ghost can be fully visible,
+appear as a shadow, or have a dark translucent-like appearance»*.
+
+**Su tabla de convars es el mejor borrador que tenemos de la nuestra.** 24 convars con el reparto de
+responsabilidades ya pensado: un master, uno por familia de evento, y los tiempos separados en
+min/max. Eso se copia de forma, no de código.
+
+### 11.2 Por qué igual hay que reimplementarlo **[verificado leyendo el archivo]**
+
+Tres defectos concretos, todos confirmados a mano:
+
+1. **`if !IsValid(pos) then return end` sobre un `Vector`** — líneas 852, 860 y 868. `IsValid()` de
+   un Vector es **siempre false**, así que `CreateCockRoachSwarm`, `CreateShadowLurker` y
+   **`CreateGhostOrbs` nunca llegan a emitir su partícula**. Los orbes —una evidencia entera— están
+   muertos en el mod. Peor: las tres funciones **pisan su propio argumento** (`local pos = ...`) en
+   la línea de arriba, así que aunque se arreglara el `IsValid`, seguirían ignorando el punto que se
+   les pasa.
+2. **`favoriteRoom = Vector(1000, 1000, 100)`** — línea 93, hardcodeado, con el comentario del propio
+   autor: `-- Set a "favorite" room position (change this based on your map)`. La favourite room del
+   mod es un punto fijo que sólo cae bien por casualidad. **Ésta es exactamente la carencia que
+   resuelve §14.**
+3. **`GetConVar("gmpa_ghost_damage")` sin `CreateConVar`** — la convar se lee en `GhostDealDamage()`
+   y **no se crea en ningún lado**. La función es inalcanzable.
+
+Y `HuntPlayer()` mueve al fantasma con `ghost:SetPos(pos + dir * 10)`: teleporte de 10 u por tick,
+sin navmesh y atravesando paredes. **Nuestra base hace eso infinitamente mejor** — es la razón por la
+que existe este proyecto.
+
+### 11.3 Qué tomamos, entonces
+
+- **El catálogo de eventos y la forma de las convars** — como especificación, ya validada por alguien
+  que hizo el mismo ejercicio.
+- **Los assets**: las partículas (`gmpa_ghost_orb_green`, `gmpa_shadow_lurker`,
+  `gmpa_shadow_figure_clouds`), los 151 sonidos, `homm.mdl`.
+- **Las funciones sanas**, llamadas directo: `GhostInteractWithDoor()`, `FlingNearbyPhysicsProps(self)`,
+  `BreakNearbyProps(self)`, `CreateShadowFigure(pos)`.
+- **Los orbes los reimplementamos** en dos líneas, esquivando el bug:
+  `ParticleEffect("gmpa_ghost_orb_green", pos, Angle(0,0,0))`.
+
+---
+
+## 12. Spawn: convar automático y menú
+
+Dos vías, porque sirven a dos usuarios distintos.
+
+### 12.1 Automático — la vía del gamemode
+
+```
+phantasmagoria_autospawn        0     cuántos fantasmas mantener vivos (0 = apagado)
+phantasmagoria_autospawn_types  ""    lista separada por comas; vacío = sorteo entre los 30
+phantasmagoria_autospawn_delay  30    segundos entre reintentos de spawn
+```
+
+Un `timer` server-side mantiene la población en `phantasmagoria_autospawn`. Si un fantasma muere o
+se lo borra, repone al cabo de `_delay`. **El tipo se sortea y no se anuncia** — que es justamente el
+punto del juego: hay que identificarlo.
+
+Esto es lo que un gamemode quiere: pone `phantasmagoria_autospawn 1` al empezar la ronda, `0` al
+terminar, y no necesita saber nada más de nuestra API.
+
+### 12.2 Desde el menú — la vía del sandbox
+
+**Un NPC por tipo en la pestaña NPCs**, con su nombre real. La base ya resuelve el registro y la
+herencia de categoría (`terminator_Extras.RegisterNPC`, doc en `sh_terminator_registernpc.lua:42-65`):
+
+```lua
+-- se generan los 30 en un bucle, no se escriben a mano
+for key, data in pairs( PHANTASMAGORIA.Types ) do
+    local ENT = {}
+    ENT.Base        = "terminator_nextbot_phantom"
+    ENT.PrintName   = data.name                    -- "Oni", "Poltergeist", "The Twins"…
+    ENT.Category    = "Phantasmagoria"
+    ENT.SubCategory = "Fantasmas"
+    ENT.Spawnable   = true
+    ENT.PhantomType = key
+    scripted_ents.Register( ENT, "phantasmagoria_" .. key )
+    terminator_Extras.RegisterNPC( "phantasmagoria_" .. key, ENT )
+end
+```
+
+Más una entrada `phantasmagoria_random` que sortea. Y un `concommand` equivalente para el que
+prefiera la consola:
+
+```
+phantasmagoria_spawn <tipo>     spawnea en el trace del que lo ejecuta
+```
+
+> **Trampa a respetar:** `RegisterNPC` difiere el registro a un `timer.Simple(0)` para que
+> `.Category`/`.SubCategory` se hereden por el árbol de bases. Si el bucle corre después de ese
+> timer, hay que llamar `spawnmenu_reload`. Está documentado en la línea 72 del archivo.
+
+---
+
+## 13. La dificultad
+
+En Phasmophobia la dificultad no cambia al fantasma: cambia **cuánta ayuda te da el juego**. Una sola
+convar, con presets:
+
+```
+phantasmagoria_difficulty   1    0=amateur 1=intermediate 2=professional 3=nightmare 4=insanity
+```
+
+| | Amateur | Intermediate | Professional | Nightmare | Insanity |
+|---|---|---|---|---|---|
+| **Se queda en su cuarto** | **sí** | se mueve poco | libre | libre | libre |
+| Evidencias que muestra | 3 | 3 | 3 | **2** | **1** |
+| Cordura inicial | 100 % | 100 % | 100 % | 100 % | 75 % |
+| Velocidad de pérdida | ×1,0 | ×1,0 | ×1,2 | ×1,5 | ×2,0 |
+| Tiempo de gracia (setup) | 5 min | 2 min | 0 | 0 | 0 |
+| Actividad del fantasma | baja | media | alta | alta | alta |
+
+**«Se queda en su cuarto» es lo que hace falta que exista §14.** En amateur el fantasma tiene una
+favourite room y no sale de ella salvo para cazar; en profesional o más, deambula por todo el mapa.
+
+Las evidencias se ocultan **quitando de la lista** que el fantasma muestra, no cambiando su tipo: un
+Oni en Insanity sigue siendo un Oni y sigue teniendo sus tres evidencias reales — pero sólo una es
+observable, y el jugador tiene que deducir el resto por comportamiento. Eso ya está soportado por la
+tabla: `evidence` es una lista de tres, y la dificultad decide cuántas se *emiten*.
+
+---
+
+## 14. Cuartos: cómo se mapea un escenario **[el pedido más técnico]**
+
+Un cuarto es, como dijo el autor: **un conjunto de navareas conectadas con techo encima**. Hace falta
+para la favourite room, para «se queda en su cuarto» en dificultad baja, y para saber dónde pueden
+aparecer los ítems malditos (tarot, calaveras, muñeca vudú, espejo, caja de música, reloj de arena).
+
+### 14.1 La primitiva ya existe y está probada **[verificado]**
+
+HIM resuelve «¿esto tiene techo?» y lo cachea por navarea —
+[`sv_zhomeless_shelter.lua:272-303`](../../dev/other/phantom/dev2/him/lua/autorun/server/sv_zhomeless_shelter.lua#L272):
+
+```lua
+local function IsUnderSkyPos( pos )
+    pos = pos + vecUpOff
+    local skyTraceResult = util.TraceLine( {
+        start  = pos,
+        endpos = pos + vec12kZ,          -- 12.000 u hacia arriba
+        mask   = CONTENTS_SOLID,
+    } )
+    if skyTraceResult.HitSky then return true          -- ve el cielo -> a la intemperie
+    elseif not skyTraceResult.Hit then return true     -- no golpea nada -> idem
+    else return false end                              -- golpeó techo -> es interior
+end
+```
+
+Y encima lo envuelve en `IsUnderSky( area )` **con caché por `CNavArea`**, que es exactamente el
+granulado que necesitamos. Hay dos alternativas más, y conviene conocerlas:
+
+| Método | Costo | Nota |
+|---|---|---|
+| `IsUnderSkyPos` (HIM) | **1 trace** | El más barato. Un hueco en el techo lo engaña |
+| `get_env_state` (Better Movement, `sh_bm_main.lua:169`) | **5 traces** (centro + 4 a 120 u) | Más robusto contra huecos. Ya networkeado como `ply:GetBmEnvIsInside()` |
+| `GetNookScore` (base Terminator) | varios | Mide *encierro*, no techo: ≥4 = rincón, ≤2,5 = abierto |
+
+**Recomiendo el de 5 traces para el mapeo** (corre una vez, offline) y el de 1 trace para consultas
+en runtime.
+
+### 14.2 El detector automático
+
+Flood fill sobre el navmesh, en una corrutina presupuestada (el patrón que HIM ya usa a 0,5 ms por
+`Think`, `sv_zhomeless_shelter.lua:2614-2666`):
+
+```
+1. Para cada CNavArea del mapa: ¿tiene techo?  -> se cachea
+2. Semilla: una navarea con techo sin cuarto asignado
+3. Expandir por area:GetAdjacentAreas() mientras el vecino:
+      - tenga techo
+      - NO esté separado por una puerta (prop_door_rotating / func_door en el borde)
+      - no supere el diámetro máximo del cuarto (convar, default ~1200 u)
+4. El grupo resultante es un cuarto. Repetir hasta que no queden áreas.
+5. Descartar cuartos de menos de N áreas (pasillos residuales).
+```
+
+El corte por puertas es lo que evita que una casa entera salga como un solo cuarto. **No va a ser
+perfecto** —los mapas de GMod no fueron hechos para esto— y por eso existe 14.3.
+
+### 14.3 La herramienta manual
+
+**Una toolgun**, `phantasmagoria_rooms`, porque el automático siempre se va a equivocar en algún mapa:
+
+| Acción | Qué hace |
+|---|---|
+| **Disparo primario** | Agrega la navarea bajo el cursor al cuarto activo |
+| **Disparo secundario** | La quita |
+| **Recargar** | Crea un cuarto nuevo y lo hace activo |
+| **Panel** | Nombrar el cuarto, marcarlo como *favourite room* válida, marcar si acepta ítems malditos |
+
+Con render de debug: cada cuarto pintado de un color distinto sobre el navmesh
+(`debugoverlay.Box` / el patrón de `navmesh.GetAllNavAreas()`), para ver el mapeo mientras se corrige.
+
+Y los comandos de consola equivalentes, que es lo que realmente se usa cuando se está mapeando:
+
+```
+phantasmagoria_rooms_detect        corre el detector automático
+phantasmagoria_rooms_show 1        pinta los cuartos sobre el navmesh
+phantasmagoria_rooms_save          guarda a disco
+phantasmagoria_rooms_clear         borra el mapeo del mapa actual
+```
+
+### 14.4 Persistencia y puntos de ítem
+
+```
+data/phantasmagoria/rooms_<nombre_del_mapa>.json
+```
+
+```json
+{
+  "map": "gm_construct",
+  "rooms": [
+    { "id": 1, "name": "Sótano", "areas": [412, 413, 419],
+      "favourite": true, "cursedSpots": [[128, -320, 64]] }
+  ]
+}
+```
+
+Los `areas` son IDs de `CNavArea` (`area:GetID()`), que son estables mientras no se regenere el
+navmesh. **Si alguien corre `nav_generate`, el mapeo se invalida** — hay que detectarlo y avisar, no
+fallar en silencio.
+
+Los `cursedSpots` son los puntos donde pueden aparecer los ítems malditos. Se marcan con la misma
+toolgun (un cuarto modo) y son posiciones de mundo, no áreas, porque un ítem se apoya en una mesa.
+
+### 14.5 Qué pasa si no hay mapeo
+
+**Degradar, nunca romper.** Si el mapa no tiene cuartos marcados:
+
+- La favourite room es **una sola navarea con techo**, elegida por `GetNookScore` alto (la más
+  metida en un rincón). Es peor que un cuarto real, pero funciona.
+- «Se queda en su cuarto» pasa a ser «se queda dentro de un radio de N unidades» de esa área.
+- Los ítems malditos aparecen en navareas con techo al azar.
+
+Nunca hay un estado en el que el addon no arranque por falta de mapeo. Eso importa porque el 99 % de
+los mapas de GMod nunca van a tener uno.

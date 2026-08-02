@@ -24,7 +24,9 @@ Lo que existe:
 | Diseño del motor de rasgos | **CERRADO** — [docs/](docs/PHANTOM_Phasmophobia_Diseno.md) |
 | Tabla de los 30 tipos | **GENERADA** — `lua/phantasmagoria/ghost_types.lua`, valida sintaxis |
 | Conversión de audio | **HECHA** — 265 archivos, 141 MB → 11 MB |
+| Diseño de spawn / dificultad / cuartos | **CERRADO** — §12, §13, §14 del diseño |
 | Entidad `terminator_nextbot_phantom` | **NO EXISTE** ← el próximo paso |
+| Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | Equipos (EMF, spirit box, etc.) | **NO EXISTEN** — props a descargar |
 | Nada de esto en juego | **0 corridas** |
 
@@ -87,6 +89,11 @@ referencia. Resumidas:
 - **Los equipos.** Props portados a descargar. Decidir cuáles entran primero: EMF reader, spirit box,
   cámara, termómetro, libro de escritura, UV, DOTS, salt, crucifijo.
 - **El ritual de vuelta** del destierro: qué es y qué hace falta para ejecutarlo.
+- **Los ítems malditos** (tarot, calaveras, muñeca vudú, espejo, caja de música, reloj de arena):
+  qué hace cada uno. Dependen de que existan los props y del mapeo de cuartos (§14).
+- **El detector de cuartos no va a ser perfecto** en mapas de GMod, que no fueron hechos para esto.
+  Por eso hay toolgun manual y por eso §14.5 define qué pasa cuando no hay mapeo: degradar, nunca
+  romper.
 - **Cuántos PHANTOM aguanta un servidor.** La base corre en coroutines presupuestadas
   (`ENT.CoroutineThresh`) pero nunca se midió.
 
