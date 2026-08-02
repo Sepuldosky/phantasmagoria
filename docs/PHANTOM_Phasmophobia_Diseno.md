@@ -769,17 +769,24 @@ del Hantu (§5.1), y `ply:GetBmEnvIsInside()` de Better Movement (§1.1) permite
 sería competir con ellos y perder. La misma regla que ya se aplicó con Better Movement (§1.1):
 **detectar en runtime, usar lo que haya, y tener un camino propio si no hay nada.**
 
-| Addon | ID | Nota |
-|---|---|---|
-| **StormFox 2** | [2447774443](https://steamcommunity.com/sharedfiles/filedetails/?id=2447774443) | **El objetivo de integración.** El más completo y el que tiene API pública |
-| gWeather | [3322707383](https://steamcommunity.com/sharedfiles/filedetails/?id=3322707383) | Más nuevo. Sin investigar |
-| Simple Weather | [531458635](https://steamcommunity.com/sharedfiles/filedetails/?id=531458635) | El más básico. Sin investigar |
+| Addon | ID | Publicado | Última actualización | Nota |
+|---|---|---|---|---|
+| **StormFox 2** | [2447774443](https://steamcommunity.com/sharedfiles/filedetails/?id=2447774443) | 2021 | **2026-05-01** | **El elegido.** El más completo, con API pública y mantenimiento activo |
+| gWeather | [3322707383](https://steamcommunity.com/sharedfiles/filedetails/?id=3322707383) | 2025 | — | Sin investigar |
+| Simple Weather | [531458635](https://steamcommunity.com/sharedfiles/filedetails/?id=531458635) | 2015 | 2025-09 | El más básico, pero **sigue mantenido**. Sin investigar |
+
+*(Fechas aportadas por el autor. Steam devolvió HTTP 429 y no se pudieron verificar desde acá.)*
+
+**StormFox 2 es el objetivo de integración** — decisión del autor, y los datos la respaldan: es el
+único de los tres con API pública documentada en un repo, y se actualizó hace tres meses.
+
+> **Cuidado con datar un addon por su ID.** El número del Workshop es secuencial por **publicación**,
+> y no dice nada sobre el mantenimiento: Simple Weather es de 2015 **y se actualizó en septiembre de
+> 2025**. Un ID viejo no es un addon abandonado. (Nota escrita porque en la primera pasada se dedujo
+> lo contrario a partir del ID, y era falso.)
 
 > El autor **no piensa usar ninguno personalmente**. Por eso la integración es *opcional de verdad*:
 > el camino sin addon de clima tiene que ser jugable, no un modo degradado triste.
->
-> *(Dato sin verificar: la página del Workshop devolvió HTTP 429. El ID `531458635` sugiere una
-> publicación de ~2015 y no de 2025 — conviene confirmarlo antes de apoyarse en ese addon.)*
 
 ### 15.2 La API de StormFox 2 **[verificado en su repo]**
 
