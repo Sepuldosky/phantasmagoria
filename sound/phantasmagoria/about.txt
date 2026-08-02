@@ -1,0 +1,43 @@
+Phantasmagoria: sonidos. Origen: Phasmophobia (Kinetic Games), rippeados por
+terceros (phasmo-sounds-main). Convertidos de .wav a .ogg Vorbis q4 el
+2026-08-01: 141 MB -> 11 MB, 265 archivos, 0 fallos, duraciones verificadas
+contra el original (delta 0,000 s). Los .wav originales NO estan aca: viven en
+dev/other/phantom/dev2/phasmo-sounds-main/ y no se tocaron.
+
+ESTANDAR DE SONIDO POR ACCION (heredado de corpus-stalker): cada carpeta es una
+accion o familia, y CUALQUIER .ogg dentro entra al pool de esa accion. Para
+cambiar el banco de un evento basta soltar archivos en la carpeta, sin tocar
+Lua. Una carpeta vacia o faltante = ese evento suena en silencio, no da error.
+
+NINGUNO DE ESTOS ARCHIVOS TIENE CONSUMIDOR TODAVIA. La entidad no esta escrita.
+
+ghost/footstep/     pasos del fantasma (8). Se oyen a 20 m = ~1050 u. El Myling
+                    los silencia via ENT:IsSilentStepping()
+player/footstep/    pasos del jugador por superficie (50): carpet, asphalt,
+                    gravel, wood, stairs, stairs_under. Material de repuesto:
+                    GMod ya trae los suyos
+player/             heartbeat_loop (el latido a <10 m del fantasma, ver diseno
+                    seccion 1), death_riser, dying
+event/throw/        objetos volando (11). El Poltergeist tira varios a la vez
+event/impact/       golpes contra madera, metal, piedra (20)
+event/creak/        crujidos de piso, bisagras, cuerdas, rejas (15). El material
+                    de la presencia ambiental
+event/knock/        golpeteo en puerta y ventana (7). Ghost event clasico
+door/               puertas: cierres, manijas, celda, corrediza (18)
+furniture/          armarios y cajones abriendose solos (12)
+light/              interruptores, zumbido, bombilla rota (5)
+equipment/          los equipos del jugador (16): emf_beep, spiritbox_noise_loop,
+                    radio_static, walkie, linterna, camara, diario, crucifijo,
+                    encendedor, pastillas
+ambience/           lluvia, truenos, viento, room tone (10)
+prop/               trastos de la casa: tv, telefono, heladera, pileta, inodoro,
+                    reloj, ventilador, microondas, ascensor, auto, piano,
+                    llaves (29)
+ui/                 menu y camion del juego original (15). Probablemente no se
+                    usen: quedan por si sirven
+_sin_identificar/   46 archivos que NO se pudieron mapear por nombre. Ver el
+                    about.txt de esa carpeta. NO USAR hasta identificarlos
+
+REGLA: no se infiere que suena un archivo a partir de su nombre. Lo que esta
+mapeado arriba es lo que el nombre original justifica sin adivinar; el resto
+espera a que el autor lo describa.

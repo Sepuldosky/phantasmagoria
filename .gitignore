@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------------------
+# Phantasmagoria - NADA de assets va al repo.
+#
+# El codigo es MIT; los assets no son nuestros (modelos portados, sonidos
+# rippeados de Phasmophobia, materiales de terceros). Se distribuyen aparte,
+# por Workshop. Ver docs/ASSETS.md para como armar el arbol local.
+# ---------------------------------------------------------------------------
+
+# Modelos
+models/
+*.mdl
+*.vtx
+*.vvd
+*.phy
+*.ani
+
+# Materiales y texturas
+materials/
+*.vtf
+*.vmt
+*.psd
+*.tga
+*.png
+*.jpg
+*.jpeg
+
+# Sonido
+sound/
+*.wav
+*.ogg
+*.mp3
+
+# ...pero los about.txt SI se versionan: son documentacion de que suena cada
+# carpeta, no assets. Sin ellos el arbol de sonido no se puede reconstruir.
+!sound/
+!sound/**/
+!sound/**/about.txt
+
+# Particulas
+particles/
+*.pcf
+
+# Empaquetado
+*.gma
+*.bsp
+*.zip
+*.7z
+
+# Addons de terceros que se estudian localmente (nunca van al repo)
+dev2/
+dev/other/
+
+# Scratch y basura de editor
+*.bak
+*.tmp
+*~
+.vscode/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
