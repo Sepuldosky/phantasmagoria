@@ -53,6 +53,7 @@ para un proyecto sin fines de lucro.
 | [Terminator NextBot](https://steamcommunity.com/sharedfiles/filedetails/?id=2734691788) | **StrawWagen** | La base entera: locomotion, pathfinding, tasks, cloaking |
 | `[gm] paranormal events` | — | Partículas, sonidos, y el catálogo de eventos que sirvió de especificación |
 | Better Movement v2 | — | Opcional. Si está montado, la velocidad se calibra con su config |
+| [StormFox 2](https://steamcommunity.com/sharedfiles/filedetails/?id=2447774443) ([repo](https://github.com/Nak2/StormFox2)) | **Nak2** | Opcional. Si está montado, de ahí sale el clima y la temperatura |
 | Datos de los 30 tipos | [tybayn](https://tybayn.github.io/phasmo-cheat-sheet/) | Velocidades, cordura y evidencias, vía el backend de su cheat sheet |
 
 **Phasmophobia** es propiedad de Kinetic Games. Este proyecto no está afiliado ni respaldado por

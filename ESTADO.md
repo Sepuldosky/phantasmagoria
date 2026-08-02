@@ -99,7 +99,10 @@ referencia. Resumidas:
 - **El detector de cuartos no va a ser perfecto** en mapas de GMod, que no fueron hechos para esto.
   Por eso hay toolgun manual y por eso §14.5 define qué pasa cuando no hay mapeo: degradar, nunca
   romper.
-- **El clima y los tiers** (§15, §16 del diseño): descubiertos y documentados, sin implementar.
+- **El clima**: se integra con **StormFox 2** en vez de reimplementarse (§15). Su API está verificada
+  contra el repo; falta escribir el mapeo y el camino propio para quien no lo tenga. **gWeather y
+  Simple Weather sin investigar.**
+- **Los tiers de equipamiento** (§16): documentados, sin implementar. Va un tier por equipo en la v1.
 - **Cuántos PHANTOM aguanta un servidor.** La base corre en coroutines presupuestadas
   (`ENT.CoroutineThresh`) pero nunca se midió.
 

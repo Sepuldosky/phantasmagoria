@@ -763,8 +763,85 @@ Y engancha con dos cosas ya diseñadas: la **temperatura** alimenta el rasgo `sp
 del Hantu (§5.1), y `ply:GetBmEnvIsInside()` de Better Movement (§1.1) permite aplicar el clima
 **sólo afuera**, que es como funciona en el juego.
 
-Implementación: una convar `phantasmagoria_weather` (0 = sorteo al cargar el mapa) y una tabla de
-8 filas. El clima **no** es un rasgo del fantasma: es estado global del contrato.
+### 15.1 No lo escribimos: nos integramos **[decisión del autor, 2026-08-02]**
+
+**Un sistema de clima es un addon entero.** Ya existen varios buenos en el Workshop y reimplementarlo
+sería competir con ellos y perder. La misma regla que ya se aplicó con Better Movement (§1.1):
+**detectar en runtime, usar lo que haya, y tener un camino propio si no hay nada.**
+
+| Addon | ID | Nota |
+|---|---|---|
+| **StormFox 2** | [2447774443](https://steamcommunity.com/sharedfiles/filedetails/?id=2447774443) | **El objetivo de integración.** El más completo y el que tiene API pública |
+| gWeather | [3322707383](https://steamcommunity.com/sharedfiles/filedetails/?id=3322707383) | Más nuevo. Sin investigar |
+| Simple Weather | [531458635](https://steamcommunity.com/sharedfiles/filedetails/?id=531458635) | El más básico. Sin investigar |
+
+> El autor **no piensa usar ninguno personalmente**. Por eso la integración es *opcional de verdad*:
+> el camino sin addon de clima tiene que ser jugable, no un modo degradado triste.
+>
+> *(Dato sin verificar: la página del Workshop devolvió HTTP 429. El ID `531458635` sugiere una
+> publicación de ~2015 y no de 2025 — conviene confirmarlo antes de apoyarse en ese addon.)*
+
+### 15.2 La API de StormFox 2 **[verificado en su repo]**
+
+Leída de [`Nak2/StormFox2`](https://github.com/Nak2/StormFox2), no de la descripción del Workshop:
+
+| Función | Archivo | Para qué nos sirve |
+|---|---|---|
+| `StormFox2.Temperature.Get( sType )` | `framework/sh_temperature.lua:91` | **La evidencia Freezing sale de acá** |
+| `StormFox2.Temperature.Convert( from, to, n )` | `:140` | Pasar a °C sin hacer cuentas |
+| `StormFox2.Weather.GetCurrent()` | `framework/sh_weather_handle.lua:124` | El clima actual |
+| `StormFox2.Weather.IsRaining()` | `:380` | Lluvia |
+| `StormFox2.Weather.IsSnowing()` | `:390` | Nieve → el clima frío de §15 |
+| `StormFox2.Weather.GetRainAmount()` | `:399` | Distinguir lluvia leve de fuerte |
+| **`StormFox2.DownFall.IsEntityHit( ent )`** | `:420` | **Si a la vela le está cayendo agua** → se apaga |
+| **`StormFox2.DownFall.IsPointHit( pos )`** | `:429` | **Si un punto está a la intemperie** |
+
+Y dos hooks para reaccionar a los cambios en vez de encuestar:
+
+```lua
+hook.Add( "StormFox2.weather.postchange", "phantasmagoria_weather", function( sName, nPercent, nDelta )
+    PHANTASMAGORIA.OnWeatherChanged( sName, nPercent )
+end )
+-- existe tambien "StormFox2.weather.prechange" (sh_weather_handle.lua:48)
+```
+
+**Dos regalos que resuelven cosas que estaban abiertas:**
+
+1. **`DownFall.IsEntityHit( ent )` implementa la mecánica de lluvia fuerte tal cual**: el juego apaga
+   los fuegos tier 1 y 2 bajo la lluvia. Con esto, la vela y el incienso se apagan **sólo si
+   efectivamente les está cayendo agua**, que es más fino que "está lloviendo".
+2. **`DownFall.IsPointHit( pos )` es un tercer detector de interior/exterior**, junto a
+   `IsUnderSkyPos` de HIM y `GetBmEnvIsInside` de Better Movement (§14.1). Si StormFox está montado,
+   es el más barato de los tres, porque ya lo calcula para su propio uso.
+
+### 15.3 La forma concreta
+
+Una sola función decide de dónde sale el clima, y **nadie más en el addon pregunta por StormFox**:
+
+```lua
+-- Devuelve { key = "heavy_rain", tempC = 8, illum = ..., vision = ..., sound = ... }
+function PHANTASMAGORIA.GetWeather()
+    -- 1. StormFox 2, si esta montado
+    if StormFox2 and StormFox2.Weather and StormFox2.Weather.GetCurrent then
+        return PHANTASMAGORIA.MapStormFoxWeather()
+    end
+
+    -- 2. …hueco para gWeather / Simple Weather, cuando se investiguen…
+
+    -- 3. Propio: una convar y la tabla de 8 filas de arriba. Sin efectos
+    --    visuales: solo los NUMEROS que el addon necesita (temperatura,
+    --    visibilidad, ruido ambiente) mas los sonidos que ya estan en disco.
+    return PHANTASMAGORIA.OwnWeather()
+end
+```
+
+El camino propio **no dibuja lluvia ni niebla** — eso es lo caro y es justamente lo que hacen bien
+los addons de clima. Sólo mantiene el estado y los números que las mecánicas consultan, más el audio
+ambiente que ya está mapeado. Un jugador sin addon de clima igual tiene noches frías que ayudan al
+termómetro y tormentas que tapan los pasos; lo que no tiene es el aguacero en pantalla.
+
+Convar: `phantasmagoria_weather` — `-1` = auto (usa StormFox si está, si no sortea), `0..7` = fijar
+uno de los 8.
 
 ---
 

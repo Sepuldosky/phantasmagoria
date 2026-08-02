@@ -48,3 +48,4 @@ crucifijo, velas, trípode) están portados a GMod por terceros. **Pendiente de 
 | **Terminator NextBot** | La base. Dependencia dura |
 | `[gm] paranormal events` | Banco de efectos: `CreateShadowFigure`, partículas, susurros |
 | Better Movement v2 | Opcional. Si está, la velocidad se calibra con su config |
+| **StormFox 2** | Opcional. Si está, de ahí salen el clima y la temperatura (ver §15 del diseño) |
