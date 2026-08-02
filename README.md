@@ -43,11 +43,18 @@ dentro del cerebro, el motor está mal cortado y hay que rediseñar antes de seg
 | [`dev/gen_types.py`](dev/gen_types.py) | El generador de la tabla |
 | [`docs/PHANTOM_Phasmophobia_Diseno.md`](docs/PHANTOM_Phasmophobia_Diseno.md) | El diseño: motor de rasgos, máquina de estados, conversión de unidades |
 | [`docs/PHANTOM_Referencia.md`](docs/PHANTOM_Referencia.md) | La investigación de la base Terminator: qué regala y dónde están sus trampas |
+| [`docs/EQUIPAMIENTO.md`](docs/EQUIPAMIENTO.md) | Los 36 props verificados desde el binario, y cómo se implementa cada mecánica |
+| [`docs/CREDITOS.md`](docs/CREDITOS.md) | Autores de los assets incluidos |
+| [`lua/autorun/phantasmagoria_assetcheck.lua`](lua/autorun/phantasmagoria_assetcheck.lua) | Avisa si tenés addons del Workshop que duplican estos assets |
 
 ## Assets
 
 **No hay assets en este repo, a propósito.** El código es MIT; los modelos, sonidos y materiales no
-son nuestros. Ver [`.gitignore`](.gitignore).
+son nuestros. Ver [`.gitignore`](.gitignore) y [`docs/ASSETS.md`](docs/ASSETS.md).
+
+El addon **incluye** los props de tres packs del Workshop, con crédito completo en
+[`docs/CREDITOS.md`](docs/CREDITOS.md). Si tenés esos addons suscritos, montan las mismas rutas y
+GMod carga uno solo sin avisar cuál: el `assetcheck` lo detecta y **te avisa** — no bloquea nada.
 
 ## Créditos
 

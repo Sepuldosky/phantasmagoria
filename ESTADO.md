@@ -25,9 +25,11 @@ Lo que existe:
 | Tabla de los 30 tipos | **GENERADA** — `lua/phantasmagoria/ghost_types.lua`, valida sintaxis |
 | Conversión de audio | **HECHA** — 265 archivos, 141 MB → 11 MB |
 | Diseño de spawn / dificultad / cuartos | **CERRADO** — §12, §13, §14 del diseño |
+| **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
+| Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
 | Entidad `terminator_nextbot_phantom` | **NO EXISTE** ← el próximo paso |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
-| Equipos (EMF, spirit box, etc.) | **NO EXISTEN** — props a descargar |
+| SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
 | Nada de esto en juego | **0 corridas** |
 
 ---

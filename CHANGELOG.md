@@ -7,6 +7,52 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-02 — Sesión 4: los props de equipamiento, verificados bit por bit
+
+### Hecho
+
+- **36 modelos consolidados** en `models/` + `materials/` desde tres packs del Workshop, con las
+  rutas **verbatim** (no se renombró nada: los `.mdl` las llevan horneadas).
+- **Detector de addons duplicados** — `lua/autorun/phantasmagoria_assetcheck.lua`. Compara los WSID
+  incluidos contra `engine.GetAddons()` y **avisa**: no desmonta, no bloquea, no rompe nada. Se
+  silencia con `phantasmagoria_assetcheck 0`.
+- **[docs/CREDITOS.md](docs/CREDITOS.md)** y **[docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md)**.
+- Los packs originales se borraron de `dev/` una vez consolidados (evita 265 MB duplicados en disco).
+
+### Verificado (parseando `studiohdr_t`, no leyendo el Workshop)
+
+- **0 colisiones de ruta entre los tres packs** — usan namespaces distintos (`kiwontatv/`, `phas/`,
+  `phasmophobia/demit/`), así que conviven.
+- **62 referencias `.mdl` → `.vmt` resueltas, 0 faltantes**, 0 `.vmt` apuntando a `.vtf` inexistente,
+  0 acompañantes (`.vvd`/`.vtx`) faltantes.
+
+### Tres correcciones a lo que dice el Workshop
+
+1. **El K2 no tiene bodygroups: tiene 6 skins**, y son mejores. `bodyparts=1, nmodels=1` (cero
+   bodygroups reales) y `numskinfamilies=6`. La tabla intercambia `level_0N` por `level_0N_active`
+   de forma **acumulativa**, así que `SetSkin(0..5)` **es** la lectura EMF. Son 6 estados, no 5: el
+   0 es "apagado".
+2. **Las masas del Prop Pack son 100 o 1000 kg sin excepción.** Un crucifijo de una tonelada no se
+   levanta con la mano. El Equipment Pack tiene masas realistas (0,1–7,2 kg) y por eso es el que
+   conviene por defecto.
+3. **El libro abierto tiene 7 skins en un pack y 8 en el otro.** La octava del Prop Pack es
+   `book_cursed_demit`, la firma del autor: sortear `0..7` la sacaría como si fuera escritura del
+   fantasma.
+
+### Defecto del pack original, corregido
+
+`eqp_flashlight_strong.mdl` declara la textura `Strong Flashlight Glass` y **el pack no la incluye**:
+el lente salía con checkerboard morado. Se escribió el `.vmt` faltante, marcado como nuestro en
+CREDITOS. El nombre lleva espacios y mayúsculas porque es la cadena horneada en el binario.
+
+### Pendiente anotado
+
+**251 MB en 58 texturas, todas 2048×2048 DXT5** — incluidas las de un encendedor y unas pastillas.
+Bajar a 1024² ahorraría ~190 MB por cliente y sería invisible en juego. **No se tocó**: es modificar
+el asset de un tercero.
+
+---
+
 ## 2026-08-02 — Sesión 3: paranormal events es 1:1, y el sistema de cuartos
 
 **Sin código.** Diseño de spawn, dificultad y cuartos, más una corrección de evaluación.
