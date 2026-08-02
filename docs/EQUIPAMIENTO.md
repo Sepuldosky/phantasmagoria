@@ -38,20 +38,45 @@ ent:SetSkin( emfLevel )   -- emfLevel 0..5 — y EMF 5 es la evidencia
 
 Mejor de lo prometido: un bodygroup exigiría combinar máscaras; el skin es un entero directo.
 
-### 1.2 Las masas del Prop Pack son inutilizables
+### 1.2 Las masas del Prop Pack son inutilizables — **corregido en Lua**
 
-| Pack | Masas |
+La masa vive en el `.phy`, en un bloque KeyValues de **texto plano** al final del archivo. Leyéndolo
+se ve de dónde sale la diferencia:
+
+| Modelo | `mass` | `volume` | **`totalmass`** | `surfaceprop` |
+|---|---:|---:|---:|---|
+| `phas/eqp_crucifix` | 1.0 | 79,8 | **0,61 kg** | `item` |
+| `demit/crucifix` | **1000.0** | 98,0 | **1000 kg** | `metal` |
+| `phas/eqp_lighter` | 1.0 | 0,77 | **0,025 kg** | `eqp_lighter` |
+
+El Equipment Pack deja `mass 1.0` y **le deja el cálculo a Source** (volumen × densidad del
+surfaceprop); el Prop Pack clavó `1000` a mano en **todos** sus props. El mismo crucifijo pesa 0,6 kg
+en un pack y una tonelada en el otro — y con una tonelada sólo lo movés con physgun, nunca con la
+mano.
+
+**Se arregla en runtime, sin tocar los assets.** Tres vías posibles y sólo una conviene:
+
+| Vía | Veredicto |
 |---|---|
-| Equipment Props (`phas/`) | **0,1 – 7,2 kg** — realistas |
-| Prop Pack (`demit/`) | **100 o 1000 kg**, sin excepción |
+| `PhysObj:SetMass()` en Lua | **La elegida.** Reversible, no modifica el asset del tercero |
+| Parchear el `.phy` | Posible (el bloque es texto plano) pero altera lo que el autor publicó |
+| Descompilar y recompilar | Innecesario |
 
-Un crucifijo de una tonelada no se puede levantar ni empujar: el physgun lo mueve, la mano no. Si se
-usa un modelo del Prop Pack hay que pisar la masa en Lua:
+La tabla vive en [`lua/phantasmagoria/prop_data.lua`](../lua/phantasmagoria/prop_data.lua), junto con
+`PHANTASMAGORIA.ApplyPropData( ent )`, que se llama desde el `Initialize` de cada prop. Hay además
+un hook `PlayerSpawnedProp` de red de seguridad: si alguien saca el crucifijo del Prop Pack **desde
+el menú Q**, igual le baja la tonelada.
 
-```lua
-local phys = ent:GetPhysicsObject()
-if IsValid( phys ) then phys:SetMass( 0.6 ) end
-```
+> **El `surfaceprop` también se corrige,** con `PhysObj:SetMaterial()` — decide fricción, elasticidad
+> y a qué suena el objeto al golpear. El crucifijo del Prop Pack venía como `metal` y sonaba a chapa.
+>
+> **Ojo con inventar surfaceprops:** `book` **no existe** en Source. Verificado contra
+> `sourceengine/scripts/surfaceproperties.txt` de la instalación: existen `item`, `paper`,
+> `cardboard`, `sand`, `metal`, `plastic`; `book` no. Un surfaceprop inexistente no da error — cae a
+> `default` en silencio, que es la peor forma de equivocarse. Los libros quedaron en `paper`.
+>
+> Nota aparte: `eqp_lighter` declara el surfaceprop **`eqp_lighter`**, que tampoco existe en el
+> juego base. El pack no trae `scripts/surfaceproperties_*.txt`, así que también cae a `default`.
 
 ### 1.3 El libro abierto tiene 7 skins en un pack y **8** en el otro
 
