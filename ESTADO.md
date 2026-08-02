@@ -99,6 +99,7 @@ referencia. Resumidas:
 - **El detector de cuartos no va a ser perfecto** en mapas de GMod, que no fueron hechos para esto.
   Por eso hay toolgun manual y por eso §14.5 define qué pasa cuando no hay mapeo: degradar, nunca
   romper.
+- **El clima y los tiers** (§15, §16 del diseño): descubiertos y documentados, sin implementar.
 - **Cuántos PHANTOM aguanta un servidor.** La base corre en coroutines presupuestadas
   (`ENT.CoroutineThresh`) pero nunca se midió.
 

@@ -38,6 +38,11 @@ ent:SetSkin( emfLevel )   -- emfLevel 0..5 — y EMF 5 es la evidencia
 
 Mejor de lo prometido: un bodygroup exigiría combinar máscaras; el skin es un entero directo.
 
+> **Y no es "un EMF genérico": es el Tier 2 del juego.** La fuente describe los tres tiers del EMF
+> Reader así — Tier 1: una aguja; **Tier 2: 5 LEDs de colores, la cantidad encendida es el nivel**;
+> Tier 3: pantalla LCD con nivel, dirección y distancia. El K2 es exactamente la descripción del
+> Tier 2. Ver §16 del diseño.
+
 ### 1.2 Las masas del Prop Pack son inutilizables — **corregido en Lua**
 
 La masa vive en el `.phy`, en un bloque KeyValues de **texto plano** al final del archivo. Leyéndolo

@@ -724,3 +724,98 @@ toolgun (un cuarto modo) y son posiciones de mundo, no áreas, porque un ítem s
 
 Nunca hay un estado en el que el addon no arranque por falta de mapeo. Eso importa porque el 99 % de
 los mapas de GMod nunca van a tener uno.
+
+---
+
+## 15. El clima — la mecánica que faltaba **[verificado]**
+
+El juego tiene **8 climas**, y no son decorado: cambian iluminación, visión, sonido ambiente y
+**temperatura**. La temperatura importa porque *Freezing* es una evidencia.
+
+| Clima | Iluminación | Visión | Sonido | Temp. | Efecto propio |
+|---|---|---|---|---:|---|
+| Clear | Dim | Alta | Bajo | 13 °C | — |
+| Sunrise | **Brillante** | Alta | Bajo | 16 °C | Ilumina exteriores y cuartos con ventana |
+| Light Rain | Modesta | Alta | Medio | 8 °C | Ruido constante, no tapa las interacciones |
+| **Heavy Rain** | Dim | Modesta | **Alto** | 8 °C | **Tapa los pasos del fantasma.** Apaga fuego tier 1/2. Relámpagos que iluminan |
+| Fog | Modesta | **Pobre** | Bajo | 13 °C | Sólo afecta exteriores — **y no afecta la visión del fantasma** |
+| Snow | Modesta | Modesta | Bajo | **5 °C** | Se ve el aliento; **dificulta ver los Ghost Orbs** |
+| Windy | Dim | Alta | Medio | 8 °C | Viento entre los árboles |
+| **Blood Moon** | Modesta | Alta | Medio | 13 °C | **2 % de probabilidad.** Ver abajo |
+
+**Blood Moon** es un modificador global, no un clima más:
+
+- Fantasma **+15 % de velocidad durante los hunts**
+- Drenaje pasivo de cordura **+100 %**
+- Más eventos
+- No se puede elegir ni pedir con la Monkey Paw
+
+**Encaja con lo que ya tenemos.** El audio del clima **ya está mapeado y en disco**:
+
+| Clima | Archivos ya organizados |
+|---|---|
+| Light / Heavy Rain | `ambience/rain.ogg`, `ambience/rain_window.ogg` |
+| Heavy Rain (truenos) | `ambience/thunder_rumble_1-2.ogg`, `ambience/thunder_clap_a/c/d.ogg` |
+| Windy | `ambience/forest_wind_loop.ogg` |
+| Clear / noche | `ambience/night_neighborhood.ogg`, `ambience/room_tone.ogg` |
+
+Y engancha con dos cosas ya diseñadas: la **temperatura** alimenta el rasgo `speed.perTemperature`
+del Hantu (§5.1), y `ply:GetBmEnvIsInside()` de Better Movement (§1.1) permite aplicar el clima
+**sólo afuera**, que es como funciona en el juego.
+
+Implementación: una convar `phantasmagoria_weather` (0 = sorteo al cargar el mapa) y una tabla de
+8 filas. El clima **no** es un rasgo del fantasma: es estado global del contrato.
+
+---
+
+## 16. Los equipos tienen **tres tiers** — y el K2 es el Tier 2 **[verificado]**
+
+Cada equipo del juego existe en tres versiones. Para el EMF, la fuente las describe así:
+
+| Tier | Cómo muestra el nivel |
+|---|---|
+| 1 | Una **aguja** que apunta al número |
+| **2** | **5 LEDs de colores; la cantidad encendida es el nivel** |
+| 3 | **Pantalla LCD** con nivel, dirección y distancia a la fuente |
+
+**El `emf_reader_k2.mdl` que tenemos es literalmente el Tier 2**: 5 LEDs, y sus 6 skins acumulativos
+encienden de a uno. No es "un EMF genérico" — es una pieza concreta de la progresión del juego.
+
+Eso da una estructura gratis para el equipamiento:
+
+- **Tier 1** = barato, información cruda (el `eqp_emf_reader` del otro pack puede cumplir acá)
+- **Tier 2** = el K2, información legible de un vistazo
+- **Tier 3** = sin modelo; requeriría una pantalla con dirección y distancia
+
+Otros tiers que la fuente menciona de paso y que afectan mecánicas ya diseñadas:
+
+- **Incienso Tier 1** hace que el fantasma **huya** en vez de quedarse cerca.
+- **Fuego tier 1 y 2** (encendedor, velas) **se apaga bajo lluvia fuerte** — engancha con §15.
+- La **cámara Tier 2 y 3** tiene pantalla para apuntar.
+
+**Para la primera versión: un solo tier por equipo.** Los tiers son progresión económica, y sin
+economía no significan nada. Pero conviene que la tabla de equipos tenga el campo `tier` desde el
+principio, porque agregarlo después obliga a tocar todas las entidades.
+
+---
+
+## 17. Lo que hay en el juego y **no** vamos a hacer
+
+Para que quede escrito por qué, y no se re-discuta:
+
+| Contenido | Por qué no |
+|---|---|
+| **Ferryman of the Drowned**, **Ghost in the Machine** | Son **puzzles de mapas concretos** (Point Hope, Nell's Diner) con recompensa de ID Badge. Dependen de la geometría de esos mapas: no se portan a GMod |
+| Desafíos semanales | Contenido rotativo atado a los mapas del juego |
+| Apocalypse bronze / silver / gold | Logros de dificultad extrema; sin economía ni progresión no significan nada |
+| Eventos estacionales (Winter's Jest, Cursed Hollow, Crimson Eye) | Contenido temporal del juego original |
+
+### Nota sobre el rumbo del juego
+
+El [roadmap 2026 de Kinetic Games](https://www.kineticgames.co.uk/news/phasmophobias-roadmap-for-2026)
+retrasó la 1.0 a **2027** e incluye un **overhaul completo de los modelos de fantasma**: cada tipo
+pasaría a tener apariencia, animaciones e historia propias. Hoy el modelo **no** indica el tipo
+(salvo Banshee y Dayan, que son femeninos), y todo el diseño de §5 se apoya en eso.
+
+**No cambia nada de lo nuestro** —somos un mod de GMod, no un port— pero si algún día se quiere
+alinear, el motor de rasgos ya lo soporta: sería un campo `model` por tipo en la tabla, y nada más.
