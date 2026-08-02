@@ -98,10 +98,11 @@ referencia. Resumidas:
   saber antes de tocar nada: **la captura de Cargo se come cualquier SWEP** que el engine entregue y
   le fabrica un def de 2,5 kg sin precio, así que registrar defs propios no es opcional si Cargo
   está montado. Sigue siendo **soft-dep**: sin Cargo tiene que haber camino propio.
-- **El arte de las huellas UV.** La mecánica está diseñada ([docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md)
-  §8) y la evidencia `uv` la tienen **13 de los 30 tipos**. Falta una sola decisión: **arte propio o
-  reciclar los cuatro decals que gmpa trae y nunca usa.** Son assets de un tercero y este repo no los
-  versiona.
+- ~~El arte de las huellas UV.~~ **CERRADO** (2026-08-02): se reciclan los decals de gmpa, derivados
+  a máscaras teñibles con [`dev/uv_prints.py`](dev/uv_prints.py) y acreditados con hash. Cuatro
+  texturas en `materials/phantasmagoria/uv/`. Lo que **queda** es el Lua: la evidencia `uv` la tienen
+  **13 de los 30 tipos** y la mecánica está diseñada en
+  [docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §8 — falta escribirla.
 - **El ritual de vuelta** del destierro: qué es y qué hace falta para ejecutarlo.
 - **Las posesiones malditas: son 7 y tenemos 1.** Documentadas con sus mecánicas y costes de cordura
   en [docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §4. Sólo la **Voodoo Doll** tiene modelo; el

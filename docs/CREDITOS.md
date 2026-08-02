@@ -29,6 +29,26 @@ conservan todos sus derechos. Esta página existe para que el crédito sea expl�
 
 Los tres formaban parte de un gamemode de Phasmophobia para GMod que quedó abandonado.
 
+### Huellas UV — **derivadas** de `[gm] paranormal events`
+
+- **Rutas nuestras:** `materials/phantasmagoria/uv/` (4 PNG)
+- **Origen:** `materials/effects/gmpa/decals/` de `[gm] paranormal events`
+- **Qué se cambió:** son decals de **sangre** (`DecalModulate`, rojo sobre blanco). Se derivó de cada
+  uno una **máscara blanca teñible** —`alfa × invertir(luminancia)`— para poder pintarlas de azul-UV
+  desde el cliente. **La forma es de ellos**; el cambio es de canal y de color, no de dibujo.
+- **Regenerable:** [`dev/uv_prints.py`](../dev/uv_prints.py)
+
+| Nuestro archivo | Origen | `sha256` del `.vtf` de origen |
+|---|---|---|
+| `hand_left.png` | `hand_l1.vtf` | `520c8e04…2a0d2e9a` |
+| `hand_right.png` | `hand_r1.vtf` | `5db31955…6f31041f` |
+| `smear_left.png` | `hand_l2.vtf` | `5591b2bc…46073a61` |
+| `smear_right.png` | `hand_r2.vtf` | `73daa7c9…617038e9` |
+
+> **Los hashes están para que el crédito sea verificable en las dos direcciones.** Un asset
+> renombrado no es un asset propio; si alguna vez alguien duda de si estas cuatro texturas son
+> nuestras, el hash de la fuente contesta sin discusión.
+
 ### Excepción: un archivo que **no** es de ellos
 
 `materials/phas/Strong Flashlight Glass.vmt` **lo escribimos nosotros**. El modelo

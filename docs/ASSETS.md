@@ -38,8 +38,30 @@ está en §10 de [PHANTOM_Referencia.md](PHANTOM_Referencia.md).
 
 ## Props de equipamiento
 
-Los equipos de Phasmophobia (EMF reader, spirit box, cámara, termómetro, libro, UV, D.O.T.S., sal,
-crucifijo, velas, trípode) están portados a GMod por terceros. **Pendiente de descargar.**
+**Ya están en el árbol** (sesión 4): 36 modelos, 63 `.vmt` y 58 `.vtf` de tres packs del Workshop con
+namespaces distintos y **0 colisiones entre ellos**. Verificados desde el binario; el detalle de cada
+uno y qué mecánica cubre está en [EQUIPAMIENTO.md](EQUIPAMIENTO.md). Autores en
+[CREDITOS.md](CREDITOS.md).
+
+| | |
+|---|---|
+| Rutas | `models/` + `materials/` bajo `kiwontatv/`, `phas/`, `phasmophobia/demit/` |
+| Verificador | [`dev/verify_tree.py`](../dev/verify_tree.py) — cruza cada textura contra su `.vmt` y su `.vtf` |
+| Inspector | [`dev/mdlinfo.py`](../dev/mdlinfo.py) — bodygroups, skins, masa, `surfaceprop` |
+| Visor de texturas | [`dev/vtf2png.py`](../dev/vtf2png.py) — `.vtf` → `.png`, con hoja de contactos |
+
+## Huellas de la evidencia UV — **generadas, no descargadas**
+
+`materials/phantasmagoria/uv/` (4 PNG) **no se descarga: se genera** desde los decals de sangre que
+`[gm] paranormal events` trae y nunca usa. Un comando:
+
+```bash
+python dev/uv_prints.py
+```
+
+Necesita el addon de origen montado en `dev/other/` (el script lo dice si falta). La derivación y el
+porqué están en §8.6 de [EQUIPAMIENTO.md](EQUIPAMIENTO.md); el crédito, con el hash de cada fuente,
+en [CREDITOS.md](CREDITOS.md).
 
 ## Addons de terceros de los que esto depende
 

@@ -7,6 +7,51 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-02 — Sesión 7: las huellas UV existen, y no eran lo que dije
+
+**Primer asset generado del proyecto.** Decisión del autor: reciclar el material de gmpa en vez de
+dibujarlo, con el crédito correspondiente.
+
+### La corrección, y de dónde salió
+
+En la sesión 6 escribí que gmpa traía «cuatro huellas de mano, izquierda y derecha, dos variantes» y
+que **60 s de fade eran exactamente la duración de las huellas en Phasmophobia, así que el autor las
+hizo para eso**. Las dos afirmaciones eran inferencias — del **nombre del archivo** y de un número
+que coincidía. **Se decodificaron los cuatro `.vtf` y se miraron:**
+
+- Son decals de **SANGRE**, rojo oscuro sobre blanco, shader `DecalModulate`. `$decalfadeduration 60`
+  es un valor corriente de decal de gore.
+- **Dos de los cuatro no son huellas.** `hand_l2` y `hand_r2` son **arrastres** de cuatro dedos
+  raspando una superficie.
+
+Los cuatro `sha256` sí son distintos, así que son cuatro texturas reales y no una repetida
+(contrastado antes de asumir). **La lección, en su versión visual:** el nombre de un archivo miente
+igual que un comentario — y acá sí había forma de refutarlo mirando, y no lo hice hasta la segunda
+pasada.
+
+### Hecho
+
+- **[`dev/uv_prints.py`](../dev/uv_prints.py)** — deriva las cuatro texturas y explica cada paso.
+  La forma vive en **dos canales**: el alfa recorta la silueta y el RGB lleva el detalle interno.
+  Aplanar a blanco tiraba el detalle; usar sólo el RGB arrastraba el fondo. La derivación usa los dos
+  — `máscara = alfa × invertir(luminancia)`, salida con RGB blanco — y el resultado es una **máscara
+  teñible**: el azul-UV lo pone `SetDrawColor` en el cliente, sin una textura por color.
+- **`materials/phantasmagoria/uv/`** — `hand_left`, `hand_right`, `smear_left`, `smear_right`.
+  **Los nombres dicen lo que la cosa es**, no lo que decía el origen. **Namespace nuestro**, no el de
+  ellos: dos addons montando la misma ruta es la colisión que `phantasmagoria_assetcheck` detecta.
+- **Crédito con hash** en [docs/CREDITOS.md](docs/CREDITOS.md) — el `sha256` de cada `.vtf` de origen,
+  para que el crédito sea verificable en las dos direcciones.
+- [docs/ASSETS.md](docs/ASSETS.md) al día: los 36 props ya no son «pendiente de descargar», y las
+  huellas UV **se generan, no se descargan**.
+
+### Verificado
+
+Los cuatro PNG escritos, releídos de disco: RGB uniforme en 255 (máscara pura) y alfa con la silueta
+y su detalle. Compuestos sobre un gris de pared y teñidos de azul-UV, se leen como huellas.
+**Nada de esto se vio en GMod todavía.**
+
+---
+
 ## 2026-08-02 — Sesión 6: leer gmpa entero, y la evidencia UV
 
 **Sin código.** Se leyeron las 1056 líneas de `gm_paranormalactivities.lua` de una sentada, en vez de

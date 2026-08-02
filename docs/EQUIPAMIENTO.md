@@ -496,9 +496,41 @@ una textura por color), **el fade** (alfa desde `expire - CurTime()`, sin depend
 se spawnea con `SetNoDraw(true)` y se dibuja client-side con la misma condición. Un solo gate para
 las dos evidencias UV, y ningún mecanismo nuevo.
 
-### 8.6 Lo que falta decidir
+### 8.6 Las texturas: **derivadas de gmpa** [decisión del autor, 2026-08-02]
 
-Los cuatro decals de gmpa dan la escala (`$decalscale .35`), el fade (60 s) y la forma, pero **son de
-sangre**: copiarlos tal cual daría manos rojas. Queda una sola pregunta abierta: **arte propio, o
-derivar de esos `.vtf` una máscara teñible**. Son assets de un tercero, y este repo no los versiona
-— decisión del autor.
+**Decidido: se reciclan en vez de dibujarlas.** El crédito se da igual, y evita hacer arte por ahora.
+Pero como son de sangre y no de UV (§8.2), copiarlas tal cual daría manos rojas: hay que derivarlas.
+
+**Lo que se aprovecha es la forma, y la forma vive en DOS canales a la vez.** El alfa recorta la
+silueta; el RGB lleva el detalle interno —el centro de la palma es más oscuro que los bordes—.
+Aplanar a blanco tiraría ese detalle; usar sólo el RGB arrastraría el fondo blanco. La derivación
+usa los dos:
+
+```
+tinta   = invertir( luminancia(RGB) )    -- lo oscuro del original es tinta
+máscara = alfa × tinta                   -- recortada por la silueta real
+salida  = RGB blanco + A = máscara
+```
+
+El resultado es una **máscara teñible**: el color lo pone `surface.SetDrawColor` en el cliente, así
+que el azul-UV sale sin generar una textura por color, y el mismo archivo sirve si mañana se quiere
+otro tono.
+
+| Origen | Nuestro nombre | Qué es |
+|---|---|---|
+| `hand_l1` | `hand_left.png` | Palma completa, izquierda |
+| `hand_r1` | `hand_right.png` | Palma completa, derecha |
+| `hand_l2` | `smear_left.png` | **Arrastre** de dedos |
+| `hand_r2` | `smear_right.png` | **Arrastre** de dedos |
+
+Dos cosas deliberadas: **los nombres dicen lo que la cosa es**, no lo que decía el archivo de origen
+—dos huellas y dos arrastres—; y viven en **nuestro namespace** (`materials/phantasmagoria/uv/`), no
+en el de ellos, porque dos addons montando la misma ruta es exactamente la colisión que
+`phantasmagoria_assetcheck` existe para detectar.
+
+Se regeneran con [`dev/uv_prints.py`](../dev/uv_prints.py) —un comando, y el script lleva escrito
+por qué cada paso— y **están acreditadas con su hash** en [CREDITOS.md](CREDITOS.md): son derivadas,
+no nuestras.
+
+> **Los arrastres son un regalo, no un descarte.** Una marca de dedos raspando una pared es
+> justamente lo que una UV revela en el juego, y da variedad gratis frente a repetir la misma palma.
