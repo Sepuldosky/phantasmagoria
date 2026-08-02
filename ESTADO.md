@@ -1,6 +1,7 @@
 # Phantasmagoria — Estado actual y handoff
 
 **Última actualización:** 2026-08-01
+**Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
 **Investigación de la base:** [docs/PHANTOM_Referencia.md](docs/PHANTOM_Referencia.md)

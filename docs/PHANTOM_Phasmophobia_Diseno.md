@@ -399,10 +399,23 @@ falta ningún rasgo nuevo en §5.
 | Desenlace del hunt | **Ambas según el tipo** — `ability.onCatch`. Ver §5.4 |
 | Audio | **Convertir a `.ogg`** — hecho, §7.3 |
 
-### 8.4 Abierto: cómo se vuelve del destierro
+### 8.4 Cómo se vuelve del destierro **[decidido]**
 
-Si `onCatch = "banish"` te saca del mapa, hace falta una salida. Opciones que veo: por tiempo, por
-ritual (un objeto/acción en la dimensión), o que otro jugador te saque. No lo decido solo.
+**Dos salidas, y la asimetría es a propósito:**
+
+| Salida | Quién la usa | Qué cuesta |
+|---|---|---|
+| **Morir** | el que se rindió | Rápida y aburrida. Siempre disponible. Perdés lo que llevabas |
+| **Ritual** | los que están afuera | Lenta, pide equipo y coordinación. **Te trae de vuelta al mundo** |
+
+La gracia es que la salida buena **no depende de vos**: depende de que alguien afuera se tome el
+trabajo. Eso convierte el destierro en un evento de grupo en vez de un castigo individual, y le da
+sentido al equipamiento — que es lo que hace que esto pueda sostener un gamemode si alguien lo
+recoge. En una partida solo, el destierro es una muerte con más ceremonia; en grupo, es una misión
+de rescate.
+
+**Falta definir qué es el ritual concretamente** (qué objetos, dónde, cuánto tarda). Se decide junto
+con el equipamiento, porque depende de qué props terminen portados.
 
 ---
 
