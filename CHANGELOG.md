@@ -7,6 +7,59 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-02 — Sesión 6: leer gmpa entero, y la evidencia UV
+
+**Sin código.** Se leyeron las 1056 líneas de `gm_paranormalactivities.lua` de una sentada, en vez de
+buscar bugs puntuales. Aparecieron seis defectos más y un asset huérfano.
+
+### El defecto que cambia cómo se siente el mod
+
+**La escalera de eventos no es exclusiva.** `RandomParanormalEvents()` tira `math.random(1,100)` una
+vez y encadena **nueve `if eventChance <= N` sin un solo `elseif`**. Un tiro de 3 dispara **los
+nueve** en el mismo frame: puerta + luz rota + botón + sonido + sangre + fling + parpadeo + susurro +
+aparición. No es «un evento cada 120 s»: a veces pasa todo junto. Se copia la **lista** de eventos;
+la escalera se reemplaza por una tabla de pesos.
+
+### Dos entradas de §9 estaban mal, y eran nuestras
+
+- **`FlingNearbyPhysicsProps` nunca corrió.** Su único call site testea `IsValid(ghost)` sobre un
+  **global que no se declara en ninguna parte** (sólo existe como local dentro de
+  `CreateGhostApparition`), así que la rama es inalcanzable. La función se lee sana, pero **nadie la
+  ejerció**: era «gratis» en nuestra tabla y en realidad es código sin probar.
+- **`BreakNearbyProps` no rompe props físicos.** Sólo `func_breakable` recibe `Fire("Break")`; a un
+  `prop_physics` le aplica la misma fuerza random que Fling, sin límite de masa y sin sonido. No es
+  «la versión brutal»: es Fling con menos guardas.
+
+**La regla:** el nombre de una función miente igual que un comentario, y «la llama el propio mod» es
+una suposición hasta que se busca el call site.
+
+### Otros cuatro
+
+Fuga de timers a 33 Hz (`GhostDistort_<entindex>`, `timer.Remove` no aparece nunca); `HuntPlayer`
+apilando un timer de borrado por llamada; el debounce de puertas comprobado **después** de disparar
+`Fire("Use")`; y `CheckFlashlightEffects()` entera muerta porque compara contra `weapon_flashlight`,
+que no existe en GMod base.
+
+### El hallazgo: gmpa trae cuatro decals que su Lua no usa jamás
+
+`hand_l1/l2/r1/r2` (`.vmt` + `.vtf`) en `materials/effects/gmpa/decals/`, `DecalModulate` con
+`$decalfadeduration 60.00`. **En 1056 líneas la palabra «decal» aparece una sola vez, en un
+comentario.** Qué son exactamente esas cuatro texturas **no se miró en esta sesión** — se infirió del
+nombre del archivo, y la sesión 7 refutó la inferencia.
+
+### Diseñada la evidencia UV (EQUIPAMIENTO §8, nueva)
+
+`uv` la tienen **13 de los 30 tipos** (medido sobre `ghost_types.lua`): sin ella, 13 tipos quedan sin
+identificar. **Un PNG no puede ser un decal** (verificado: un decal pide `.vmt` con `$decal 1` +
+`.vtf`), **pero sí puede ser un material dibujado a mano** (verificado: Cargo carga PNGs así en
+producción). Y el decal es la herramienta equivocada igual: se ve siempre y para todos, cuando la
+mecánica pide invisible-hasta-la-UV. La forma elegida es guardar la huella como **dato** server-side
+y dibujarla client-side con `cam.Start3D2D` bajo la puerta de «tengo la UV apuntando» — que compra
+además el teñido y el fade por código. La huella de sal (`salt_step.mdl`, que es un **modelo**) viaja
+por la misma puerta con `SetNoDraw(true)`.
+
+---
+
 ## 2026-08-02 — Sesión 5: qué forma tiene el equipo, y qué le da Cargo
 
 **Sin código de entidades.** Se contestaron tres preguntas del autor y se corrigió un error propio.

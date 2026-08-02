@@ -398,3 +398,107 @@ encendedor y unas pastillas, que en pantalla ocupan cuarenta píxeles.
 Bajar a 1024² sería invisible en juego para casi todo y ahorra ~190 MB de descarga por cliente.
 **No lo hice: es modificar el asset de un tercero y cambia lo que ellos publicaron.** Queda como
 recomendación, y es tu decisión.
+
+---
+
+## 8. La evidencia **Ultraviolet**: huellas que sólo existen bajo la luz
+
+### 8.1 El tamaño de la pregunta **[medido sobre `ghost_types.lua`]**
+
+`uv` es una de las 7 evidencias y la tienen **13 de los 30 tipos** — empatada con `writing` y `emf5`
+como la segunda más frecuente. **Sin UV, 13 tipos quedan sin identificar.** No es adorno.
+
+### 8.2 Los decals ya existen, y están huérfanos **[hallazgo, 2026-08-02]**
+
+`[gm] paranormal events` trae en `materials/effects/gmpa/decals/`:
+
+```
+hand_l1.vmt + .vtf     hand_r1.vmt + .vtf
+hand_l2.vmt + .vtf     hand_r2.vmt + .vtf
+```
+
+**Su Lua no las usa jamás.** En 1056 líneas la palabra «decal» aparece **una sola vez**, en un
+comentario (línea 948: `-- Visualize favorite room with mist and decals`). Ni un `game.AddDecal`, ni
+un `util.Decal`. Los assets están completos, en el formato correcto, y sin cablear.
+
+> **Corrección de la primera versión de esta sección (mismo día).** La escribí diciendo «cuatro
+> huellas de mano, izquierda y derecha, dos variantes» y que **60 s de fade son exactamente la
+> duración de las huellas en Phasmophobia, así que el autor las hizo para esto**. Las dos cosas eran
+> inferencias del **nombre de archivo** y de un número que coincidía. **Se miraron, y las refutan:**
+>
+> | Archivo | Qué es realmente |
+> |---|---|
+> | `hand_l1` | Palma completa, mano izquierda — **rojo oscuro sobre blanco** |
+> | `hand_r1` | Palma completa, mano derecha |
+> | `hand_l2` / `hand_r2` | **No son huellas: son arrastres** de cuatro dedos raspando |
+>
+> **Son decals de SANGRE**, no de UV: el shader `DecalModulate` multiplica el fondo para dejar una
+> mancha, y `$decalfadeduration 60` es un valor corriente de decal de gore. Los cuatro `.vtf` sí
+> tienen hash distinto (contrastados), así que son cuatro texturas reales y no una repetida.
+>
+> **La forma sirve igual** — ver §8.6 — pero hay que **derivarla**, no copiarla. Y la lección es la
+> de siempre, en su versión visual: **el nombre de un archivo miente igual que un comentario, y acá
+> sí había forma de refutarlo mirando.** Dos de los cuatro «hand_*» no son manos.
+
+### 8.3 ¿Sirve un `.png`? Depende del camino — y hay dos
+
+**Como decal: NO. [verificado]** Un decal de Source necesita **`.vmt` con `$decal 1` + `.vtf`**. Lo
+confirma el workspace: ARC9MW registra `game.AddDecal("molotovscorch", "decals/molotovscorch")` y al
+lado están el `.vmt` (con `"$decal" 1`) y el `.vtf`. **Un PNG no puede ser un decal.**
+
+**Como material dibujado a mano: SÍ. [verificado]** Cargo lo hace en producción
+(`corpus_cargo_lights.lua:112`): `Material("corpus_cargo/wheel/flashlight.png", "smooth mips")`,
+con un `file.Exists` como gate. La regla que sale de ahí y vale para todo el addon:
+
+> **Un PNG sirve donde se acepta un `IMaterial`; falla donde se pide un texture ID o un parámetro de
+> shader.** (Cargo pagó el segundo caso: `WepSelectIcon` no admite PNG.)
+
+### 8.4 Pero el decal es la herramienta equivocada, aunque salga gratis
+
+**Un decal se ve siempre y para todos.** La mecánica pide lo contrario: la huella tiene que ser
+**invisible hasta que le apuntás con la UV**. Pegarlas como decal hace que el jugador las vea sin la
+linterna, y entonces la evidencia deja de ser evidencia — **peor que no tenerla**, porque convierte
+la linterna UV en un adorno.
+
+`util.DecalEx` es client-side y parece la salida (pegar sólo en el cliente que tiene la UV prendida).
+**Su trampa:** no hay forma de borrar un decal individual. Al apagar la UV quedan pegadas hasta un
+`RemoveAllDecals`, que además borra la sangre y todo lo demás de esa superficie.
+
+### 8.5 La forma que sí da la mecánica
+
+El servidor guarda la huella como **dato**; el cliente la dibuja **sólo bajo la puerta**:
+
+```lua
+-- SERVER: al interactuar, guardar el punto. No se pinta nada.
+prints[#prints+1] = { pos = tr.HitPos, normal = tr.HitNormal, hand = math.random(1,4),
+                      expire = CurTime() + 60 }
+
+-- CLIENT: existe únicamente mientras la UV apunta. Las cuatro texturas son
+-- MÁSCARAS BLANCAS (§8.6): el color entero lo pone SetDrawColor.
+local MAT = Material("phantasmagoria/uv/hand_left.png", "smooth")
+hook.Add("PostDrawTranslucentRenderables", "phantasmagoria_uv", function()
+    if not PHANTASMAGORIA.HoldingUV() then return end        -- la puerta ES la mecánica
+    for _, p in ipairs(PHANTASMAGORIA.Prints) do
+        local ang = p.normal:Angle(); ang:RotateAroundAxis(ang:Right(), -90)
+        cam.Start3D2D(p.pos + p.normal * 0.2, ang, 0.1)
+            surface.SetMaterial(MAT); surface.SetDrawColor(180, 220, 255, 200)
+            surface.DrawTexturedRect(-64, -64, 128, 128)
+        cam.End3D2D()
+    end
+end)
+```
+
+Tres cosas que esto compra y el decal no: **el color** (teñir un PNG blanco con `SetDrawColor`, sin
+una textura por color), **el fade** (alfa desde `expire - CurTime()`, sin depender de
+`$decalfadeduration`), y **la puerta**, que es toda la mecánica.
+
+**La huella de sal viaja en la misma puerta.** `demit/salt_step.mdl` es un **modelo**, no un decal:
+se spawnea con `SetNoDraw(true)` y se dibuja client-side con la misma condición. Un solo gate para
+las dos evidencias UV, y ningún mecanismo nuevo.
+
+### 8.6 Lo que falta decidir
+
+Los cuatro decals de gmpa dan la escala (`$decalscale .35`), el fade (60 s) y la forma, pero **son de
+sangre**: copiarlos tal cual daría manos rojas. Queda una sola pregunta abierta: **arte propio, o
+derivar de esos `.vtf` una máscara teñible**. Son assets de un tercero, y este repo no los versiona
+— decisión del autor.

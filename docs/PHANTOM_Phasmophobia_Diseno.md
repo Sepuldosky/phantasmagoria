@@ -432,11 +432,28 @@ Sus funciones son globales y se llaman directo:
 ```lua
 CreateShadowFigure( pos )         -- manifestación tipo "shadow" (la sana; respeta el argumento)
 GhostInteractWithDoor()           -- puerta que se abre sola y se cierra en 3-15 s
-FlingNearbyPhysicsProps( self )   -- ← el Poltergeist, literalmente
-BreakNearbyProps( self )          -- versión brutal, para el Oni/Demon
+FlingNearbyPhysicsProps( self )   -- el Poltergeist... pero NUNCA CORRIÓ. Ver abajo
+BreakNearbyProps( self )          -- NO rompe props. El nombre miente. Ver abajo
 ParticleEffectAttach( "gmpa_shadow_figure_clouds", PATTACH_POINT_FOLLOW, self, 0 )
 table.Random( ghostwhispers )     -- 14 susurros: voc_comehere_01, voc_followme, voc_overhere
 ```
+
+> **Corrección de las dos últimas (2026-08-02, leyendo el archivo entero).** Este bloque decía «el
+> Poltergeist, literalmente» y «versión brutal, para el Oni/Demon». Ninguna de las dos se sostiene:
+>
+> - **`FlingNearbyPhysicsProps` no se llama nunca.** Su único call site (línea ~608) es
+>   `if IsValid(ghost) then FlingNearbyPhysicsProps(ghost) end`, y `ghost` ahí es un **global que no
+>   se declara en ninguna parte** — sólo existe como local dentro de `CreateGhostApparition`. O sea:
+>   `IsValid(nil)` es false y la rama es inalcanzable. La función **se lee sana** (radio 500,
+>   tope de 10 props, límite de masa 10 kg, `ApplyForceCenter` random, sonido), pero **nadie la
+>   ejerció jamás**. Es código sin probar, no código probado — la distinción importa porque la
+>   estábamos contando como «gratis».
+> - **`BreakNearbyProps` no rompe props físicos.** Sólo a `func_breakable` le dispara `Fire("Break")`;
+>   a un `prop_physics` le aplica **la misma fuerza random que Fling**, sin el límite de masa y sin
+>   sonido. No es una versión brutal: es Fling con menos guardas y peor nombre.
+>
+> **La regla otra vez:** el nombre de una función miente igual que un comentario, y «la llama el
+> propio mod» es una suposición hasta que se busca el call site.
 
 **Con la advertencia de §8 del documento hermano:** tres de sus cuatro efectos de partícula están
 muertos por un `IsValid(Vector)`, así que las partículas conviene emitirlas a mano —
@@ -518,14 +535,53 @@ Y `HuntPlayer()` mueve al fantasma con `ghost:SetPos(pos + dir * 10)`: teleporte
 sin navmesh y atravesando paredes. **Nuestra base hace eso infinitamente mejor** — es la razón por la
 que existe este proyecto.
 
+#### Segunda pasada (2026-08-02): seis defectos más, leyendo las 1056 líneas
+
+Los tres de arriba salieron de buscar bugs concretos. Éstos salieron de leer el archivo **entero**, y
+el primero cambia cómo se siente el mod más que los otros cinco juntos:
+
+4. **La escalera de eventos no es exclusiva.** `RandomParanormalEvents()` tira
+   `math.random(1,100)` una vez y después encadena **nueve `if eventChance <= N`** —5, 10, 15, 25,
+   30, 40, 50, 60, 80— **sin un solo `elseif`**. Un tiro de 3 dispara **los nueve**: puerta + luz
+   rota + botón + sonido + sangre del techo + fling + parpadeo + susurro + una aparición, todo en el
+   mismo frame. No es «un evento cada 120 s»: es una lotería donde a veces pasa **todo junto**. La
+   forma que el autor claramente quiso —una tabla de pesos— es la que hay que copiar, no el código.
+5. **`FlingNearbyPhysicsProps` es inalcanzable** y **`BreakNearbyProps` no rompe props físicos** —
+   ver la corrección al bloque de §9.
+6. **Fuga de timers a 33 Hz.** `timer.Create("GhostDistort_"..EntIndex(), 0.03, 0, ...)` y
+   **`timer.Remove` no aparece nunca** para ese nombre. Cuando la aparición muere, el callback hace
+   `if not IsValid(ghost) then return end` y **el timer sigue corriendo para siempre**. Acotado por
+   reciclado de EntIndex, pero son decenas de timers a 33 Hz haciendo nada.
+7. **`HuntPlayer` crea un `timer.Simple(10-15)` de borrado en cada llamada**, y la llama
+   `CheckPlayerAggro` por cada fantasma × cada jugador. Se apilan docenas sobre la misma entidad.
+8. **El debounce de puertas está muerto.** `GhostInteractWithDoor` comprueba
+   `doorLastInteraction[door:EntIndex()]` **después** de haber disparado `door:Fire("Use")`. La regla
+   de «no tocar la misma puerta dos veces en 60 s» no previene nada. (La función igual sirve: lo que
+   nos interesa de ella es el `Fire("Use")` + el cierre diferido, no su contabilidad.)
+9. **`CheckFlashlightEffects()` es una rama muerta entera [lectura]:** compara
+   `ply:GetActiveWeapon():GetClass() == "weapon_flashlight"`, y **la linterna de GMod base no es un
+   arma**. Toda la mecánica de «la luz baja el aggro» nunca se ejecuta.
+
+**Lo que esto no cambia:** el veredicto de §11.1 sigue en pie — el mod es 1:1 con Phasmophobia como
+*diseño*. **Lo que sí cambia:** cuáles son «las funciones sanas» de §11.3.
+
 ### 11.3 Qué tomamos, entonces
 
 - **El catálogo de eventos y la forma de las convars** — como especificación, ya validada por alguien
-  que hizo el mismo ejercicio.
+  que hizo el mismo ejercicio. **La forma, no el código:** su escalera de `if` es acumulativa
+  (defecto 4), así que se copia la *lista* de eventos y se escribe una tabla de pesos.
 - **Los assets**: las partículas (`gmpa_ghost_orb_green`, `gmpa_shadow_lurker`,
-  `gmpa_shadow_figure_clouds`), los 151 sonidos, `homm.mdl`.
-- **Las funciones sanas**, llamadas directo: `GhostInteractWithDoor()`, `FlingNearbyPhysicsProps(self)`,
-  `BreakNearbyProps(self)`, `CreateShadowFigure(pos)`.
+  `gmpa_shadow_figure_clouds`), los 151 sonidos, `homm.mdl`, **y los cuatro decals de huella de
+  mano** que el mod trae y nunca cablea — ver `EQUIPAMIENTO.md` §8.
+- **Las funciones llamables**, con lo que ahora sabemos de cada una:
+
+  | Función | Veredicto tras la 2.ª pasada |
+  |---|---|
+  | `GhostInteractWithDoor()` | **Sirve.** Su contabilidad de 60 s está muerta, pero el `Fire("Use")` + cierre diferido es lo que queremos |
+  | `CreateShadowFigure(pos)` | **Sirve.** Es la que respeta el argumento |
+  | `FlingNearbyPhysicsProps(self)` | **Se lee sana pero nunca corrió** — su call site es inalcanzable. Probarla antes de contarla |
+  | `BreakNearbyProps(self)` | **No hace lo que el nombre dice.** Si querés romper `prop_physics`, hay que escribirlo |
+
 - **Los orbes los reimplementamos** en dos líneas, esquivando el bug:
   `ParticleEffect("gmpa_ghost_orb_green", pos, Angle(0,0,0))`.
 
