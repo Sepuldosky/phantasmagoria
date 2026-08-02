@@ -80,8 +80,10 @@ referencia. Resumidas:
 
 ## Lo que está abierto
 
-- **Los sonidos ambiguos.** ~40 de los 265 no se pueden mapear por nombre. Ver
-  [docs/SONIDOS.md](docs/SONIDOS.md) — el autor va a describirlos y ahí se renombran por literalidad.
+- **Los sonidos ambiguos: 46 de 265.** Están en `sound/phantasmagoria/_sin_identificar/`, con el
+  detalle de qué falta saber de cada uno en el `about.txt` de esa carpeta (agrupados y con duración).
+  El autor los describe y ahí se renombran por literalidad y se mueven a la carpeta que toque.
+  Los otros **219 ya están mapeados** por acción.
 - **Los equipos.** Props portados a descargar. Decidir cuáles entran primero: EMF reader, spirit box,
   cámara, termómetro, libro de escritura, UV, DOTS, salt, crucifijo.
 - **El ritual de vuelta** del destierro: qué es y qué hace falta para ejecutarlo.
