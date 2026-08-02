@@ -43,7 +43,7 @@ dentro del cerebro, el motor está mal cortado y hay que rediseñar antes de seg
 | [`dev/gen_types.py`](dev/gen_types.py) | El generador de la tabla |
 | [`docs/PHANTOM_Phasmophobia_Diseno.md`](docs/PHANTOM_Phasmophobia_Diseno.md) | El diseño: motor de rasgos, máquina de estados, conversión de unidades |
 | [`docs/PHANTOM_Referencia.md`](docs/PHANTOM_Referencia.md) | La investigación de la base Terminator: qué regala y dónde están sus trampas |
-| [`docs/EQUIPAMIENTO.md`](docs/EQUIPAMIENTO.md) | Los 36 props verificados desde el binario, y cómo se implementa cada mecánica |
+| [`docs/EQUIPAMIENTO.md`](docs/EQUIPAMIENTO.md) | Los 36 props verificados desde el binario, cómo se implementa cada mecánica, qué forma toma cada equipo (SWEP / entidad / ítem) y la integración con Cargo |
 | [`docs/CREDITOS.md`](docs/CREDITOS.md) | Autores de los assets incluidos |
 | [`lua/autorun/phantasmagoria_assetcheck.lua`](lua/autorun/phantasmagoria_assetcheck.lua) | Avisa si tenés addons del Workshop que duplican estos assets |
 

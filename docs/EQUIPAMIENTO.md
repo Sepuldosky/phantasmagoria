@@ -55,9 +55,23 @@ se ve de dónde sale la diferencia:
 | `phas/eqp_lighter` | 1.0 | 0,77 | **0,025 kg** | `eqp_lighter` |
 
 El Equipment Pack deja `mass 1.0` y **le deja el cálculo a Source** (volumen × densidad del
-surfaceprop); el Prop Pack clavó `1000` a mano en **todos** sus props. El mismo crucifijo pesa 0,6 kg
-en un pack y una tonelada en el otro — y con una tonelada sólo lo movés con physgun, nunca con la
-mano.
+surfaceprop); el Prop Pack clava el número a mano. El mismo crucifijo pesa 0,6 kg en un pack y una
+tonelada en el otro — y con una tonelada sólo lo movés con physgun, nunca con la mano.
+
+> **Corrección (2026-08-02).** Este párrafo decía que el Prop Pack clavó `1000` en **todos** sus
+> props. Es falso, y lo desmiente la misma fuente que el párrafo cita. Leídos los **13** `.phy`:
+>
+> | `mass` | Cuántos | Cuáles |
+> |---:|---:|---|
+> | **1000** | 6 | `camera_open`, `crucifix`, `cursed_book`, `cursed_book_open`, `emf`, `uv_torch` |
+> | **100** | 7 | `flashlight`, `motion_sensor`, `salt`, `salt_b`, `salt_step`, `spiritbox`, `ther_m` |
+>
+> **No cambia nada de lo que sigue:** 100 kg para una linterna es igual de inusable que 1000 para un
+> crucifijo, y la vía sigue siendo `SetMass()` en runtime. Lo que cambia es el hábito — la frase
+> generalizó a 13 desde los 3 casos de la tabla de arriba, y ninguno de los diez restantes se había
+> abierto. **La tabla de `prop_data.lua` nunca dependió de esto** (fija una masa objetivo por modelo,
+> no una corrección uniforme), así que el código estaba bien mientras la prosa estaba mal. Los 13
+> declaran además `surfaceprop metal`, lo que confirma por qué la sal sonaba a chapa.
 
 **Se arregla en runtime, sin tocar los assets.** Tres vías posibles y sólo una conviene:
 
@@ -230,7 +244,147 @@ fantasma sin mostrarlo es justo el tipo de tensión que el resto del addon busca
 
 ---
 
-## 5. Pendiente: el peso de las texturas
+## 5. Cómo se sostiene el equipo: **SWEP, entidad o ítem**
+
+### 5.1 La medición que decide la forma **[medido 2026-08-02]**
+
+`python dev/mdlinfo.py models/` sobre los 36:
+
+```
+los 36 modelos:  numbones = 1,  numseq = 1
+```
+
+Un hueso y una secuencia, sin excepción. Eso cierra dos preguntas antes de discutirlas:
+
+1. **Manos: imposible.** `SWEP.UseHands` necesita un viewmodel con el rig de brazos (`ValveBiped`).
+   Un hueso solo no lo tiene. **El equipo flotando frente a la cámara no es una elección estética:
+   es la única opción sin descompilar y recompilar.**
+2. **Animación: no hay.** Una sola secuencia es la pose de referencia. No hay draw, ni idle, ni
+   guardado. **Todo el movimiento tiene que ser código** — bob, sway por velocidad, un lerp al
+   sacarlo. El abierto/cerrado del trípode es un bodygroup, no una animación (§3.4).
+
+### 5.2 El reparto
+
+No todo el equipo es la misma cosa, y meterlo todo en SWEPs sería tan malo como no usar ninguno:
+
+| Tipo | Forma | Por qué |
+|---|---|---|
+| Se sostiene y se lee — EMF/K2, spirit box, termómetro, UV, cámara de fotos | **SWEP** | Es lo único que da mano, viewmodel y hotbar; y es lo que Cargo equipa vía `def.weapon_class` (§6) |
+| Se planta y queda — trípode, DOTS, sensor de movimiento, cámara de video | **Entidad** | El SWEP es el *deployer*: el ataque primario spawnea la entidad y la saca del inventario |
+| Se consume — pastillas, sal, incienso, encendedor | **Ítem con `onUse`** | Son los quick slots F1-F4 de Cargo, que **exigen** `onUse`: sin él el slot los rechaza |
+| Escenografía — libro, crucifijo, vela, muñeca vudú | **Entidad** | Nunca están en la mano: el fantasma interactúa con ellos en el piso (§3.2, §4) |
+
+### 5.3 El viewmodel flotante — dos caminos, y uno está verificado y el otro no
+
+**Camino corto — el prop *es* el viewmodel.** Se reposiciona con `CalcViewModelView`:
+
+```lua
+SWEP.ViewModel     = "models/kiwontatv/ghost_busters/emf_reader_k2.mdl"
+SWEP.WorldModel    = "models/kiwontatv/ghost_busters/emf_reader_k2.mdl"
+SWEP.UseHands      = false   -- 1 hueso: no hay dónde enganchar las manos
+SWEP.ViewModelFOV  = 60      -- el prop no fue autorado para el FOV 90 de un viewmodel
+
+function SWEP:CalcViewModelView( vm, oldPos, oldAng, pos, ang )
+    local bob = math.sin( CurTime() * 2 ) * 0.3
+    return pos + ang:Forward() * 12 + ang:Right() * 6 + ang:Up() * ( -5 + bob ), ang
+end
+
+-- el nivel del K2 en la mano: el skin, desde una var networked del propio SWEP
+function SWEP:PreDrawViewModel( vm )
+    vm:SetSkin( self:GetEMFLevel() )
+end
+```
+
+> **[sin verificar]** Que un prop de **1 hueso y 1 secuencia** funcione como `SWEP.ViewModel` es lo
+> que sé del engine, **no algo contrastado contra código de este workspace**. Busqué precedente: los
+> SWEPs de `dev/other/` usan **todos** viewmodels dedicados `v_`/`c_`, ninguno un prop pelado. Es
+> barato de medir en la primera pasada — si no renderiza o aparece en un lugar absurdo, se ve al
+> instante. **El engine es un tercero:** vale la misma desconfianza que ARC9.
+
+**Camino largo — dibujarlo a mano. [verificado]** Tiene precedente leído en este workspace: el NVG de
+Neosun (`dev/other/[vmanip] neosun's cooler nightvision/lua/autorun/cl_arctic_nvg.lua:73` y `:255`)
+dibuja props exactamente así — `ClientsideModel` → `SetNoDraw(true)` → `SetPos`/`SetAngles`/
+`DrawModel()` dentro de un hook de render, anclado a un attachment. Anclarlo a `EyePos()`/
+`EyeAngles()` en vez de al hueso de la cabeza da el objeto flotante con control total.
+
+**Su costo, que es conocido y no chico:** se dibuja en la pasada del mundo, así que usa el FOV del
+mundo y **atraviesa paredes**. Los viewmodels no lo hacen porque el engine los dibuja en un rango de
+profundidad aparte.
+
+**Orden recomendado:** el corto primero. Si en juego el prop-como-viewmodel se porta mal, el largo
+está probado y el trabajo de posicionamiento se recicla entero.
+
+---
+
+## 6. Integración con **Cargo** — soft-dep, y hay más superficie de la que parece
+
+Cargo es el módulo de inventario del ecosistema Corpus
+([`github.com/Sepuldosky/corpus-cargo`](https://github.com/Sepuldosky/corpus-cargo); en el workspace,
+`../../corpus-cargo/`). Phantasmagoria está **fuera** de Corpus y no puede hard-depender de él: vale
+lo mismo que §3.5 — detección en runtime y **siempre** un camino propio.
+
+### 6.1 El hallazgo que decide todo: **si el equipo es SWEP, Cargo se lo come solo** [verificado]
+
+`../../corpus-cargo/lua/corpus_cargo/server/corpus_cargo_capture.lua` captura **toda** arma que el
+engine le entregue al jugador y le fabrica un def `autogen`. Sin registrar nada, nuestros SWEPs
+entrarían al inventario con el **peso de fallback (2,5 kg)**, categoría `weapons` y **sin precio**.
+Con defs propios entran con la masa real que ya está medida del `.phy`.
+
+**No es opcional decidirlo:** con Cargo montado pasa igual. La elección es entre hacerlo bien o que
+salga mal solo. (La vía de escape existe y es `CARGO.Capture.Ignore`, para lo que no deba ser ítem.)
+
+### 6.2 Lo que se gana registrando defs
+
+`Cargo.Items.Register{ id, name, weight, class, category, ... }`:
+
+| Se gana | Detalle |
+|---|---|
+| **Íconos gratis** | El pipeline renderiza el modelo a PNG y lo cachea. Los 36 props tienen ícono sin dibujar nada |
+| **Peso → velocidad** | La curva cobra los 7,2 kg del libro abierto y los 5,5 del trípode. Cargar el kit completo *debe* costar, y acá sale gratis |
+| **Drop, contenedores, comercio** | `def.value` los hace comerciables; sin `value` no se venden (ausencia = "no está a la venta", no "gratis") |
+| **Consumibles** | `def.onUse` para pastillas/sal/incienso. **Se registra en los dos realms** (COR-12): la UI habilita el botón mirando `isfunction(def.onUse)` del lado cliente |
+
+### 6.3 Tres registros vivos que encajan casi literalmente [verificado]
+
+| API de Cargo | Uso acá |
+|---|---|
+| `Wheel.RegisterLightSource( id, spec )` | Linterna, linterna fuerte, UV y glowstick como **grupo de luces del wheel radial**. Es exactamente para lo que se diseñó |
+| `StatusPanel.RegisterBar( module, spec )` | La **cordura** de §3.5 como barra: `{ id, label, getValue = function(ply) → 0..100, color }` |
+| `Capture.RegisterWorldPickup( class, spec )` | Props tirados en el mapa que se recogen con WALK+USE y entran al grid |
+
+### 6.4 El límite honesto: **Cargo no tiene API para registrar slots** [verificado]
+
+`corpus_cargo_slots.lua` es data, y la columna de equipamiento está maquetada a mano en la UI. Los
+slots de arma filtran por `category:weapons`, así que **para que un equipo entre en un slot de arma
+su categoría tiene que ser `weapons`**. Dos salidas:
+
+- **Hoy, sin tocar Cargo:** categoría `weapons` + `def.equip_slots = { "primary", "secondary",
+  "sidearm" }`. Da las **teclas 1-4 estilo STALKER, el wheel radial y el enfundado** gratis, y un
+  hotbar de 3-4 equipos que es *justo* el de Phasmophobia. Cuesta aparecer bajo la pestaña Weapons,
+  mezclados con las armas si hay ARC9.
+- **A mediano plazo:** pedirle a Cargo un `Slots.Register` para una fila de *gear*. Eso es trabajo de
+  Cargo, no de este addon. **No apendear a `Slots.List` por la ventana:** el slot no se renderiza en
+  la columna y quedaría medio implementado.
+
+### 6.5 La forma del enganche
+
+```lua
+-- ni una llamada a Corpus en file-scope: el orden de carga entre addons no se asume
+hook.Add( "Initialize", "phantasmagoria_cargo", function()
+    if not ( Corpus and Corpus.GetModule and Corpus.GetModule( "cargo" ) ) then
+        PHANTASMAGORIA.OwnInventory()   -- el camino propio, que tiene que existir igual
+        return
+    end
+    PHANTASMAGORIA.RegisterCargoItems()
+end )
+```
+
+Y la regla que no se negocia: **sin Cargo el addon no puede quedarse sin forma de sostener el equipo
+ni de leer la cordura.** Degradar, nunca romper — la misma de §14.5 del diseño.
+
+---
+
+## 7. Pendiente: el peso de las texturas
 
 **251 MB en 58 `.vtf`.** Todas son **2048×2048 DXT5** (5,3 MB cada una) — incluidas las de un
 encendedor y unas pastillas, que en pantalla ocupan cuarenta píxeles.

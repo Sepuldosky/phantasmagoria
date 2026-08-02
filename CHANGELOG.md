@@ -7,6 +7,52 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-02 — Sesión 5: qué forma tiene el equipo, y qué le da Cargo
+
+**Sin código de entidades.** Se contestaron tres preguntas del autor y se corrigió un error propio.
+
+### Medido
+
+- **Los 36 modelos tienen `numbones = 1` y `numseq = 1`**, sin excepción (`dev/mdlinfo.py`). Eso
+  decide la forma del equipo antes de discutirla: **no hay rig para `UseHands`** (el viewmodel
+  flotante no es una elección estética, es la única opción sin recompilar) y **no hay animación**
+  (todo el movimiento es código). Ver EQUIPAMIENTO §5.1.
+- **Los 13 `.phy` del Prop Pack, uno por uno**: **6 en 1000 kg** y **7 en 100**, no trece en 1000.
+  Los 13 declaran `surfaceprop metal` — de ahí que la sal sonara a chapa.
+
+### Corregido — un error de la sesión anterior
+
+EQUIPAMIENTO §1.2 afirmaba que el Prop Pack «clavó `1000` a mano en **todos** sus props». **Falso, y
+lo desmiente la misma fuente que el párrafo citaba**: la frase generalizó a 13 desde los 3 casos de
+su propia tabla, y ninguno de los otros diez se había abierto. `prop_data.lua` arrastraba la misma
+frase en su header **mientras el comentario de su tabla, 35 líneas más abajo, decía «100 o 1000»**:
+el archivo se contradecía a sí mismo. Corregidos los dos.
+
+**No cambió ninguna decisión** — 100 kg para una linterna es igual de inusable que 1000 para un
+crucifijo, y la vía sigue siendo `SetMass()` en runtime. **El código nunca dependió del error**: la
+tabla fija una masa objetivo por modelo, no una corrección uniforme. Prosa mal, código bien.
+
+### Diseñado (EQUIPAMIENTO §5 y §6, nuevas)
+
+- **El reparto del equipo en cuatro formas** — SWEP lo que se sostiene, entidad lo que se planta y lo
+  que es escenografía, ítem con `onUse` lo que se consume.
+- **Integración con Cargo**, leída contra su código. El hallazgo que manda: **la captura de Cargo se
+  come cualquier SWEP que el engine entregue** y le fabrica un def `autogen` de 2,5 kg sin precio.
+  Con Cargo montado pasa igual — la elección es registrar defs propios o que salga mal solo.
+- Tres registros de Cargo que encajan casi literalmente: `Wheel.RegisterLightSource` (linterna, UV,
+  glowstick), `StatusPanel.RegisterBar` (la cordura de §3.5), `Capture.RegisterWorldPickup`.
+- **El límite:** Cargo **no** tiene API para registrar slots. O categoría `weapons` + `equip_slots`
+  (y se gana el hotbar 1-4 y el wheel gratis), o un `Slots.Register` que es trabajo de Cargo.
+
+### Frontera declarada
+
+Que un prop de 1 hueso y 1 secuencia funcione como `SWEP.ViewModel` **[sin verificar]**: los SWEPs de
+`dev/other/` usan todos viewmodels dedicados `v_`/`c_`, ninguno un prop pelado. El camino alternativo
+—dibujarlo a mano con `ClientsideModel`— **sí** tiene precedente leído (el NVG de Neosun), y su costo
+es conocido: se dibuja en la pasada del mundo, así que atraviesa paredes.
+
+---
+
 ## 2026-08-02 — Sesión 4: los props de equipamiento, verificados bit por bit
 
 ### Hecho

@@ -9,9 +9,17 @@
       phasmophobia/demit/crucifix   "mass" "1000.0"  -> totalmass 1000 kg
 
     El Equipment Pack deja mass=1.0 y le deja el calculo a Source (masa =
-    volumen x densidad del surfaceprop). El Prop Pack clavo 1000 a mano en
-    TODOS sus props. El mismo crucifijo pesa 0,6 kg en uno y una tonelada en
-    el otro: con 1000 kg no se puede levantar con la mano, solo con physgun.
+    volumen x densidad del surfaceprop). El Prop Pack clava el numero a mano:
+    medidos los 13 .phy, son SEIS en 1000 (camera_open, crucifix, cursed_book,
+    cursed_book_open, emf, uv_torch) y SIETE en 100 (flashlight, motion_sensor,
+    salt, salt_b, salt_step, spiritbox, ther_m). El mismo crucifijo pesa 0,6 kg
+    en uno y una tonelada en el otro: con 1000 kg no se puede levantar con la
+    mano, solo con physgun; con 100 kg tampoco.
+
+    (Este header decia "clavo 1000 en TODOS sus props" y el comentario de la
+    tabla, mas abajo, decia "100 o 1000": el archivo se contradecia a si mismo.
+    Corregido 2026-08-02 midiendo los 13. La tabla no cambia: fija una masa
+    objetivo por modelo, no una correccion uniforme.)
 
     NO se parchean los .phy: son assets de terceros. La masa se fija en
     runtime con PhysObj:SetMass(), que es reversible y no modifica nada.

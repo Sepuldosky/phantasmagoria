@@ -88,8 +88,16 @@ referencia. Resumidas:
   detalle de qué falta saber de cada uno en el `about.txt` de esa carpeta (agrupados y con duración).
   El autor los describe y ahí se renombran por literalidad y se mueven a la carpeta que toque.
   Los otros **219 ya están mapeados** por acción.
-- **Los equipos.** Props portados a descargar. Decidir cuáles entran primero: EMF reader, spirit box,
-  cámara, termómetro, libro de escritura, UV, DOTS, salt, crucifijo.
+- **Los equipos.** La **forma** ya está decidida ([docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §5):
+  SWEP lo que se sostiene, entidad lo que se planta y la escenografía, ítem con `onUse` lo que se
+  consume. Falta **elegir cuáles entran primero** — EMF reader, spirit box, cámara, termómetro, libro
+  de escritura, UV, DOTS, salt, crucifijo — y escribir el primero de punta a punta. El viewmodel es
+  el prop flotando frente a la cámara: los 36 modelos tienen **1 hueso y 1 secuencia**, así que no
+  hay manos ni animación posibles sin recompilar (§5.1, medido).
+- **Cargo.** La integración está diseñada y leída contra su código (§6), sin escribir. Lo que hay que
+  saber antes de tocar nada: **la captura de Cargo se come cualquier SWEP** que el engine entregue y
+  le fabrica un def de 2,5 kg sin precio, así que registrar defs propios no es opcional si Cargo
+  está montado. Sigue siendo **soft-dep**: sin Cargo tiene que haber camino propio.
 - **El ritual de vuelta** del destierro: qué es y qué hace falta para ejecutarlo.
 - **Las posesiones malditas: son 7 y tenemos 1.** Documentadas con sus mecánicas y costes de cordura
   en [docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §4. Sólo la **Voodoo Doll** tiene modelo; el
