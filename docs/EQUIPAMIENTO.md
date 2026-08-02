@@ -188,7 +188,44 @@ quedarse sin forma de leer la cordura.
 
 ---
 
-## 4. Pendiente: el peso de las texturas
+## 4. Las posesiones malditas: son **7**, y tenemos **1**
+
+**[verificado]** contra el backend del cheat sheet (`wiki.json`, mismo origen que la tabla de tipos),
+no de memoria.
+
+| Posesión | Qué hace | Cordura | Modelo |
+|---|---|---:|---|
+| **Voodoo Doll** | Cada alfiler fuerza una interacción del fantasma. El del **corazón** dispara un *cursed hunt* — igual que si la usás con 0 % de cordura | 5 % por alfiler, **10 %** el del corazón | ✅ `phas/evt_voodoo_doll` |
+| **Summoning Circle** | Encender las **5 velas rojas** con un encendedor. Al prender la quinta: evento, el fantasma se teletransporta al círculo, espera **5 s** y arranca un cursed hunt | **16 % por vela**, 80 % total | ⚠️ **armable** — ver abajo |
+| **Ouija Board** | Preguntás y responde deletreando con la güija. Da el cuarto **actual**, no el favorito. Hay que despedirse para cerrar la sesión | **50 %** | ❌ |
+| **Haunted Mirror** | Muestra el **cuarto favorito**. Se rompe si el usuario se queda sin cordura, y al romperse arranca un cursed hunt | 7,5 %/s, mínimo 20 % | ❌ |
+| **Music Box** | A **20 m** el fantasma canta y delata su posición **sin hacerse visible**; a **5 m** se materializa y camina hacia la caja | 2,6 %/s a menos de 3 m | ❌ |
+| **Monkey Paw** | Deseos: cada uno da información o actividad forzada, y cobra. Un dedo se dobla por deseo concedido | variable | ❌ |
+| **Tarot Cards** | Mazo de **10 cartas** al azar; cada carta un efecto (ej. duplicar la actividad 20 s, 20 % de probabilidad) | variable | ❌ |
+
+### 4.1 El Summoning Circle se puede hacer **hoy**
+
+No hace falta un modelo de «círculo»: hace falta **5 velas rojas y un encendedor**, y los dos están
+en disco (`phas/eqp_candle`, `phas/eqp_lighter`). El círculo es un **decal** en el piso.
+
+Es además el que mejor encaja con lo que ya está diseñado: usa el sistema de cuartos (§14 del diseño)
+para elegir dónde aparece, usa el encendedor que ya tiene modelo, y su desenlace —teleport del
+fantasma + hunt— es exactamente lo que la base Terminator hace bien.
+
+### 4.2 Las otras cinco
+
+Sin modelo propio. Opciones, de menos a más trabajo: un prop plano con textura custom (sirve para
+Ouija y Tarot, que son objetos planos), buscar ports sueltos en el Workshop, o dejarlas fuera de la
+primera versión. **La Music Box es la que más valor daría** por su mecánica: delatar la posición del
+fantasma sin mostrarlo es justo el tipo de tensión que el resto del addon busca.
+
+> **Nota de la fuente:** aparecieron dos grupos con ~78 entradas cada uno, `ferryman` y
+> `ghost_machine`, que no corresponden a ninguna de las 7 ni a ningún tipo de fantasma. Son contenido
+> más nuevo que no conozco y **no está investigado**. Si el juego sumó mecánicas grandes, están ahí.
+
+---
+
+## 5. Pendiente: el peso de las texturas
 
 **251 MB en 58 `.vtf`.** Todas son **2048×2048 DXT5** (5,3 MB cada una) — incluidas las de un
 encendedor y unas pastillas, que en pantalla ocupan cuarenta píxeles.

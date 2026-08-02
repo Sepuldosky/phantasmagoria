@@ -91,8 +91,11 @@ referencia. Resumidas:
 - **Los equipos.** Props portados a descargar. Decidir cuáles entran primero: EMF reader, spirit box,
   cámara, termómetro, libro de escritura, UV, DOTS, salt, crucifijo.
 - **El ritual de vuelta** del destierro: qué es y qué hace falta para ejecutarlo.
-- **Los ítems malditos** (tarot, calaveras, muñeca vudú, espejo, caja de música, reloj de arena):
-  qué hace cada uno. Dependen de que existan los props y del mapeo de cuartos (§14).
+- **Las posesiones malditas: son 7 y tenemos 1.** Documentadas con sus mecánicas y costes de cordura
+  en [docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §4. Sólo la **Voodoo Doll** tiene modelo; el
+  **Summoning Circle** es armable hoy con las velas + el encendedor que ya están en disco, y es el
+  candidato natural para el primero. Faltan modelo para Ouija, Espejo, Caja de Música, Pata de Mono
+  y Tarot.
 - **El detector de cuartos no va a ser perfecto** en mapas de GMod, que no fueron hechos para esto.
   Por eso hay toolgun manual y por eso §14.5 define qué pasa cuando no hay mapeo: degradar, nunca
   romper.
