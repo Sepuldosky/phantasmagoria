@@ -29,7 +29,7 @@ Lo que existe:
 | Zona segura / esconderse / hunt no determinista | **CERRADO** — §18; corrige dos filas de §2 |
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
-| Entidad `terminator_nextbot_phantom` | **NO EXISTE** ← el próximo paso |
+| Entidad `terminator_nextbot_phantom` | **NO EXISTE** ← el próximo paso, y su primer trabajo es ser **instrumento** (ver abajo) |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
 | Nada de esto en juego | **0 corridas** |
@@ -91,6 +91,19 @@ referencia. Resumidas:
   — pero eso es leer una constante, no medir el engine. **Todo §18.2 depende de esto:** si los props
   no cortan el rayo, esconderse detrás de una caja **no existe** y §14 (spots marcados) pasa de
   opcional a bloqueante. Barato de medir: una caja, un fantasma, y ver si te registra.
+
+  **Plan del autor (2026-08-03): la entidad básica se escribe como el instrumento de este check** —
+  primero existir y **mostrar dónde está**, después todo lo demás. Tres cosas para no tropezar:
+
+  1. **NO ponerle `ENT.IsWraith = true` todavía.** §2 lo lista como el regalo que la hace invisible
+     fuera del hunt — y un instrumento invisible no sirve para ver dónde está.
+  2. **La base ya trae visualizadores**, no hace falta escribirlos: `term_debugpath` (dibuja el path;
+     **pide `sv_cheats 1`**, `base/init.lua:92`), `term_debugtasks` (imprime tareas, y vuelca el
+     historial al hacerle **+use** al bot) y `term_debughearing`.
+  3. **El check NO depende de la entidad.** «¿Un prop corta `MASK_BLOCKLOS`?» es una pregunta de
+     `util.TraceLine` entre dos puntos cualesquiera: se contesta desde consola sin NextBot. Hacerlo
+     con el fantasma es **más convincente** —ejerce la cadena real, `GetShootPos` → `EntShootPos`→
+     `CanSeePosition`— pero si la entidad se demora, la versión sintética desbloquea el diseño igual.
 - **Dos defectos de la base que hay que arreglar antes de reusarla** (§18.3): `MaxSeeEnemyDistance`
   **no se aplica a jugadores** —vista ilimitada salvo niebla— y la dispersión de la corazonada
   **se invierte** pasando los 500 u de alcance sonoro.
