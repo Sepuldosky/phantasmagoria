@@ -1564,9 +1564,96 @@ un prop:
 `CONTENTS_MONSTER` es el bit de *«esto es una entidad»*, y **`MASK_BLOCKLOS` es geometría del mundo
 y nada más**. El bot heredado ve a través de props, NPCs y jugadores por igual.
 
+> **⚠ El mask NO alcanza. Leer §18.7 antes de implementar** — hay una segunda ruta de adquisición
+> que no consulta `self.LineOfSightMask`, y el «arreglo es un campo» de esta sección es incompleto.
+
 > **Un detalle que respalda el cambio.** `CanSeePosition` termina en
 > `not tr.Hit or ( isentity( check ) and tr.Entity == check )`. Con `MASK_BLOCKLOS` la rama derecha
 > **nunca** se cumple para un jugador o un NPC —el trace no los toca—, así que todo pasa por
 > `not tr.Hit`. Con `MASK_SOLID` el rayo **sí** pega en el objetivo y la segunda rama se vuelve el
 > camino normal. Esa rama ya estaba escrita: **el swap no es un parche contra el diseño de la
 > función, es la mitad de la función que hoy no se usa.**
+
+---
+
+### 18.7 Las **seis** rutas de percepción — enumeración completa **[verificado]**
+
+Escrita porque §18.6 dijo *«el arreglo es un campo»* leyendo **una** ruta, y hay seis. El error de
+método está al final; primero la tabla, que es lo que se usa.
+
+| # | Ruta | Chequeo | Mask | ¿La cubre `LineOfSightMask`? |
+|---|---|---|---|---|
+| 1 | `FindEnemies`, barrido en cono/esfera ([`:613`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L613)) | `ShouldBeEnemy` + `CanSeePosition` | `self.LineOfSightMask` | **sí** |
+| 2 | Enemigo actual, cada tick ([`shared:3307`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L3307)) | `CanSeePosition` | `self.LineOfSightMask` | **sí** |
+| 3 | **Fallback «sin enemigos»** ([`shared:3203`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L3203)) | `IsInMyFov` + `PosCanSee` + `ClearOrBreakable` | `MASK_BLOCKLOS` **global** + `MASK_SOLID` **hardcodeado** | **NO** |
+| 4 | Daño recibido ([`damageandhealth:500`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/damageandhealth.lua#L500)) | **ninguno** si el atacante está a < `CloseEnemyDistance` | — | no aplica |
+| 5 | Sonido → `movement_followsound` | `SaveSoundHint` / `validSoundHint` | — | no aplica |
+| 6 | **Otro terminator te delata** ([`shared:4052`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L4052)) | red entre bots, `MakeFeud` | — | no aplica |
+
+**La 6 importa más de lo que parece:** un bot le pasa tu posición a otro. Relevante para **The
+Twins** (§5.3, dos entidades) y para cualquier servidor con otros Terminators montados.
+
+**La 4 es fuerte y hay que declararla:** pegarle al fantasma a menos de 175 u
+(`ENT.CloseEnemyDistance`) actualiza su memoria **sin ningún chequeo de línea de vista**. Es
+correcto —te sintió— y se queda, pero conviene saberlo antes de diagnosticar «me encontró y yo
+estaba tapado».
+
+#### La ruta 3, en detalle — y por qué se filtraba
+
+```lua
+local canSee = terminator_Extras.PosCanSee( myShoot, theirShoot )          -- MASK_BLOCKLOS, solo mundo
+local clearOrBreakable = canSee and myTbl.ClearOrBreakable( self, myShoot, theirShoot )
+if clearOrBreakable then                    -- perfect visibility
+    myTbl.UpdateEnemyMemory( self, pickedPlayer, pickedPlayer:GetPos() )   -- tu posicion REAL
+elseif canSee then                          -- they are obscured by a prop
+    myTbl.RegisterForcedEnemyCheckPos( self, pickedPlayer )                -- "andá a fijarte ahí"
+```
+
+Corre **sólo cuando el bot no tiene enemigo**, un jugador por tick. El comentario `-- they are
+obscured by a prop` es del autor de la base: **ya contempló el caso, y su respuesta no es "no te
+veo" sino "voy a chequear"** — lo correcto para un cazador, lo contrario de lo que pide un fantasma.
+
+`ClearOrBreakable` ([`motionoverrides:76`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/motionoverrides.lua#L76))
+es un **`TraceHull`** con `mask = MASK_SOLID` **hardcodeado** y las bounds del bot × 0.5 — o sea que
+la base **ya tenía** un camino que ve props; sólo que lo usa para *«¿está despejado?»* y no para
+*«¿lo percibo?»*. Dos masks para dos preguntas, a propósito.
+
+> **Consecuencia para §18.2 que cambia el diseño de niveles:** `ClearOrBreakable` cuenta un prop
+> **rompible** como despejado. **Esconderse detrás de algo que se rompe no te esconde.**
+
+#### El arreglo completo: **dos campos**
+
+```lua
+ENT.LineOfSightMask = MASK_SOLID     -- rutas 1 y 2  (§18.6)
+-- y al spawnear:
+myTbl.forcedCheckPositions = false   -- ruta 3
+```
+
+El segundo usa **la salida temprana que la propia base escribió**
+([`:1494`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L1494)):
+`if checkPositions == false then return end`. Las tres llamadas quedan no-op para siempre, sin tocar
+la lista de tareas, y `movement_handler` tampoco arranca el barrido porque exige que la tabla tenga
+entradas ([`:4146`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L4146)).
+
+**Y NO se lleva puesta la investigación por sonido** —que era el riesgo—: eso es la tarea
+`movement_followsound`, alimentada por `lastHeardSoundHint`, un subsistema completamente aparte
+([`shared:5107`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L5107)).
+El fantasma sigue viniendo cuando hacés ruido, que es exactamente la mecánica que queremos.
+
+Con los dos campos la ruta 3 queda cerrada del todo: `ClearOrBreakable` **ya** detecta el prop, así
+que nunca te metía en memoria; lo único que se filtraba era el punto a revisar.
+
+#### El error de método, que ya no es mala suerte **[cuarta vez en la sesión]**
+
+El primer grep de la sesión listó **cinco** call sites de `UpdateEnemyMemory`. **Leí tres.** Después
+escribí conclusiones sobre «el mecanismo de visión» como si los hubiera leído todos — y los dos que
+salté (`shared.lua:3209` y `:3376`) son justamente los que rompían la historia.
+
+No fue que no encontré las rutas: **las encontré, las tuve impresas en pantalla, y no las abrí.**
+Junto con las otras tres de §18 —la regla de los 100 u citada desde una función que yo mismo había
+declarado muerta, `CONTENTS_OPAQUE` afirmado dos veces sin mirar el número, y «los props deberían
+cortar»— **el patrón es siempre el mismo: leer un sitio y generalizar al mecanismo.**
+
+**La regla que queda:** cuando un grep devuelve N call sites de algo que se va a describir como *el*
+mecanismo, **se leen los N o se declara cuáles no** — un inventario a medias escrito como completo
+es indistinguible de uno completo hasta que rompe.

@@ -27,6 +27,7 @@ Lo que existe:
 | Catálogo de audio | **CERRADO** — 265/265 identificados y por acción ([§7.2](docs/PHANTOM_Phasmophobia_Diseno.md)) |
 | Diseño de spawn / dificultad / cuartos | **CERRADO** — §12, §13, §14 del diseño |
 | Zona segura / esconderse / hunt no determinista | **CERRADO** — §18; corrige dos filas de §2 |
+| Percepción: las **6** rutas por las que el bot te ubica | **CERRADO** — §18.7; el arreglo son **dos campos**, no uno |
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
 | Entidad `terminator_nextbot_phantom` | **NO EXISTE** ← el próximo paso, y su primer trabajo es ser **instrumento** (ver abajo) |

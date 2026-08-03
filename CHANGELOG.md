@@ -66,6 +66,30 @@ NPCs pasan a ocluir**.
 `MASK_BLOCKLOS` incluye `CONTENTS_OPAQUE`. **Falso** — 16449 no tiene el bit 128. Razonar sobre la
 constante de memoria falló otra vez; el número medido lo desarmó.
 
+### Y el «arreglo es un campo» era falso: hay **seis** rutas de percepción
+
+Preguntado si se podía cerrar el tema, salió que no. `LineOfSightMask` cubre **dos** de las seis
+formas en que el bot aprende dónde estás. Las otras cuatro: el **fallback «sin enemigos»**
+(`shared:3203`, un jugador por tick, con `PosCanSee` **global** y `ClearOrBreakable` con `MASK_SOLID`
+**hardcodeado** — ninguno consulta el campo), el **daño recibido** (a menos de 175 u actualiza
+memoria **sin chequeo de vista**), el **sonido**, y **otro terminator delatándote** (`shared:4052`,
+que importa para The Twins y para servidores con otros Terminators).
+
+El comentario del autor de la base en la ruta 3 es `-- they are obscured by a prop`, y su respuesta
+**no es «no te veo» sino «voy a chequear ahí»**: correcto para un cazador, lo contrario de lo que
+pide un fantasma. Se apaga con la salida temprana que la propia base escribió —
+`forcedCheckPositions = false`— y **eso no toca la investigación por sonido**, que es otra tarea
+(`movement_followsound`) alimentada por otro subsistema. El fantasma sigue viniendo si hacés ruido.
+
+Detalle que cambia el diseño de niveles de §18.2: `ClearOrBreakable` cuenta un prop **rompible** como
+despejado. **Esconderse detrás de algo que se rompe no te esconde.**
+
+**Cuarta vez en la sesión con la misma forma de error**, y ya no es mala suerte: el primer grep listó
+cinco call sites de `UpdateEnemyMemory`, se leyeron tres, y se escribieron conclusiones sobre «el
+mecanismo» como si fueran cinco — los dos salteados eran los que rompían la historia. No es que no
+se encontraran: estuvieron impresas en pantalla y no se abrieron. **Cuando un grep devuelve N sitios
+de algo que se va a describir como *el* mecanismo, se leen los N o se declara cuáles no.**
+
 ### La generalización, medida en la misma sesión
 
 El mismo barrido contra un `npc_kleiner` —una entidad de clase completamente distinta a un prop— dio
