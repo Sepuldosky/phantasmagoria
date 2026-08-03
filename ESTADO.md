@@ -113,9 +113,11 @@ referencia. Resumidas:
   Por eso hay toolgun manual y por eso §14.5 define qué pasa cuando no hay mapeo: degradar, nunca
   romper.
 - **El clima**: se integra con **StormFox 2** en vez de reimplementarse (§15). Su API está verificada
-  contra el repo (publicado 2021, actualizado 2026-05-01: mantenimiento activo); falta escribir el
-  mapeo y el camino propio para quien no lo tenga. **gWeather y
-  Simple Weather sin investigar.**
+  **contra el `.gma` instalado**, no sólo contra el repo — el addon está desempacado en
+  `dev/other/stormfox 2/` (2026-08-02). Falta escribir el mapeo y el camino propio para quien no lo
+  tenga; §15.2 ya anota las **cuatro trampas** que salieron de leer los cuerpos (`GetCurrent`
+  devuelve tabla, la nieve es lluvia bajo −2 °C, `GetRainAmount` da 0 nevando, `Temperature.Get`
+  crashea con un tipo inválido). **gWeather y Simple Weather sin investigar.**
 - **Los tiers de equipamiento** (§16): documentados, sin implementar. Va un tier por equipo en la v1.
 - **Cuántos PHANTOM aguanta un servidor.** La base corre en coroutines presupuestadas
   (`ENT.CoroutineThresh`) pero nunca se midió.

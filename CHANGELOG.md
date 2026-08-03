@@ -7,6 +7,58 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-02 — Sesión 8: StormFox 2 desempacado, y la API contra el addon que corre
+
+**Sin código.** Se trajo el `.gma` suscrito (WSID `2447774443`, 307 archivos) a
+`dev/other/stormfox 2/` con `gmad.exe`, para leer el mod **independiente de su repo de GitHub**.
+
+### La afirmación de §15.2 se fortalece
+
+Las 8 funciones y los 2 hooks que el diseño daba por *«verificado en su repo»* existen **en el addon
+que realmente corre**, y los números de línea de la tabla coinciden. Un repo puede estar adelantado,
+atrasado o en otra rama respecto de lo publicado; el `.gma` es lo que se ejecuta.
+
+### Cuatro cosas que la tabla de firmas no podía decir
+
+Salieron de leer los **cuerpos**, y las cuatro cambian cómo se usa la API:
+
+1. **`Weather.GetCurrent()` devuelve la TABLA del clima** (`.Name`, `.Inherit`), no un string.
+   `MapStormFoxWeather()` tiene que leer esos campos.
+2. **La nieve no es un clima aparte: es lluvia bajo −2 °C.** La temperatura **causa** la
+   clasificación, así que termómetro y nieve dejan de ser señales independientes. Y un clima que
+   *hereda* de `Rain` da `IsSnowing()` **siempre false**, a cualquier temperatura.
+3. **`GetRainAmount()` devuelve 0 mientras nieva** — arranca con `if not IsRaining() then return 0`.
+   Sirve para graduar lluvia, no como cantidad de precipitación.
+4. **`Temperature.Get()` con un tipo inválido avisa y después crashea** indexando un `nil`. Y su
+   anotación LuaLS dice `---@return Color` cuando devuelve un número.
+
+Más una trampa de catálogo: el mod **mezcla mayúsculas** en sus hooks —`StormFox2.weather.postchange`
+en minúscula, `StormFox2.Weather.Think` capitalizado—. Normalizarlos da un hook que nunca dispara y
+**no da error**.
+
+### Y un «regalo» nuestro que quedó REFUTADO
+
+§15.2 se anotaba dos: la mecánica de la vela y **«`DownFall.IsPointHit` es un tercer detector de
+interior/exterior»**. El segundo es falso. Su primera línea es
+`if not Weather.HasDownfall() then return false end`, y `HasDownfall` sólo es true con clima `Rain` o
+heredado de `Rain`: **con cielo despejado devuelve false en todo el mapa, adentro y afuera**. Mapear
+cuartos con eso daría «todos bajo techo» los días de sol, en silencio y sin error. Y aun lloviendo
+tampoco lo es: su trace no va hacia arriba sino **en la dirección del viento**, así que contesta «¿le
+está llegando la precipitación?» — que es justo lo que la vela necesita y justo lo que los cuartos no.
+El detector de interior/exterior sigue siendo el de §14.1.
+
+**La lección:** una función cuyo nombre describe **geometría** puede estar cerrada por una condición
+de **estado** que el nombre no menciona. Las 10 líneas de la tabla de §15.2 apuntaban todas a la
+declaración correcta — el error no estaba en la firma, estaba en el cuerpo.
+
+### Corregido en el acto
+
+Anuncié que el diseño «documentaba dos argumentos» de `postchange` y que el tercero era un hallazgo.
+**Falso: el ejemplo de §15.2 ya tenía los tres.** Lo que faltaba era la firma de `prechange`, que
+lleva **dos**. Corregido en el mapa de mods antes de que la afirmación se asentara.
+
+---
+
 ## 2026-08-02 — Sesión 7: las huellas UV existen, y no eran lo que dije
 
 **Primer asset generado del proyecto.** Decisión del autor: reciclar el material de gmpa en vez de

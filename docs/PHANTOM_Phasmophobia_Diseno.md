@@ -844,9 +844,13 @@ sería competir con ellos y perder. La misma regla que ya se aplicó con Better 
 > El autor **no piensa usar ninguno personalmente**. Por eso la integración es *opcional de verdad*:
 > el camino sin addon de clima tiene que ser jugable, no un modo degradado triste.
 
-### 15.2 La API de StormFox 2 **[verificado en su repo]**
+### 15.2 La API de StormFox 2 **[verificado contra el `.gma` instalado]**
 
-Leída de [`Nak2/StormFox2`](https://github.com/Nak2/StormFox2), no de la descripción del Workshop:
+Leída primero de [`Nak2/StormFox2`](https://github.com/Nak2/StormFox2), no de la descripción del
+Workshop. **Re-verificada el 2026-08-02 contra el addon que realmente corre** — el `.gma` suscrito
+(WSID `2447774443`, 307 archivos) desempacado a `dev/other/stormfox 2/`. **Las ocho funciones y los
+dos hooks existen, y los números de línea de la tabla coinciden.** Es una afirmación más fuerte que
+la anterior: un repo puede estar adelantado, atrasado o en otra rama respecto de lo publicado.
 
 | Función | Archivo | Para qué nos sirve |
 |---|---|---|
@@ -856,8 +860,8 @@ Leída de [`Nak2/StormFox2`](https://github.com/Nak2/StormFox2), no de la descri
 | `StormFox2.Weather.IsRaining()` | `:380` | Lluvia |
 | `StormFox2.Weather.IsSnowing()` | `:390` | Nieve → el clima frío de §15 |
 | `StormFox2.Weather.GetRainAmount()` | `:399` | Distinguir lluvia leve de fuerte |
-| **`StormFox2.DownFall.IsEntityHit( ent )`** | `:420` | **Si a la vela le está cayendo agua** → se apaga |
-| **`StormFox2.DownFall.IsPointHit( pos )`** | `:429` | **Si un punto está a la intemperie** |
+| **`StormFox2.DownFall.IsEntityHit( ent, bDont_cache )`** | `:420` | **Si a la vela le está cayendo agua** → se apaga. **El 2.º argumento no estaba en esta tabla:** saltea la caché (delega en `Wind.IsEntityInWind`) |
+| **`StormFox2.DownFall.IsPointHit( pos )`** | `:429` | Si a un punto **le está llegando la precipitación**. **No es lo mismo que "está a la intemperie"** — ver abajo |
 
 Y dos hooks para reaccionar a los cambios en vez de encuestar:
 
@@ -865,17 +869,62 @@ Y dos hooks para reaccionar a los cambios en vez de encuestar:
 hook.Add( "StormFox2.weather.postchange", "phantasmagoria_weather", function( sName, nPercent, nDelta )
     PHANTASMAGORIA.OnWeatherChanged( sName, nPercent )
 end )
--- existe tambien "StormFox2.weather.prechange" (sh_weather_handle.lua:48)
+-- el otro es prechange, y lleva DOS argumentos, no tres:
+--   hook.Run( "StormFox2.weather.prechange",  sName, nPercentage )          -- :48
+--   hook.Run( "StormFox2.weather.postchange", sName, nPercentage, nDelta )  -- :115
 ```
+
+> **Trampa de mayúsculas al catalogar sus hooks.** El mod **mezcla los dos estilos**: los de clima van
+> en minúscula (`StormFox2.weather.postchange`, `.prechange`, `.clear`, `.setlight`) y otros van
+> capitalizados (`StormFox2.Weather.Think`, `.Stamp`, `.SendForcast`). Copiar el string tal cual
+> aparece en el `hook.Run`; normalizarlo a un estilo da un hook que nunca dispara y **no da error**.
+
+#### Lo que la tabla no decía, y sale de leer los cuerpos **[medido 2026-08-02]**
+
+Cuatro cosas que cambian cómo se usa esta API, ninguna deducible de las firmas:
+
+1. **`Weather.GetCurrent()` NO devuelve un string: devuelve la TABLA del clima.**
+   `return CurrentWeather or StormFox2.Weather.Get("Clear")` — un objeto con `.Name` y `.Inherit`.
+   `MapStormFoxWeather()` (§15.3) tiene que leer **esos campos**, no tratar el retorno como una clave.
+2. **La nieve no es un clima aparte: es lluvia bajo −2 °C.** `IsSnowing()` es
+   `wT.Name == "Rain" and Temperature.Get() <= -2`, y `IsRaining()` es el complemento
+   (`> -2`) **más** todo lo que hereda de `Rain`. O sea: la temperatura **causa** la clasificación,
+   no al revés — y con eso el termómetro y la nieve dejan de ser dos señales independientes.
+   **Asimetría a tener presente:** un clima que *hereda* de `Rain` (una tormenta) da `IsRaining()`
+   true a cualquier temperatura y `IsSnowing()` **siempre false**, porque su `.Name` no es `"Rain"`.
+3. **`GetRainAmount()` devuelve 0 mientras nieva.** Su primera línea es
+   `if not IsRaining() then return 0 end`. Sirve para graduar lluvia, **no** como "cantidad de
+   precipitación": en una nevada lee 0 en silencio. La cantidad cruda es `Weather.GetPercent()`.
+4. **`Temperature.Get(sType)` con un tipo inválido avisa y después CRASHEA.** Emite
+   `StormFox2.Warning(...)` y acto seguido hace `convert_to[sType](n)` sobre un `nil`. Usar sólo
+   `"celsius"` (el default), `"fahrenheit"` o `"kelvin"`. Su hermana `Convert` sí usa `error()` limpio.
+   Nota aparte: la anotación LuaLS de `Get` declara `---@return Color` y **devuelve un número** — el
+   comentario de un tercero miente igual que cualquier otro.
 
 **Dos regalos que resuelven cosas que estaban abiertas:**
 
 1. **`DownFall.IsEntityHit( ent )` implementa la mecánica de lluvia fuerte tal cual**: el juego apaga
    los fuegos tier 1 y 2 bajo la lluvia. Con esto, la vela y el incienso se apagan **sólo si
    efectivamente les está cayendo agua**, que es más fino que "está lloviendo".
-2. **`DownFall.IsPointHit( pos )` es un tercer detector de interior/exterior**, junto a
+2. ~~**`DownFall.IsPointHit( pos )` es un tercer detector de interior/exterior**, junto a
    `IsUnderSkyPos` de HIM y `GetBmEnvIsInside` de Better Movement (§14.1). Si StormFox está montado,
-   es el más barato de los tres, porque ya lo calcula para su propio uso.
+   es el más barato de los tres, porque ya lo calcula para su propio uso.~~
+
+   > **REFUTADO leyendo el cuerpo (2026-08-02). No sirve como detector de interior/exterior.** Su
+   > primera línea es `if not StormFox2.Weather.HasDownfall() then return false end` — y `HasDownfall`
+   > es true **sólo si el clima es `Rain` o hereda de `Rain`**. Con cielo despejado, `IsPointHit`
+   > devuelve **false en todo el mapa**, adentro y afuera. Usarlo para mapear cuartos daría «todos
+   > están bajo techo» los días de sol, en silencio y sin error.
+   >
+   > Y aun lloviendo tampoco lo es: el trace no va hacia arriba, va **en la dirección del viento**
+   > (`-StormFox2.Wind.GetNorm() * 262144`). Contesta *«¿a este punto le está llegando la
+   > precipitación?»*, que es una pregunta con viento adentro. **Para la vela es exactamente lo que
+   > queremos** — un alero a favor del viento no la apaga — y para los cuartos no sirve.
+   >
+   > **El detector de interior/exterior sigue siendo el de §14.1** (`IsUnderSkyPos` de HIM, y
+   > `GetBmEnvIsInside` como alternativa). El regalo era uno solo, no dos: la mecánica de la vela.
+   > **La lección:** una función cuyo nombre describe geometría puede estar cerrada por una condición
+   > de estado que el nombre no menciona.
 
 ### 15.3 La forma concreta
 
