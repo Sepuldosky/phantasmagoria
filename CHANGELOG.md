@@ -44,11 +44,33 @@ Un cazador que pierde el rastro detrás de cada silla se siente roto: ver a trav
 *feature* para un Terminator. Para un fantasma de Phasmophobia es lo contrario. **Tercera vez en §18
 que «heredado» no es «correcto».**
 
+### El barrido, corrido en la misma sesión: `MASK_SOLID`
+
+Cinco masks contra la caja y contra una pared. **Contra la pared pegan las cinco** — o sea que la
+rama catastrófica (que la base fuera omnisciente) **está muerta**. Contra la caja sólo la ven
+`MASK_SOLID` y `MASK_SHOT`.
+
+Decodificar los valores dio lo que no se había preguntado: **los tres masks que atraviesan la caja
+tienen `CONTENTS_SOLID` igual que los dos que la ven.** Lo único que separa a los grupos es
+**`CONTENTS_MONSTER`** — es decir, un `prop_physics` no se presenta como `CONTENTS_SOLID` ante un
+trace de entidad, y `CONTENTS_MONSTER` es en la práctica el bit de *«esto es una entidad»*. La
+consecuencia excede a las cajas: **`MASK_BLOCKLOS` ≈ sólo geometría del mundo**, y el bot heredado ve
+a través de cualquier entidad no-brush.
+
+Elegido **`MASK_SOLID`**: de los dos que sirven, `MASK_SHOT` trae `CONTENTS_DEBRIS` (gibs cortando la
+vista) y `CONTENTS_HITBOX` (precisión de bala, más cara, y este trace corre por enemigo y por
+barrido). Efecto secundario declarado: `MASK_SOLID` incluye `CONTENTS_MONSTER`, así que **jugadores y
+NPCs pasan a ocluir**.
+
+**Y una corrección más, del mismo tipo que la de arriba:** este documento afirmaba dos veces que
+`MASK_BLOCKLOS` incluye `CONTENTS_OPAQUE`. **Falso** — 16449 no tiene el bit 128. Razonar sobre la
+constante de memoria falló otra vez; el número medido lo desarmó.
+
 ### Abrió una pregunta nueva
 
-**¿El mundo sí corta `MASK_BLOCKLOS`?** Si tampoco cortara, `CanSeePosition` sería casi siempre true
-y la base entera sería omnisciente — un problema mucho mayor que el nuestro. Es probable que corte,
-pero «probable» es justo lo que esta sesión castigó.
+**¿Una entidad —jugador, NPC— corta `MASK_BLOCKLOS`?** La lectura de los bits dice que no, lo que
+convertiría «los props no cortan» en «nada que no sea mundo corta». Es lectura, no medición: mismo
+comando, apuntándole a un NPC.
 
 ---
 

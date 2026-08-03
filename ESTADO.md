@@ -90,10 +90,16 @@ referencia. Resumidas:
   **no choca.** Control `true / Entity [59][prop_physics]`, con el mask `false / [NULL Entity]` —
   misma línea, única variable el mask. **Primera medición del proyecto y refutó al documento.**
   El arreglo es un campo: `ENT.LineOfSightMask` es por entidad con fallback al global
-  (`shared.lua:2960`), y sus tres usos son la misma clase de pregunta. **Falta elegir el mask, y esta
-  vez se barren los candidatos en juego antes de escribir nada** — el comando está en §18.6.
-- **¿El mundo sí corta `MASK_BLOCKLOS`?** — abierta *por* la anterior. Si tampoco cortara, la base
-  sería omnisciente y el problema excede a nuestro diseño. Mismos dos comandos, contra una pared.
+  (`shared.lua:2960`), y sus tres usos son la misma clase de pregunta.
+  **El mask elegido es `MASK_SOLID`**, barriendo cinco candidatos en juego: es el único de los dos
+  que sirven sin traer `CONTENTS_DEBRIS` (gibs cortando la vista) ni `CONTENTS_HITBOX` (caro, y este
+  trace corre por enemigo y por barrido).
+- ~~¿El mundo sí corta `MASK_BLOCKLOS`?~~ **MEDIDO: sí** — las cinco pegan en `worldspawn` contra una
+  pared. **La rama catastrófica está muerta**, la base no es omnisciente.
+- **¿Una entidad (jugador, NPC) corta `MASK_BLOCKLOS`?** — abierta por el barrido. Decodificando los
+  valores, lo único que separa a los masks que ven la caja de los que no es **`CONTENTS_MONSTER`**,
+  o sea el bit de «esto es una entidad»: la lectura dice que **nada que no sea mundo corta**. Es
+  **lectura, no medición** — mismo comando, apuntándole a un NPC.
 
 - **Plan del autor (2026-08-03): la entidad básica se escribe como instrumento** — primero existir y
   **mostrar dónde está**, después todo lo demás. Tres cosas para no tropezar:

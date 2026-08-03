@@ -1481,16 +1481,72 @@ la misma clase de pregunta —*¿puedo ver?*—, así que cambiarlo los mueve de
 ([`:395`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L395)),
 que pregunta otra cosa —*¿este punto es visible desde el jugador?*— y puede quedarse como está.
 
-#### Qué mask poner: **sin decidir, y esta vez se mide primero**
+#### El barrido de masks — **corrido, y contestó más de lo preguntado [medido]**
 
-`MASK_SOLID`, `MASK_SHOT`, `MASK_OPAQUE`, `MASK_VISIBLE` son los candidatos. **No se elige leyendo
-la lista de constantes** — es lo que acaba de fallar. Se barren los cinco contra la misma caja y
-gana el que la reporte:
+Cinco masks, el mismo trace, apuntando primero a la caja y después a una pared:
 
+| Mask | Valor | **a la caja** | a la pared |
+|---|---:|---|---|
+| `MASK_SOLID` | 33570827 | **`[396][prop_physics]`** | `[0][worldspawn]` |
+| `MASK_SHOT` | 1174421507 | **`[396][prop_physics]`** | `[0][worldspawn]` |
+| `MASK_OPAQUE` | 16513 | `[0][worldspawn]` | `[0][worldspawn]` |
+| `MASK_VISIBLE` | 24705 | `[0][worldspawn]` | `[0][worldspawn]` |
+| `MASK_BLOCKLOS` | 16449 | `[0][worldspawn]` | `[0][worldspawn]` |
+
+**Las paredes cortan las cinco.** La rama catastrófica de §18.5 está **muerta**: la base no es
+omnisciente, pierde al jugador detrás de geometría del mundo. Eso era lo único que podía volver este
+problema más grande que nuestro diseño.
+
+**Y esta corrida mide mejor que la de arriba.** La primera dio `[NULL Entity]` porque no había nada
+detrás de la caja; ésta da `worldspawn`, que **prueba que el rayo atravesó el prop** en vez de
+simplemente no haberle pegado a nada.
+
+##### Por qué, decodificando los valores **[lectura de los números]**
+
+| Mask | Bits |
+|---|---|
+| `MASK_BLOCKLOS` 16449 | SOLID(1) + BLOCKLOS(64) + MOVEABLE(16384) |
+| `MASK_OPAQUE` 16513 | SOLID + OPAQUE(128) + MOVEABLE |
+| `MASK_VISIBLE` 24705 | ↑ + IGNORE_NODRAW_OPAQUE(8192) |
+| `MASK_SOLID` 33570827 | SOLID + WINDOW(2) + GRATE(8) + MOVEABLE + **MONSTER(33554432)** |
+| `MASK_SHOT` 1174421507 | SOLID + WINDOW + MOVEABLE + DEBRIS + **MONSTER** + HITBOX |
+
+**Los tres que atraviesan la caja tienen `CONTENTS_SOLID` igual que los dos que la ven.** Lo único
+que separa a los grupos es **`CONTENTS_MONSTER`**. Es decir: un `prop_physics` **no se presenta como
+`CONTENTS_SOLID`** ante un trace de entidad — `CONTENTS_MONSTER` es en la práctica el bit de *«esto
+es una entidad»*, y el nombre miente como tantos otros en este proyecto.
+
+**La consecuencia es más grande que las cajas:** `MASK_BLOCKLOS` ≈ **sólo geometría del mundo**. El
+bot heredado ve a través de *cualquier* entidad no-brush.
+
+> **Corrección al margen:** §18.6 y §18.5 decían que `MASK_BLOCKLOS` incluye `CONTENTS_OPAQUE`.
+> **Falso** — 16449 no tiene el bit 128. Lo afirmé dos veces razonando de memoria sobre la
+> constante; el número medido lo desarma. Misma familia que todo el resto de esta sección.
+
+##### La decisión: **`MASK_SOLID`** [2026-08-03]
+
+```lua
+ENT.LineOfSightMask = MASK_SOLID
 ```
-lua_run local p=Entity(1) local e=p:EyePos() local d=e+p:GetAimVector()*300 for _,m in ipairs{"MASK_SOLID","MASK_SHOT","MASK_OPAQUE","MASK_VISIBLE","MASK_BLOCKLOS"} do print(m, util.TraceLine{start=e,endpos=d,mask=_G[m],filter=p}.Entity) end
-```
 
-Criterio binario por fila: si imprime `Entity [n][prop_physics]`, ese mask sirve. `MASK_BLOCKLOS` va
-en la lista **como control**: tiene que salir `[NULL Entity]` o el barrido no está midiendo lo que
-cree.
+De los dos que sirven, `MASK_SHOT` trae dos bits que no queremos para *ver*:
+
+- **`CONTENTS_DEBRIS`** — escombros y gibs cortarían la línea de vista. Un pedazo de algo en el piso
+  no debería esconderte.
+- **`CONTENTS_HITBOX`** — precisión de bala. Es más caro, y este trace corre **por enemigo y por
+  barrido**.
+
+`MASK_SOLID` trae `CONTENTS_GRATE`, o sea que una reja o malla **sí** corta la vista. Discutible
+—a través de una reja se ve— pero es el lado conservador, y si algún día molesta se saca un bit:
+`bit.band( MASK_SOLID, bit.bnot( CONTENTS_GRATE ) )`.
+
+**Efecto secundario declarado:** `MASK_SOLID` incluye `CONTENTS_MONSTER`, así que **jugadores y NPCs
+pasan a ocluir**. Esconderse detrás de un compañero funciona; y en un sandbox lleno de NPCs el
+fantasma puede quedar puntualmente ciego por gente en el medio. Se acepta a propósito —es coherente
+con «la línea de vista es la línea de vista»— pero queda escrito para no diagnosticarlo dos veces.
+
+##### Lo que abre, y cuesta una corrida
+
+**¿Una entidad (jugador, NPC) corta `MASK_BLOCKLOS`?** La lectura de los bits dice que **no** —sin
+`CONTENTS_MONSTER` no colisiona con entidades— y eso convertiría «los props no cortan» en «nada que
+no sea mundo corta». **Es lectura, no medición.** Mismo comando del barrido, apuntándole a un NPC.
