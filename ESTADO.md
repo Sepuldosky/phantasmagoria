@@ -26,6 +26,7 @@ Lo que existe:
 | Conversión de audio | **HECHA** — 265 archivos, 141 MB → 11 MB |
 | Catálogo de audio | **CERRADO** — 265/265 identificados y por acción ([§7.2](docs/PHANTOM_Phasmophobia_Diseno.md)) |
 | Diseño de spawn / dificultad / cuartos | **CERRADO** — §12, §13, §14 del diseño |
+| Zona segura / esconderse / hunt no determinista | **CERRADO** — §18; corrige dos filas de §2 |
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
 | Entidad `terminator_nextbot_phantom` | **NO EXISTE** ← el próximo paso |
@@ -85,6 +86,14 @@ referencia. Resumidas:
 
 ## Lo que está abierto
 
+- **⚠ EL PRIMER CHECK DE LA PLANILLA, y es bloqueante** (§18.5): **¿`MASK_BLOCKLOS` choca con
+  `prop_physics`?** El mask incluye `CONTENTS_SOLID` y el `.phy` de un prop lo es, así que *debería*
+  — pero eso es leer una constante, no medir el engine. **Todo §18.2 depende de esto:** si los props
+  no cortan el rayo, esconderse detrás de una caja **no existe** y §14 (spots marcados) pasa de
+  opcional a bloqueante. Barato de medir: una caja, un fantasma, y ver si te registra.
+- **Dos defectos de la base que hay que arreglar antes de reusarla** (§18.3): `MaxSeeEnemyDistance`
+  **no se aplica a jugadores** —vista ilimitada salvo niebla— y la dispersión de la corazonada
+  **se invierte** pasando los 500 u de alcance sonoro.
 - ~~Los sonidos ambiguos: 46 de 265.~~ **CERRADO** (2026-08-03): el autor los escuchó y los
   describió uno por uno; están catalogados y `_sin_identificar/` ya no existe. **265 de 265 mapeados**
   por acción, **incluidos los pasos del fantasma** — `ghost/footstep/boots_1-8`, §7.4.

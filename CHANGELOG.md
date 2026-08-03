@@ -7,6 +7,84 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-03 — Sesión 11: zona segura, esconderse, y el hunt que la base **no** regala
+
+El autor levantó tres huecos que la tabla de §2 daba por cubiertos. **Dos filas de esa tabla no
+sobrevivieron releerlas contra el código**, y de los tres huecos **dos resultaron ser la misma
+función de la base**, ya escrita y muerta detrás de un `if`.
+
+### Lo que se refutó de nuestro propio diseño
+
+| Fila de §2 | Qué decía | Qué es |
+|---|---|---|
+| `hazardousAreas` para encerrar al fantasma | «casi gratis» | **Falso.** Significa *«areas we took damage in»* y alimenta `AddAreasToAvoid`, que suma **costo**. Es un peaje, no un muro: si el único camino hacia vos lo cruza, **entra** |
+| El hunt | «**gratis**» | Cierto y engañoso. La base *es* un cazador que te encuentra; el fantasma del juego está diseñado para **fallar** casi siempre. Gratis ≠ correcto |
+
+### El hallazgo que ordenó las otras dos
+
+`shouldNotSeeEnemy` (`enemyoverrides.lua:307-416`) **ya tiene adentro las reglas de Phasmophobia**:
+linterna prendida `+80`, ruido reciente con bump por alcance, y la **dispersión** —cuando no te ve
+claro **no guarda tu posición real**, guarda un punto al azar que se acerca cuanto más ruido hacés—.
+Todo eso está muerto detrás de **una línea**: `if a >= maxSeen then return end`, donde `a` es el
+**alfa del jugador**. El modelo existe para jugadores *transparentes*; para un jugador opaco —o sea,
+todos— la función devuelve en la tercera línea. **El trabajo no es escribir un sistema: es cambiar
+qué alimenta `seen`.**
+
+### Cómo ve la base a un jugador — medido
+
+Hacen falta **dos** filtros y los dos tienen que pasar: `ShouldBeEnemy` **y** `CanSeePosition`. La
+segunda es **un solo `util.TraceLine` a un solo punto** (`MASK_BLOCKLOS`): no muestrea hitboxes, no
+existe «parcialmente visible». **Y el punto cambia si estás agachado**, por una rama explícita en
+`EntShootPos:186`:
+
+| | Punto que se traza | z sobre los pies |
+|---|---|---|
+| De pie | hitbox de la **cabeza** | ~64 (estimado) |
+| **Agachado** | **`WorldSpaceCenter`** | **18** |
+
+Ojos del fantasma a **64** (`round(maxs.z − 8)`, `motionoverrides.lua:3883`). De ahí la cuenta que
+contesta *«¿me tapa esta caja?»*: altura `H` a la fracción `t` del camino corta el rayo si
+**`H > 64 − 46·t`**. Pegada a vos basta **18**; **de pie el rayo va horizontal a 64 y la misma caja
+no tapa nada**. Conclusión: **agacharse detrás de un prop ya esconde, hoy, sin escribir una línea.**
+
+### Una afirmación mía, refutada dos párrafos después de escribirla
+
+La primera redacción de §18.2 usaba **la regla de los 100 u** como la frontera entre los dos niveles
+de esconderse. Falsa por dos motivos independientes: esa regla vive **adentro de la función que yo
+mismo había declarado muerta**, una subsección antes; y aun viva **no puentea el trace** —los dos
+filtros tienen que pasar, así que sólo puede hacerte *más* difícil de ver—. **Leí como override lo
+que era un AND.**
+
+Desarmarla mejoró el diseño: el modo de falla real de la cobertura no es la distancia sino que **el
+fantasma se mueve** —un paso al costado y la caja deja de tapar—, lo que re-justifica el hiding spot
+por lo que de verdad lo distingue: **estar cerrado**.
+
+### Decisiones del autor
+
+| Pregunta | Respuesta |
+|---|---|
+| Zona segura | **Sólo targeting**, vía el veto público `terminator_blocktarget`. Entrás al camión y **te olvida**. Los props que te tira igual te pegan |
+| ¿Aviso de «estás escondido»? | **No.** El juego no lo da: el **lugar** es el aviso |
+| ¿Las sombras esconden? | **No.** Delata **el electrónico encendido en la mano**; por eso las sombras *parecen* ayudar |
+| ¿Se revisan los escondites? | **Sí, y cuánto lo decide la dificultad** — fila nueva en §13, al lado de «se queda en su cuarto» |
+| Equipo de terceros | Delata la linterna default más lo nuestro. El resto va como **capa de compatibilidad**, con la forma de `corpus_cargo_movecompat.lua` |
+
+La segunda respuesta borró la parte cara del diseño: **cayó el nivel de luz como input**, que era el
+único que pedía plumbing cliente→servidor (`render.GetLightColor` es CLIENT). El ocultamiento quedó
+entero server-side.
+
+### Lo que queda, y es un solo bloqueante
+
+**¿`MASK_BLOCKLOS` choca con `prop_physics`? SIN MEDIR.** El mask incluye `CONTENTS_SOLID` y el
+`.phy` de un prop lo es, así que *debería* — pero es **leer una constante, no medir el engine**.
+Todo §18.2 depende de eso: si no chocara, esconderse detrás de una caja **no existe** y §14 pasa de
+opcional a bloqueante. Es el primer check de la planilla y cuesta un minuto.
+
+Más dos defectos de la base a arreglar antes de reusarla: `MaxSeeEnemyDistance` **no se aplica a
+jugadores** (vista ilimitada salvo niebla, `:508`) y la dispersión **se invierte** pasando los 500 u.
+
+---
+
 ## 2026-08-03 — Sesión 10: los pasos vuelven al fantasma, y un evento que no necesita assets
 
 Continuación directa de la sesión 9, que había dejado a `ghost/` **sin banco de pasos**.

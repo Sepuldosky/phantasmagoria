@@ -93,11 +93,11 @@ estado más difícil de Phasmophobia —la cacería— porque *es* un cazador.
 
 | Mecánica de Phasmophobia | De dónde sale | Estado |
 |---|---|---|
-| **Hunt**: perseguir y matar | El cerebro entero de la base | **gratis** |
+| **Hunt**: perseguir y matar | El cerebro entero de la base | **gratis**, pero ver §18 |
 | **Flicker** durante el hunt | `CloakedMatFlicker` del módulo wraith | **gratis** |
 | Invisible fuera del hunt | `ENT.IsWraith = true` | **gratis** |
 | Roaming entre puntos | Pathing + navmesh de la base | **gratis** |
-| No salir del área de investigación | `ENT.hazardousAreas` / navareas prohibidas | casi gratis |
+| ~~No salir del área de investigación~~ | ~~`ENT.hazardousAreas`~~ | **REFUTADO — §18.1** |
 | Abrir/golpear puertas | `terminator_doorbash.lua` + `GhostInteractWithDoor()` | **gratis** |
 | Tirar objetos (Poltergeist) | `FlingNearbyPhysicsProps(self)` de paranormal | **gratis** |
 | Pasos audibles a 20 m | `ProcessFootsteps` + `IsSilentStepping()` | **gratis** |
@@ -110,6 +110,11 @@ estado más difícil de Phasmophobia —la cacería— porque *es* un cazador.
 
 **Lo que hay que escribir de cero son tres cosas:** la máquina de estados de §3, el sistema de
 cordura, y la tabla de rasgos de §5. Nada de eso es difícil; lo difícil ya está heredado.
+
+> **⚠ Esta tabla se leyó de nuevo contra el código el 2026-08-03 y dos filas no sobrevivieron.**
+> `hazardousAreas` **no** encierra al fantasma, y «el hunt es gratis» oculta que el hunt heredado es
+> el de un cazador que te encuentra, no el de un fantasma al que se le puede escapar. Las dos, más el
+> agujero de esconderse, en **§18**. El resto de la tabla sigue en pie.
 
 ---
 
@@ -754,6 +759,7 @@ phantasmagoria_difficulty   1    0=amateur 1=intermediate 2=professional 3=night
 | | Amateur | Intermediate | Professional | Nightmare | Insanity |
 |---|---|---|---|---|---|
 | **Se queda en su cuarto** | **sí** | se mueve poco | libre | libre | libre |
+| **Revisa escondites** (§18.2.3) | no | no | a veces | **sí** | **sí, y antes** |
 | Evidencias que muestra | 3 | 3 | 3 | **2** | **1** |
 | Cordura inicial | 100 % | 100 % | 100 % | 100 % | 75 % |
 | Velocidad de pérdida | ×1,0 | ×1,0 | ×1,2 | ×1,5 | ×2,0 |
@@ -1111,3 +1117,322 @@ pasaría a tener apariencia, animaciones e historia propias. Hoy el modelo **no*
 
 **No cambia nada de lo nuestro** —somos un mod de GMod, no un port— pero si algún día se quiere
 alinear, el motor de rasgos ya lo soporta: sería un campo `model` por tipo en la tabla, y nada más.
+
+---
+
+## 18. Zona segura, esconderse, y por qué el hunt heredado **no** alcanza **[2026-08-03]**
+
+Tres huecos que el autor levantó y que §2 daba por cubiertos. **Dos de los tres son la misma
+función de la base**, ya escrita, sólo que enchufada a la entrada equivocada.
+
+Salvo donde se indique, todo lo de acá se leyó en
+[`terminator nextbot/…/enemyoverrides.lua`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua)
+y está marcado **[verificado]**. Las mecánicas del juego original vienen del autor —la wiki devuelve
+402, §6— y van como **[dato del autor]**.
+
+### 18.1 La zona segura es de *targeting*, no de pathing **[decisión del autor]**
+
+**§2 estaba mal.** `ENT.hazardousAreas` no sirve para encerrar al fantasma:
+
+- En la base significa otra cosa: *«areas we took damage in»*
+  ([`shared.lua:2932`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L2932)).
+  Ya tiene dueño.
+- Alimenta `AddAreasToAvoid( areas, mul )`
+  ([`pathoverrides.lua:386`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/pathoverrides.lua#L386)),
+  que **suma costo** a `pathAreasAdditionalCost`. Es un **peaje, no un muro**.
+
+Y ahí muere la mecánica: si el único camino hacia el jugador cruza la zona segura, el fantasma
+**paga el peaje y entra**. Un camión al que se puede entrar cuando sale más barato no es un camión
+seguro.
+
+**La zona segura del juego no es un lugar al que el fantasma no va: es un lugar donde no sos un
+objetivo.** Esa pregunta la contesta un veto que la base expone en público:
+
+```lua
+if hook.Run( "terminator_blocktarget", self, ent ) == true then return false end
+```
+— [`enemyoverrides.lua:496`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L496), dentro de `ShouldBeEnemy`.
+
+**El veto muerde de verdad [verificado].** `ShouldBeEnemy` es el filtro que decide si `FindEnemies`
+llega a llamar `UpdateEnemyMemory`
+([`:596-609`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L596)),
+y `ForgetOldEnemies` limpia la memoria de quien deja de calificar
+([`:676`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L676)).
+Entrás al camión y el fantasma no sólo te suelta: **te olvida.**
+
+Por qué el hook y no las dos alternativas obvias:
+
+| Mecanismo | Veredicto |
+|---|---|
+| **`terminator_blocktarget`** | **El elegido.** Un solo lugar, sin estado que mantener, y es la API que la base ofrece para esto |
+| `FL_NOTARGET` | Funciona —la base lo chequea en [`:434`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L434) y el alerter también— pero es una bandera **global**: te vuelve invisible para todos los NPC del servidor. Esto es un addon de sandbox |
+| La relación de §3.1 | Es el switch fantasma/cazador, que cambia dos veces por hunt. La zona segura cambia veinte veces por partida |
+
+**Sólo protege del targeting [decisión del autor].** Si un Poltergeist tira un prop y entra por la
+puerta del camión, te pega. El camión es seguro *del fantasma*, no del mundo.
+
+Tres cosas que el veto **no** resuelve y hay que escribir aparte:
+
+1. **El fantasma tampoco debería caminar ahí.** Eso sí es pathing, y ahí el costo alto de
+   `AddAreasToAvoid` está bien —como preferencia, no como promesa— sumado a que el selector de
+   roaming nunca sortee esas áreas.
+2. **El sonido no queda bloqueado.** El alerter es un sistema aparte: un jugador que hace ruido
+   adentro del camión sigue mandando `SaveSoundHint`. Hay que filtrarlo en el mismo lugar, o el
+   camión te delata desde adentro.
+3. **De dónde sale la zona.** «Afuera de la casa» no existe en `gm_construct`. Con mapeo, sale de
+   §14. Sin mapeo —el 99 % de los mapas, §14.5— la degradación honesta es **una entidad**: se
+   spawnea el camión y su radio *es* la zona. Encima da el objeto físico que enseña la regla sin
+   explicarla.
+
+### 18.2 Esconderse: dos niveles, y la frontera son 100 unidades
+
+**Dos correcciones del autor que definen esto [dato del autor]:**
+
+- **El juego no te avisa que estás escondido.** Vas a un hiding spot; el lugar *es* el aviso.
+  → **no lleva HUD.**
+- **La oscuridad no oculta.** Lo que te delata es tener **un electrónico encendido en la mano** —
+  por eso las sombras *parecen* ayudar. Detrás de cierto objeto sí ayuda.
+  → **cae el nivel de luz**, que era el único input que pedía plumbing cliente→servidor. Todo el
+  ocultamiento queda server-side y gratis.
+
+> **La consecuencia de sacar el HUD no es sólo sacar el HUD.** El borrador previo puntuaba el
+> escondite con `GetNookScore` —un valor **continuo** sobre navareas—. En Phasmophobia el escondite
+> es legible porque está **autorado**: un placard es un placard. Un puntaje continuo no lo es: el
+> jugador no tiene forma de saber que *ese* rincón cuenta, y sin HUD tampoco se lo dice nadie. El
+> puntaje se va con el HUD. **Lo que reemplaza al cartel no es otro cartel: es que el escondite sea
+> un lugar discreto y reconocible.**
+
+Queda partido en dos niveles, y **la línea que los separa NO es la distancia** — ver §18.2.1, que
+corrige un error de la primera redacción de esta sección:
+
+| Nivel | Qué es | Qué cuesta | Dónde falla — **a propósito** |
+|---|---|---|---|
+| **Detrás de un objeto** | Línea de vista cortada, nada más. `CanSeePosition` es un trace y ya anda ([`:563`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L563)) | **gratis, ya anda** | **El fantasma se mueve.** Un paso al costado y la caja deja de tapar |
+| **Hiding spot** | Volumen **cerrado** y marcado: no se resuelve caminando alrededor | Mapeo — misma toolgun y mismo JSON de §14 | Hay que poder **abrirlo** — §18.2.3 |
+
+Los dos son legibles sin cartel: la caja la ves entre vos y el fantasma, y el placard es un placard.
+Y el modo de falla del primero es el correcto: **te obliga a seguir al fantasma con la vista en vez
+de contar segundos.** El segundo existe justamente porque hay veces en que no podés seguirlo.
+
+### 18.2.1 Cómo ve la base a un jugador — el mecanismo entero **[verificado]**
+
+Escrito porque de esto depende si el nivel 1 existe, y porque la primera redacción de §18.2 lo dio
+por sabido y se equivocó.
+
+Para que el bot te registre tienen que pasar **dos** filtros, no uno
+([`:596-609`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L596)):
+`ShouldBeEnemy` (relación, FOV, niebla, y la tirada de §18.3) **y** `CanSeePosition`. La segunda es
+todo el asunto:
+
+```lua
+local tr = util.TraceLine( {
+    start  = myTbl.GetShootPos( self ),
+    endpos = pos,                     -- pos = EntShootPos( check )
+    mask   = self.LineOfSightMask,    -- MASK_BLOCKLOS ( shared.lua:239 )
+    filter = self
+} )
+local seeBasic = not tr.Hit or ( isentity( check ) and tr.Entity == check )
+```
+— [`:563-580`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L563)
+
+**Un solo rayo, a un solo punto.** No muestrea hitboxes: no existe «parcialmente visible». Si el
+rayo pega en cualquier cosa que no seas vos, **no te ve**. La cobertura es binaria — que es una
+propiedad buena para un mecanismo que el jugador tiene que aprender sin que nadie se lo explique.
+
+**Y el punto cambia si estás agachado**, por una rama explícita en `EntShootPos`
+([`:186-240`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L186)):
+
+```lua
+local isCrouchingPlayer = isPly and ent:Crouching()
+if not isCrouchingPlayer then
+    -- hitbox de la CABEZA primero, despues pecho, despues generico
+end
+-- agachado cae aca:
+local pos = entMeta.WorldSpaceCenter( ent )
+```
+
+| | Punto que se traza | z sobre los pies |
+|---|---|---|
+| De pie | hitbox de la **cabeza** | ~64 **[estimado]** |
+| **Agachado** | **`WorldSpaceCenter`** — centro de la caja de colisión | **18** |
+
+Los ojos del fantasma están a **64**: `GetShootPos` es `LocalToWorld( GetViewOffset() )`
+([`base/shared.lua:137`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot_base/shared.lua#L137))
+y el offset sale de `round( maxs.z - 8 )` con `maxs.z = 72`
+([`motionoverrides.lua:3883-3886`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/motionoverrides.lua#L3883)).
+
+**La cuenta que contesta «¿me tapa esta caja?»:** el rayo va de 64 a 18, así que una caja de altura
+`H` a la fracción `t` del camino lo corta si **`H > 64 − 46·t`**.
+
+| Dónde está la caja | Altura que necesita |
+|---|---|
+| Pegada a vos (`t ≈ 1`) | **> 18** — cualquier caja |
+| A mitad de camino | > 41 — una `wood_crate001a` (~45 u) todavía sirve |
+| Pegada al fantasma (`t ≈ 0`) | > 64 |
+
+**De pie el rayo va casi horizontal a 64, así que esa misma caja no tapa nada.** O sea:
+**agacharse ya es un mecanismo de esconderse, hoy, sin escribir una línea** — y la diferencia entre
+agachado y de pie detrás del mismo objeto es enorme y se aprende en una partida.
+
+### 18.2.2 Corrección: «los 100 u» no son la frontera **[refutado]**
+
+> La primera redacción de §18.2 decía que «detrás de un objeto» **falla a menos de 100 u**. Es falso
+> por dos motivos independientes, y el error habría cambiado la implementación:
+>
+> 1. Esa regla vive **adentro** de `shouldNotSeeEnemy`
+>    ([`:404`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L404)),
+>    la función que muere en la línea 317 para jugadores opacos (§18.3). **Hoy no corre.**
+> 2. Aun cuando corra, **no puentea el trace.** `shouldNotSeeEnemy` es un filtro *extra* encima de
+>    `CanSeePosition`, y las dos tienen que pasar: sólo puede hacerte **más** difícil de ver, nunca
+>    más fácil. **La línea de vista no la pisa la cercanía.**
+>
+> Si la caja corta el rayo, no te ve — a 1000 unidades o a 20. **El modo de falla real del nivel 1
+> es que el fantasma se mueve**, y es mejor que el inventado: es legible, es justo, y re-justifica el
+> hiding spot por lo que de verdad lo distingue —**estar cerrado**— y no por un umbral de distancia.
+
+### 18.2.3 El escondite se puede revisar, y **cuánto depende de la dificultad** [decisión del autor]
+
+Un escondite que nunca se revisa es una estrategia dominante; uno que siempre se revisa no es un
+escondite. La perilla es la **dificultad** (§13), que es donde el juego original pone todo lo que no
+cambia al fantasma sino cuánta ayuda te da:
+
+| | Amateur | Intermediate | Professional | Nightmare | Insanity |
+|---|---|---|---|---|---|
+| **El fantasma revisa escondites** | no | no | a veces | sí | sí, y antes |
+
+Encaja con la fila «se queda en su cuarto» que §13 ya tiene: en dificultad baja el fantasma es
+predecible y perdonador, en alta no. Y no necesita mecánica nueva — revisar es **acercarse al
+volumen y forzar un `CanSeePosition` desde adentro**, que es lo que hace abrir el placard.
+
+### 18.2.4 El delator es la linterna default y lo nuestro; el resto es **capa de compatibilidad** [decisión del autor]
+
+Lo que te delata (§18.2) son **`ply:FlashlightIsOn()`** y **nuestros ítems encendidos**. Punto. Un
+SWEP cualquiera del sandbox **no** delata: si delatara, esconderse dejaría de existir en cualquier
+servidor con addons, que es donde este mod va a correr.
+
+El soporte para equipo de terceros va como **capa de compatibilidad separada**, con la forma que
+Corpus ya usa —`corpus-cargo/lua/corpus_cargo/shared/corpus_cargo_movecompat.lua`—: **archivo
+aparte, convar propia, leída contra el mod vivo y nunca supuesta, y degradación honesta en las dos
+direcciones.** Si el mod no está o su toggle está en 0, la capa no hace nada y el camino base sigue
+siendo toda la historia.
+
+**El escondite se rompe si te vio entrar, y eso sale gratis.** `UpdateEnemyMemory` guarda dónde te
+vio por última vez; si te vio meterte, va ahí. El escondite sirve **sólo si cortaste la línea de
+vista antes de entrar** — que es la regla exacta del juego, sin escribir nada.
+
+### 18.3 El hunt heredado es el de un cazador — y el arreglo ya está escrito
+
+§2 decía «Hunt: **gratis**». Lo que es gratis es un cazador que te encuentra. **El fantasma de
+Phasmophobia está diseñado para fallar la mayoría de las veces**, y eso no se hereda.
+
+**Pero la base ya tiene el modelo, en `shouldNotSeeEnemy`**
+([`:307-416`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L307)),
+y lo que hay adentro son, literalmente, las reglas del juego **[verificado]**:
+
+| En la base | Línea | La regla del juego |
+|---|---|---|
+| Linterna prendida → `+80` a la tirada | [`:346`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L346) | la luz te delata |
+| Arma en mano con holdtype ≠ `normal` → `+80` | [`:340`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L340) | *casi* — ver abajo |
+| Ruido reciente → bump escalado por el alcance | [`:369-379`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L369) | el ruido te delata |
+| A menos de 100 u, **siempre** te ve | [`:404`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L404) | si lo tenés encima, te encontró |
+
+Y el **hunt no determinista está en la misma función**
+([`:387-401`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L387)):
+cuando no te ve claro **no guarda tu posición real**, guarda
+`enemy:GetPos() + randNoZ * investigateRadius` —un punto al azar a cientos de unidades— y sólo lo
+acepta si es visible desde vos (`PosCanSee`). El fantasma va a *cerca de donde estabas*. Y
+`investigateRadius = 500 - sndDist`: **cuanto más fuerte el ruido, más cerca cae la corazonada.**
+
+**El problema es una línea.** Todo eso vive detrás de un portón en
+[`:317`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L317):
+
+```lua
+if a >= maxSeen then cacheShouldNotSee( enemy, false ) return end -- dont waste any more performance
+```
+
+`a` es el **alfa del jugador** y `maxSeen` es 150: el modelo existe para jugadores *transparentes*
+(cloak). Para un jugador opaco —o sea, todos— la función devuelve en la tercera línea y **nada de lo
+de arriba corre nunca**.
+
+> **Entonces el trabajo no es escribir un sistema de esconderse ni un hunt nuevo. Es cambiar qué
+> alimenta `seen`**: de «transparencia del jugador» a un puntaje de ocultamiento. Es una refactor
+> chica y hereda comportamiento ya tuneado. **§18.2 y §18.3 son la misma función.**
+
+Las entradas del puntaje, después de las correcciones del autor:
+
+| Entrada | De dónde sale |
+|---|---|
+| Línea de vista cortada | La base, gratis (§18.2) |
+| Dentro de un hiding spot marcado | Nuestro, §14 |
+| **Electrónico encendido en la mano** | **Nuestro** — ver abajo |
+| Ruido reciente | La base, [`:369`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L369) |
+| ~~Nivel de luz / oscuridad~~ | **DESCARTADO** — el autor: las sombras no ocultan |
+
+**La señal no es «linterna»: es electrónico encendido.** `enemy:FlashlightIsOn()` está bien y ya
+está —§11.2 defecto 9 ya había establecido que la linterna de GMod no es un arma—, pero el bump de
+holdtype de [`:340`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L340)
+dispara con **cualquier** arma empuñada, prendida o no. Para nuestro equipo el chequeo lo escribimos
+nosotros y es exacto: un campo en el SWEP (`SWEP.PhantomIsElectronic`) más su estado de encendido.
+
+Eso convierte al EMF y al spirit box en **decisiones durante el hunt** —apagarlos antes de
+esconderse—, que es lo que hace que el equipamiento de [EQUIPAMIENTO.md](EQUIPAMIENTO.md) importe
+mecánicamente y no sólo como props.
+
+#### Dos defectos de la base que hay que arreglar **antes** de construir encima
+
+1. **`MaxSeeEnemyDistance` no se aplica a jugadores [verificado].**
+   [`:508`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L508):
+
+   ```lua
+   if isPly then -- ignore maxSeeingDist for plys
+       if isBeyondFog( nil, rangeTo ) then return false end
+   ```
+
+   Los 3000 u de `ENT.MaxSeeEnemyDistance`
+   ([`base/init.lua:77`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot_base/init.lua#L77))
+   valen para NPCs. Contra un jugador el alcance de vista es **ilimitado**, salvo niebla y línea de
+   vista. Un fantasma que te ve desde el otro extremo del mapa no es el del juego: **ese límite lo
+   ponemos nosotros.**
+
+2. **La dispersión se invierte pasando los 500 u [verificado].** `investigateRadius = 500 - sndDist`,
+   y `VectorRand()` **no está normalizado** (componentes en −1..1). Con `sndDist = 500` el radio da
+   **0** —te clava la posición exacta— y con `sndDist = 1000` da **−500**, que multiplicado por un
+   vector aleatorio dispersa **lo mismo** que 500. O sea: **pasado cierto volumen, un ruido más
+   fuerte vuelve a empeorar la corazonada.** La curva la escribimos nosotros.
+   *El engine también es un tercero* — la lección de §14 del roadmap #46, otra vez.
+
+### 18.4 Lo que esto agrega a §5.2
+
+Cae un rasgo nuevo que la tabla no tenía:
+
+| Rasgo | Qué hace | Tipos |
+|---|---|---|
+| **`hunt.searchRadius`** | Cuánto dispersa la corazonada de dónde estás. **Es `investigateRadius`**, que ya es un número en la base | Deogen `0`, los tímidos alto |
+
+Es la única perilla que hace que un fantasma se sienta astuto y otro ciego. Y con ella
+**`hunt.hearsOnly` deja de ser un caso especial**: el Deogen —que te encuentra escondido— es
+`searchRadius = 0`, no una rama en el cerebro. Que es exactamente lo que §5 exigía: *ningún tipo
+necesita código propio*.
+
+### 18.5 Lo que queda abierto
+
+- ~~El «check» del hiding spot~~ **CERRADO** (2026-08-03) — se revisa, y **cuánto lo decide la
+  dificultad**. §18.2.3.
+- ~~Qué cuenta como «electrónico encendido» en el equipo de terceros~~ **CERRADO** (2026-08-03) —
+  linterna default más lo nuestro; el resto, **capa de compatibilidad** con la forma de Corpus.
+  §18.2.4.
+- **⚠ EL ÚNICO BLOQUEANTE REAL: ¿`MASK_BLOCKLOS` choca con `prop_physics`? [SIN MEDIR]**
+  El mask es `CONTENTS_SOLID | CONTENTS_MOVEABLE | CONTENTS_BLOCKLOS | CONTENTS_OPAQUE`
+  ([`shared.lua:239`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L239))
+  y el `.phy` de un prop estándar es `CONTENTS_SOLID`, así que **debería** cortar el rayo. Pero eso
+  es **leer una constante, no medir el engine** — y en este proyecto ya se pagó tres veces que *el
+  engine también es un tercero*.
+
+  **Todo §18.2 depende de esto.** Si los props NO cortan `MASK_BLOCKLOS`, el nivel 1 —esconderse
+  detrás de una caja— **no existe**, y el ocultamiento entero tiene que salir de spots marcados, o
+  sea que §14 pasa a ser bloqueante en vez de opcional. Es el **primer check de la planilla** y es
+  barato: una caja, un fantasma, y mirar si te registra.
+
+  De la misma familia, más chicas: la **cabeza a ~64** es estimación (lo verificado es el
+  *mecanismo*, hitbox de cabeza vs `WorldSpaceCenter`, no el número), y el hull agachado del jugador
+  —maxs.z 36, centro 18— es el estándar del engine, tampoco medido acá.
