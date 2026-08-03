@@ -181,6 +181,12 @@ La cordura es del **jugador**, no del fantasma, y es la variable que gobierna to
 Se implementa como un número por jugador en el servidor, networkeado para el HUD. Es independiente
 de la base Terminator: no hay nada que heredar acá, pero tampoco nada difícil.
 
+> **§19 desarrolla todo esto** (2026-08-03) — incluida la **trampa de NEAD**, que activa la mecánica
+> que §18.2 descartó. Y la mitad del equipo de cordura ya estaba diseñada en
+> [EQUIPAMIENTO.md §3.5](EQUIPAMIENTO.md): la barra de Cargo, la vela que frena el drenaje y los
+> costos de las 7 posesiones. **Estas diez líneas nunca fueron todo el diseño de cordura**, sólo la
+> parte que vive en este archivo.
+
 **Durante el hunt** (de la wiki): la electrónica falla en 10 m y el fantasma parpadea. El parpadeo
 es literalmente `CloakedMatFlicker`, y la interferencia es un bucle sobre jugadores en 525 u.
 
@@ -1657,3 +1663,150 @@ cortar»— **el patrón es siempre el mismo: leer un sitio y generalizar al mec
 **La regla que queda:** cuando un grep devuelve N call sites de algo que se va a describir como *el*
 mecanismo, **se leen los N o se declara cuáles no** — un inventario a medias escrito como completo
 es indistinguible de uno completo hasta que rompe.
+
+---
+
+## 19. La cordura — el gatillo de todo **[2026-08-03]**
+
+§18 diseñó **cómo** caza el fantasma. La cordura decide **cuándo**: sin ella, §18 es un motor sin
+llave. Por eso no es una feature al costado.
+
+> **Lo que este documento tenía mal:** §4 son diez líneas y las leí como «el diseño de cordura».
+> **La mitad ya estaba escrita en [EQUIPAMIENTO.md](EQUIPAMIENTO.md) §3.5** —la barra de Cargo, la
+> vela que frena el drenaje, `eqp_sanity_pills` con masa y descripción, y los costos de cordura de
+> las 7 posesiones malditas— y **los datos por tipo estaban en `ghost_types.lua`**. Buscar en un solo
+> archivo y concluir sobre el proyecto es la falla de §18.7 otra vez, en otro eje.
+
+### 19.1 Los datos ya están, generados del juego **[verificado]**
+
+`lua/phantasmagoria/ghost_types.lua` trae **`hunt.threshold` en los 30 tipos** y
+`thresholdLow`/`thresholdHigh` en **12**. No hay que inventar números.
+
+Y los comentarios por tipo —de la misma fuente— ya especifican mecánicas de cordura que §4 no
+menciona:
+
+```lua
+-- Banshee:
+--   Hunts based on target's sanity instead of average sanity
+--   Target loses 15% sanity if they touch the ghost during a singing ghost event
+-- Aswang:
+--   Will immediately end a hunt if the ghost enters an official hiding spot that a
+--     detected player is currently in
+```
+
+> **El Aswang confirma §18.2 desde afuera.** Los datos del juego dicen **«official hiding spot»**: el
+> escondite es un lugar **discreto y nombrado**, no un puntaje continuo. §18.2 llegó ahí discutiendo
+> contra mi propio borrador; acá lo dice la fuente sola.
+
+### 19.2 Las tres decisiones **[decisión del autor]**
+
+| Pregunta | Respuesta |
+|---|---|
+| **Tasa de drenaje** | **10-20 min de 100 a 0**, como el juego — **condicionado** a que haya eventos paranormales que sostengan la tensión |
+| **Ámbito** | **Por jugador.** El promedio existe como **lectura**, no como la variable |
+| **Pastillas** | **Existen y tienen 3 tiers** — `models/phas/eqp_sanity_pills.mdl` ya está en el árbol |
+
+**La primera es una condición, no un número.** Una barra que baja quince minutos sin que pase nada no
+es tensión: es una barra. En palabras del autor, *«mientras existan eventos paranormales que asusten
+y entretengan al jugador todo bien; lo atmosférico también es el punto que lo mantiene
+entretenido»*. **El drenaje sólo funciona si los eventos (§7.5, §11.1) están escritos** — si no, hay
+que acortarlo. Queda como dependencia declarada entre dos sistemas que parecían independientes.
+
+### 19.3 El camión: dos pantallas, y una es una mecánica que no teníamos
+
+De las capturas del juego que pasó el autor:
+
+| Pantalla | Qué muestra |
+|---|---|
+| **TEAM SANITY** | El **promedio** arriba, y **una barra por jugador** con nombre y % |
+| **TOTAL ACTIVITY** | Un gráfico **0-10** contra el tiempo. **10 = hunt sostenido** |
+
+**El medidor de actividad no estaba en ningún documento.** Es una segunda variable global —cuánto
+está pasando— dibujada como **historia** y no como instante, y es lo que convierte «no pasó nada en
+cinco minutos» en información en vez de aburrimiento. Entra como diseño nuevo, y engancha con la
+condición de §19.2.
+
+**Cargo ya tiene la puerta:** `StatusPanel.RegisterBar` (EQUIPAMIENTO.md §3.5). La barra por jugador
+es literalmente eso.
+
+> **Va detrás de un convar, por decisión del autor:** *«es medio tramposo»*. Ver tu cordura te dice
+> cuándo empieza el hunt, que es justo lo que el juego te hace **estimar**. Lo fiel es tenerlo **en
+> el camión** y no en el HUD — y con la zona segura de §18.1 ya definida, «en el camión» es una
+> condición que sabemos evaluar.
+
+### 19.4 La oscuridad: NEAD tiene el algoritmo **[verificado contra el mod montado]**
+
+`render.GetLightColor` y `render.ComputeDynamicLighting` **son CLIENT** — el servidor de GMod no
+puede saber cuánta luz recibe un punto. NEAD lo resuelve en 20 líneas
+(`nead_clientscript.lua:44-70`; referencia propia en
+[`dev/Cortex_NEAD_Referencia.md`](../../dev/Cortex_NEAD_Referencia.md)):
+
+- `render.GetLightColor` en **pies+10** y en **los ojos** (lightmap horneado)
+- `render.ComputeDynamicLighting` en las dos alturas y en **ambos sentidos** del vector (luz dinámica)
+- Suma RGB de las seis muestras, cada una contra `NEAD_light_sen` (default **0.001**)
+- Su condición de esconderse ya excluye `ply:FlashlightIsOn()` — **el mismo delator de §18.2.4**
+
+**Pero `NEAD_indark` nunca se networkea:** es client-side; lo único que viaja al server es `hidden`.
+La forma, igual que `GetWeather()` con StormFox (§15.3):
+
+```lua
+-- CLIENT, en el tick de cordura
+local function InDarkness( ply )
+    if ply.NEAD_indark ~= nil then return ply.NEAD_indark end  -- NEAD montado: costo cero,
+                                                               -- y respeta SU calibracion
+    return PHANTASMAGORIA.SampleDarkness( ply )                -- propio: las mismas 6 muestras
+end
+```
+
+Preferir el valor de NEAD no es sólo ahorro: **es respetar la sensibilidad que el usuario ya
+ajustó**. El autor confirma que en la práctica anda —*«hay varios mapas medio oscuros donde me he
+ocultado usando ese mod»*— y el propio mod avisa que no es perfecto.
+
+### 19.5 ⚠ La trampa de NEAD: te vuelve **intargeteable**
+
+```lua
+ply:SetNoTarget( bool )   -- nead_serverscript.lua:180
+```
+
+`SetNoTarget` prende **`FL_NOTARGET`**, y la base Terminator lo respeta **en dos lugares**:
+
+| Dónde | Efecto |
+|---|---|
+| `ShouldBeEnemy` ([`:434`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L434)) | Sale antes de todo: **no sos enemigo** |
+| El alerter | **Descarta tus sonidos** — *«dont alert for stuff that doesnt want to be targeted»* |
+
+**Con NEAD montado, un segundo a oscuras sin linterna te vuelve invisible E inaudible para nuestro
+fantasma.** Silencioso, sin error, y es exactamente la mecánica que §18.2 descartó.
+
+**No es un bug de nadie: es un choque de premisas.** NEAD existe para que la oscuridad te esconda;
+Phasmophobia existe para que no.
+
+Y ojo: **no alcanza con que nuestro fantasma no sea DrGBase.** NEAD sólo cachea NPCs y nextbots con
+`Base == "drgbase_nextbot"`, así que su lógica *directa* ignora a un Terminator — pero `FL_NOTARGET`
+es una **bandera global del engine** y por ahí nos alcanza igual. *Una integración puede llegarte por
+un camino que su propia lista de entidades no contempla.*
+
+#### La forma: capa de compatibilidad, y falta decidir su precisión
+
+Va con el patrón de §18.2.4 (`corpus_cargo_movecompat.lua`): archivo aparte, convar propia, leída
+contra el mod vivo, degradación honesta en las dos direcciones. Lo que **no** se puede es arreglarlo
+desde `terminator_blocktarget`: el chequeo de `FL_NOTARGET` está en la línea 434 y el hook en la 496
+— **la bandera devuelve antes**. Hay que overridear `ShouldBeEnemy` en el phantom.
+
+**La decisión pendiente es el precio:**
+
+| Opción | Costo |
+|---|---|
+| Ignorar `FL_NOTARGET` en jugadores, siempre | Simple. **Rompe `notarget` como herramienta de testeo** — que es la que §18 usó para medir sin que el bot atacara |
+| Ignorarlo sólo si `NEAD_enabled` es 1 | Más fino, pero sigue rompiendo `notarget` en servidores con NEAD |
+| Ignorarlo sólo cuando **nuestra** medición dice que está a oscuras | El más preciso, pero atribuye la bandera por correlación y no por origen |
+
+### 19.6 Lo que falta
+
+- **La decisión de §19.5** — cuál de las tres formas.
+- **Los 3 tiers de las pastillas** (§16): el modelo es uno; los tiers son cuánto restauran. El autor
+  quiere **ripear el resto de los ítems**, así que la tabla lleva `tier` desde el principio.
+- **Qué drena y cuánto**: oscuridad (§19.4), ver manifestaciones, cercanía del fantasma —el banco
+  `ghost/scare_light` del catálogo **ya es ese evento**, §7.2— y los hunts. Los números salen de
+  repartir los 10-20 min de §19.2.
+- **El medidor de actividad** (§19.3): qué suma actividad y con qué peso.

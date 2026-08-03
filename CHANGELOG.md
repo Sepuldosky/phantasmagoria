@@ -66,6 +66,44 @@ NPCs pasan a ocluir**.
 `MASK_BLOCKLOS` incluye `CONTENTS_OPAQUE`. **Falso** — 16449 no tiene el bit 128. Razonar sobre la
 constante de memoria falló otra vez; el número medido lo desarmó.
 
+### §19: la cordura, y la trampa de NEAD
+
+La cordura no es una feature al costado: **es el gatillo**. §18 diseñó *cómo* caza el fantasma; el
+umbral de cordura decide *cuándo*, así que sin ella §18 es un motor sin llave.
+
+**Y estaba más diseñada de lo que dije.** Leí §4 —diez líneas— y concluí «es un stub», sin mirar que
+**la mitad vivía en `EQUIPAMIENTO.md` §3.5** (la barra de Cargo, la vela que frena el drenaje,
+`eqp_sanity_pills` con masa, los costos de las 7 posesiones) y que **`ghost_types.lua` ya trae
+`hunt.threshold` en los 30 tipos**, con rangos low/high en 12. También afirmé que no teníamos modelo
+de pastillas: **`models/phas/eqp_sanity_pills.mdl` estaba en el árbol**. Dos afirmaciones sin mirar,
+en la misma respuesta.
+
+Decisiones del autor: drenaje **10-20 min** *condicionado a que existan eventos paranormales* —una
+barra que baja sin que pase nada no es tensión—, ámbito **por jugador** (el promedio es lectura, no
+variable), y las pastillas **con 3 tiers**.
+
+**Mecánica nueva, de las capturas del camión:** además de TEAM SANITY (promedio + barra por
+jugador), hay un **TOTAL ACTIVITY 0-10** dibujado como historia contra el tiempo, donde 10 es hunt
+sostenido. No estaba en ningún documento. Y la cordura va **detrás de un convar y en el camión, no
+en el HUD**: verla te dice cuándo empieza el hunt, que es justo lo que el juego te hace estimar.
+
+**La oscuridad la resuelve NEAD** (`nead_clientscript.lua:44-70`): seis muestras —lightmap horneado
+y luz dinámica, en pies+10 y ojos, en ambos sentidos del vector— contra `NEAD_light_sen`. Es CLIENT
+por fuerza. `NEAD_indark` **no se networkea**, así que se lee client-side si NEAD está montado —lo
+que además respeta la calibración del usuario— y se muestrea igual si no.
+
+**Y la trampa:** NEAD hace `ply:SetNoTarget(true)`, o sea `FL_NOTARGET`, que la base Terminator
+respeta **en `ShouldBeEnemy` Y en el alerter**. Con NEAD montado, **un segundo a oscuras sin linterna
+te vuelve invisible e inaudible para el fantasma** — la mecánica que §18.2 descartó, activada por un
+tercero, en silencio. No es bug de nadie: NEAD existe para que la oscuridad esconda y Phasmophobia
+para que no. Y **no alcanza con que nuestro bot no sea DrGBase**: NEAD sólo cachea NPCs y nextbots
+DrGBase, pero `FL_NOTARGET` es una bandera global del engine. *Una integración puede alcanzarte por
+un camino que su propia lista de entidades no contempla.*
+
+Tampoco se arregla desde `terminator_blocktarget`: la bandera devuelve en la línea 434 y el hook
+está en la 496. Hay que overridear `ShouldBeEnemy`, y falta decidir con cuánta precisión — la
+opción simple **rompe `notarget` como herramienta de testeo**, que es la que §18 usó para medir.
+
 ### Y el «arreglo es un campo» era falso: hay **seis** rutas de percepción
 
 Preguntado si se podía cerrar el tema, salió que no. `LineOfSightMask` cubre **dos** de las seis

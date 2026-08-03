@@ -28,6 +28,7 @@ Lo que existe:
 | Diseño de spawn / dificultad / cuartos | **CERRADO** — §12, §13, §14 del diseño |
 | Zona segura / esconderse / hunt no determinista | **CERRADO** — §18; corrige dos filas de §2 |
 | Percepción: las **6** rutas por las que el bot te ubica | **CERRADO** — §18.7; el arreglo son **dos campos**, no uno |
+| Cordura: tasa, ámbito, oscuridad, camión | **DISEÑADO** — §19; falta la forma de la capa NEAD (§19.5) |
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
 | Entidad `terminator_nextbot_phantom` | **NO EXISTE** ← el próximo paso, y su primer trabajo es ser **instrumento** (ver abajo) |
@@ -86,6 +87,17 @@ referencia. Resumidas:
 ---
 
 ## Lo que está abierto
+
+- **⚠ NEAD te vuelve intargeteable para el fantasma** (§19.5): hace `ply:SetNoTarget(true)` a un
+  segundo a oscuras sin linterna, y la base Terminator respeta `FL_NOTARGET` en `ShouldBeEnemy`
+  **y en el alerter** — invisible **e inaudible**, en silencio y sin error. Es la mecánica que §18.2
+  descartó, activada por un tercero. **No es bug de nadie: NEAD existe para que la oscuridad esconda
+  y Phasmophobia para que no.** No se puede arreglar desde `terminator_blocktarget` (la bandera
+  devuelve en la línea 434, el hook está en la 496). Falta elegir la precisión de la capa de compat.
+- **Los 3 tiers de las pastillas** y qué restaura cada uno (§19.6). El modelo ya está:
+  `models/phas/eqp_sanity_pills.mdl`.
+- **Qué drena cordura y cuánto**, y **qué suma al medidor de actividad** 0-10 (§19.3, mecánica nueva
+  que salió de las capturas del camión).
 
 - ~~¿`MASK_BLOCKLOS` choca con `prop_physics`?~~ **MEDIDO Y REFUTADO EN JUEGO** (2026-08-03, §18.6):
   **no choca.** Control `true / Entity [59][prop_physics]`, con el mask `false / [NULL Entity]` —
