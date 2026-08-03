@@ -66,11 +66,22 @@ NPCs pasan a ocluir**.
 `MASK_BLOCKLOS` incluye `CONTENTS_OPAQUE`. **Falso** — 16449 no tiene el bit 128. Razonar sobre la
 constante de memoria falló otra vez; el número medido lo desarmó.
 
-### Abrió una pregunta nueva
+### La generalización, medida en la misma sesión
 
-**¿Una entidad —jugador, NPC— corta `MASK_BLOCKLOS`?** La lectura de los bits dice que no, lo que
-convertiría «los props no cortan» en «nada que no sea mundo corta». Es lectura, no medición: mismo
-comando, apuntándole a un NPC.
+El mismo barrido contra un `npc_kleiner` —una entidad de clase completamente distinta a un prop— dio
+**el mismo patrón exacto**: `MASK_SOLID` y `MASK_SHOT` le pegan, los otros tres lo atraviesan y
+siguen hasta `worldspawn`.
+
+La lectura de los bits pasó a medición: **`CONTENTS_MONSTER` es el bit de «esto es una entidad», y
+`MASK_BLOCKLOS` es geometría del mundo y nada más.** El bot heredado ve a través de props, NPCs y
+jugadores por igual. Con eso queda medido también el efecto secundario de elegir `MASK_SOLID`:
+**jugadores y NPCs pasan a ocluir**, que era lo único de la decisión que estaba inferido.
+
+Y un detalle que respalda el cambio: `CanSeePosition` termina en
+`not tr.Hit or ( isentity(check) and tr.Entity == check )`. Con `MASK_BLOCKLOS` la rama derecha nunca
+se cumple para un jugador o un NPC, así que todo pasa por `not tr.Hit`; con `MASK_SOLID` el rayo sí
+pega en el objetivo y esa rama se vuelve el camino normal. **El swap no es un parche contra el diseño
+de la función: es la mitad de la función que hoy no se usa.**
 
 ---
 

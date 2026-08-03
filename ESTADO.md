@@ -96,10 +96,10 @@ referencia. Resumidas:
   trace corre por enemigo y por barrido).
 - ~~¿El mundo sí corta `MASK_BLOCKLOS`?~~ **MEDIDO: sí** — las cinco pegan en `worldspawn` contra una
   pared. **La rama catastrófica está muerta**, la base no es omnisciente.
-- **¿Una entidad (jugador, NPC) corta `MASK_BLOCKLOS`?** — abierta por el barrido. Decodificando los
-  valores, lo único que separa a los masks que ven la caja de los que no es **`CONTENTS_MONSTER`**,
-  o sea el bit de «esto es una entidad»: la lectura dice que **nada que no sea mundo corta**. Es
-  **lectura, no medición** — mismo comando, apuntándole a un NPC.
+- ~~¿Una entidad (jugador, NPC) corta `MASK_BLOCKLOS`?~~ **MEDIDO: no.** Mismo barrido contra un
+  `npc_kleiner`: mismo patrón exacto que la caja, con una entidad de clase distinta. **`MASK_BLOCKLOS`
+  es geometría del mundo y nada más**, y `CONTENTS_MONSTER` es el bit de «esto es una entidad». Con
+  eso queda medido también el efecto secundario de `MASK_SOLID`: **jugadores y NPCs ocluyen**.
 
 - **Plan del autor (2026-08-03): la entidad básica se escribe como instrumento** — primero existir y
   **mostrar dónde está**, después todo lo demás. Tres cosas para no tropezar:

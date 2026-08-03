@@ -1540,13 +1540,33 @@ De los dos que sirven, `MASK_SHOT` trae dos bits que no queremos para *ver*:
 —a través de una reja se ve— pero es el lado conservador, y si algún día molesta se saca un bit:
 `bit.band( MASK_SOLID, bit.bnot( CONTENTS_GRATE ) )`.
 
-**Efecto secundario declarado:** `MASK_SOLID` incluye `CONTENTS_MONSTER`, así que **jugadores y NPCs
-pasan a ocluir**. Esconderse detrás de un compañero funciona; y en un sandbox lleno de NPCs el
-fantasma puede quedar puntualmente ciego por gente en el medio. Se acepta a propósito —es coherente
-con «la línea de vista es la línea de vista»— pero queda escrito para no diagnosticarlo dos veces.
+**Efecto secundario, ahora MEDIDO y no inferido:** `MASK_SOLID` incluye `CONTENTS_MONSTER`, así que
+**jugadores y NPCs pasan a ocluir**. Esconderse detrás de un compañero funciona; y en un sandbox
+lleno de NPCs el fantasma puede quedar puntualmente ciego por gente en el medio. Se acepta a
+propósito —es coherente con «la línea de vista es la línea de vista»— pero queda escrito para no
+diagnosticarlo dos veces.
 
-##### Lo que abre, y cuesta una corrida
+##### La generalización, confirmada sobre un NPC **[medido]**
 
-**¿Una entidad (jugador, NPC) corta `MASK_BLOCKLOS`?** La lectura de los bits dice que **no** —sin
-`CONTENTS_MONSTER` no colisiona con entidades— y eso convertiría «los props no cortan» en «nada que
-no sea mundo corta». **Es lectura, no medición.** Mismo comando del barrido, apuntándole a un NPC.
+La lectura de los bits decía que **nada que no sea mundo corta `MASK_BLOCKLOS`**. Se midió con el
+mismo barrido apuntándole a un `npc_kleiner`, que es una entidad de clase completamente distinta a
+un prop:
+
+| Mask | a la caja | **al NPC** | a la pared |
+|---|---|---|---|
+| `MASK_SOLID` | `[396][prop_physics]` | **`NPC [386][npc_kleiner]`** | `[0][worldspawn]` |
+| `MASK_SHOT` | `[396][prop_physics]` | **`NPC [386][npc_kleiner]`** | `[0][worldspawn]` |
+| `MASK_OPAQUE` | `[0][worldspawn]` | `[0][worldspawn]` | `[0][worldspawn]` |
+| `MASK_VISIBLE` | `[0][worldspawn]` | `[0][worldspawn]` | `[0][worldspawn]` |
+| `MASK_BLOCKLOS` | `[0][worldspawn]` | `[0][worldspawn]` | `[0][worldspawn]` |
+
+**Mismo patrón, misma frontera, dos tipos de entidad distintos.** La lectura pasó a medición:
+`CONTENTS_MONSTER` es el bit de *«esto es una entidad»*, y **`MASK_BLOCKLOS` es geometría del mundo
+y nada más**. El bot heredado ve a través de props, NPCs y jugadores por igual.
+
+> **Un detalle que respalda el cambio.** `CanSeePosition` termina en
+> `not tr.Hit or ( isentity( check ) and tr.Entity == check )`. Con `MASK_BLOCKLOS` la rama derecha
+> **nunca** se cumple para un jugador o un NPC —el trace no los toca—, así que todo pasa por
+> `not tr.Hit`. Con `MASK_SOLID` el rayo **sí** pega en el objetivo y la segunda rama se vuelve el
+> camino normal. Esa rama ya estaba escrita: **el swap no es un parche contra el diseño de la
+> función, es la mitad de la función que hoy no se usa.**
