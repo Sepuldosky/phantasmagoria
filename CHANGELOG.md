@@ -7,6 +7,51 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-03 — Sesión 12: la primera medición en juego, y refutó al documento
+
+**Primer dato del proyecto que sale del juego y no de leer código.** El bloqueante que la sesión 11
+había dejado marcado —*¿`MASK_BLOCKLOS` choca con `prop_physics`?*— se midió con una caja delante y
+dos traces idénticos salvo el mask:
+
+```
+control  (mask por defecto)   ->  true    Entity [59][prop_physics]
+medicion (MASK_BLOCKLOS)      ->  false   [NULL Entity]
+```
+
+**Los props NO cortan la vista de la base.** El documento afirmaba que «debería» cortar, razonando
+que el mask incluye `CONTENTS_SOLID` y que el `.phy` de un prop lo es: razonamiento plausible,
+conclusión falsa. **El engine también es un tercero** — cuarta vez en este proyecto, y la primera en
+que la medición llega *antes* de escribir el código en vez de después.
+
+**El control es lo que la vuelve concluyente.** Sin él, un `Hit = false` sería indistinguible de «no
+le estaba apuntando a la caja».
+
+### El arreglo, y por qué es chico
+
+`LineOfSightMask` es **por entidad con fallback al global** (`shared.lua:2960`), así que declarar
+`ENT.LineOfSightMask` en el phantom alcanza. Y sus **tres** usos son la misma clase de pregunta —
+`CanSeePosition` (`:574`) y los dos «¿vería al enemigo de pie / agachado?» (`:1108`, `:1137`)—, o sea
+que cambiarlo los mueve coherentemente. **No toca** `terminator_Extras.PosCanSee`, que es global y
+sigue con `MASK_BLOCKLOS`: ahí vive el filtro de la dispersión, que pregunta otra cosa.
+
+**Qué mask poner queda SIN decidir a propósito.** Elegirlo leyendo la lista de constantes es
+exactamente lo que acaba de fallar; §18.6 trae el barrido que los prueba a los cinco en juego, con
+`MASK_BLOCKLOS` incluido **como control**.
+
+### Y probablemente sea deliberado en la base
+
+Un cazador que pierde el rastro detrás de cada silla se siente roto: ver a través del desorden es una
+*feature* para un Terminator. Para un fantasma de Phasmophobia es lo contrario. **Tercera vez en §18
+que «heredado» no es «correcto».**
+
+### Abrió una pregunta nueva
+
+**¿El mundo sí corta `MASK_BLOCKLOS`?** Si tampoco cortara, `CanSeePosition` sería casi siempre true
+y la base entera sería omnisciente — un problema mucho mayor que el nuestro. Es probable que corte,
+pero «probable» es justo lo que esta sesión castigó.
+
+---
+
 ## 2026-08-03 — Sesión 11: zona segura, esconderse, y el hunt que la base **no** regala
 
 El autor levantó tres huecos que la tabla de §2 daba por cubiertos. **Dos filas de esa tabla no

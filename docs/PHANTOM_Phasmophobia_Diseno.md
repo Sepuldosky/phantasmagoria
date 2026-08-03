@@ -1207,7 +1207,7 @@ corrige un error de la primera redacción de esta sección:
 
 | Nivel | Qué es | Qué cuesta | Dónde falla — **a propósito** |
 |---|---|---|---|
-| **Detrás de un objeto** | Línea de vista cortada, nada más. `CanSeePosition` es un trace y ya anda ([`:563`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L563)) | **gratis, ya anda** | **El fantasma se mueve.** Un paso al costado y la caja deja de tapar |
+| **Detrás de un objeto** | Línea de vista cortada. `CanSeePosition` es un trace ([`:563`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L563)) — **pero con el mask heredado los props NO cortan, medido en juego, §18.6** | **un campo**, `ENT.LineOfSightMask` | **El fantasma se mueve.** Un paso al costado y la caja deja de tapar |
 | **Hiding spot** | Volumen **cerrado** y marcado: no se resuelve caminando alrededor | Mapeo — misma toolgun y mismo JSON de §14 | Hay que poder **abrirlo** — §18.2.3 |
 
 Los dos son legibles sin cartel: la caja la ves entre vos y el fantasma, y el placard es un placard.
@@ -1421,18 +1421,76 @@ necesita código propio*.
 - ~~Qué cuenta como «electrónico encendido» en el equipo de terceros~~ **CERRADO** (2026-08-03) —
   linterna default más lo nuestro; el resto, **capa de compatibilidad** con la forma de Corpus.
   §18.2.4.
-- **⚠ EL ÚNICO BLOQUEANTE REAL: ¿`MASK_BLOCKLOS` choca con `prop_physics`? [SIN MEDIR]**
-  El mask es `CONTENTS_SOLID | CONTENTS_MOVEABLE | CONTENTS_BLOCKLOS | CONTENTS_OPAQUE`
-  ([`shared.lua:239`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L239))
-  y el `.phy` de un prop estándar es `CONTENTS_SOLID`, así que **debería** cortar el rayo. Pero eso
-  es **leer una constante, no medir el engine** — y en este proyecto ya se pagó tres veces que *el
-  engine también es un tercero*.
+- ~~¿`MASK_BLOCKLOS` choca con `prop_physics`?~~ **MEDIDO EN JUEGO Y REFUTADO** (2026-08-03) —
+  **no choca.** Ver **§18.6**, que trae el arreglo.
 
-  **Todo §18.2 depende de esto.** Si los props NO cortan `MASK_BLOCKLOS`, el nivel 1 —esconderse
-  detrás de una caja— **no existe**, y el ocultamiento entero tiene que salir de spots marcados, o
-  sea que §14 pasa a ser bloqueante en vez de opcional. Es el **primer check de la planilla** y es
-  barato: una caja, un fantasma, y mirar si te registra.
+  De la misma familia, todavía sin medir y más chicas: la **cabeza a ~64** es estimación (lo
+  verificado es el *mecanismo*, hitbox de cabeza vs `WorldSpaceCenter`, no el número), y el hull
+  agachado del jugador —maxs.z 36, centro 18— es el estándar del engine, tampoco medido acá.
+- **¿El mundo sí corta `MASK_BLOCKLOS`? [SIN MEDIR]** — abierta *por* §18.6. Si los props no cortan,
+  hay que confirmar que las paredes sí: si tampoco cortaran, `CanSeePosition` sería casi siempre
+  true y la base entera sería omnisciente, lo que afectaría mucho más que a nuestro diseño. Es
+  probable que corten (la base funciona y pierde jugadores), pero **«probable» es exactamente lo que
+  §18.6 acaba de castigar.** Mismos dos comandos, apuntando a una pared.
 
-  De la misma familia, más chicas: la **cabeza a ~64** es estimación (lo verificado es el
-  *mecanismo*, hitbox de cabeza vs `WorldSpaceCenter`, no el número), y el hull agachado del jugador
-  —maxs.z 36, centro 18— es el estándar del engine, tampoco medido acá.
+### 18.6 Los props **NO** cortan `MASK_BLOCKLOS` — medido en juego **[2026-08-03]**
+
+**La primera medición del proyecto, y refutó lo que este documento afirmaba dos secciones más
+arriba.** El autor lo corrió con una caja delante, dos traces idénticos salvo el mask:
+
+```
+] lua_run ... util.TraceLine{start=e,endpos=e+p:GetAimVector()*300,filter=p} ...
+true    Entity [59][prop_physics]                 <- control: la caja ESTA ahi
+
+] lua_run ... util.TraceLine{... ,mask=MASK_BLOCKLOS, ...} ...
+false   [NULL Entity]                             <- con el mask de la base: PASA DE LARGO
+```
+
+Mismo origen, mismo destino, mismo filtro; **la única variable es el mask.** El rayo con
+`MASK_BLOCKLOS` no pega en la caja ni en nada: `Hit` es **false**. **El control es lo que lo vuelve
+concluyente** — sin él, un `false` sería indistinguible de «no le estaba apuntando».
+
+> **Yo había escrito que «debería» cortar**, razonando que el mask incluye `CONTENTS_SOLID` y que el
+> `.phy` de un prop lo es. El razonamiento era plausible y la conclusión falsa. *El engine también es
+> un tercero* — cuarta vez en este proyecto, y la primera en que la medición llega **antes** de
+> escribir el código en vez de después.
+
+**Y probablemente sea deliberado en la base.** Un cazador que pierde el rastro detrás de cada silla
+se siente roto; para un Terminator, ver a través del desorden es una *feature*. Para un fantasma de
+Phasmophobia es exactamente lo contrario. **«Heredado» no es «correcto»** — tercera vez en §18.
+
+#### El arreglo es un campo, y el radio de explosión está acotado **[verificado]**
+
+`LineOfSightMask` **es por entidad, con fallback al global**
+([`shared.lua:2960`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L2960)):
+
+```lua
+myTbl.LineOfSightMask = myTbl.LineOfSightMask or LineOfSightMask
+```
+
+Declarar `ENT.LineOfSightMask` en el phantom gana. Y los **tres** usos de `self.LineOfSightMask` son
+la misma clase de pregunta —*¿puedo ver?*—, así que cambiarlo los mueve de forma coherente:
+
+| Sitio | Qué pregunta |
+|---|---|
+| [`:574`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L574) | `CanSeePosition` — el trace del que depende todo §18.2 |
+| [`:1108`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L1108) · [`:1137`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L1137) | «¿vería al enemigo de pie / agachado?» |
+
+**Lo que NO cambia:** `terminator_Extras.PosCanSee` es **global**, no por entidad, y sigue usando
+`MASK_BLOCKLOS` pase lo que pase. Ahí vive el filtro de la dispersión de §18.3
+([`:395`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L395)),
+que pregunta otra cosa —*¿este punto es visible desde el jugador?*— y puede quedarse como está.
+
+#### Qué mask poner: **sin decidir, y esta vez se mide primero**
+
+`MASK_SOLID`, `MASK_SHOT`, `MASK_OPAQUE`, `MASK_VISIBLE` son los candidatos. **No se elige leyendo
+la lista de constantes** — es lo que acaba de fallar. Se barren los cinco contra la misma caja y
+gana el que la reporte:
+
+```
+lua_run local p=Entity(1) local e=p:EyePos() local d=e+p:GetAimVector()*300 for _,m in ipairs{"MASK_SOLID","MASK_SHOT","MASK_OPAQUE","MASK_VISIBLE","MASK_BLOCKLOS"} do print(m, util.TraceLine{start=e,endpos=d,mask=_G[m],filter=p}.Entity) end
+```
+
+Criterio binario por fila: si imprime `Entity [n][prop_physics]`, ese mask sirve. `MASK_BLOCKLOS` va
+en la lista **como control**: tiene que salir `[NULL Entity]` o el barrido no está midiendo lo que
+cree.

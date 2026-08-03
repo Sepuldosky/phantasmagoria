@@ -86,14 +86,17 @@ referencia. Resumidas:
 
 ## Lo que está abierto
 
-- **⚠ EL PRIMER CHECK DE LA PLANILLA, y es bloqueante** (§18.5): **¿`MASK_BLOCKLOS` choca con
-  `prop_physics`?** El mask incluye `CONTENTS_SOLID` y el `.phy` de un prop lo es, así que *debería*
-  — pero eso es leer una constante, no medir el engine. **Todo §18.2 depende de esto:** si los props
-  no cortan el rayo, esconderse detrás de una caja **no existe** y §14 (spots marcados) pasa de
-  opcional a bloqueante. Barato de medir: una caja, un fantasma, y ver si te registra.
+- ~~¿`MASK_BLOCKLOS` choca con `prop_physics`?~~ **MEDIDO Y REFUTADO EN JUEGO** (2026-08-03, §18.6):
+  **no choca.** Control `true / Entity [59][prop_physics]`, con el mask `false / [NULL Entity]` —
+  misma línea, única variable el mask. **Primera medición del proyecto y refutó al documento.**
+  El arreglo es un campo: `ENT.LineOfSightMask` es por entidad con fallback al global
+  (`shared.lua:2960`), y sus tres usos son la misma clase de pregunta. **Falta elegir el mask, y esta
+  vez se barren los candidatos en juego antes de escribir nada** — el comando está en §18.6.
+- **¿El mundo sí corta `MASK_BLOCKLOS`?** — abierta *por* la anterior. Si tampoco cortara, la base
+  sería omnisciente y el problema excede a nuestro diseño. Mismos dos comandos, contra una pared.
 
-  **Plan del autor (2026-08-03): la entidad básica se escribe como el instrumento de este check** —
-  primero existir y **mostrar dónde está**, después todo lo demás. Tres cosas para no tropezar:
+- **Plan del autor (2026-08-03): la entidad básica se escribe como instrumento** — primero existir y
+  **mostrar dónde está**, después todo lo demás. Tres cosas para no tropezar:
 
   1. **NO ponerle `ENT.IsWraith = true` todavía.** §2 lo lista como el regalo que la hace invisible
      fuera del hunt — y un instrumento invisible no sirve para ver dónde está.
