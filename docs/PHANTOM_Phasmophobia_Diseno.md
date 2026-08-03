@@ -319,7 +319,7 @@ Mapeo directo de lo que **sí** puedo identificar por nombre y duración:
 
 | Uso en PHANTOM | Archivos | n |
 |---|---|---:|
-| Pasos del fantasma | `GhostFootstepCarpet1-8` | 8 |
+| ~~Pasos del fantasma~~ | ~~`GhostFootstepCarpet1-8`~~ | **REFUTADO — §7.4** |
 | Pasos del jugador | `FootstepCarpet*`, `FOOTSTEP_*` (asfalto/grava/madera), `Stairs footsteps*` | ~50 |
 | Tirar objetos (Poltergeist) | `Throwing 1-11` | 11 |
 | Golpes / impactos | `Wood Impact 1-6`, `wood-1..6`, `IMPACT_*`, `metal-pipe-*` | ~18 |
@@ -333,9 +333,33 @@ Mapeo directo de lo que **sí** puedo identificar por nombre y duración:
 | Ambiente | `Nights Ambience Neighborhood`, `Rain`, `THUNDER_*`, `ThunderClap_*`, `Dark Cinematic Horror Room Tone 2` | ~10 |
 | Trastos de casa | `Tv On/Off/Noise`, `PhoneRing`, `Fridge loop`, `Sink loop`, `TOILET_Flush`, `Clock Ticking`, `CeilingFan`, `Microwave Beep` | ~12 |
 
-### 7.2 Lo que **no** sé, y te pregunto — §8
+### 7.2 Lo que no sabía — **CERRADO** (2026-08-03)
 
-Hay tres grupos que no puedo mapear sin escucharlos, y por tu regla no los asumo. Están en §8.
+Los tres grupos de §8.1 los escuchó el autor y los describió uno por uno. Los **46** archivos de
+`_sin_identificar/` están catalogados y esa carpeta ya no existe. El detalle por archivo —qué dijo
+el autor, qué se midió, y las transcripciones de las líneas habladas— vive en
+`sound/phantasmagoria/about.txt`, que es lo único del árbol de sonido que se versiona.
+
+Lo que la identificación **agregó** al diseño:
+
+| Uso en PHANTOM | Carpeta | n |
+|---|---|---:|
+| Respiración del fantasma cazando | `ghost/hunt/` | 1 |
+| El fantasma se acerca y come cordura | `ghost/scare_light/` | 2 |
+| Ataque fuerte (**sólo voz 2**) | `ghost/scare_strong/` | 1 |
+| Quejido de daño del fantasma | `ghost/hurt/` | 2 |
+| Tarareo del ghost event de aparición | `ghost/humming/` | 2 |
+| Respuestas del Spirit Box (voz masculina, literales) | `equipment/spiritbox_response/` | 22 |
+| Beep del motion sensor | `equipment/motion_sensor_beep.ogg` | 1 |
+| Loop de estar muerto — candidato para **la otra dimensión** | `player/dead_loop.ogg` | 1 |
+| Tono de interior de la casa (82 s) | `ambience/house_tone_loop.ogg` | 1 |
+| La voz del encargado (intel del caso + menú) | `voice/` | 18 |
+
+**Las dos voces.** `voice_1` es más femenina, `voice_2` más grave. El índice **es** la voz: elegir
+siempre el mismo entre carpetas es lo que hace que un fantasma suene a *un* fantasma — el
+«fingerprint sonoro» que §5 pedía para que el jugador distinga un hunt de un ghost event. Y la
+asimetría hay que respetarla: **`scare_strong` sólo existe para la voz 2**, así que un fantasma con
+voz 1 degrada a `scare_light`, no suena en silencio.
 
 ### 7.3 Conversión a `.ogg` — **HECHA** [verificado]
 
@@ -357,33 +381,59 @@ Convertidos el 2026-08-01 a Vorbis `q4 44.1 kHz`:
 Herramienta: `ffmpeg 8.1.2`, instalado en el sistema del autor con `winget install Gyan.FFmpeg`
 durante esta sesión.
 
+### 7.4 El fantasma **no tiene pasos** [medido]
+
+Los 8 `GhostFootstepCarpet` que §7.1 daba por pasos del fantasma **son del jugador**: el autor los
+reconoce del juego. Se movieron a `player/footstep/carpet_loud_*` y `ghost/footstep/` **quedó
+vacía** — por la regla del árbol, eso significa que hoy el fantasma **camina en silencio**, sin
+error. Llenar ese banco es trabajo pendiente de la entidad, y §1 lo necesita: los sonidos del
+fantasma tienen que oírse a **20 m (~1050 u)**.
+
+Lo medido antes de mover, para no repetirlo:
+
+- **No** son los mismos archivos que `player/footstep/carpet_1-8`: 16 hashes distintos, y el
+  null-test (alineado por correlación cruzada, ganancia por mínimos cuadrados) da `corr` 0,32-0,80
+  — exactamente el rango de los controles cruzados. **No es una copia con otra ganancia.**
+- Pero las duraciones emparejan una a una: 0,342/0,335 · 0,382/0,372 · 0,396/0,392 · 0,396/0,368 ·
+  0,333/0,327 · 0,302/0,299 · 0,296/0,285 · 0,292/0,290 — **delta 2-11 ms en 7 de 8**.
+- Y el set está **~10 dB más fuerte**: media −17…−25 dB contra −27…−35 dB.
+
+Lectura: misma superficie, **dos mezclas** — una audible en el mundo y una para tus propios pies.
+Por eso `carpet_loud` y no `carpet_9..16`: en un solo pool el sorteo saltaría 13 dB entre pisada y
+pisada. Y por eso siguen siendo el candidato natural cuando haya que darle pasos al fantasma.
+
+La hipótesis alternativa —que fueran las escaleras— **no sobrevivió la medición**: `stairs_*` dura
+0,25-0,52 s a −36…−43 dB y `stairs_under_*` 0,34-0,56 s a −21…−33 dB; ninguno de los dos empareja
+como empareja `carpet_*`.
+
 ---
 
 ## 8. Lo que necesito que me digas
 
-### 8.1 Sonidos — los tres grupos que no puedo identificar
+### 8.1 ~~Sonidos — los tres grupos que no puedo identificar~~ **CERRADO (2026-08-03)**
 
-**Grupo A — palabras sueltas (23 archivos, 0,3-0,6 s cada uno).** Supongo que son respuestas de voz
-del **Spirit Box**, pero no sé *qué voz* (¿masculina? ¿femenina? ¿susurro? ¿varias?) ni si algunas
-son del **Ouija Board**:
+Los **46** los escuchó el autor. Lo que contestó, resumido:
 
-> `Adult` `Baby` `Child` `Kid` `Young` `Old` — suenan a respuestas de «how old are you?»
-> `Dad` `Mum` `Son` `Daughter` — a respuestas de parentesco
-> `Attack` `Away` `Behind` `Close` `Far` `Here` `Hate` `Hurt` `Kill` `Die` `Death` `Next` `Beep`
+| Grupo | Qué era |
+|---|---|
+| **A** — 23 palabras sueltas | **Spirit Box, voz masculina**, y **literales al nombre**: `adult.ogg` dice «adult». Salvo `Beep`, que es el **motion sensor** cuando algo lo cruza |
+| **B** — 5 vocalizaciones | Sí eran las del fantasma, pero **por función, no por daño**: `light/strong attack` es el fantasma acercándose y comiéndote la cordura; `damaged` es un quejido de golpe. Y son **dos voces** — la 1 más femenina, la 2 más grave —, que es exactamente el «fingerprint sonoro» que pedía §5 |
+| **C** — los 8 `Hint` | **No** eran Ouija ni spirit box: es **una voz británica**, el ayudante de la compañía, dando intel del caso al llegar. Mismo hablante que `arrival`, `welcome_back`, `lobby_*` y `menu_intro`, que estaban sueltos en `ui/`. Los 20 juntos hoy en `voice/`, con transcripción |
+| **C** — sueltos | `ManHumming`/`WomanHumming` = el tarareo del ghost event de aparición (y de la cajita musical). `MainToneLoop` = tono de interior de la casa. `DeathZoneLoop` = el loop de estar muerto — **candidato para la otra dimensión**. `Clicker_idle_26` = la respiración del fantasma **cazando**. `BearLaugh` = el peluche del cuarto del bebé. `GuitarSound` = una cuerda de guitarra. `MetalWhine1/2` = movimiento metálico, probablemente una puerta |
 
-**Grupo B — vocalizaciones del fantasma (5 archivos, 2-4 s).** Los nombres hablan de daño y ataque,
-pero en Phasmophobia el fantasma no recibe daño, así que no sé qué son en realidad:
+Y una corrección al mapeo previo: **los `GhostFootstepCarpet` no eran del fantasma** — §7.4.
 
-> `Ghost 1 (damaged)` `Ghost 1 (light attack)` `Ghost 2 (damaged)` `Ghost 2 (light attack)` `Ghost 2 (strong attack)`
+**Los 8 `hint` no se ordenan por su nombre.** Dos de los ocho contradicen su propio texto
+(`hint_friendly_ghost_2` habla de *«reports of violence»*; `hint_non_friendly_ghost_1` empieza con
+*«nothing to report»*), así que si la briefing se elige por agresividad, **el tier sale del contenido
+y no del nombre** — la escalera está en `sound/phantasmagoria/about.txt`. Los nombres se conservan
+porque son el único rastro hasta el rip. Sobre si alguno **nunca se usó** en el juego original: no es
+verificable desde los archivos, y la señal de formato que lo habría apoyado **dio negativa** — el
+rip tiene 5 formatos distintos y estas 8 caen todas en el mismo, con el mastering agrupado en
+1,4 dB. Eso no refuta la sospecha; sólo dice que el archivo no la apoya.
 
-¿Son las **vocalizaciones de hunt/manifestación** (las 7 masculinas y 6 femeninas que menciona la
-wiki)? Si lo son, me sirven como el «fingerprint sonoro» del contrato.
-
-**Grupo C — sueltos que no ubico:**
-
-> `Hint Aggressive Ghost` / `Hint Friendly Ghost` (×2) / `Hint Non Friendly Ghost` (×2) / `Hint None` (×3) — 2,5-6,8 s. ¿Ouija? ¿respuestas del spirit box largas?
-> `ManHumming` / `WomanHumming` — 25 s cada uno. ¿El tarareo de un ghost event?
-> `MetalWhine1/2` (1,1 s) · `MainToneLoop` (82 s) · `DeathZoneLoop` (14 s) · `Clicker_idle_26` (2,6 s) · `BearLaugh` · `GuitarSound` · `PianoKey1-5`
+El detalle por archivo está en `sound/phantasmagoria/about.txt`, con lo que quedó marcado como
+**sospecha** del autor separado de lo que se midió.
 
 ### 8.2 Los seis fantasmas que no conozco
 

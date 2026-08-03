@@ -4,6 +4,9 @@ terceros (phasmo-sounds-main). Convertidos de .wav a .ogg Vorbis q4 el
 contra el original (delta 0,000 s). Los .wav originales NO estan aca: viven en
 dev/other/phantom/dev2/phasmo-sounds-main/ y no se tocaron.
 
+Los 46 que quedaron sin identificar se cerraron el 2026-08-03: el autor los
+escucho uno por uno y los describio. _sin_identificar/ ya no existe.
+
 ESTANDAR DE SONIDO POR ACCION (heredado de corpus-stalker): cada carpeta es una
 accion o familia, y CUALQUIER .ogg dentro entra al pool de esa accion. Para
 cambiar el banco de un evento basta soltar archivos en la carpeta, sin tocar
@@ -11,33 +14,233 @@ Lua. Una carpeta vacia o faltante = ese evento suena en silencio, no da error.
 
 NINGUNO DE ESTOS ARCHIVOS TIENE CONSUMIDOR TODAVIA. La entidad no esta escrita.
 
-ghost/footstep/     pasos del fantasma (8). Se oyen a 20 m = ~1050 u. El Myling
-                    los silencia via ENT:IsSilentStepping()
-player/footstep/    pasos del jugador por superficie (50): carpet, asphalt,
-                    gravel, wood, stairs, stairs_under. Material de repuesto:
-                    GMod ya trae los suyos
-player/             heartbeat_loop (el latido a <10 m del fantasma, ver diseno
-                    seccion 1), death_riser, dying
-event/throw/        objetos volando (11). El Poltergeist tira varios a la vez
-event/impact/       golpes contra madera, metal, piedra (20)
-event/creak/        crujidos de piso, bisagras, cuerdas, rejas (15). El material
-                    de la presencia ambiental
-event/knock/        golpeteo en puerta y ventana (7). Ghost event clasico
-door/               puertas: cierres, manijas, celda, corrediza (18)
-furniture/          armarios y cajones abriendose solos (12)
-light/              interruptores, zumbido, bombilla rota (5)
-equipment/          los equipos del jugador (16): emf_beep, spiritbox_noise_loop,
-                    radio_static, walkie, linterna, camara, diario, crucifijo,
-                    encendedor, pastillas
-ambience/           lluvia, truenos, viento, room tone (10)
-prop/               trastos de la casa: tv, telefono, heladera, pileta, inodoro,
-                    reloj, ventilador, microondas, ascensor, auto, piano,
-                    llaves (29)
-ui/                 menu y camion del juego original (15). Probablemente no se
-                    usen: quedan por si sirven
-_sin_identificar/   46 archivos que NO se pudieron mapear por nombre. Ver el
-                    about.txt de esa carpeta. NO USAR hasta identificarlos
+=============================================================================
+EL ARBOL                                                        265 archivos
+=============================================================================
 
-REGLA: no se infiere que suena un archivo a partir de su nombre. Lo que esta
-mapeado arriba es lo que el nombre original justifica sin adivinar; el resto
-espera a que el autor lo describa.
+ghost/hunt/             1   la respiracion del fantasma cazando. "Como que
+                            expulsa saliva constantemente junto con el aire de
+                            los pulmones". Es el loop de la caceria
+ghost/scare_light/      2   el fantasma se te acerca y te come la cordura, se
+                            aparezca de frente o pase invisible al lado tuyo
+ghost/scare_strong/     1   "un soplido intenso y largo como enojado". SOLO
+                            existe para la voz 2 (ver LAS DOS VOCES, abajo)
+ghost/hurt/             2   quejido de dano. En Phasmophobia al fantasma no se
+                            le pega; aca si puede servir. "Suenan como que le
+                            pegaras un punetazo en el estomago"
+ghost/humming/          2   el tarareo, masculino y femenino. Suena con la
+                            cajita musical y en el ghost event de aparicion,
+                            donde el fantasma camina mostrandose (se le puede
+                            sacar la foto). La Banshee prefiere estos eventos
+ghost/  --- SIN PASOS ---   el banco de pasos del fantasma NO existe. Ver
+                            "LO QUE QUEDA ABIERTO" #1
+
+player/                 4   heartbeat_loop (el latido a <10 m del fantasma, ver
+                            diseno seccion 1), death_riser (el jumpscare cuando
+                            el fantasma te agarra la cara), dying (el jadeo del
+                            jugador ahogandose), dead_loop
+player/footstep/       58   pasos del jugador por superficie: carpet (8),
+                            carpet_loud (8), asphalt (8), gravel (8+loop),
+                            wood (8), stairs (8), stairs_under (9). Material de
+                            repuesto: GMod ya trae los suyos
+
+equipment/             17   los equipos del jugador: emf_beep,
+                            motion_sensor_beep, spiritbox_noise_loop,
+                            radio_static, walkie, linterna, camara, diario,
+                            crucifijo, encendedor, pastillas
+equipment/spiritbox_response/
+                       22   las respuestas del Spirit Box, voz masculina. El
+                            nombre ES la palabra que se oye: adult.ogg dice
+                            "adult". Ver SPIRIT BOX, abajo
+
+event/throw/           11   objetos volando. El Poltergeist tira varios a la vez
+event/impact/          20   golpes contra madera, metal, piedra
+event/creak/           15   crujidos de piso, bisagras, cuerdas, rejas. El
+                            material de la presencia ambiental
+event/knock/            7   golpeteo en puerta y ventana. Ghost event clasico
+
+door/                  20   puertas: cierres, manijas, celda, corrediza, y los
+                            dos metal_whine (uno acercandose, otro alejandose)
+furniture/             12   armarios y cajones abriendose solos
+light/                  5   interruptores, zumbido, bombilla rota
+prop/                  32   trastos de la casa: tv (+ su control remoto),
+                            telefono, heladera, pileta, inodoro, reloj,
+                            ventilador, microondas, ascensor, auto, piano,
+                            guitarra, llaves, el peluche del cuarto del bebe
+ambience/              11   lluvia, truenos, viento, room tone, y el tono de
+                            interior de la casa (house_tone_loop, 82 s)
+
+voice/                 18   el encargado: una voz britanica, el ayudante de la
+                            compania de cazafantasmas. Da informacion del caso
+                            al llegar. Transcripciones abajo
+ui/                     5   clicks de interfaz (button_click, button_toggle_1 y
+                            _2) y el camion del juego original (truck_exit,
+                            truck_stop_exit). Probablemente no se usen
+
+=============================================================================
+LAS DOS VOCES DEL FANTASMA
+=============================================================================
+
+Los archivos se llaman voice_1 y voice_2, y el indice ES la voz, no el orden:
+
+  voice_1   mas femenina
+  voice_2   mas grave, masculina
+
+La carpeta sigue siendo la accion (como en todo el arbol), pero elegir SIEMPRE
+el mismo indice entre carpetas es lo que hace que un fantasma suene a UN
+fantasma y no a dos. Eso es el "fingerprint sonoro" del contrato del diseno: el
+jugador distingue un hunt de un ghost event porque la voz no cambia.
+
+Asimetria a respetar: scare_strong SOLO tiene voice_2. Un fantasma con voz 1 no
+tiene ataque fuerte y hay que degradarlo a scare_light, no sonar en silencio.
+
+=============================================================================
+SPIRIT BOX
+=============================================================================
+
+22 palabras sueltas de 0,3-0,6 s, todas en voz masculina, literales al nombre.
+Estan PLANAS a proposito: agruparlas por tema seria mi categorizacion, no la
+medicion del autor. Como el nombre de archivo es la palabra, el Lua agrupa
+cuando decida. Los grupos que se leen solos, por si sirven de punto de partida:
+
+  edad         adult  baby  child  kid  young  old
+  parentesco   dad  mum  son  daughter
+  lugar        away  behind  close  far  here
+  amenaza      attack  hate  hurt  kill  die  death
+  sin ubicar   next
+
+OJO: si el consumidor sortea del pool entero, a "how old are you?" el fantasma
+puede contestar "kill". Si eso importa, el corte por grupo va en el Lua.
+
+=============================================================================
+LA VOZ DEL ENCARGADO - transcripciones del autor
+=============================================================================
+
+Las ocho de intel del caso (llegada al lugar), que en el juego se eligen segun
+que tan agresivo es el fantasma:
+
+  hint_aggressive_ghost      "got the intel, looks like this gonna be a tough
+                              one, we have reports of violence and it looks
+                              like they left in a hurry..."
+  hint_friendly_ghost        "new intel, reports of light switching possible
+                              harmless but be careful out there"
+  hint_friendly_ghost_2      "there's been reports of violence or sighting but
+                              please remain careful"          <-- ver ABIERTO #2
+  hint_non_friendly_ghost_1  "nothing to report, but it looks like whomever was
+                              here left in a hurry"
+  hint_non_friendly_ghost_2  "I got a report that suggest a possible ghost
+                              sighting"
+  hint_none                  "we have no reports of violence but keep an eye
+                              out (?)"
+  hint_none_2                "no report this time, be careful you're going in
+                              blind"
+  hint_none_3                "I got nothing else to report unfortunately"
+
+Las diez de menu y llegada:
+
+  arrival_1                  "alright we are here, take a look at the equipment
+                              and prepare accordingly before starting the
+                              investigation, I also written some notes in the
+                              whiteboard if you need them". Suena cuando llega
+                              el camion y ya se puede abrir la puerta
+  arrival_2                  "we have arrived, check the equipment and get set
+                              up before investigating, and remember to check
+                              the whiteboard for help"
+  lobby_found_players_1      "looks like there are others out there that need
+                              our help"
+  lobby_found_players_2      "I gathered a list of other hunters asking for
+                              help"
+  lobby_no_players_1         "doesn't look like everyone else is in need of
+                              help"
+  lobby_no_players_2         "unfortunately it looks like you are on your own"
+  menu_intro                 "good day (?) well I already have got some jobs
+                              ready for you that way (?)"
+  welcome_back_1/2/3         el britanico saludando: "welcome back, I have new
+                              jobs ready for you"
+
+Las transcripciones son de oido y las marcadas con (?) son las dudosas.
+
+NO USAR EL NOMBRE COMO TIER. Dos de los ocho nombres del rip contradicen lo que
+la linea dice. Si el Lua elige la briefing segun que tan agresivo es el
+fantasma, el orden que vale es este -- por CONTENIDO, de mas grave a menos:
+
+  1  violencia         hint_aggressive_ghost      "reports of violence" + se
+                                                  fueron apurados
+  2  violencia o       hint_friendly_ghost_2      su nombre dice friendly y su
+     avistamiento                                 texto dice violencia  <-- (!)
+  3  avistamiento      hint_non_friendly_ghost_2  "possible ghost sighting"
+  4  actividad leve    hint_friendly_ghost        luces, "possible harmless"
+  5  nada + inquietud  hint_non_friendly_ghost_1  empieza con "nothing to
+                                                  report"               <-- (!)
+  6  nada              hint_none
+  7  nada              hint_none_2
+  8  nada              hint_none_3
+
+Los dos marcados con (!) son los que no encajan con su nombre. Los nombres se
+conservan igual: son el unico rastro que queda hasta el rip, y renombrar por una
+transcripcion de oido cambia una etiqueta dudosa por otra. El tier vive aca.
+
+=============================================================================
+LO QUE QUEDA ABIERTO
+=============================================================================
+
+1. EL FANTASMA NO TIENE PASOS. Los 8 GhostFootstepCarpet del rip estaban en
+   ghost/footstep/; el autor los reconoce como pasos DEL JUGADOR y se movieron
+   a player/footstep/carpet_loud_*. La seccion 7 del diseno los daba por pasos
+   del fantasma, y ahora ese banco esta vacio: si nadie lo llena, el fantasma
+   camina en silencio (y por la regla de arriba, sin error). El candidato
+   natural sigue siendo carpet_loud_* -- ver la medicion que sigue -- pero eso
+   se decide al escribir la entidad, no aca.
+
+   Lo MEDIDO sobre esos 8, para que nadie lo repita:
+     - NO son los mismos archivos que player/footstep/carpet_1..8. Los 16
+       hashes son distintos, y el null-test (alineado por correlacion cruzada y
+       ganancia por minimos cuadrados) da corr 0,32-0,80, que es exactamente el
+       rango de los controles cruzados: no es una copia con otra ganancia.
+     - PERO las duraciones emparejan una a una: 0,342/0,335 - 0,382/0,372 -
+       0,396/0,392 - 0,396/0,368 - 0,333/0,327 - 0,302/0,299 - 0,296/0,285 -
+       0,292/0,290. Delta 2-11 ms en 7 de 8.
+     - Y este set esta ~10 dB mas fuerte: media -17..-25 dB contra -27..-35 dB.
+     Lectura: misma superficie, dos mezclas, una fuerte y una suave. Por eso se
+     llaman carpet_loud y no carpet_9..16: en un solo pool, el sorteo saltaria
+     13 dB entre pisada y pisada.
+     La hipotesis de que fueran escaleras NO sobrevivio la medicion:
+     stairs_* dura 0,25-0,52 s a -36..-43 dB y stairs_under_* 0,34-0,56 s a
+     -21..-33 dB; ninguno empareja como empareja carpet_*.
+
+2. LOS NOMBRES DE LOS 8 hint NO SIRVEN COMO TIER. Son DOS los que contradicen su
+   texto, no uno: hint_friendly_ghost_2 habla de "reports of violence", y
+   hint_non_friendly_ghost_1 empieza con "nothing to report". Con 2 de 8 mal
+   puestos deja de ser un archivo raro y pasa a ser que la etiqueta del rip no
+   es confiable. El orden por contenido esta arriba, en LA VOZ DEL ENCARGADO.
+
+   El autor sospecha ademas que hint_friendly_ghost_2 NUNCA SE USO en el juego.
+   Eso NO se pudo verificar y la unica senal que lo habria apoyado dio NEGATIVA:
+   el audio cortado suele delatarse en el formato, y este no se delata. El rip
+   NO es uniforme (5 formatos entre los 265: 125 en 44100/mono, 71 en
+   44100/estereo, 40 en 48000/mono, 22 en 22050/mono, 7 en 48000/estereo), asi
+   que coincidir significa algo -- y coincide del todo: 44100/mono/s16 como las
+   otras siete, con mean -27,0 dB y max -11,4 dB, el centro exacto del grupo
+   (las otras van de -26,4 a -29,7 y de -11,1 a -13,2). Paso por el mismo
+   pipeline y el mismo mastering que las que si se usan.
+   Ojo con la conclusion: esto NO refuta la sospecha. Una linea se puede
+   masterizar entera y quedar cortada despues por un cambio de codigo, sin dejar
+   rastro en el archivo. Lo que dice la medicion es que el archivo no la apoya.
+
+3. Los dos metal_whine estan en door/ por "probablemente una puerta" -- palabra
+   del autor, no medicion. Si aparece que son otra cosa (una reja, un porton),
+   se mueven a event/creak/ donde ya viven metal_hinge y fence_shake.
+
+4. ui/button_toggle_2 ("es literal el sonido de apagado"): el autor sospecha
+   que puede ser la linterna, y equipment/flashlight_click ya existe. Quedo en
+   ui/ con su hermano button_toggle_1, que es de donde viene el nombre del rip.
+
+5. next.ogg: la palabra "next" en la voz del spirit box, sin rol claro dentro
+   del banco.
+
+6. player/dead_loop (14 s) es el loop de estar muerto y moverse como un fantasma
+   mas. El autor lo propone para el loop de LA OTRA DIMENSION del mod.
+
+REGLA: no se infiere que suena un archivo a partir de su nombre. Todo lo que
+esta arriba o lo describio el autor de oido, o se midio; lo que es sospecha
+suya esta marcado como sospecha y esta en la lista de arriba.

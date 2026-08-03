@@ -7,6 +7,92 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-03 — Sesión 9: los 46 sonidos identificados, y el fantasma que se quedó sin pasos
+
+**Sin código.** El autor escuchó los 46 archivos de `_sin_identificar/` y los describió uno por uno.
+Se movieron **65 archivos** (los 46 más 19 recatalogados), quedaron **265 de 265** mapeados por
+acción, y la carpeta `_sin_identificar/` **ya no existe**.
+
+### Lo que eran
+
+Los tres grupos de §8.1 se cerraron: las **23 palabras sueltas** son respuestas del Spirit Box en voz
+masculina y **literales al nombre** (`adult.ogg` dice «adult») salvo `Beep`, que es el motion sensor;
+las **5 vocalizaciones** son del fantasma pero por función y no por daño; y los **8 `Hint`** no eran
+ni Ouija ni spirit box sino **una voz británica** —el ayudante de la compañía— que resultó ser el
+mismo hablante que `arrival`, `welcome_back`, `lobby_*` y `menu_intro`. Esos 20 estaban repartidos
+entre `ui/` y sin identificar; hoy son `voice/`, con transcripción.
+
+### La corrección que más cambia el diseño
+
+**`GhostFootstepCarpet1-8` no eran los pasos del fantasma.** §7.1 los daba por suyos desde el
+principio —por el nombre—, y el autor los reconoce como los del jugador. Se movieron, y `ghost/`
+**quedó sin banco de pasos**: por la regla del árbol eso no es un error, es un fantasma que camina
+en silencio. Queda anotado como abierto en §7.4 y en ESTADO.
+
+### Medir antes de mover cambió qué se movía
+
+La duda era si esos 8 eran una copia renombrada de `player/footstep/carpet_1-8`. Tres mediciones:
+
+1. **16 hashes distintos** — no es el mismo archivo con otro nombre.
+2. **Null-test** (alineado por correlación cruzada, ganancia por mínimos cuadrados): `corr`
+   **0,32-0,80**, que es exactamente el rango de los controles cruzados y de dos tomas distintas del
+   mismo set. Tampoco es una copia con otra ganancia — **mi hipótesis quedó refutada por mi propia
+   medición**.
+3. Pero las **duraciones emparejan una a una** (delta 2-11 ms en 7 de 8) y el set está **~10 dB más
+   fuerte** (−17…−25 dB contra −27…−35 dB).
+
+Misma superficie, **dos mezclas**. Por eso terminaron como `carpet_loud_1..8` y no como
+`carpet_9..16`: metidos en un solo pool, el sorteo saltaría **13 dB entre pisada y pisada** — un
+defecto audible que el nombre «correcto» habría creado en silencio.
+
+La hipótesis alternativa del autor —que fueran las escaleras— **no sobrevivió**: `stairs_*` dura
+0,25-0,52 s a −36…−43 dB y `stairs_under_*` 0,34-0,56 s a −21…−33 dB. Ninguno empareja como empareja
+`carpet_*`.
+
+### Lo que se decidió NO hacer
+
+- **El Spirit Box quedó plano**, 22 archivos sueltos. Agruparlos por edad / parentesco / lugar /
+  amenaza se lee solo, pero esa categorización sería **mía, no del autor**: el `about.txt` la sugiere
+  como punto de partida y el corte va en el Lua. Con el pool entero, a «how old are you?» el fantasma
+  puede contestar «kill».
+- **Los 8 `hint` no se renombraron** aunque **dos** contradicen su nombre. El nombre viene del rip y
+  la transcripción es de oído: cambiar una etiqueta dudosa por otra no es identificar. Lo que sí se
+  escribió es el **orden por contenido**, que es lo que el Lua va a leer — ver abajo.
+
+### La sospecha del autor, y la medición que no la apoya
+
+El autor sospechó que `hint_friendly_ghost_2` **nunca se usó en el juego**, precisamente por lo raro
+de su texto. No se pudo verificar, y **la única señal que lo habría apoyado dio negativa**: el audio
+cortado suele delatarse en el formato, y éste no se delata.
+
+Que coincida **significa algo**, porque el rip **no es uniforme** — 5 formatos entre los 265: 125 en
+44100/mono, 71 en 44100/estéreo, 40 en 48000/mono, 22 en 22050/mono, 7 en 48000/estéreo. Y coincide
+del todo: 44100/mono/s16 como las otras siete, `mean −27,0 dB` y `max −11,4 dB`, **el centro exacto
+del grupo** (las otras van de −26,4 a −29,7 y de −11,1 a −13,2). Pasó por el mismo pipeline y el
+mismo mastering que las líneas que sí se usan.
+
+**Pero esto no refuta la sospecha, y no hay que escribirlo como si lo hiciera.** Una línea se puede
+masterizar entera y quedar cortada después por un cambio de código, sin dejar rastro en el archivo.
+Lo que dice la medición es que **el archivo no la apoya** — nada más.
+
+### Y el autor tenía razón de más: son DOS los mal etiquetados
+
+Ordenando las ocho por lo que **dicen** en vez de por cómo se llaman, aparece un segundo:
+`hint_non_friendly_ghost_1` empieza literalmente con «nothing to report», y su único indicio es el
+mismo «left in a hurry» que trae la línea agresiva. Con **2 de 8** mal puestos, deja de ser «un
+archivo raro» y pasa a ser **la etiqueta del rip no es confiable como tier**. El orden por contenido
+quedó escrito en el `about.txt`, que es donde el Lua lo va a buscar; los nombres siguen intactos
+porque son el único rastro que queda hasta el rip.
+
+### La regla
+
+**Un nombre que describe al emisor no dice quién lo emite.** `GhostFootstepCarpet` describe
+correctamente lo que se oye —una pisada sobre alfombra— y aun así atribuía mal quién la da. Sonaba a
+persona caminando porque *eso* es lo que suena un fantasma caminando, y por eso el nombre sobrevivió
+un mapeo entero sin que nadie lo dudara.
+
+---
+
 ## 2026-08-02 — Sesión 8: StormFox 2 desempacado, y la API contra el addon que corre
 
 **Sin código.** Se trajo el `.gma` suscrito (WSID `2447774443`, 307 archivos) a

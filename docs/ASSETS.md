@@ -12,10 +12,14 @@ materiales son de terceros. Esta guía dice qué hace falta y de dónde sale.
 | Origen | `dev/other/phantom/dev2/phasmo-sounds-main/` (fuera del repo) |
 | Convertidos | `.ogg` Vorbis q4 — 141 MB → 11 MB |
 | Destino | `sound/phantasmagoria/` |
-| Organizador | [`dev/organize_sounds.py`](../dev/organize_sounds.py) |
+| Organizador | [`dev/organize_sounds.py`](../dev/organize_sounds.py) (primer mapeo por nombre) |
+| Recatálogo | [`dev/recatalog_sounds.py`](../dev/recatalog_sounds.py) (lo que el autor identificó de oído) |
 
-219 de los 265 están mapeados a carpetas por acción; **46 siguen sin identificar** y viven en
-`sound/phantasmagoria/_sin_identificar/`. Ver el `about.txt` de esa carpeta.
+**Los 265 están mapeados** a carpetas por acción. Los 46 que el nombre no justificaba se cerraron el
+2026-08-03 y `_sin_identificar/` ya no existe. Qué suena cada carpeta, las transcripciones de las
+líneas habladas y lo que quedó como sospecha: [`sound/phantasmagoria/about.txt`](../sound/phantasmagoria/about.txt)
+— el único archivo del árbol de sonido que se versiona, y sin el cual el árbol no se puede
+reconstruir.
 
 ## Modelos
 

@@ -24,6 +24,7 @@ Lo que existe:
 | Diseño del motor de rasgos | **CERRADO** — [docs/](docs/PHANTOM_Phasmophobia_Diseno.md) |
 | Tabla de los 30 tipos | **GENERADA** — `lua/phantasmagoria/ghost_types.lua`, valida sintaxis |
 | Conversión de audio | **HECHA** — 265 archivos, 141 MB → 11 MB |
+| Catálogo de audio | **CERRADO** — 265/265 identificados y por acción ([§7.2](docs/PHANTOM_Phasmophobia_Diseno.md)) |
 | Diseño de spawn / dificultad / cuartos | **CERRADO** — §12, §13, §14 del diseño |
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
@@ -84,10 +85,13 @@ referencia. Resumidas:
 
 ## Lo que está abierto
 
-- **Los sonidos ambiguos: 46 de 265.** Están en `sound/phantasmagoria/_sin_identificar/`, con el
-  detalle de qué falta saber de cada uno en el `about.txt` de esa carpeta (agrupados y con duración).
-  El autor los describe y ahí se renombran por literalidad y se mueven a la carpeta que toque.
-  Los otros **219 ya están mapeados** por acción.
+- ~~Los sonidos ambiguos: 46 de 265.~~ **CERRADO** (2026-08-03): el autor los escuchó y los
+  describió uno por uno; están catalogados y `_sin_identificar/` ya no existe. **265 de 265 mapeados**
+  por acción. Lo que **abrió**: **el fantasma se quedó sin pasos.** Los 8 `GhostFootstepCarpet` que
+  el diseño daba por suyos son del jugador (§7.4, medido) y hoy `ghost/` no tiene banco de pasos —
+  por la regla del árbol eso es **caminar en silencio, sin error**. El candidato para llenarlo es
+  `player/footstep/carpet_loud_*`, que es la mezcla ~10 dB más fuerte de la misma superficie, pero
+  se decide al escribir la entidad.
 - **Los equipos.** La **forma** ya está decidida ([docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §5):
   SWEP lo que se sostiene, entidad lo que se planta y la escenografía, ítem con `onUse` lo que se
   consume. Falta **elegir cuáles entran primero** — EMF reader, spirit box, cámara, termómetro, libro
