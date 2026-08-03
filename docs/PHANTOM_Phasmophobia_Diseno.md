@@ -381,15 +381,39 @@ Convertidos el 2026-08-01 a Vorbis `q4 44.1 kHz`:
 Herramienta: `ffmpeg 8.1.2`, instalado en el sistema del autor con `winget install Gyan.FFmpeg`
 durante esta sesión.
 
-### 7.4 El fantasma **no tiene pasos** [medido]
+### 7.4 Los pasos del fantasma: **botas** [medido + oído]
 
-Los 8 `GhostFootstepCarpet` que §7.1 daba por pasos del fantasma **son del jugador**: el autor los
-reconoce del juego. Se movieron a `player/footstep/carpet_loud_*` y `ghost/footstep/` **quedó
-vacía** — por la regla del árbol, eso significa que hoy el fantasma **camina en silencio**, sin
-error. Llenar ese banco es trabajo pendiente de la entidad, y §1 lo necesita: los sonidos del
-fantasma tienen que oírse a **20 m (~1050 u)**.
+`ghost/footstep/boots_1-8` — y el camino hasta ahí vale más que el resultado.
 
-Lo medido antes de mover, para no repetirlo:
+Los 8 `GhostFootstepCarpet` estaban en `ghost/footstep/` **por su nombre**. Primera escucha del
+autor: *«el paso es del jugador, yo lo reconozco del juego»* → se movieron al jugador y el fantasma
+**quedó sin banco**, es decir caminando en silencio y sin error. Segunda escucha, con la pregunta ya
+cambiada de *«¿de quién es la grabación?»* a *«¿para qué sirve acá?»*: *«muy parecidos a la pisada de
+una **bota**»*, y *«como el jugador en Garry's Mod ya tiene su propio footstep, agregar este como
+pisada de fantasma está ok»*. Volvieron, renombrados por lo que se oye.
+
+**Las dos escuchas no se contradicen.** La grabación es de una persona caminando —por eso no eran
+«los pasos del fantasma» de Phasmophobia— y el **uso** acá es el fantasma, porque al jugador GMod ya
+le da los suyos. La carpeta dice el uso; el `about.txt` dice el origen. La lección de método:
+**cambiar la pregunta cambió la respuesta sin que ningún dato cambiara.**
+
+Y el banco sirve por una razón medible además del oído: §1 pide que el fantasma se oiga a **20 m
+(~1050 u)**, y a distancia sólo sobrevive el grave.
+
+| Banco | <250 Hz | <120 Hz | centroide |
+|---|---:|---:|---:|
+| `stairs_under` | 99,1 % | 93,9 % | 65 Hz |
+| `wood` | 97,9 % | 96,6 % | 103 Hz |
+| **`boots`** (el del fantasma) | **89,8 %** | 34,6 % | **183 Hz** |
+| `stairs` | 72,5 % | 40,1 % | 214 Hz |
+| `carpet` | 35,8 % | 6,9 % | 1217 Hz |
+| `gravel` | 2,3 % | 0,5 % | 2261 Hz |
+
+`carpet` y `gravel` son roce agudo: a 20 m no llegan. (`stairs_under` **no** es «pasos oídos desde
+debajo de la escalera» — ésa fue una lectura del nombre del rip y el autor la refutó: son pisadas
+**en** una escalera.)
+
+Lo medido antes del primer movimiento, para no repetirlo:
 
 - **No** son los mismos archivos que `player/footstep/carpet_1-8`: 16 hashes distintos, y el
   null-test (alineado por correlación cruzada, ganancia por mínimos cuadrados) da `corr` 0,32-0,80
@@ -405,6 +429,35 @@ pisada. Y por eso siguen siendo el candidato natural cuando haya que darle pasos
 La hipótesis alternativa —que fueran las escaleras— **no sobrevivió la medición**: `stairs_*` dura
 0,25-0,52 s a −36…−43 dB y `stairs_under_*` 0,34-0,56 s a −21…−33 dB; ninguno de los dos empareja
 como empareja `carpet_*`.
+
+### 7.5 Ghost event: **los pasos lejanos** [pedido del autor, 2026-08-03]
+
+> *«Estaba solo en mi casa y empecé a escuchar ruidos de alguien caminando lentamente con unas botas.
+> Podríamos simular algo parecido: sonidos de pisadas a lo lejos del jugador.»*
+
+**El rasgo ya existe:** `ability.paranormalSoundInterval` (§5.3), 80-127 s para todos, **64-127 el
+Myling**. Y no hace falta banco nuevo — es `ghost/footstep/boots_*` tocado **lejos** y con cadencia
+lenta. Lo que lo distingue de los pasos normales del fantasma no es el sonido: es **dónde** y **a qué
+ritmo** suena.
+
+Lo que hace que funcione, y que es todo decisión de implementación:
+
+- **Se emite en una posición, no en la entidad.** El evento no debe delatar dónde está el fantasma
+  de verdad: es un punto a media distancia, idealmente **fuera de línea de vista** (el detector de
+  §14.1 ya sabe si hay pared en el medio). Si sonara en el fantasma sería un localizador gratis y
+  mataría el spirit box, la parabólica y la caja de música de un saque.
+- **Cadencia lenta y constante.** Lo que asusta es que sea *regular*: pasos aleatorios se leen como
+  ruido ambiente, pasos parejos se leen como **alguien**. 3-5 pisadas por evento, no una.
+- **Sin fuente visible.** Es la única forma de que el jugador dude de sí mismo, que es el punto.
+
+**La asimetría del Myling la vuelve cruel, y ya está diseñada:** es el tipo que **camina en silencio
+cazando** (`ENT:IsSilentStepping()`, §3) y el que **más sonido paranormal tira**. O sea: el que hace
+ruido cuando no viene, y no hace ninguno cuando sí. No hay que escribir nada nuevo para eso — sale de
+cruzar dos rasgos que ya están.
+
+**Lo que falta decidir:** sin una herramienta para *oír a distancia*, el evento es ambientación pura
+y no evidencia. Su consumidor natural sería la **parabólica** — que no tenemos, ver
+[EQUIPAMIENTO.md](EQUIPAMIENTO.md) §9.
 
 ---
 

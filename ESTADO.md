@@ -87,11 +87,14 @@ referencia. Resumidas:
 
 - ~~Los sonidos ambiguos: 46 de 265.~~ **CERRADO** (2026-08-03): el autor los escuchó y los
   describió uno por uno; están catalogados y `_sin_identificar/` ya no existe. **265 de 265 mapeados**
-  por acción. Lo que **abrió**: **el fantasma se quedó sin pasos.** Los 8 `GhostFootstepCarpet` que
-  el diseño daba por suyos son del jugador (§7.4, medido) y hoy `ghost/` no tiene banco de pasos —
-  por la regla del árbol eso es **caminar en silencio, sin error**. El candidato para llenarlo es
-  `player/footstep/carpet_loud_*`, que es la mezcla ~10 dB más fuerte de la misma superficie, pero
-  se decide al escribir la entidad.
+  por acción, **incluidos los pasos del fantasma** — `ghost/footstep/boots_1-8`, §7.4.
+- **Los pasos lejanos** (§7.5, pedido del autor): un ghost event de pisadas lentas a distancia, sin
+  fuente visible. **No necesita assets nuevos** —es el banco de botas sonando lejos— y el rasgo
+  (`ability.paranormalSoundInterval`) ya existe. Falta escribirlo, como todo lo demás.
+- **La parabólica y el sound sensor no existen**: 36 modelos y ninguno es un micrófono
+  ([EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §9). Con la identificación de sonido cerrada, la mecánica
+  de **delatar por sonido tiene audio y le faltan props dos veces** — también a la Music Box, que ya
+  tiene su tarareo. Sin decidir cuál de los tres caminos se toma.
 - **Los equipos.** La **forma** ya está decidida ([docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §5):
   SWEP lo que se sostiene, entidad lo que se planta y la escenografía, ítem con `onUse` lo que se
   consume. Falta **elegir cuáles entran primero** — EMF reader, spirit box, cámara, termómetro, libro

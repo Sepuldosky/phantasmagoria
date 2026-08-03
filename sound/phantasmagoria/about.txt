@@ -32,17 +32,20 @@ ghost/humming/          2   el tarareo, masculino y femenino. Suena con la
                             cajita musical y en el ghost event de aparicion,
                             donde el fantasma camina mostrandose (se le puede
                             sacar la foto). La Banshee prefiere estos eventos
-ghost/  --- SIN PASOS ---   el banco de pasos del fantasma NO existe. Ver
-                            "LO QUE QUEDA ABIERTO" #1
+ghost/footstep/         8   los pasos del fantasma: BOTAS. El autor los describe
+                            como "muy parecidos a la pisada de una bota", y son
+                            el banco mas grave de los que quedaban disponibles
+                            (89,8 % de la energia bajo 250 Hz, centroide 183 Hz)
 
 player/                 4   heartbeat_loop (el latido a <10 m del fantasma, ver
                             diseno seccion 1), death_riser (el jumpscare cuando
                             el fantasma te agarra la cara), dying (el jadeo del
                             jugador ahogandose), dead_loop
-player/footstep/       58   pasos del jugador por superficie: carpet (8),
-                            carpet_loud (8), asphalt (8), gravel (8+loop),
-                            wood (8), stairs (8), stairs_under (9). Material de
-                            repuesto: GMod ya trae los suyos
+player/footstep/       50   pasos del jugador por superficie: carpet (8),
+                            asphalt (8), gravel (8+loop), wood (8), stairs (8),
+                            stairs_under (9). Material de REPUESTO: GMod ya le
+                            da al jugador sus propios pasos, y por eso el banco
+                            de botas se le cedio entero al fantasma
 
 equipment/             17   los equipos del jugador: emf_beep,
                             motion_sensor_beep, spiritbox_noise_loop,
@@ -184,13 +187,21 @@ transcripcion de oido cambia una etiqueta dudosa por otra. El tier vive aca.
 LO QUE QUEDA ABIERTO
 =============================================================================
 
-1. EL FANTASMA NO TIENE PASOS. Los 8 GhostFootstepCarpet del rip estaban en
-   ghost/footstep/; el autor los reconoce como pasos DEL JUGADOR y se movieron
-   a player/footstep/carpet_loud_*. La seccion 7 del diseno los daba por pasos
-   del fantasma, y ahora ese banco esta vacio: si nadie lo llena, el fantasma
-   camina en silencio (y por la regla de arriba, sin error). El candidato
-   natural sigue siendo carpet_loud_* -- ver la medicion que sigue -- pero eso
-   se decide al escribir la entidad, no aca.
+1. LOS PASOS DEL FANTASMA: RESUELTO, y el camino importa mas que el resultado.
+   Los 8 GhostFootstepCarpet del rip estaban en ghost/footstep/ por su NOMBRE.
+   Primera escucha del autor: "el paso es del jugador, yo lo reconozco del
+   juego" -> se movieron a player/footstep/carpet_loud_* y el fantasma quedo sin
+   banco (o sea, caminando en silencio y sin error). Segunda escucha, ya con la
+   pregunta cambiada de "de quien es la grabacion" a "para que sirve aca":
+   "muy parecidos a la pisada de una BOTA", y "como el jugador en Garry's Mod ya
+   tiene su propio footstep, agregar este como pisada de fantasma esta ok".
+   Volvieron a ghost/footstep/ como boots_1..8.
+
+   Las dos escuchas NO se contradicen: la GRABACION es de una persona caminando
+   -- por eso no eran "los pasos del fantasma" de Phasmophobia -- y el USO en
+   este addon es el fantasma, porque el jugador ya tiene los de GMod. La carpeta
+   dice el USO; este about dice el ORIGEN. Y el nombre pasa a ser boots porque
+   se nombra por lo que se oye, no por la superficie del archivo original.
 
    Lo MEDIDO sobre esos 8, para que nadie lo repita:
      - NO son los mismos archivos que player/footstep/carpet_1..8. Los 16
@@ -208,7 +219,35 @@ LO QUE QUEDA ABIERTO
      stairs_* dura 0,25-0,52 s a -36..-43 dB y stairs_under_* 0,34-0,56 s a
      -21..-33 dB; ninguno empareja como empareja carpet_*.
 
-2. LOS NOMBRES DE LOS 8 hint NO SIRVEN COMO TIER. Son DOS los que contradicen su
+   CUERPO GRAVE DE CADA BANCO (lo unico que sobrevive la distancia: lejos solo
+   llega el grave). Energia bajo 250 Hz / bajo 120 Hz / centroide:
+
+     stairs_under   99,1 %   93,9 %     65 Hz
+     wood           97,9 %   96,6 %    103 Hz
+     boots          89,8 %   34,6 %    183 Hz   <- el del fantasma
+     stairs         72,5 %   40,1 %    214 Hz
+     asphalt        40,1 %   14,5 %   1264 Hz
+     carpet         35,8 %    6,9 %   1217 Hz
+     gravel          2,3 %    0,5 %   2261 Hz
+
+   carpet y gravel son roce agudo: a distancia desaparecen y no sirven para
+   nada que tenga que oirse lejos.
+
+2. stairs_under NO es "pasos oidos desde debajo de la escalera". Esa fue MI
+   lectura del nombre del rip (underneath_stairs_footsteps) y el autor la
+   refuto: "son pisadas de una escalera". Su sospecha es que "under" sea
+   SUBTERRANEO -- escalera de sotano -- porque en stairs_under_2 se oye un
+   crujido leve de madera. Queda como sospecha: el crujido apoya "escalera de
+   madera", que no es lo mismo que "sotano". Sin renombrar.
+
+3. PEDIDO DE DISENO DEL AUTOR: el evento de pasos lejanos. "Sonidos de pisadas
+   a lo lejos del jugador", lentas y pesadas, de alguien que camina sin estar a
+   la vista. Entra en el rasgo ability.paranormalSoundInterval, que YA existe
+   en el diseno (80-127 s; el Myling 64-127). No necesita banco nuevo: es
+   ghost/footstep/boots_* tocado a distancia y con cadencia lenta. Ver la
+   seccion 7.5 del diseno.
+
+4. LOS NOMBRES DE LOS 8 hint NO SIRVEN COMO TIER. Son DOS los que contradicen su
    texto, no uno: hint_friendly_ghost_2 habla de "reports of violence", y
    hint_non_friendly_ghost_1 empieza con "nothing to report". Con 2 de 8 mal
    puestos deja de ser un archivo raro y pasa a ser que la etiqueta del rip no
@@ -227,18 +266,18 @@ LO QUE QUEDA ABIERTO
    masterizar entera y quedar cortada despues por un cambio de codigo, sin dejar
    rastro en el archivo. Lo que dice la medicion es que el archivo no la apoya.
 
-3. Los dos metal_whine estan en door/ por "probablemente una puerta" -- palabra
+5. Los dos metal_whine estan en door/ por "probablemente una puerta" -- palabra
    del autor, no medicion. Si aparece que son otra cosa (una reja, un porton),
    se mueven a event/creak/ donde ya viven metal_hinge y fence_shake.
 
-4. ui/button_toggle_2 ("es literal el sonido de apagado"): el autor sospecha
+6. ui/button_toggle_2 ("es literal el sonido de apagado"): el autor sospecha
    que puede ser la linterna, y equipment/flashlight_click ya existe. Quedo en
    ui/ con su hermano button_toggle_1, que es de donde viene el nombre del rip.
 
-5. next.ogg: la palabra "next" en la voz del spirit box, sin rol claro dentro
+7. next.ogg: la palabra "next" en la voz del spirit box, sin rol claro dentro
    del banco.
 
-6. player/dead_loop (14 s) es el loop de estar muerto y moverse como un fantasma
+8. player/dead_loop (14 s) es el loop de estar muerto y moverse como un fantasma
    mas. El autor lo propone para el loop de LA OTRA DIMENSION del mod.
 
 REGLA: no se infiere que suena un archivo a partir de su nombre. Todo lo que

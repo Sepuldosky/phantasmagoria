@@ -534,3 +534,41 @@ no nuestras.
 
 > **Los arrastres son un regalo, no un descarte.** Una marca de dedos raspando una pared es
 > justamente lo que una UV revela en el juego, y da variedad gratis frente a repetir la misma palma.
+
+---
+
+## 9. Lo que **oye a distancia**: la parabólica y el sound sensor — **no los tenemos**
+
+Pregunta del autor (2026-08-03): *«¿dentro de los equipos tenemos la antena parabólica o de sonidos?
+Los sonidos que puede captar eso claramente delatarían al fantasma en su posición.»*
+
+**No.** Medido sobre el árbol: **36 modelos y ninguno es un micrófono.** Ni la
+**Parabolic Microphone** (de mano, mide sonido paranormal a distancia) ni el **Sound Sensor**
+(se planta y reporta niveles por zona). Los `motion_sensor`, `dots_projector` y `tripod` de §2.2 son
+los únicos «aparatos plantables» y ninguno es reutilizable sin mentir sobre qué es.
+
+### 9.1 El hueco tiene forma, y es más grande que un modelo
+
+Con la identificación de sonido del 2026-08-03, **la mecánica de «delatar por sonido» tiene audio y
+no tiene props — dos veces**:
+
+| Mecánica | Audio | Modelo |
+|---|---|---|
+| **Music Box** — a 20 m el fantasma canta y delata su posición sin hacerse visible (§4) | ✅ `ghost/humming/male` + `female`, 25 s cada uno | ❌ |
+| **Parabólica / sound sensor** — oír actividad lejana y ubicarla | ✅ todo `event/`, `ghost/`, y el evento de pasos lejanos (Diseño §7.5) | ❌ |
+
+Y el pedido de §7.5 del diseño —los pasos lejanos— **depende de esto para ser algo más que
+ambientación**: sin herramienta que convierta «oí algo» en «vino de allá», el evento asusta pero no
+se juega. Con ella, el bucle se cierra: barrés con el plato, el medidor pica hacia un cuarto, y vas.
+
+### 9.2 Los tres caminos, sin recomendación todavía
+
+1. **Buscar modelo** en el Workshop, como se hizo con los otros tres packs. Es el único que da el
+   objeto de verdad; cuesta una búsqueda y un crédito más.
+2. **Sin modelo, mecánica igual**: el sound sensor puede ser una **entidad** con un prop genérico, y
+   la parabólica un **ítem sin viewmodel** (un HUD y un medidor). Feo, pero §5.1 ya obliga a que todo
+   el «sostener» sea código.
+3. **Fuera de la v1** y que los pasos lejanos queden como ambientación pura, que es lo que el autor
+   describió y ya vale por sí solo.
+
+**Sin decidir.** Lo que sí está decidido es no fingir que la tenemos.

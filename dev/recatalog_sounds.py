@@ -109,6 +109,16 @@ MOVES = [(UNK + "/" + w + ".ogg", "equipment/spiritbox_response/" + w + ".ogg")
 MOVES += [("ghost/footstep/carpet_%d.ogg" % i,
            "player/footstep/carpet_loud_%d.ogg" % i) for i in range(1, 9)]
 
+# 2.a-bis  ...y de ahi al fantasma. Segunda escucha del autor: "podria describir
+#      carpet_loud como sonidos muy parecidos a la pisada de una BOTA", y "como
+#      el jugador en Garry's Mod ya tiene su propio footstep, agregar este como
+#      pisada de fantasma esta ok". No se contradice con 2.a: la GRABACION es de
+#      una persona caminando (por eso no eran del fantasma en Phasmophobia), y
+#      el USO en este addon es el fantasma. La carpeta dice el uso, el about
+#      dice el origen. Se renombran por lo que se oye: botas, no alfombra.
+MOVES += [("player/footstep/carpet_loud_%d.ogg" % i,
+           "ghost/footstep/boots_%d.ogg" % i) for i in range(1, 9)]
+
 # 2.b  "remote_click -> boton remoto de un control, probablemente apagan una
 #      tv". Es un trasto de la casa, no interfaz: se va con tv_on/tv_off.
 MOVES += [("ui/remote_click.ogg", "prop/tv_remote.ogg")]

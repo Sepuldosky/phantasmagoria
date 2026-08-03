@@ -7,6 +7,67 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-03 — Sesión 10: los pasos vuelven al fantasma, y un evento que no necesita assets
+
+Continuación directa de la sesión 9, que había dejado a `ghost/` **sin banco de pasos**.
+
+### La misma pregunta, hecha distinto, dio otra respuesta
+
+En la sesión 9 la pregunta fue *«¿de quién es esta grabación?»* y el autor contestó *«del jugador, yo
+lo reconozco del juego»* — correcto, y por eso los 8 se fueron a `player/footstep/carpet_loud_*`.
+Esta sesión la pregunta fue *«¿para qué sirve acá?»* y contestó *«muy parecidos a la pisada de una
+**bota**»* y *«como el jugador en Garry's Mod ya tiene su propio footstep, agregar este como pisada
+de fantasma está ok»*. Volvieron como `ghost/footstep/boots_1-8`.
+
+**Las dos escuchas no se contradicen y ninguna fue un error.** La grabación *es* de una persona
+caminando; el **uso** en este addon es el fantasma, porque al jugador GMod ya le da los suyos. La
+carpeta dice el uso, el `about.txt` dice el origen. **Cambió la pregunta, no el dato.**
+
+### La medición que respalda el banco elegido
+
+§1 pide que el fantasma se oiga a **20 m**, y a distancia sólo sobrevive el grave. Energía bajo
+250 Hz / bajo 120 Hz / centroide, por banco:
+
+| `stairs_under` | `wood` | **`boots`** | `stairs` | `asphalt` | `carpet` | `gravel` |
+|---|---|---|---|---|---|---|
+| 99,1 % · 65 Hz | 97,9 % · 103 Hz | **89,8 % · 183 Hz** | 72,5 % · 214 Hz | 40,1 % · 1264 Hz | 35,8 % · 1217 Hz | 2,3 % · 2261 Hz |
+
+`carpet` y `gravel` son roce agudo: a 20 m no llegan. El banco de botas tiene cuerpo y aguanta.
+
+### Otra lectura mía del nombre, refutada por el oído
+
+Propuse `stairs_under` como el banco del evento leyendo `underneath_stairs_footsteps` como *«pasos
+oídos desde debajo de la escalera»*, y el espectro parecía confirmarlo (94 % bajo 120 Hz, centroide
+65 Hz — exactamente lo que suena estructural). El autor: *«son pisadas de una escalera»*. **El
+espectro decía cómo suena, no qué es.** Su sospecha de que `under` sea *subterráneo* queda anotada
+como sospecha: el crujido de madera de `stairs_under_2` apoya «escalera de madera», que no es lo
+mismo que «sótano».
+
+### El evento de pasos lejanos — §7.5, y no cuesta un asset
+
+Pedido del autor, de una experiencia propia: pisadas lentas y pesadas a lo lejos, sin fuente visible.
+**El rasgo ya existe** (`ability.paranormalSoundInterval`, 80-127 s; Myling 64-127) y **el banco
+también** — son las botas sonando lejos. Lo que lo hace un evento y no un paso normal es *dónde* y
+*a qué ritmo* suena: en una posición a media distancia y **fuera de línea de vista**, nunca en la
+entidad, porque si sonara en el fantasma sería un localizador gratis que mata al spirit box, a la
+parabólica y a la caja de música de un saque. Cadencia **pareja**: pasos aleatorios se leen como
+ruido ambiente, pasos regulares se leen como *alguien*.
+
+Y la crueldad sale de cruzar dos rasgos que ya estaban: **el Myling camina en silencio cazando**
+(`IsSilentStepping`) **y es el que más sonido paranormal tira**. Hace ruido cuando no viene, y
+ninguno cuando sí.
+
+### La parabólica no existe — EQUIPAMIENTO §9
+
+**36 modelos y ninguno es un micrófono**: ni Parabolic Microphone ni Sound Sensor. Y con la
+identificación de sonido cerrada aparece el patrón: **la mecánica de delatar por sonido tiene audio y
+le faltan props dos veces** — la Music Box (a 20 m el fantasma canta y delata su posición) ya tiene
+su tarareo desde la sesión 9 y tampoco tiene modelo. Sin la herramienta, los pasos lejanos son
+ambientación pura y no evidencia. Tres caminos anotados, **sin decidir** — lo que sí está decidido es
+no fingir que la tenemos.
+
+---
+
 ## 2026-08-03 — Sesión 9: los 46 sonidos identificados, y el fantasma que se quedó sin pasos
 
 **Sin código.** El autor escuchó los 46 archivos de `_sin_identificar/` y los describió uno por uno.
