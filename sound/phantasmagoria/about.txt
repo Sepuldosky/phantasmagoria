@@ -1,11 +1,28 @@
-Phantasmagoria: sonidos. Origen: Phasmophobia (Kinetic Games), rippeados por
-terceros (phasmo-sounds-main). Convertidos de .wav a .ogg Vorbis q4 el
-2026-08-01: 141 MB -> 11 MB, 265 archivos, 0 fallos, duraciones verificadas
-contra el original (delta 0,000 s). Los .wav originales NO estan aca: viven en
-dev/other/phantom/dev2/phasmo-sounds-main/ y no se tocaron.
+Phantasmagoria: sonidos. Origen: Phasmophobia (Kinetic Games). 656 archivos,
+37 MB, de DOS fuentes distintas que conviene no confundir:
+
+  265  rip de terceros (phasmo-sounds-main), .wav -> .ogg Vorbis q4 el
+       2026-08-01: 141 MB -> 11 MB, 0 fallos, duraciones verificadas contra el
+       original (delta 0,000 s). Los .wav viven en
+       dev/other/phantom/dev2/phasmo-sounds-main/ y no se tocaron.
+
+  391  extraidos del JUEGO el 2026-08-03 con dev/phastools/araudio.py, que saca
+       los 4138 AudioClip de la instalacion via AssetRipper. Son el Vorbis
+       ORIGINAL de Unity, copiados tal cual: reencodear ya-comprimido solo
+       pierde. Importados por dev/import_phasmo_audio.py, que verifica que la
+       duracion de cada copia coincida con la que Unity declara (391/391).
+       De esos, 196 son EQUIPAMIENTO POR TIER y las 7 posesiones malditas,
+       y 8 mas son lineas del encargado que al rip de terceros le faltaban.
 
 Los 46 que quedaron sin identificar se cerraron el 2026-08-03: el autor los
 escucho uno por uno y los describio. _sin_identificar/ ya no existe.
+
+LA DIFERENCIA ENTRE LAS DOS FUENTES NO ES SOLO DE CANTIDAD. El rip de terceros
+es de una version anterior del juego: tiene 22 palabras de spirit box con UNA
+toma cada una, y el juego de hoy tiene 11 palabras con 5 a 7 tomas. Las once
+que faltan (adult, baby, child, kid, dad, mum, son, daughter, die, next) NO
+EXISTEN hoy bajo ningun nombre -- se busco por substring en los 4138. Por eso
+no se borro nada del rip viejo: es la unica copia de esas once.
 
 ESTANDAR DE SONIDO POR ACCION (heredado de corpus-stalker): cada carpeta es una
 accion o familia, y CUALQUIER .ogg dentro entra al pool de esa accion. Para
@@ -15,46 +32,134 @@ Lua. Una carpeta vacia o faltante = ese evento suena en silencio, no da error.
 NINGUNO DE ESTOS ARCHIVOS TIENE CONSUMIDOR TODAVIA. La entidad no esta escrita.
 
 =============================================================================
-EL ARBOL                                                        265 archivos
+EL ARBOL                                                        656 archivos
 =============================================================================
+                            [+N] = cuantos entraron del juego el 2026-08-03
 
-ghost/hunt/             1   la respiracion del fantasma cazando. "Como que
-                            expulsa saliva constantemente junto con el aire de
-                            los pulmones". Es el loop de la caceria
+ghost/hunt/            14   la caceria. Habia UNO de 2,6 s ("como que expulsa
+              [+13]         saliva constantemente junto con el aire de los
+                            pulmones"); ahora estan los loops reales del juego:
+                            voice_1_loop_01..05 (21 a 65 s) y voice_2_loop_01..05
+                            (37 a 50 s), mas voice_2_whispering, voice_2_grim y
+                            voice_1_inhales. 8,5 min de material
 ghost/scare_light/      2   el fantasma se te acerca y te come la cordura, se
                             aparezca de frente o pase invisible al lado tuyo
-ghost/scare_strong/     1   "un soplido intenso y largo como enojado". SOLO
-                            existe para la voz 2 (ver LAS DOS VOCES, abajo)
+ghost/scare_strong/     2   "un soplido intenso y largo como enojado".
+               [+1]         LA ASIMETRIA ESTA CERRADA: voice_1.ogg ya existe.
+                            Ver LAS DOS VOCES, abajo
+ghost/death/            2   NUEVO. El fantasma muriendo, una por voz. En
+               [+2]         Phasmophobia el fantasma no muere; aca si
 ghost/hurt/             2   quejido de dano. En Phasmophobia al fantasma no se
                             le pega; aca si puede servir. "Suenan como que le
                             pegaras un punetazo en el estomago"
-ghost/humming/          2   el tarareo, masculino y femenino. Suena con la
-                            cajita musical y en el ghost event de aparicion,
+ghost/breathing/        9   NUEVO. Respiracion, 4 por voz, mas deogen.ogg, que
+               [+9]         el juego nombra por un tipo de fantasma concreto
+ghost/humming/          6   el tarareo, masculino y femenino. Suena con la
+               [+4]         cajita musical y en el ghost event de aparicion,
                             donde el fantasma camina mostrandose (se le puede
-                            sacar la foto). La Banshee prefiere estos eventos
+                            sacar la foto). La Banshee prefiere estos eventos.
+                            Los 4 del juego son voice_*_musicbox (29 s, el
+                            tarareo con la cajita) y voice_*_singing (10 y 15 s)
+ghost/banshee_scream/  22   NUEVO. 20 gritos de 2 a 3,6 s (el juego los nombra
+              [+22]         Paramic_*: son los que capta el microfono
+                            parabolico), mas long_voice_1 de 48 s y para.ogg
+ghost/paranormal_voice/41   NUEVO. Lo que el fantasma DICE, tambien capturado
+              [+41]         por el parabolico. Por voz: risas, susurros,
+                            quejidos, jadeos, mascullar, y frases -- get_out,
+                            help, watching_you, sohungry, cant_find_me, lost,
+                            cold, hey, why, shhh. Mas dead_voices (29 s) y
+                            whispering_voices (24 s), que son coros
 ghost/footstep/         8   los pasos del fantasma: BOTAS. El autor los describe
                             como "muy parecidos a la pisada de una bota", y son
                             el banco mas grave de los que quedaban disponibles
                             (89,8 % de la energia bajo 250 Hz, centroide 183 Hz)
 
-player/                 4   heartbeat_loop (el latido a <10 m del fantasma, ver
-                            diseno seccion 1), death_riser (el jumpscare cuando
+player/                15   heartbeat_loop (el latido a <10 m del fantasma, ver
+              [+11]         diseno seccion 1), death_riser (el jumpscare cuando
                             el fantasma te agarra la cara), dying (el jadeo del
-                            jugador ahogandose), dead_loop
+                            jugador ahogandose), dead_loop. Del juego entraron
+                            death_01..04, death_hang_01..03 (el mismo largo los
+                            tres: 5,968 s), death_animation_01 (9,2 s) y
+                            revive_01..03
 player/footstep/       50   pasos del jugador por superficie: carpet (8),
                             asphalt (8), gravel (8+loop), wood (8), stairs (8),
                             stairs_under (9). Material de REPUESTO: GMod ya le
                             da al jugador sus propios pasos, y por eso el banco
                             de botas se le cedio entero al fantasma
 
-equipment/             17   los equipos del jugador: emf_beep,
-                            motion_sensor_beep, spiritbox_noise_loop,
+equipment/             18   los equipos del jugador: emf_beep,
+               [+1]         motion_sensor_beep, spiritbox_noise_loop,
                             radio_static, walkie, linterna, camara, diario,
-                            crucifijo, encendedor, pastillas
+                            crucifijo, encendedor, pastillas. Del juego entro
+                            radio_static_long (76 s), que es el `Radio Static
+                            Noise` que la seccion 7.1 del diseno pone en el
+                            banco de interferencia del hunt.
+                            MEDIDO de paso: spiritbox_noise_loop dura 85,603 s y
+                            el `Spiritbox_T1_Noise_Loop` del juego 85,603 s -- el
+                            mismo clip. equipment/ ya estaba bien poblado
 equipment/spiritbox_response/
-                       22   las respuestas del Spirit Box, voz masculina. El
-                            nombre ES la palabra que se oye: adult.ogg dice
-                            "adult". Ver SPIRIT BOX, abajo
+                       93   las respuestas del Spirit Box. El nombre ES la
+              [+71]         palabra que se oye: adult.ogg dice "adult", y
+                            attack_03.ogg tambien dice "attack". Ver SPIRIT BOX
+
+--- EQUIPAMIENTO POR TIER (2026-08-03) --------------------- 196 archivos ---
+Una carpeta por item; el nombre empieza por `t1_`/`t2_`/`t3_` cuando el juego
+distingue el tier, y sin prefijo cuando no. Ver EL EQUIPAMIENTO, mas abajo.
+
+equipment/emf/         15   on/off por tier, los niveles (t1_levels_2_4 de 17 s,
+                            t3_level_3, level_5) y el loop de nivel 5 del T3
+equipment/spiritbox/   15   on/off de los tres tiers + t1_noise_loop (85,6 s) +
+                            los drops del T1 y del T3
+equipment/video_camera/17   el mejor cubierto: on, off, record_start,
+                            record_success y nightvision on/off, casi completo
+                            en los tres tiers
+equipment/sound_recorder/
+                       14   on por tier (T1 x4, T2 x2, T3 x2) + booting,
+                            success, celebrating, shutdown y warning
+equipment/flashlight/  14   on/off de los tres tiers, el par `alt_` (que NO son
+                            los T2: ver ABIERTO #15), click y la lampara
+equipment/salt/        12   las DOCE tomas: t1_use_01..06 y place_1..6, que son
+                            tomas DISTINTAS pese a emparejar en duracion
+equipment/smudge/      11   incienso quemandose (3) y los dos sets de drop
+equipment/journal/      9   abrir, escribir y pasar paginas
+equipment/crucifix/     8   burn por tier + burn_start + burn_loop (34,8 s) +
+                            las tres vueltas de 5 s
+equipment/paramic/      7   on/off sin tier y on/off del T3 -- son CUATRO clips
+                            distintos, no dos (medido) -- + los drops del T1
+equipment/igniter/      5   fosforo (T1, normal y rapido), T2 on, T3 light/close
+equipment/tripod/       5   los cuatro drops y el motor girando
+equipment/dots/         4   t1 on/off, el loop del T2 (28,5 s) y el giro del T3
+equipment/photo_camera/ 4   flip del T1 y la foto de los tres tiers
+equipment/firelight/    4   t1_blow, t1_wick, light y blow
+equipment/head_mounted_cam/
+                        3   nightvision on/off del T3 y el loop de
+                            interferencia del fantasma (17,3 s)
+equipment/ghost_book/   3   el libro cerrandose, uno por tier
+equipment/sanity_meds/  3   T1 bebe el jarabe, T2 traga pastillas, T3 se pone
+                            una inyeccion de adrenalina (11,4 s)
+equipment/uv/           2   on/off del T3
+equipment/glowstick/    2   el snap y la sacudida
+equipment/button/       2   el boton de equipo, T1 y T2
+equipment/thermometer/  1   SOLO t2_record. Ver ABIERTO #16
+
+--- LAS 7 POSESIONES MALDITAS ------------------------------- 43 archivos ---
+LAS SIETE tienen sonido en el juego. La §4 del diseno las lista con 1 de 7
+modelada; el audio ya no es el cuello de botella.
+
+cursed/voodoo/          6   los cinco alfileres + el del CORAZON, que es el que
+                            dispara el cursed hunt
+cursed/monkey_paw/      9   twitch_1..3 (el dedo doblandose por deseo
+                            concedido), los thuds y los drops
+cursed/tarot/           8   las tres cartas robadas + los drops del mazo
+cursed/musicbox/        7   open, close, clash y los cuatro drops. El TARAREO
+                            que sale de ella no esta aca: esta en ghost/humming/
+cursed/mirror/          7   el smash + la luz del espejo (hum, on x2, off x3)
+cursed/ouija/           2   SOLO los dos de rotura. Ver ABIERTO #16
+cursed/summoning_circle/1   SOLO el "poof". Ver ABIERTO #16
+
+                            Los `Cursed Voiceover 1..3` del juego NO estan aca:
+                            son el ENCARGADO hablando DE los objetos malditos,
+                            no los objetos. Estan en voice/. Ver ABIERTO #17
 
 event/throw/           11   objetos volando. El Poltergeist tira varios a la vez
 event/impact/          20   golpes contra madera, metal, piedra
@@ -70,12 +175,31 @@ prop/                  32   trastos de la casa: tv (+ su control remoto),
                             telefono, heladera, pileta, inodoro, reloj,
                             ventilador, microondas, ascensor, auto, piano,
                             guitarra, llaves, el peluche del cuarto del bebe
+prop/radio/             8   NUEVO. La radio andando, "media creepy" (palabra del
+               [+8]         autor): creepy_music, creepy_music_news,
+                            creepy_music_slowdown, creepy_music_old,
+                            creepy_news, creepy_montage -- 19 a 42 s cada uno.
+                            Mas dos de ritual: ritual_loop (160 s) y
+                            ritual_chanting_loop (33 s).
+                            PEDIDO DE DISENO DEL AUTOR: que el fantasma agarre
+                            un prop de radio de HL2 o CS (la de office) y
+                            reproduzca esto.
+                            NO estan aca los dos estaticos: `Radio Static Noise`
+                            y `Walkie Talkie Static` son el banco de
+                            INTERFERENCIA del hunt segun la seccion 7.1 del
+                            diseno, y viven en equipment/
+prop/musicbox/          7   NUEVO. La cajita musical como OBJETO: open, close,
+               [+7]         clash y drop_01..04. El tarareo que sale de ella
+                            NO esta aca, esta en ghost/humming/
 ambience/              11   lluvia, truenos, viento, room tone, y el tono de
                             interior de la casa (house_tone_loop, 82 s)
 
-voice/                 18   el encargado: una voz britanica, el ayudante de la
-                            compania de cazafantasmas. Da informacion del caso
-                            al llegar. Transcripciones abajo
+voice/                 26   el encargado: una voz britanica, el ayudante de la
+               [+8]         compania de cazafantasmas. Da informacion del caso
+                            al llegar. Transcripciones abajo. Del juego
+                            entraron hint_cursed_object_01..03 (la briefing de
+                            objeto maldito), arrival_short_01/02, good_job_01/02
+                            y training_intro
 ui/                     5   clicks de interfaz (button_click, button_toggle_1 y
                             _2) y el camion del juego original (truck_exit,
                             truck_stop_exit). Probablemente no se usen
@@ -94,26 +218,133 @@ el mismo indice entre carpetas es lo que hace que un fantasma suene a UN
 fantasma y no a dos. Eso es el "fingerprint sonoro" del contrato del diseno: el
 jugador distingue un hunt de un ghost event porque la voz no cambia.
 
-Asimetria a respetar: scare_strong SOLO tiene voice_2. Un fantasma con voz 1 no
-tiene ataque fuerte y hay que degradarlo a scare_light, no sonar en silencio.
+LA ASIMETRIA DE scare_strong ESTA CERRADA (2026-08-03). Decia aca: "scare_strong
+SOLO tiene voice_2; un fantasma con voz 1 hay que degradarlo a scare_light". El
+archivo existia en el juego y no en el rip de terceros. Ya esta importado. El
+Lua no necesita la degradacion.
+
+--- POR QUE EL INDICE DEL JUEGO ES EL INDICE DE ESTE ARBOL --------------------
+
+El juego llama a sus clips `Ghost 1 (...)` y `Ghost 2 (...)`. Que ese 1 sea
+NUESTRO voice_1 no se supuso: los archivos que ya estaban en el arbol resultaron
+ser LOS MISMOS clips, y eso se midio por duracion contra el manifest del juego:
+
+  ghost/scare_light/voice_1.ogg    4,049 s == Ghost 1 (light attack)   4,049
+  ghost/scare_light/voice_2.ogg    2,351 s == Ghost 2 (light attack)   2,351
+  ghost/scare_strong/voice_2.ogg   3,997 s == Ghost 2 (strong attack)  3,997
+  ghost/hurt/voice_2.ogg           2,064 s == Ghost 2 (damaged)        2,064
+  ghost/hurt/voice_1.ogg           1,959 s == Ghost 1 (damaged)        1,959
+
+La ultima empataba en duracion con otros NUEVE clips del juego (un murcielago,
+una cortina de cuentas, un buho, dos EMF...). Se resolvio por CONTENIDO:
+correlacion de la envolvente de energia, que sobrevive al reencode a q4. Dio
++0,9990 contra Ghost 1 (damaged) y +0,3585 contra el segundo mejor.
+
+Y el sexo sale de ahi: el autor escucho voice_1.ogg y lo llamo el mas femenino.
+Ese archivo ES Ghost 1. Por eso los clips que el juego prefija Female_ y F_
+entraron como voice_1, y los Male_ y M_ como voice_2.
+
+LO QUE NO SE PUDO MEDIR, y conviene saberlo antes de intentarlo de nuevo: el
+TONO no clasifica estos clips. dev/phastools/voice_probe.py mide F0 por
+autocorrelacion, y contra los controles que el propio juego etiqueta:
+
+  separa limpio    Male Singing 78 Hz  vs  Female Singing 151 Hz
+                   caja musical male 105 Hz  vs  female 311 Hz
+  NO separa nada   Male Breathing 262-401 Hz  vs  Female Breathing 344-356 Hz
+                   Male_Ghost_Hunting 248-350  vs  Female_ 204-320 (invertido!)
+
+Los ataques de fantasma tienen 2-7 % de tramas sonoras: son soplido y gruñido,
+no voz con tono. La identidad de voz de arriba sale del apareo de archivos, no
+del tono, y un check de tono sobre este material habria dado una respuesta
+segura y falsa.
 
 =============================================================================
 SPIRIT BOX
 =============================================================================
 
-22 palabras sueltas de 0,3-0,6 s, todas en voz masculina, literales al nombre.
-Estan PLANAS a proposito: agruparlas por tema seria mi categorizacion, no la
-medicion del autor. Como el nombre de archivo es la palabra, el Lua agrupa
-cuando decida. Los grupos que se leen solos, por si sirven de punto de partida:
+93 archivos, de dos fuentes. El nombre SIEMPRE empieza por la palabra que se
+oye, asi que `nombre:match("^(%a+)")` sigue dando la palabra en los dos casos:
 
-  edad         adult  baby  child  kid  young  old
+  22  del rip de terceros, `<palabra>.ogg`, 0,3-0,6 s, voz masculina
+  71  del juego, `<palabra>_NN.ogg`, 0,64-1,54 s. El autor las describe como
+      "transmisiones de radio que dicen la palabra" -- son mas largas porque
+      traen el caracter de la radio, no solo la palabra
+
+Estan PLANAS a proposito: agruparlas por tema seria mi categorizacion, no la
+medicion del autor. Los grupos que se leen solos, por si sirven de punto de
+partida (entre parentesis, cuantas tomas del juego hay de cada una):
+
+  edad         adult  baby  child  kid  young(6)  old(6)
   parentesco   dad  mum  son  daughter
-  lugar        away  behind  close  far  here
-  amenaza      attack  hate  hurt  kill  die  death
+  lugar        away(6)  behind(5)  close(6)  far(7)  here(6)
+  amenaza      attack(5)  hate(6)  hurt(6)  kill(6)  die  death(6)
   sin ubicar   next
+
+LAS ONCE SIN NUMERO NO EXISTEN EN EL JUEGO DE HOY. adult, baby, child, kid,
+dad, mum, son, daughter, die y next no aparecen en los 4138 AudioClip bajo
+NINGUN nombre -- se busco por substring, no solo por nombre exacto. O el juego
+las saco, o el rip de terceros es de una version anterior. Por eso el rip viejo
+no se toco: es la unica copia que queda de esas once.
 
 OJO: si el consumidor sortea del pool entero, a "how old are you?" el fantasma
 puede contestar "kill". Si eso importa, el corte por grupo va en el Lua.
+
+=============================================================================
+EL EQUIPAMIENTO - como nombra los tiers el juego, y por que importa
+=============================================================================
+
+El mismo item se escribe de hasta CUATRO formas, y el tier cambia de lado:
+
+  Spiritbox_T1_Off      el tier en el medio
+  T2_SpiritboxOff       el tier adelante, y sin separadores
+  T3_SpiritbixOff       idem, y ademas con el nombre MAL ESCRITO (Spiritbix)
+  Spirit box drop       sin tier y con espacios
+
+Mismo lio en la camara: T1_VideoCameraVideoCamera_On (con el nombre repetido),
+Video_Camera_T2_On, T3_VideoCameraNightVisionOn. Y en el libro el tier es
+romano: Equipment_Ghost_writing_book_CLOSE_02_Tier_II.
+
+CONSECUENCIA PRACTICA: agrupar por nombre da huecos FALSOS. Un primer barrido
+reporto "SpiritboxOff: falta T1 y T3" cuando los tres tiers existen, sólo que
+escritos distinto. Por eso la tabla del importador tiene un patron por tier y
+no una regex "inteligente": una que cubriera las cuatro formas tambien cubriria
+cosas que no son.
+
+--- COMO SE DECIDIO QUE ES DUPLICADO Y QUE NO ------------------------------
+
+El juego arrastra nombres viejos sin tier junto a los nuevos, y muchos coinciden
+en duracion EXACTA con su version con tier. Decidir mal en cualquiera de los dos
+sentidos cuesta: de mas, se pierde una toma; de menos, el pool repite.
+
+Se probaron tres instrumentos y los dos primeros dieron respuestas FALSAS:
+
+  1. duracion            empareja, pero hay nueve clips distintos de 1,96 s
+  2. correlacion de      dio 0,85-0,99 y marco como duplicados a `EMF ON`,
+     envolvente          `Salt place 1..6` y `Candle wick burn`
+  3. null-test alineado  RESTO 1 y 2. Alinea por correlacion cruzada, ajusta
+     y con ganancia      ganancia por minimos cuadrados, y mide el residuo:
+
+     EMF ON      vs EMF_T1_On       -2,8 dB   control -0,5   TOMAS DISTINTAS
+     Salt place  vs T1_SaltUse      -6 a -8,5 control -0,0   TOMAS DISTINTAS
+     Candle wick vs T1_FirelightWick -32,5 dB control -2,8   la MISMA toma
+     EMF_T2_On   vs EMF_T3_On      -56,9 dB   control -0,2   EL MISMO CLIP
+
+De los ocho sospechosos, SIETE resultaron tomas distintas y entraron todos. El
+unico que no entro es `Candle wick burn`.
+
+Y una que la envolvente jamas habria encontrado: **EMF_T2_On, EMF_T2_Off,
+EMF_T3_On y EMF_T3_Off son UN SOLO CLIP con cuatro nombres** (-57 dB entre
+todos los pares, ganancia 1,00). Los cuatro archivos se conservan igual, porque
+la busqueda del Lua es por tier + accion y sacar uno lo dejaria sin resolver.
+
+OJO CON EL METODO, no solo con el resultado: en el arbol de sonido ya se uso
+correlacion de envolvente para probar que `ghost/hurt/voice_1.ogg` es
+`Ghost 1 (damaged)` (+0,9990 contra +0,3585) y esa conclusion SIGUE VALIENDO.
+La diferencia es que ahi se comparaba contra un reencode a q4, que cambia la
+forma de onda y deja sin usar el null-test; la envolvente es lo unico que
+sobrevive un reencode. Aca los dos lados salen del mismo volcado, asi que el
+null-test esta disponible y es estrictamente mas fuerte. **El instrumento
+correcto depende de si hubo reencode en el medio.**
 
 =============================================================================
 LA VOZ DEL ENCARGADO - transcripciones del autor
@@ -139,6 +370,29 @@ que tan agresivo es el fantasma:
                               blind"
   hint_none_3                "I got nothing else to report unfortunately"
 
+Las TRES de objeto maldito (2026-08-03) - el juego las llama `Cursed Voiceover`
+y el autor las transcribio de oido. Suenan al llegar con el camion, y avisan
+que en la casa hay una posesion maldita:
+
+  hint_cursed_object_01      "el fantasma aqui parece estar ligado a un objeto
+                              maldito, ve a tomar un vistazo para ayudarte con
+                              tu investigacion"                          7,33 s
+  hint_cursed_object_02      "sea quien sea que viva aqui hizo aparecer el
+                              fantasma con el objeto maldito, ten cuidado, no
+                              sabemos que nos podemos encontrar"         7,87 s
+  hint_cursed_object_03      "ha habido un reporte nuevo de un objeto maldito
+                              cerca, esta debe ser la razon de que hayan hecho
+                              aparecer un fantasma, hecha un vistazo, puede ser
+                              util como ventaja"                         9,54 s
+
+Estan en castellano porque asi las dicto el autor; el audio es ingles britanico
+como el resto, y el propio autor marco las tres como "no totalmente exactas".
+
+SON UN EJE DISTINTO del de las ocho de arriba. Las ocho hint dicen que tan
+agresivo es el fantasma; estas tres dicen que hay un objeto maldito. Un caso
+puede necesitar una de cada una, asi que el Lua no las puede sortear del mismo
+pool aunque compartan carpeta y prefijo.
+
 Las diez de menu y llegada:
 
   arrival_1                  "alright we are here, take a look at the equipment
@@ -163,9 +417,39 @@ Las diez de menu y llegada:
 
 Las transcripciones son de oido y las marcadas con (?) son las dudosas.
 
-NO USAR EL NOMBRE COMO TIER. Dos de los ocho nombres del rip contradicen lo que
-la linea dice. Si el Lua elige la briefing segun que tan agresivo es el
-fantasma, el orden que vale es este -- por CONTENIDO, de mas grave a menos:
+INTENTO DE VERIFICARLAS CONTRA EL JUEGO: NEGATIVO (2026-08-03). El juego trae
+un TextAsset `localisation` de 4,9 MB -- un CSV con 2.388 IDs en 29 idiomas, o
+sea el texto autoritativo de todo lo escrito. **Las lineas habladas del
+encargado NO estan ahi.** Se busco por contenido (reports of violence, left in
+a hurry, light switching, nothing to report, keep an eye out, going in blind,
+whiteboard, prepare accordingly...) y por ID (hint, brief, voiceover, arrival,
+intel): cero. La busqueda SI funciona -- encontro `Map_SecondDescription2` =
+"We've just got confirmation of a possible ghost sighting here." -- asi que el
+cero es una medicion y no un fallo del metodo. Estas lineas no estan
+subtituladas ni localizadas: existen solo como audio.
+
+  OJO CON UNA TRAMPA DE NOMBRE: en `localisation` los IDs `Loading_Hint1..11`
+  son TIPS DE PANTALLA DE CARGA ("Don't stay in the dark too long"), no tienen
+  nada que ver con los `Hint Aggressive Ghost` del audio. Misma palabra, dos
+  cosas distintas.
+
+  Lo que si es texto autoritativo y sirve de referencia para escribir briefings
+  propias: `Map_SecondDescription1..5` y `Map_ThirdDescription1..5`, que son las
+  cinco+cinco descripciones que el juego MUESTRA al elegir contrato.
+
+NO USAR EL NOMBRE COMO TIER, Y LA RAZON CAMBIO. Antes decia aca que "la
+etiqueta del RIP no es confiable". **Los nombres no son del rip: son del
+JUEGO.** Los clips se llaman `Hint Friendly Ghost 2` y `Hint Non Friendly
+Ghost 1` en los propios assets, y que los archivos del arbol sean esos clips
+esta medido: 14 de los 18 de voice/ emparejan su duracion EXACTA con la linea
+del juego. O sea que la contradiccion entre nombre y contenido -- si las
+transcripciones del autor son correctas -- es de Kinetic Games, no de quien
+rippeo.
+
+Eso refuerza la decision de NO renombrar, por un motivo mejor que el anterior:
+el nombre es la clave con la que se vuelve al asset original. Si el Lua elige
+la briefing segun que tan agresivo es el fantasma, el orden que vale es este
+-- por CONTENIDO, de mas grave a menos:
 
   1  violencia         hint_aggressive_ghost      "reports of violence" + se
                                                   fueron apurados
@@ -180,8 +464,18 @@ fantasma, el orden que vale es este -- por CONTENIDO, de mas grave a menos:
   8  nada              hint_none_3
 
 Los dos marcados con (!) son los que no encajan con su nombre. Los nombres se
-conservan igual: son el unico rastro que queda hasta el rip, y renombrar por una
-transcripcion de oido cambia una etiqueta dudosa por otra. El tier vive aca.
+conservan igual: son el nombre del asset EN EL JUEGO (medido, ver arriba), y
+renombrar por una transcripcion de oido cambia una etiqueta del juego por una
+etiqueta nuestra. El tier vive aca.
+
+QUE FALTARIA PARA CERRAR ESTO DE VERDAD: transcribir los 26 audios de voice/.
+Hay un camino concreto y no se tomo porque hace falta instalar algo: el juego
+**incluye los modelos Vosk de reconocimiento de voz offline**, en
+StreamingAssets/LanguageModels/English (67,6 MB, 14 archivos), que es el mismo
+motor con el que el juego te escucha a vos. `speech_recognition` 3.16.1 ya esta
+instalado, pero sin backend (falta `pip install vosk`). Con eso se transcriben
+los 26 con el modelo del propio juego y las 18 transcripciones de oido pasan de
+"del autor" a contrastadas. Es decision del autor si se instala.
 
 =============================================================================
 LO QUE QUEDA ABIERTO
@@ -279,6 +573,90 @@ LO QUE QUEDA ABIERTO
 
 8. player/dead_loop (14 s) es el loop de estar muerto y moverse como un fantasma
    mas. El autor lo propone para el loop de LA OTRA DIMENSION del mod.
+
+9. NUEVO (2026-08-03). ?ES LA TOMA VIEJA DEL SPIRIT BOX UNA DE LAS NUEVAS?
+   NO SE PUDO DECIDIR, y el intento es instructivo. Se comparo cada
+   `<palabra>.ogg` del rip contra las tomas `<palabra>_NN.ogg` del juego por
+   correlacion de envolvente con alineacion. Los numeros parecen concluyentes
+   -- death 0,946, here 0,875, kill 0,856 -- hasta que se mira el SEGUNDO mejor:
+   0,936, 0,855, 0,833. La metrica no discrimina, porque todas las tomas de una
+   misma palabra tienen la misma envolvente: es la misma palabra dicha igual.
+   Un check que marca al sospechoso y marca casi igual a todos los demas no ha
+   medido nada. Queda para el oido. Consecuencia practica si estuvieran
+   duplicadas: una toma repetida en el sorteo, no un bug.
+
+10. ghost/humming: los dos del rip (female.ogg, male.ogg, 25,1 y 25,4 s) NO son
+   los mismos takes que los cuatro del juego -- la misma correlacion da 0,11 a
+   0,39, y ahi si separa. Las seis suman al pool sin duplicar.
+
+11. ghost/hunt/breath_1.ogg (2,6 s, el unico que habia) contra los loops nuevos
+   da 0,60-0,68. NO alcanza para llamarlo fragmento de ninguno: deslizar 2,6 s
+   sobre 40 s de respiracion casi periodica encuentra una ventana parecida por
+   construccion. Se deja donde esta.
+
+12. ghost/paranormal_voice/ es una carpeta que NO existia en el diseno. Nace de
+   que el juego tiene 36 clips ParaSound_* -- lo que el microfono parabolico le
+   oye decir al fantasma. La accion todavia no esta escrita en el diseno; el
+   banco existe antes que su consumidor, como todo el resto de este arbol.
+
+14. `Walkie Talkie Static` del juego NO SE IMPORTO. equipment/walkie_static.ogg
+   (del rip) dura 19,684 s y el del juego 19,665 s: 19 ms de diferencia, con el
+   mismo nombre y el mismo rol. Un segundo archivo casi identico en el mismo
+   pool solo agrega una repeticion. Pero OJO con la conclusion: 19 ms NO es
+   cero, y la conversion del rip preservo las duraciones con delta 0,000 s en
+   los otros casos medidos. O sea que probablemente NO son el mismo archivo, y
+   equipment/ tiene ademas radio_static.ogg de 19,649 s -- tres estaticos de
+   ~19,6 s que nadie separo todavia. La duracion no los distingue y la
+   envolvente tampoco puede (el ruido no tiene envolvente). Es para el oido.
+
+15. `equipment/flashlight/alt_on.ogg` y `alt_off.ogg` (los `Flashlight 2` del
+   juego) NO son los del tier 2, aunque el nombre lo sugiera: null-test -0,01 y
+   otra duracion. De que tier son, no se sabe. Se llaman `alt_` a proposito
+   para no cablear una suposicion en el nombre del archivo. Lo mismo con
+   `equipment/paramic/on.ogg` y `off.ogg`, que NO son los del T3 (-0,08).
+
+16. TRES HUECOS REALES, buscados por substring en los 4138 y no por nombre
+   exacto, asi que no son un artefacto de como busque:
+     - TERMOMETRO: existe UN solo clip, `T2_ThermometerRecordTemp` (0,09 s).
+       No hay T1 ni T3, ni nada con "temperat" ni "freez" salvo un freezer de
+       cocina.
+     - SENSOR DE MOVIMIENTO: CERO. Lo unico con "motion" son las luces con
+       sensor de una casa (`Lights_Farm_Motion_sensor`) y dos temas de musica
+       de 8 minutos que matchearon por "eMOTION" y "proMOTION" -- un falso
+       positivo de substring que conviene no repetir. El
+       `equipment/motion_sensor_beep.ogg` del rip de terceros sigue siendo la
+       unica fuente.
+     - GUIJA: solo los dos sonidos de ROTURA. No hay sesion, ni deletreo, ni
+       voz; no existe nada con "ouija", "seance" ni "spell" mas alla de esos
+       dos. Los `cursed/voiceover_1..3` PODRIAN ser la guija hablando, pero eso
+       es una sospecha mia y no se midio.
+   El circulo de invocacion tiene solo el "poof", y las velas que hay que
+   prender probablemente usen el banco del igniter/firelight.
+   Tambien: el HUESO (la evidencia que se fotografia) no tiene sonido propio;
+   los 26 clips con "bone" son todos un juguete de perro.
+
+17. `Cursed Voiceover` = EL ENCARGADO, no el objeto. Los tres estaban en
+   cursed/ porque yo lei el nombre y anote "la voz de los objetos malditos, de
+   cual de los siete no se sabe". El autor los escucho: es el britanico
+   avisando que en la casa hay una posesion maldita. **El nombre decia de QUE
+   habla, no QUIEN habla** -- y la duda que yo mismo habia dejado anotada
+   ("de cual de los siete") apuntaba al eje equivocado, asi que ni siquiera
+   servia para encontrar el error. Es la misma familia que los ocho `Hint ...`,
+   y esta medido: de los 18 archivos de voice/ del rip, CATORCE emparejan
+   exacto con su linea del juego.
+
+18. `voice/arrival_1.ogg` y `arrival_2.ogg` (del rip) NO son las `Arrival 1/2`
+   del juego de hoy: 8,72 y 6,26 s contra 5,58 y 3,91 s. Son otras grabaciones
+   del mismo momento. Entraron las dos nuevas como arrival_short_01/02 sin
+   pisar nada; cual usar es decision de oido. Las transcripciones de arriba son
+   de las LARGAS, las del rip.
+
+13. NADIE ESCUCHO LOS 391 ARCHIVOS NUEVOS (menos las tres de objeto maldito,
+   que SI escucho el autor). Su mapeo salio del nombre INTERNO del
+   juego (que es descriptivo en ingles: "Ghost 1 (strong attack)"), de la
+   medicion de duracion contra el manifest, y de lo que el autor conto de oido
+   sobre las familias. Eso es mas fuerte que un nombre de rip de terceros, pero
+   NO es haberlos escuchado. La regla de abajo sigue valiendo entera.
 
 REGLA: no se infiere que suena un archivo a partir de su nombre. Todo lo que
 esta arriba o lo describio el autor de oido, o se midio; lo que es sospecha

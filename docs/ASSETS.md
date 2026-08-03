@@ -5,21 +5,51 @@ materiales son de terceros. Esta guía dice qué hace falta y de dónde sale.
 
 ## Sonido
 
-265 archivos de **Phasmophobia** (Kinetic Games), rippeados por terceros y convertidos a `.ogg`.
+**656 archivos** de **Phasmophobia** (Kinetic Games), 37 MB, de dos fuentes que no hay que confundir.
+
+| | Archivos | Origen |
+|---|---|---|
+| Rip de terceros | 265 | `dev/other/phantom/dev2/phasmo-sounds-main/` (fuera del repo), `.ogg` Vorbis q4 — 141 MB → 11 MB |
+| **Del juego** | **391** | extraídos de la instalación con [`dev/phastools/araudio.py`](../../dev/phastools/araudio.py); Vorbis **original**, copiado sin reencodear |
+
+De los 391, **196 son equipamiento por tier y las 7 posesiones malditas** — una carpeta por ítem bajo
+`equipment/` y `cursed/`, con los archivos prefijados `t1_`/`t2_`/`t3_` cuando el juego distingue el
+tier. **Las siete posesiones malditas tienen sonido**; el audio ya no es el cuello de botella de §4
+de [EQUIPAMIENTO.md](EQUIPAMIENTO.md).
 
 | | |
 |---|---|
-| Origen | `dev/other/phantom/dev2/phasmo-sounds-main/` (fuera del repo) |
-| Convertidos | `.ogg` Vorbis q4 — 141 MB → 11 MB |
 | Destino | `sound/phantasmagoria/` |
 | Organizador | [`dev/organize_sounds.py`](../dev/organize_sounds.py) (primer mapeo por nombre) |
 | Recatálogo | [`dev/recatalog_sounds.py`](../dev/recatalog_sounds.py) (lo que el autor identificó de oído) |
+| **Importador del juego** | [`dev/import_phasmo_audio.py`](../dev/import_phasmo_audio.py) — tabla explícita, falla si un patrón no resuelve, y verifica duración copia vs. juego (391/391) |
 
-**Los 265 están mapeados** a carpetas por acción. Los 46 que el nombre no justificaba se cerraron el
-2026-08-03 y `_sin_identificar/` ya no existe. Qué suena cada carpeta, las transcripciones de las
+```bash
+python -u dev/phastools/araudio.py dump out\audio    # los 4138 clips del juego
+python -u dev/import_phasmo_audio.py --dry-run       # qué traería
+python -u dev/import_phasmo_audio.py                 # copia y verifica
+```
+
+**Los 656 están mapeados** a carpetas por acción. Qué suena cada carpeta, las transcripciones de las
 líneas habladas y lo que quedó como sospecha: [`sound/phantasmagoria/about.txt`](../sound/phantasmagoria/about.txt)
 — el único archivo del árbol de sonido que se versiona, y sin el cual el árbol no se puede
 reconstruir.
+
+Dos cosas del import que cambian decisiones de Lua:
+
+- **La asimetría de `scare_strong` está cerrada.** Existía sólo `voice_2`, y el diseño obligaba a
+  degradar la voz 1 a `scare_light`. El archivo estaba en el juego: ya no hace falta la degradación.
+- **El índice de voz del juego es el de este árbol**, y no por suposición: los archivos que ya
+  estaban resultaron ser los mismos clips (cinco coincidencias exactas de duración, y la ambigua
+  resuelta por correlación de envolvente, +0,999 contra +0,359 del segundo). El detalle está en
+  `about.txt`.
+- **El nombre no dice el tier de forma fiable.** El mismo ítem se escribe hasta de cuatro maneras
+  (`Spiritbox_T1_Off`, `T2_SpiritboxOff`, `T3_SpiritbixOff` —con typo—, `Spirit box drop`), así que
+  agrupar por nombre inventa huecos que no existen. La tabla del importador lleva **un patrón por
+  tier**, a propósito.
+- **Tres huecos que sí son reales**: el termómetro tiene un solo clip (T2), el sensor de movimiento
+  **no tiene ninguno**, y de la güija sólo existen los dos sonidos de rotura. Detalle y método en
+  `about.txt`, abiertos #15 y #16.
 
 ## Modelos
 
