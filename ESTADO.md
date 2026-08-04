@@ -88,12 +88,19 @@ referencia. Resumidas:
 
 ## Lo que está abierto
 
-- **⚠ NEAD te vuelve intargeteable para el fantasma** (§19.5): hace `ply:SetNoTarget(true)` a un
-  segundo a oscuras sin linterna, y la base Terminator respeta `FL_NOTARGET` en `ShouldBeEnemy`
-  **y en el alerter** — invisible **e inaudible**, en silencio y sin error. Es la mecánica que §18.2
-  descartó, activada por un tercero. **No es bug de nadie: NEAD existe para que la oscuridad esconda
-  y Phasmophobia para que no.** No se puede arreglar desde `terminator_blocktarget` (la bandera
-  devuelve en la línea 434, el hook está en la 496). Falta elegir la precisión de la capa de compat.
+- ~~La forma de la capa de compat con NEAD~~ **DECIDIDO: no se integra** (§19.5). NEAD hace
+  `ply:SetNoTarget(true)` a un segundo a oscuras sin linterna, y la base respeta `FL_NOTARGET` en
+  `ShouldBeEnemy` **y en el alerter** — invisible **e inaudible**. El override era posible, pero
+  **las 6 muestras de oscuridad son API del engine, no de NEAD**: se reimplementan en 20 líneas, sin
+  heredar el conflicto. **NEAD queda declarado no compatible, con aviso y sin bloquear** (precedente
+  de `phantasmagoria_assetcheck.lua`). El sampler va **chico y autocontenido**: Cortex lo va a
+  necesitar.
+- **Cortar la pantalla del `tv_plasma`** (§19.3): ya extraído a `dev/other/cs_office_tv/`, pero
+  **tiene una sola textura**, así que `SetSubMaterial` reemplazaría el televisor entero. Falta la
+  pasada de Blender (`dev/phastools/bl_merge.py --screen-fit` + `bl_screen_orient.py`) y renombrarlo
+  a namespace propio para no colisionar con el CS:S de quien lo tenga.
+- **¿`DHTML:GetHTMLMaterial()` sirve en `SetSubMaterial` sobre un modelo?** Sin medir. El camino
+  seguro es HTML → nuestro RT → submaterial, que reusa la plomería del paramic.
 - **Los 3 tiers de las pastillas** y qué restaura cada uno (§19.6). El modelo ya está:
   `models/phas/eqp_sanity_pills.mdl`.
 - **Qué drena cordura y cuánto**, y **qué suma al medidor de actividad** 0-10 (§19.3, mecánica nueva

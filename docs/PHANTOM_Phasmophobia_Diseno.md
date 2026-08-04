@@ -1729,6 +1729,38 @@ condición de §19.2.
 **Cargo ya tiene la puerta:** `StatusPanel.RegisterBar` (EQUIPAMIENTO.md §3.5). La barra por jugador
 es literalmente eso.
 
+#### Cómo se dibujan: **HTML sobre RT**, y el modelo ya está extraído
+
+El reparto se justifica solo, y no es la misma técnica para las dos cosas:
+
+| | Equipo en mano | Pantallas del camión |
+|---|---|---|
+| Técnica | **2D**, como `phantasmagoria_paramic_screen.lua` | **HTML → RT** |
+| Por qué | barato, y está siempre a la vista | pesado, pero **sólo se ve dentro del camión** y son pocas |
+| Lo que gana | — | el gráfico de actividad y las barras salen gratis en CSS/SVG; a mano son `DrawLine` |
+
+> **`DHTML:GetHTMLMaterial()` existe, pero NO se asume que sirva en `SetSubMaterial` sobre un
+> modelo** — es exactamente el fallo silencioso que el archivo del paramic documenta (material sin
+> `$model 1` ⇒ la submalla no se dibuja, sin error y sin textura rosa). **El camino seguro es
+> HTML → nuestro RT → submaterial**: se dibuja el material del DHTML dentro del RT que ya tiene
+> `$model 1` y se reusa toda la plomería existente. Un blit de más y cero riesgo. Cuál de los dos
+> anda es **una medición, no una decisión**.
+
+**El modelo: `tv_plasma` de CS:Source, ya extraído** a
+[`dev/other/cs_office_tv/`](../../dev/other/cs_office_tv/) (2026-08-03) — **CS:S no viene montado por
+defecto en GMod**, es tan común que lo parece pero es contenido de Valve que hay que tener.
+
+⚠ **Y el patrón del paramic NO se aplica tal cual.** Medido con `dev/mdlinfo.py`: `tv_plasma.mdl`
+tiene **una sola textura** (`TV_plasma`), igual que `tv_plasma_p1..p4` (`TV_plasma_p`). Los paramic
+funcionan porque **fueron cortados en Blender** (`bl_merge.py --screen-fit`) y su pantalla es una
+submalla propia terminada en `_screen`. En un `tv_plasma` sin cortar, `SetSubMaterial(0, …)`
+reemplaza **el televisor entero, marco incluido**.
+
+Falta entonces: cortar la pantalla con las herramientas que ya existen en `dev/phastools/`
+(`bl_merge.py`, `bl_screen_orient.py` para la relación de aspecto) **y renombrar a namespace propio
+en la misma pasada**, porque dejarlo en `models/props/cs_office/` colisiona con el CS:S de quien lo
+tenga montado. El detalle y la receta de extracción están en el `LEEME.md` de esa carpeta.
+
 > **Va detrás de un convar, por decisión del autor:** *«es medio tramposo»*. Ver tu cordura te dice
 > cuándo empieza el hunt, que es justo lo que el juego te hace **estimar**. Lo fiel es tenerlo **en
 > el camión** y no en el HUD — y con la zona segura de §18.1 ya definida, «en el camión» es una
@@ -1786,20 +1818,29 @@ Y ojo: **no alcanza con que nuestro fantasma no sea DrGBase.** NEAD sólo cachea
 es una **bandera global del engine** y por ahí nos alcanza igual. *Una integración puede llegarte por
 un camino que su propia lista de entidades no contempla.*
 
-#### La forma: capa de compatibilidad, y falta decidir su precisión
+#### La decisión: **no se integra NEAD** [decisión del autor, 2026-08-03]
 
-Va con el patrón de §18.2.4 (`corpus_cargo_movecompat.lua`): archivo aparte, convar propia, leída
-contra el mod vivo, degradación honesta en las dos direcciones. Lo que **no** se puede es arreglarlo
-desde `terminator_blocktarget`: el chequeo de `FL_NOTARGET` está en la línea 434 y el hook en la 496
-— **la bandera devuelve antes**. Hay que overridear `ShouldBeEnemy` en el phantom.
+**El override era posible** —overridear `ShouldBeEnemy` en el phantom; desde `terminator_blocktarget`
+no, porque la bandera devuelve en la línea 434 y el hook está en la 496— **pero no vale la pena, y la
+razón es mejor que la imposibilidad:**
 
-**La decisión pendiente es el precio:**
+**No necesitamos NEAD para nada.** Las seis muestras de §19.4 son `render.GetLightColor` y
+`render.ComputeDynamicLighting`: **API estándar del engine, no propiedad de NEAD**. Reimplementarlas
+no es copiar, es usar las dos funciones que cualquiera usaría. Son 20 líneas. Depender de un addon
+entero por 20 líneas **y encima heredarle un conflicto de diseño** es un mal negocio.
 
-| Opción | Costo |
-|---|---|
-| Ignorar `FL_NOTARGET` en jugadores, siempre | Simple. **Rompe `notarget` como herramienta de testeo** — que es la que §18 usó para medir sin que el bot atacara |
-| Ignorarlo sólo si `NEAD_enabled` es 1 | Más fino, pero sigue rompiendo `notarget` en servidores con NEAD |
-| Ignorarlo sólo cuando **nuestra** medición dice que está a oscuras | El más preciso, pero atribuye la bandera por correlación y no por origen |
+Lo que sí se recicla de NEAD es **lo que ya está medido**: que hay que muestrear en **dos alturas** y
+en **ambos sentidos** del vector (si no, la luz dinámica que te da de espaldas no cuenta), y que
+`0.001` es un umbral que el autor ya probó en juego.
+
+> **«No compatible» significa avisar, no bloquear** — precedente del propio autor:
+> `phantasmagoria_assetcheck.lua` detecta addons duplicados y **avisa sin bloquear**, porque
+> *«bloquear un mod por despecho, como la controversia de TFA VOX, está mal»*. Si NEAD está montado,
+> el detector lo dice y explica el efecto: **con NEAD, la oscuridad te esconde del fantasma**. El
+> jugador decide si lo quiere.
+
+**Y el sampler se escribe chico y autocontenido**, sin acoplarlo a la cordura: **Cortex va a
+necesitar lo mismo** más adelante y tiene que poder levantarlo tal cual.
 
 ### 19.6 Lo que falta
 
