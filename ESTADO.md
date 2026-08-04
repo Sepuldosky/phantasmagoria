@@ -95,10 +95,14 @@ referencia. Resumidas:
   heredar el conflicto. **NEAD queda declarado no compatible, con aviso y sin bloquear** (precedente
   de `phantasmagoria_assetcheck.lua`). El sampler va **chico y autocontenido**: Cortex lo va a
   necesitar.
-- **Cortar la pantalla del `tv_plasma`** (§19.3): ya extraído a `dev/other/cs_office_tv/`, pero
-  **tiene una sola textura**, así que `SetSubMaterial` reemplazaría el televisor entero. Falta la
-  pasada de Blender (`dev/phastools/bl_merge.py --screen-fit` + `bl_screen_orient.py`) y renombrarlo
-  a namespace propio para no colisionar con el CS:S de quien lo tenga.
+- **La pantalla del camión** (§19.3) — **sesión aparte, y NO hay que cortar la tele de Valve.**
+  `tv_plasma` está extraído en `dev/other/cs_office_tv/` y tiene **una sola textura**, así que
+  `SetSubMaterial` se comería el televisor entero. Pero el toolchain no tiene decompilador (sí
+  `studiomdl.exe`, y los 7/7 paramic prueban que compila), así que la ruta buena es **hacer nuestra
+  propia pantalla como prop plano** — un rectángulo, el modelo más simple que existe — con su
+  material `_screen`, y dejar el `tv_plasma` como decoración. Reusa **verbatim**
+  `phantasmagoria_paramic_screen.lua` y `bl_screen_orient.py`. Las tres rutas comparadas están en el
+  `LEEME.md` de esa carpeta.
 - **¿`DHTML:GetHTMLMaterial()` sirve en `SetSubMaterial` sobre un modelo?** Sin medir. El camino
   seguro es HTML → nuestro RT → submaterial, que reusa la plomería del paramic.
 - **Los 3 tiers de las pastillas** y qué restaura cada uno (§19.6). El modelo ya está:
