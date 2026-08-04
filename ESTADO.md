@@ -115,6 +115,10 @@ referencia. Resumidas:
   misma línea, única variable el mask. **Primera medición del proyecto y refutó al documento.**
   El arreglo es un campo: `ENT.LineOfSightMask` es por entidad con fallback al global
   (`shared.lua:2960`), y sus tres usos son la misma clase de pregunta.
+  **MEDIDO EN JUEGO que el campo se respeta** (2026-08-03): de frente sin nada en medio `solid=true`
+  —el control—, tras un container y tras unas compuertas `solid=false`. De paso salió que **las
+  compuertas tampoco cortan `MASK_BLOCKLOS`**. Sigue **sin medir** que un `ENT.LineOfSightMask` de
+  **subclase** sobreviva la línea de init: acá se seteó después del spawn.
   **El mask elegido es `MASK_SOLID`**, barriendo cinco candidatos en juego: es el único de los dos
   que sirven sin traer `CONTENTS_DEBRIS` (gibs cortando la vista) ni `CONTENTS_HITBOX` (caro, y este
   trace corre por enemigo y por barrido).

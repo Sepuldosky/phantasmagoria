@@ -1529,6 +1529,33 @@ bot heredado ve a través de *cualquier* entidad no-brush.
 > **Falso** — 16449 no tiene el bit 128. Lo afirmé dos veces razonando de memoria sobre la
 > constante; el número medido lo desarma. Misma familia que todo el resto de esta sección.
 
+##### El campo se respeta — **medido en juego** [2026-08-03]
+
+`ENT.LineOfSightMask` no quedó como lectura de una línea: se ejerció contra un
+`terminator_nextbot_loreaccurate` vivo, cambiando el mask y llamando `CanSeePosition` **en el mismo
+instante** para las dos lecturas (así el bot puede caminar sin partir la comparación):
+
+| Situación | `blos` | `solid` | Qué prueba |
+|---|---|---|---|
+| **De frente, nada en medio** (agachado) | true | **true** | **El control.** `MASK_SOLID` devuelve `true` cuando debe: **no rompe el trace, lo cambia** |
+| De pie tras un container | true | **false** | El prop corta |
+| Agachado tras unas compuertas | true | **false** | **Otro tipo de entidad**, mismo resultado |
+
+> **El control salió de una lectura que yo no había pedido.** Mi diseño era «de pie tras una caja →
+> `solid = true`», que dependía de una caja **baja**; un container tapa aun de pie. La lectura *de
+> frente sin nada en medio* prueba el positivo directamente y es **mejor control**: si el mask
+> rompiera el trace en lugar de cambiarlo, ahí habría dado `false`. *Un control vale por lo que
+> descarta, no por la geometría que uno imaginó.*
+
+**Dato extra que no se buscaba:** las **compuertas tampoco cortan `MASK_BLOCKLOS`**. Ya estaba medido
+para props y NPCs; ahora también para entidades de puerta. Para un fantasma que abre y cruza puertas
+(§2, `GhostInteractWithDoor`) eso no es menor.
+
+**Lo que sigue SIN medir**, y es una afirmación distinta: que `ENT.LineOfSightMask` declarado en una
+**subclase** sobreviva la línea de init (`myTbl.LineOfSightMask = myTbl.LineOfSightMask or
+LineOfSightMask`, `shared.lua:2960`). Acá el campo se seteó **después** del spawn, salteando esa
+línea. El idiom del `or` lo hace probable, pero probable no es medido.
+
 ##### La decisión: **`MASK_SOLID`** [2026-08-03]
 
 ```lua
