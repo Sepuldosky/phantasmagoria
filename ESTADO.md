@@ -95,14 +95,12 @@ referencia. Resumidas:
   heredar el conflicto. **NEAD queda declarado no compatible, con aviso y sin bloquear** (precedente
   de `phantasmagoria_assetcheck.lua`). El sampler va **chico y autocontenido**: Cortex lo va a
   necesitar.
-- **La pantalla del camión** (§19.3) — **sesión aparte, y NO hay que cortar la tele de Valve.**
-  `tv_plasma` está extraído en `dev/other/cs_office_tv/` y tiene **una sola textura**, así que
-  `SetSubMaterial` se comería el televisor entero. Pero el toolchain no tiene decompilador (sí
-  `studiomdl.exe`, y los 7/7 paramic prueban que compila), así que la ruta buena es **hacer nuestra
-  propia pantalla como prop plano** — un rectángulo, el modelo más simple que existe — con su
-  material `_screen`, y dejar el `tv_plasma` como decoración. Reusa **verbatim**
-  `phantasmagoria_paramic_screen.lua` y `bl_screen_orient.py`. Las tres rutas comparadas están en el
-  `LEEME.md` de esa carpeta.
+- **La pantalla del camión** (§19.3) — **EN CURSO EN OTRA SESIÓN, por el camino bueno: se está
+  ripeando la pantalla real del camión de Phasmophobia.** El modelo ya está bien y el Lua que le pone
+  la info está en proceso. **No hay que hacer nada con `tv_plasma`**: `dev/other/cs_office_tv/` queda
+  sólo como respaldo del prop de CS:S y como registro de la trampa de `vpk.exe`. Lo que sigue
+  valiendo de acá es §19.3: **HTML para las pantallas del camión, 2D para el equipo en mano**, y no
+  asumir que `DHTML:GetHTMLMaterial()` sirva en `SetSubMaterial`.
 - **¿`DHTML:GetHTMLMaterial()` sirve en `SetSubMaterial` sobre un modelo?** Sin medir. El camino
   seguro es HTML → nuestro RT → submaterial, que reusa la plomería del paramic.
 - **Los 3 tiers de las pastillas** y qué restaura cada uno (§19.6). El modelo ya está:
