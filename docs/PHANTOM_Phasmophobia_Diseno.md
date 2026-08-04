@@ -1386,25 +1386,54 @@ mecánicamente y no sólo como props.
 
 #### Dos defectos de la base que hay que arreglar **antes** de construir encima
 
-1. **`MaxSeeEnemyDistance` no se aplica a jugadores [verificado].**
-   [`:508`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L508):
+1. **Vista infinita sobre jugadores — y NO es un bug: está etiquetado como feature [verificado].**
+
+   La primera redacción culpaba al `if isPly then -- ignore maxSeeingDist for plys` de
+   [`:508`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L508).
+   **Eso es la consecuencia, no la causa.** El motor está en `DoDefaultTasks`
+   ([`shared.lua:3185`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L3185)),
+   y el autor de la base lo nombra él mismo:
 
    ```lua
-   if isPly then -- ignore maxSeeingDist for plys
-       if isBeyondFog( nil, rangeTo ) then return false end
+   elseif not fodder and not validPotentialNew and not myTbl.IgnoringPlayers( self ) then -- cheap infinite view distance
+       -- only run this code if no enemies, go thru player table one-by-one and check los
+       local allPlayers = player.GetAll()
    ```
 
-   Los 3000 u de `ENT.MaxSeeEnemyDistance`
-   ([`base/init.lua:77`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot_base/init.lua#L77))
-   valen para NPCs. Contra un jugador el alcance de vista es **ilimitado**, salvo niebla y línea de
-   vista. Un fantasma que te ve desde el otro extremo del mapa no es el del juego: **ese límite lo
-   ponemos nosotros.**
+   Recorre **`player.GetAll()` sin filtro de distancia**, un jugador por tick en round-robin, y sólo
+   cuando el bot **no tiene enemigo**. El mapa real de alcances queda así:
 
-2. **La dispersión se invierte pasando los 500 u [verificado].** `investigateRadius = 500 - sndDist`,
-   y `VectorRand()` **no está normalizado** (componentes en −1..1). Con `sndDist = 500` el radio da
-   **0** —te clava la posición exacta— y con `sndDist = 1000` da **−500**, que multiplicado por un
-   vector aleatorio dispersa **lo mismo** que 500. O sea: **pasado cierto volumen, un ruido más
-   fuerte vuelve a empeorar la corazonada.** La curva la escribimos nosotros.
+   | Camino | Alcance |
+   |---|---|
+   | `FindEnemies` (barrido en cono) | **acotado a 3000** por `FindInSphere`/`FindInCone` |
+   | El fallback «sin enemigos» (= la **ruta 3** de §18.7) | **ilimitado, a propósito** |
+
+   En un mapa abierto, un fantasma cazando sin objetivo fijado **te engancha desde el otro extremo**
+   si hay línea de vista. Correcto para un Terminator; lo contrario de un fantasma de Phasmophobia.
+   **Tercera vez que «heredado» ≠ «correcto»: no hay que arreglarlo, hay que acotarlo.**
+
+   **Y hay un punto único donde acotarlo:** esa rama llama `ShouldBeEnemy` **antes que nada**, así
+   que **overridear `ShouldBeEnemy` con un corte por distancia para jugadores arregla todos los
+   caminos de una** — el mismo punto que iba a hacer falta para NEAD antes de descartarlo (§19.5).
+
+2. **La dispersión se invierte pasando los 500 u — y hoy está DORMIDO [verificado].**
+   `investigateRadius = 500 - sndDist`, y `VectorRand()` **no está normalizado** (componentes en
+   −1..1, magnitud hasta ~1,41×). El radio negativo sólo invierte la dirección: no achica nada.
+
+   | Alcance del ruido | Radio | Dispersión real |
+   |---:|---:|---|
+   | 200 | 300 | ~424 u |
+   | **500** | **0** | **te clava la posición exacta** |
+   | 1000 | −500 | ~707 u — **igual que con radio +500** |
+
+   La intención era *más ruido ⇒ mejor puntería*, y se cumple **sólo hasta 500**. Pasado ese punto,
+   un ruido más fuerte **vuelve a empeorar** la corazonada.
+
+   > **La diferencia con el defecto 1: éste no muerde hoy.** Vive dentro de `shouldNotSeeEnemy`, la
+   > función que muere en la línea 317 para jugadores opacos. **Lo heredamos en el momento exacto en
+   > que la des-gateemos** — o sea, al implementar §18.3. Por eso hay que arreglarlo **en esa misma
+   > sesión** y no después: es una trampa esperando a que enciendan el mecanismo.
+
    *El engine también es un tercero* — la lección de §14 del roadmap #46, otra vez.
 
 ### 18.4 Lo que esto agrega a §5.2
@@ -1654,13 +1683,23 @@ la base **ya tenía** un camino que ve props; sólo que lo usa para *«¿está d
 > **Consecuencia para §18.2 que cambia el diseño de niveles:** `ClearOrBreakable` cuenta un prop
 > **rompible** como despejado. **Esconderse detrás de algo que se rompe no te esconde.**
 
-#### El arreglo completo: **dos campos**
+#### El arreglo completo: **dos campos y un override**
+
+> **Corrección (2026-08-03): eran dos campos y quedaron cortos.** Los dos campos tapan la fuga del
+> *«andá a fijarte ahí»*, pero **la ruta 3 sigue adquiriéndote a distancia infinita** cuando el
+> camino está despejado — es la *«cheap infinite view distance»* del defecto 1 de §18.3. Sin el
+> override, un fantasma sin objetivo te engancha desde el otro extremo del mapa.
 
 ```lua
-ENT.LineOfSightMask = MASK_SOLID     -- rutas 1 y 2  (§18.6)
+ENT.LineOfSightMask = MASK_SOLID     -- rutas 1 y 2  (§18.6, MEDIDO)
 -- y al spawnear:
-myTbl.forcedCheckPositions = false   -- ruta 3
+myTbl.forcedCheckPositions = false   -- la fuga de la ruta 3
+-- y ademas:
+function ENT:ShouldBeEnemy( ent, fov, myTbl, entsTbl )  -- corte por distancia en jugadores
 ```
+
+**El override es el punto único**: las tres rutas que adquieren pasan por `ShouldBeEnemy` antes que
+nada, así que un corte por distancia ahí las acota a las tres de una sola vez.
 
 El segundo usa **la salida temprana que la propia base escribió**
 ([`:1494`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L1494)):

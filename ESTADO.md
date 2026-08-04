@@ -139,9 +139,16 @@ referencia. Resumidas:
      `util.TraceLine` entre dos puntos cualesquiera: se contesta desde consola sin NextBot. Hacerlo
      con el fantasma es **más convincente** —ejerce la cadena real, `GetShootPos` → `EntShootPos`→
      `CanSeePosition`— pero si la entidad se demora, la versión sintética desbloquea el diseño igual.
-- **Dos defectos de la base que hay que arreglar antes de reusarla** (§18.3): `MaxSeeEnemyDistance`
-  **no se aplica a jugadores** —vista ilimitada salvo niebla— y la dispersión de la corazonada
-  **se invierte** pasando los 500 u de alcance sonoro.
+- **Dos defectos de la base, y muerden en momentos distintos** (§18.3):
+  1. **Vista infinita sobre jugadores, y está etiquetada como feature** — `DoDefaultTasks` recorre
+     `player.GetAll()` **sin filtro de distancia** cuando el bot no tiene enemigo (*«cheap infinite
+     view distance»*, `shared.lua:3185`). Es la **ruta 3** de §18.7. **Vive y muerde hoy.** Se acota
+     overrideando `ShouldBeEnemy`, que es **punto único**: las tres rutas de adquisición pasan por
+     ahí. Por eso el arreglo son **dos campos MÁS un override**, no dos campos.
+  2. **La dispersión se invierte pasando los 500 u** (`500 - sndDist`, y `VectorRand()` sin
+     normalizar): más ruido mejora la puntería sólo hasta 500, y a 500 clavados **te da la posición
+     exacta**. **Está DORMIDO** —vive en `shouldNotSeeEnemy`, muerta tras el `if` del alfa— y se
+     hereda **en el instante en que se des-gatee** (§18.3). Arreglarlo en **esa misma** sesión.
 - ~~Los sonidos ambiguos: 46 de 265.~~ **CERRADO** (2026-08-03): el autor los escuchó y los
   describió uno por uno; están catalogados y `_sin_identificar/` ya no existe. **265 de 265 mapeados**
   por acción, **incluidos los pasos del fantasma** — `ghost/footstep/boots_1-8`, §7.4.
