@@ -131,14 +131,30 @@ Por default **el bot odia a los jugadores**: `GetDesiredEnemyRelationship` devue
 prioridad 1000 ([`enemyoverrides.lua:941-945`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L941)).
 La puerta que lo decide es `ShouldBeEnemy`, líneas 493-494: sin `D_HT`, `return false`.
 
-Se apaga en **un** lugar — sobreescribir `OnFirstRelationWithPlayer` (línea 947), cuyo retorno pisa
-el `D_HT`. La implementación default no devuelve nada:
+Se apaga en **un** lugar — sobreescribir `OnFirstRelationWithPlayer`, cuyo retorno pisa el `D_HT`:
 
 ```lua
 function ENT:OnFirstRelationWithPlayer( ply ) return D_NU end
 ```
 
 Alternativa sin subclasear: el hook `terminator_blocktarget` (línea 497).
+
+> **Dos correcciones a lo que decía este párrafo, del 2026-08-05, al escribir la entidad**
+> [verificado]:
+>
+> **(a) La línea 947 es la llamada, no la definición.** La definición vive en otro archivo:
+> [`damageandhealth.lua:872`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/damageandhealth.lua#L872).
+>
+> **(b) La implementación default NO está vacía.** Es cierto que no devuelve nada, y por eso el
+> `D_HT` sobrevive — pero su cuerpo **implementa `ExtraSpawnHealthPerPlayer`**: cuenta jugadores,
+> ignora al primero y a los `FL_NOTARGET`, y le sube `SpawnHealth` y el max health al bot por cada
+> jugador de más. **Un override que no encadene al `BaseClass` mata esa mecánica en silencio.**
+> Hoy no nos duele —no declaramos el campo— y por eso mismo el defecto sería invisible hasta que
+> alguien lo declare.
+>
+> **(c) La firma de la llamada tiene cuatro argumentos**, no uno:
+> `OnFirstRelationWithPlayer( self, ent, disp, priority, theirDisp )` (`enemyoverrides.lua:947`).
+> La declaración solo nombra `ply`, así que los otros tres están disponibles y sin documentar.
 
 ### 4.3 Las tres trampas caras **[verificado — las tres salieron de refutar al lector]**
 
@@ -171,6 +187,46 @@ El slot `Bool 0` **ya es `Crouching`**. HIM declara `self:NetworkVar("Bool", 0, 
 `SetupDataTables`.
 
 Slots ocupados por la base: `Entity 0-1`, `Bool 0`, `Int 0-3`, `Float 0-1`, `Angle 0`, `Vector 0-2`.
+
+### 4.4 Lo que salió de escribir la entidad de verdad **[2026-08-05]**
+
+Las tres de arriba salieron de auditar el código. Estas cuatro salieron de tener que decidir cosas
+que la lectura no obliga a decidir.
+
+**④ El punto de entrada de una entidad-carpeta es `shared.lua`, no `init.lua`** — porque el registro
+**tiene que correr en el cliente**. `terminator_Extras.RegisterNPC` termina en
+`list.Set( "NPC", … )` y en `language.Add`
+([`sh_terminator_registernpc.lua:21-26`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/autorun/sh_terminator_registernpc.lua#L21)),
+y **el spawnmenu se arma en el cliente**: si el registro corre solo en el servidor, la entidad existe
+y no está en el menú. El precedente exacto está en el vecino: HIM vive en otro addon, es una carpeta,
+y su entrada es `shared.lua` con `AddCSLuaFile()` + `AddCSLuaFile( "client.lua" )` y el
+`if CLIENT then include… elseif SERVER then include…` al final
+([`him/…/terminator_nextbot_homeless/shared.lua:1-2, 43-49`](../../dev/other/phantom/dev2/him/lua/entities/terminator_nextbot_homeless/shared.lua)).
+La base hace lo mismo. **[verificado por precedente]**
+
+> El snippet que arrastraba ESTADO.md ponía ese contenido en `.../terminator_nextbot_phantom/init.lua`,
+> que es el molde de un archivo **suelto** (`terminator_nextbot_wraith.lua` y compañía: `AddCSLuaFile()`
+> + `if CLIENT then return end`) metido dentro de una **carpeta**. Que un `init.lua` solo deje al
+> cliente sin registrar es **[inferencia, no medida]** — el loader de carpetas incluye `cl_init.lua` en
+> el cliente, no `init.lua`, así que el `AddCSLuaFile()` lo manda y nadie lo incluye. No se midió
+> porque no hacía falta arriesgarlo: se siguió el precedente que ya funciona.
+
+**⑤ El navmesh es precondición del check, no del código.** `Initialize` avisa si
+`navmesh.GetNavAreaCount() <= 0` (`shared.lua:3047-3066`) — pero **solo al creador**, y si la entidad
+la spawnea un script no hay creador a quien avisarle. Un bot sin navmesh spawnea y no camina, y eso
+es indistinguible de un bug propio. Es la causa número uno de «spawnea y no hace nada».
+
+**⑥ `Spawnable = false` en las subclases de la base es deliberado, y son dos listas.**
+`ENT.Spawnable` gobierna la pestaña **Entities**; `RegisterNPC` gobierna la pestaña **NPCs**. Las 11
+subclases del addon ponen `Spawnable = false` con el comentario `-- dont show up in entity spawn
+category` (p. ej. [`terminator_nextbot_cmetro.lua:15`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot_cmetro.lua#L15)):
+están en el menú de NPCs y no quieren estar dos veces.
+
+**⑦ `TERM_FISTS = false` apaga dos cosas que no son el puño.** Sin puños el bot **no mira hacia su
+objetivo al moverse** (`motionoverrides.lua:2838`, con el comentario *«only look towards goal if we
+have fists»*) y **no pega para desatascarse** (`shared.lua:2142`,
+`tryToHitUnstuck = isstring( TERM_FISTS )`). Las dos son correctas para un fantasma; las dos explican
+comportamiento que si no se lee como bug.
 
 ---
 

@@ -32,44 +32,66 @@ Lo que existe:
 | Cordura: tasa, ámbito, oscuridad, camión | **DISEÑADO** — §19; falta la forma de la capa NEAD (§19.5) |
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
-| Entidad `terminator_nextbot_phantom` | **NO EXISTE** ← el próximo paso, y su primer trabajo es ser **instrumento** (ver abajo) |
+| Entidad `terminator_nextbot_phantom` | **ESCRITA, SIN CORRER** — `lua/entities/terminator_nextbot_phantom/`, 3 archivos. Es un **instrumento**, no un fantasma (ver abajo) |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
 | Nada de esto en juego | **0 corridas** |
 
 ---
 
-## El próximo paso concreto
+## El próximo paso concreto: **correrla**
 
-**Escribir la entidad mínima y verla spawnear.** No la máquina de estados entera: el esqueleto de
-§4.1 del diseño, con el modelo correcto y `IsWraith`, y confirmarlo en juego. Hasta que eso no
-aparezca en el spawnmenu y camine, todo lo demás es papel.
+La entidad **está escrita** (2026-08-05) y **no se corrió ni una vez**. Son tres archivos:
 
-```lua
--- lua/entities/terminator_nextbot_phantom/init.lua  (aun no escrito)
-AddCSLuaFile()
-ENT.Base = "terminator_nextbot"          -- NO "terminator_nextbot_base"
-DEFINE_BASECLASS( ENT.Base )
-ENT.PrintName = "Phantasmagoria Ghost"
-ENT.Spawnable = true
-terminator_Extras.RegisterNPC( "terminator_nextbot_phantom", ENT )
-
-if CLIENT then return end
-
-ENT.Models   = { "models/dejtriyev/scaryblackman.mdl" }  -- Models, NO Model
-ENT.ModelSkin = 1
-ENT.IsWraith = true
-ENT.DefaultWeapon = false
-ENT.TERM_FISTS    = false
+```
+lua/entities/terminator_nextbot_phantom/
+    shared.lua    registro, clase, categoría — corre en los DOS realms
+    server.lua    modelo, desarmado, FOV, y los avisos de spawn
+    client.lua    el marcador que atraviesa paredes
 ```
 
-Las cuatro trampas que ya sabemos y que hay que respetar desde la primera línea están en §4.3 de la
-referencia. Resumidas:
+**Su primer trabajo es ser instrumento, no ser un fantasma.** Por eso `IsWraith` está **fuera**
+—corrige el snippet que este documento traía, que lo incluía— y por eso el bot queda **hostil a
+propósito**: el criterio de cierre dice «camina hacia algo» y hace falta un algo.
+
+### El check, declarado antes de correr
+
+**Precondición: un mapa con navmesh** (`gm_construct` no trae; `nav_generate` o un mapa de navmesh
+hecho). Sin eso el bot spawnea y no camina, y no es culpa del código. El propio `server.lua` lo avisa
+en consola al spawnear.
+
+| # | Qué se hace | Verde | Rojo |
+|---|---|---|---|
+| 1 | Abrir el spawnmenu, pestaña **NPCs** | hay categoría **Phantasmagoria → Fantasmas** con *Phantasmagoria Ghost* | no está |
+| 2 | Clickearlo | aparece un cuerpo, y la consola imprime `[Phantasmagoria] spawn #N modelo … pos …` | error de Lua, o nada |
+| 3 | Mirarlo | hay caja violeta + haz + `PHANTOM #N` + distancia en metros, **también a través de una pared** | no se dibuja nada |
+| 4 | Alejarse y esperar | **camina hacia el jugador** — el marcador se mueve y la distancia baja | se queda clavado |
+| 5 | `phantasmagoria_ghost_where` en consola | lista pos, vida, modelo, enemigo, tareas y navareas | dice 0 fantasmas con uno vivo |
+
+El 3 y el 5 son **dos instrumentos que fallan distinto**: el marcador solo ve lo que está en el PVS,
+el comando corre en el servidor y los ve a todos. Si el 5 lo encuentra y el 3 no, el bot existe y el
+que falló es el dibujo.
+
+Si algo sale distinto de lo que este documento predice, **gana el juego** y se corrige el documento.
+
+### Lo que deliberadamente NO tiene, y por qué
+
+| Ausente | Por qué |
+|---|---|
+| `ENT.IsWraith` | un instrumento invisible no sirve para ver dónde está |
+| `OnFirstRelationWithPlayer` | es el interruptor fantasma/cazador (§3.1 del diseño), y hoy queremos al bot hostil para que camine hacia algo. Va en esa función y **nunca** en `DisableBehaviour` |
+| `SetupDataTables` | el `Bool 0` ya es `Crouching` en la base (trampa ③) |
+| máquina de estados, 30 tipos, rasgos, cordura, hunt, sonidos | todo eso viene **después** de verla caminar una vez |
+
+Las trampas de la base están en §4.3 y §4.4 de la referencia. Resumidas:
 
 1. **`ENT.Models`, no `ENT.Model`** — si no, spawnea con Arnold.
 2. **`Term_FOV` necesita `AutoUpdateFOV = false`** o la convar global lo pisa en caliente.
 3. **No usar `SetupDataTables` con `Bool 0`** — la base ya usa ese slot para `Crouching`.
 4. **El interruptor fantasma/cazador es `OnFirstRelationWithPlayer`**, no `DisableBehaviour`.
+5. **`ENT.Base = "terminator_nextbot"`**, no `"terminator_nextbot_base"` — el `_base` no tiene cerebro.
+6. **El punto de entrada de una entidad-carpeta es `shared.lua`**, no `init.lua`: el registro tiene
+   que correr **en el cliente**, que es donde se arma el spawnmenu (§4.4④).
 
 ---
 

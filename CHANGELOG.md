@@ -7,6 +7,62 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-05 — Sesión 14: la primera entidad, escrita como instrumento
+
+**La primera línea de código del proyecto.** `lua/entities/terminator_nextbot_phantom/` —
+`shared.lua`, `server.lua`, `client.lua`. **Sigue habiendo 0 corridas en GMod**: esto es código sin
+ejercer, y el check está declarado en ESTADO.md *antes* de correrlo.
+
+**No es un fantasma, es un instrumento.** Existe, spawnea, camina y **muestra dónde está**: caja
+violeta + haz + etiqueta con la distancia en metros, dibujados con `cam.IgnoreZ` **a través de las
+paredes**. Sin eso, un modelo negro sin ojos en un mapa oscuro es indistinguible de «no spawneó
+nada». Y el marcador tiene un segundo instrumento al lado que **falla distinto**:
+`phantasmagoria_ghost_where` corre en el servidor y ve también lo que está fuera del PVS.
+
+### La contradicción del documento, resuelta a favor del plan
+
+ESTADO.md traía un snippet con `ENT.IsWraith = true` y, treinta líneas más abajo, el plan del autor
+diciendo que **no** hay que ponerlo todavía. Vale el plan: **un instrumento invisible no sirve para
+ver dónde está.** El snippet quedó reemplazado por la descripción de lo que realmente se escribió.
+
+Por la misma razón el bot queda **hostil a propósito**: el criterio de cierre es «camina hacia algo»
+y hace falta un algo. El interruptor fantasma/cazador es la próxima pasada, y va en
+`OnFirstRelationWithPlayer` — **nunca** en `DisableBehaviour`.
+
+### Cuatro cosas nuevas de la base, que salieron de escribirla y no de leerla
+
+Están en [§4.4](docs/PHANTOM_Referencia.md) con archivo y línea:
+
+1. **El punto de entrada de una entidad-carpeta es `shared.lua`, no `init.lua`** — el registro
+   termina en `list.Set( "NPC", … )` y **el spawnmenu se arma en el cliente**. El snippet que
+   arrastraba ESTADO.md metía el molde de un archivo *suelto* dentro de una *carpeta*. Se siguió el
+   precedente de HIM, que es exactamente el mismo caso: subclase en otro addon, en carpeta.
+2. **El navmesh es precondición del check.** La base avisa, pero **solo al creador** — y si la
+   spawnea un script, no hay creador. Es la causa número uno de «spawnea y no hace nada», así que el
+   aviso se reimplementó en tres líneas.
+3. **`Spawnable` y `RegisterNPC` son dos listas distintas** (Entities y NPCs). Las 11 subclases de la
+   base ponen `Spawnable = false` a propósito, para no estar duplicadas.
+4. **`TERM_FISTS = false` apaga dos cosas que no son el puño**: sin puños el bot no mira hacia su
+   objetivo al moverse ni pega para desatascarse.
+
+### Y una corrección a la referencia
+
+**`OnFirstRelationWithPlayer` no es una función vacía.** §4.2 citaba la línea 947, que es **la
+llamada**; la definición está en `damageandhealth.lua:872` y su cuerpo implementa
+`ExtraSpawnHealthPerPlayer`. Un override que no encadene al `BaseClass` **mata esa mecánica en
+silencio** — hoy no duele porque no declaramos el campo, y por eso mismo el defecto sería invisible
+hasta que alguien lo declare. De paso: la llamada pasa **cuatro** argumentos y la declaración nombra
+uno.
+
+### El instrumento de sintaxis también se midió
+
+`luaparser` rechazó los dos archivos que usan `continue`. **El control lo refutó**: el mismo parser
+rechaza `terminator_nextbot_fakeply.lua`, que corre en GMod hoy — `continue` es extensión de GMod y
+no de Lua 5.1. Con el token neutralizado, los tres archivos parsean. **La medición decía «tu código
+está roto» y lo que estaba roto era la regla del parser.**
+
+---
+
 ## 2026-08-03 — Sesión 12: la primera medición en juego, y refutó al documento
 
 **Primer dato del proyecto que sale del juego y no de leer código.** El bloqueante que la sesión 11
