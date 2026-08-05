@@ -56,9 +56,27 @@ propósito**: el criterio de cierre dice «camina hacia algo» y hace falta un a
 
 ### El check, declarado antes de correr
 
-**Precondición: un mapa con navmesh** (`gm_construct` no trae; `nav_generate` o un mapa de navmesh
-hecho). Sin eso el bot spawnea y no camina, y no es culpa del código. El propio `server.lua` lo avisa
-en consola al spawnear.
+**Las precondiciones, medidas en la máquina del autor el 2026-08-05** (no supuestas):
+
+| Precondición | Estado | Cómo se midió |
+|---|---|---|
+| El addon montado en GMod | ✅ | junction `garrysmod/addons/phantasmagoria` → el repo. El código entra al arrancar, sin copiar nada |
+| La base Terminator montada | ✅ | WSID **2944078031**, título *«Terminator Nextbot»*. Ojo: `CREDITOS.md` anota `2734691788`, que **no** está suscrito |
+| Un mapa con navmesh | ✅ | `maps/gm_construct.nav` (7,2 MB) y `gm_flatgrass.nav` (277 KB) ya existen. **No hace falta `nav_generate`** |
+| `models/dejtriyev/scaryblackman.mdl` | ❌ | **no lo trae ningún addon montado** — barridos los 418 con contenido (395 `.gma` + 26 legacy `.bin` descomprimidos), las otras 455 carpetas del Workshop están vacías |
+
+**El modelo faltante no bloquea el check, y por eso el fallback existe:** `server.lua` va a caer a
+`models/player/group01/male_04.mdl` —presente en el índice de `garrysmod_dir.vpk`— y **lo va a decir
+en consola**. Así que la predicción de la fila 2 cambia: **no** sale la silueta negra sin ojos, sale
+un ciudadano de HL2. Si querés el modelo bueno, está desempacado en
+`dev/other/phantom/dev2/scary black man (hood irony) playermodel/` y se monta con un junction a
+`addons/`, igual que este repo.
+
+> Los dos negativos de arriba salieron **con control**, porque el primer barrido mintió dos veces: el
+> parser de títulos `.gma` daba 0 coincidencias hasta que se le leyó bien la lista de contenido
+> requerido, y el barrido por substring daba «ninguno» sobre los legacy `.bin` **porque están
+> comprimidos con LZMA** — lo delató que el control (Jeff, que sí está suscrito) tampoco aparecía en
+> su propio archivo.
 
 | # | Qué se hace | Verde | Rojo |
 |---|---|---|---|
@@ -71,6 +89,21 @@ en consola al spawnear.
 El 3 y el 5 son **dos instrumentos que fallan distinto**: el marcador solo ve lo que está en el PVS,
 el comando corre en el servidor y los ve a todos. Si el 5 lo encuentra y el 3 no, el bot existe y el
 que falló es el dibujo.
+
+### Si la fila 1 sale roja: la escalera que separa las causas
+
+Cuatro formas de spawnearlo que dependen de cosas distintas, de más frágil a más cruda. La primera
+que funcione dice dónde está el corte:
+
+| Camino | De qué depende | Si anda y el anterior no |
+|---|---|---|
+| menú NPCs | registro **en el cliente** | falló `RegisterNPC` clientside — o sea el entrypoint (§4.4④) |
+| `gmod_spawnnpc terminator_nextbot_phantom` | `list.GetEntry( "NPC", … )` **en el servidor** (`sandbox/gamemode/commands.lua:607`) | el registro corrió en el servidor y no en el cliente |
+| `gm_spawnsent terminator_nextbot_phantom` | `ENT.Spawnable`, lista `SpawnableEntities` (`commands.lua:918`) | `RegisterNPC` falló en los dos realms, pero la clase existe |
+| `lua_run ents.Create( "terminator_nextbot_phantom" ):Spawn()` | sólo que la clase esté registrada | la entidad está sana y todo el problema es de listas |
+
+Si falla **también** el cuarto, la clase no se registró: hay un error de Lua al cargar y está en la
+consola, arriba de todo.
 
 Si algo sale distinto de lo que este documento predice, **gana el juego** y se corrige el documento.
 
