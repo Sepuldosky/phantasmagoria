@@ -97,11 +97,28 @@ Necesita el addon de origen montado en `dev/other/` (el script lo dice si falta)
 porqué están en §8.6 de [EQUIPAMIENTO.md](EQUIPAMIENTO.md); el crédito, con el hash de cada fuente,
 en [CREDITOS.md](CREDITOS.md).
 
+## Rostros del Alternate — **derivados, no descargados**
+
+`materials/phantasmagoria/alternate/` (6 PNG de 768×1024) sale de los seis originales de 4096×4096
+que están en `dev/alternate_src/`. Un comando:
+
+```bash
+python dev/alternate_tv.py
+```
+
+**Los originales no se usan tal cual por tres motivos**, y el primero es un fallo silencioso: los
+`.png` **no sobreviven bajo `sound/`** (la lista blanca del `.gma` sólo admite `wav`/`mp3`/`ogg` ahí,
+así que desaparecen al empaquetar, sin error). Los otros dos son peso —400 MB de VRAM contra 18— y
+encuadre: `alternate_appear` viene corrido un 10 % respecto de los cinco rostros y pegarlos
+"centrados" lo hacía saltar 100 px en pantalla. El detalle medido está en §4 de
+[ALTERNATE.md](ALTERNATE.md).
+
 ## Addons de terceros de los que esto depende
 
 | Addon | Para qué |
 |---|---|
 | **Terminator NextBot** | La base. Dependencia dura |
+| **Jeff the Hunter Playermodel** (`806714233`) | El modelo del Alternate. Sólo si se usa ese NPC — ver [ALTERNATE.md](ALTERNATE.md) §3 |
 | `[gm] paranormal events` | Banco de efectos: `CreateShadowFigure`, partículas, susurros |
 | Better Movement v2 | Opcional. Si está, la velocidad se calibra con su config |
 | **StormFox 2** | Opcional. Si está, de ahí salen el clima y la temperatura (ver §15 del diseño) |

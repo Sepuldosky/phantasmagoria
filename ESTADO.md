@@ -5,6 +5,7 @@
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
 **Investigación de la base:** [docs/PHANTOM_Referencia.md](docs/PHANTOM_Referencia.md)
+**NPC de evento especial:** [docs/ALTERNATE.md](docs/ALTERNATE.md) — el Alternate de Mandela Catalogue
 
 Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
@@ -174,6 +175,80 @@ referencia. Resumidas:
   texturas en `materials/phantasmagoria/uv/`. Lo que **queda** es el Lua: la evidencia `uv` la tienen
   **13 de los 30 tipos** y la mecánica está diseñada en
   [docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §8 — falta escribirla.
+- **El Alternate** (Mandela Catalogue) — **NPC de evento especial, fuera de los 30 tipos.**
+  **ACTUALIZADO 2026-08-05: el banco de voces pasó de 34 a 168 archivos (20,2 min) y eso cambió el
+  diseño, no sólo los números.** Dos bancos nuevos mandan: `sayto_ghost` (62 líneas dirigidas a otro
+  fantasma) **obliga a que el Alternate NO sea el fantasma del contrato** —se suma al sorteo, no lo
+  reemplaza— y convierte al enemigo en **fuente de información**: le habla al otro fantasma, el
+  jugador espía, y **7 de los 30 tipos tienen voz propia** (`demon`, `goryo`, `jinn`, `oni`,
+  `poltergeist`, `shade`, `yokai` — verificado contra las claves de `ghost_types.lua`), así que 23
+  de 30 partidas la conversación no revela nada. `idle_prayer` (10) es **la única ventana en la que
+  el crucifijo destierra** en vez de sólo degradar: dura ~6 s, igual que `preacherwhispers`.
+  **El loop está cerrado en ALTERNATE.md §7-§9**: el antagonista es a la vez el obstáculo, el sistema
+  de pistas y la condición de victoria.
+  **Y meter un segundo fantasma destapó que el daño de cordura estaba inflado al doble** (lo pescó el
+  autor): con el anfitrión drenando en paralelo, la cordura llegaba a 0 en **4:03** y no entraba nada
+  de lo que el diseño pide que pase. Arreglado con dos piezas (§5.2-§5.5): la aparición vuelve al
+  **15 % del `about.txt`** —yo la había puesto en 30 %— y **mientras el Alternate está activo el
+  fantasma anfitrión se calla**: no hace eventos, no drena y no caza, así que los drenajes no se
+  apilan y **el silencio de la casa se vuelve el aviso de que llegó**. Las evidencias ya puestas NO
+  se suprimen: el contrato se sigue pudiendo resolver.
+  **Los 168 están TRANSCRITOS** (2026-08-05, `faster-whisper` local, con permiso del autor; el `.tsv`
+  quedó **fuera del repo** a propósito). Dos resultados que cambian el diseño: (1) las líneas
+  específicas **no nombran al fantasma — son adivinanzas** sobre la etimología y el folklore del
+  nombre (*"they threw beans at you, once a year"* = Setsubun = Oni), o sea que la información viene
+  **cifrada** y no trivializa la identificación; y (2) el lenguaje explícito **está confinado a
+  `sanity_strong_attack`**, así que la compuerta de contenido cubre un solo banco.
+  **Y el Principio T.H.I.N.K. del canon resultó ser el manual del addon** (ALTERNATE.md §9): las
+  cinco letras mapean una a una sobre mecánicas que ya estaban diseñadas —**HINDER es literalmente la
+  frase del `about.txt` sobre ralentizarlo 15 s**, y el *"if safe to do so"* de NEUTRALIZE es la
+  ventana de rezo—. De ahí salen los dos tiers de contenido sin inventar nada, porque **la propia
+  cinta muestra la diapositiva corrupta y después la corrige**. Abre tres pendientes: falta grabar la
+  K canónica completa, y *"IDENTIFY the class type"* es un segundo bucle de identificación sin
+  diseñar.
+  **Las CUATRO clases quedaron escritas** (ALTERNATE.md §11, taxonomía del autor): Doppelgänger,
+  Unspeakable, Flawed Impersonator y Tulpa — **los cuatro hacen M.A.D.**, la clase dice *cómo se
+  acerca*. Tres consecuencias: (1) **lo de los flexes estaba mal planteado y se invierte** — el tell
+  del Doppelgänger es *expresión fija y parpadeo incorrecto*, o sea que los **cero flexes de Jeff SON
+  el tell**, y el del Flawed Impersonator son proporciones imposibles, que se hacen con
+  `ManipulateBoneScale` sobre los 53 huesos ValveBiped; ninguna de las dos pedía morphs, y cae la
+  advertencia de que un playermodel sin flexes rompía la mecánica; (2) **cada pieza ya diseñada
+  pertenece a una clase** — la aparición con `preacherwhispers` es Tipo 3 (*The Preacher* lo es), la
+  posesión de TV y pantallas es **cómo se desplaza un Tulpa** y no un truco, y *"mata directamente"*
+  es Tipo 2; (3) **la tarjeta T.H.I.N.K. lista tres clases y hay cuatro** — no es error del canon (la
+  cinta admite información incompleta) sino **una escena**: la clase que el manual no menciona es la
+  única que viaja por pantallas, o sea la única que puede alcanzarte **dentro del camión**.
+  Y el espejo maldito ya tiene el feed en vivo (`DrawMirrorView`), así que la segunda superficie del
+  Tulpa no necesita código nuevo.
+  **VERIFICADO CONTRA LA BASE (2026-08-05, §3.3-§3.4):** la invisibilidad **ya existe y no hace falta
+  HIM** — `terminator_nextbot/wraithcloaking.lua`, 202 líneas, se enciende con `ENT.IsWraith = true`,
+  y **el "cuándo" es un punto de extensión declarado** (`ENT.wraithTerm_CloakDecidingTask`, `:23`):
+  el Alternate no escribe el cloak, escribe ese override. De paso **se cae una reserva propia**: yo
+  había marcado `$allowdiffusemodulation 0` del `.vmt` de Jeff como riesgo para el fade, y la base no
+  usa `SetColor` sino **`SetMaterial`**, así que la bandera no interviene — marqué un riesgo contra
+  una técnica que la base no usa. Sin medir queda el efecto de `FL_NOTARGET` mientras está
+  encubierto: **es la misma bandera de la trampa de NEAD** (§19.5). Y apareció el patrón que piden
+  las posesiones: HIM usa **una tabla de props con probabilidad por prop**
+  (`["homeless_camera"] = { defChance = 90, func = … }`), que es exactamente la forma del 30 % de la
+  TV y el 30 % de las pantallas.
+  **PENDIENTE DEL AUTOR — audio que todavía no existe:** la voz del **Tipo 4** (otro registro,
+  susurro/teléfono, palabras inteligibles pero extrañas), la **señal musical** que acompaña su
+  posesión de pantallas —**el Ave María de Bach/Gounod por Alessandro Moreschi**, 1902-1904, dominio
+  público, *bajando una transferencia limpia y no un remaster*— y la **K canónica** de T.H.I.N.K.
+  La señal musical **es el temporizador de la ventana de escape del camión**, así que su duración es
+  una decisión de diseño y no de estética.
+  **Diseño abierto y escrito: [docs/ALTERNATE.md](docs/ALTERNATE.md)** (2026-08-04). Tiene banco de
+  audio propio (34 `.ogg`, duraciones medidas), modelo elegido y desempacado
+  (`Jeff the Hunter`, WSID `806714233`) y los seis rostros de la TV ya derivados a
+  `materials/phantasmagoria/alternate/`. **El gameplay loop está ratificado por el autor**: no se
+  mata, se **degrada** —crucifijo y balas cambian su estado, no su vida— y la victoria es **llegar al
+  camión**. Lo que falta antes de escribir Lua: el `.vmt` propio (el del Workshop trae
+  `$allowdiffusemodulation 0` y `$Selfillum 1`, los dos en contra del "modelo oscuro"),
+  **cómo entra al juego** (no puede salir del sorteo normal), y **qué le dice el libro de evidencias**
+  a un fantasma que no es ninguno de los 30. **Crédito del modelo RESUELTO** (2026-08-04): autor
+  **SpongePierre** sobre el Hunter de L4D2 de Valve, y el ítem del Workshop es un **reupload** de
+  Foxy — ya está en [docs/CREDITOS.md](docs/CREDITOS.md). Salió de leer la descripción de la página:
+  el campo `creator` de la API de Steam es **el subidor**, no el autor.
 - **El ritual de vuelta** del destierro: qué es y qué hace falta para ejecutarlo.
 - **Las posesiones malditas: son 7 y tenemos 1.** Documentadas con sus mecánicas y costes de cordura
   en [docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §4. Sólo la **Voodoo Doll** tiene modelo; el

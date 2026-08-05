@@ -1,0 +1,60 @@
+>> EL DISENO DE ESTE NPC VIVE EN docs/ALTERNATE.md <<
+   Ahi estan las duraciones medidas de cada audio, el analisis del modelo, el
+   diseno de cordura (un solo reloj, 25 s, multiplicador de voluntariedad), la
+   aparicion, las variantes y como se lo enfrenta. Este archivo describe la
+   CARPETA; el diseno no cabe aca y no se mantiene en dos lugares.
+
+   CENSO AL 2026-08-05: 168 .ogg, 20,2 minutos de voz. El texto de mas abajo
+   describe el banco original de 34 y sigue valiendo para esos grupos, pero NO
+   menciona los que se agregaron despues: hurt (21), idle_lament (13),
+   idle_prayer (10), banished (2), sayto_ghost (25 genericas + 37 dirigidas a
+   demon/goryo/jinn/oni/poltergeist/shade/yokai), y biblequote_yapping paso de
+   1 archivo a 14. Los dos que cambiaron el diseno entero son sayto_ghost
+   (obliga a que haya OTRO fantasma en el mapa) e idle_prayer (es la unica
+   ventana en la que se lo puede desterrar). Ver ALTERNATE.md secciones 7 y 8.
+
+   Las imagenes de la TV YA NO ESTAN en esta carpeta: la lista blanca del .gma
+   solo admite wav/mp3/ogg bajo sound/, asi que un .png aca desaparece al
+   empaquetar para el Workshop, sin dar error. Estan en
+   materials/phantasmagoria/alternate/ (derivadas, 768x1024) y los originales
+   de 4096 en dev/alternate_src/. Se regeneran con dev/alternate_tv.py.
+
+Este es un banco de sonidos creados con microsoft sam para simular a los alternados de Mandela Catalogue. Posible NPC custom de phastasmagoria.
+
+Sanity attacks son frases largas que dañan la cordura, se dicen generalmente cuando el npc esta cerca del jugador y quiere atacarlo mentalemente.
+Strong ya es mas directo e induce al jugador a dañarse a si mismo, deberia decirlo no muchas veces cuando el jugador tiene poca cordura (Perder vida) (Acorde con lo que es M.A.D. en el lore)
+Here, es literal puede ser usado para despistar al jugador
+watching player, son para asustar al jugador, dicen "I SEE YOU" o "I'm Watching you..."
+hunt_loop, es solo la palabra "nothing is worth the risk", puede usarse mientras hace la caceria en loop.
+hunt_loop, es lo mismo que lo de arriba pero lo remite varias veces y rapido con mas fuerza, podria usarse como hunt cursed (?)
+preacherwhispers, son unos sonidos inteligibles que deberian dañar completamente la cordura si se ejecuta.
+biblequote_yapping, es solo algo que dice en el entretanto y muy bajito (Especie de idle). No daña la cordura, solo describen como perdieron la gracia de dios se volvieron demonios.
+
+Descripcion del NPC:
+Es una especie de demonio o angel caido de tiempos biblicos, muy peligroso, genera grandes daños psicologicos y suele atacar mas a quienes tienen conocimientos filosoficos o sean religiosos.
+De la wiki:
+They are demonic and sadistic shapeshifters who drive their victims insane, to the point where the victim commits suicide. This is realised by the alternates through the transmission of a psychological condition, Metaphysical Awareness Disorder, caused by exposure to "Verbal information that is not desired to be known". While their motivations for driving humanity insane, or even if they have one, are unknown, it is blatant that they are malevolent in nature. 
+
+Comportamiento:
+Este NPC es el dueño del evento de la radio: event_creepy_eas_paranormal_radio_advise.ogg
+Deberia ejecutarlo por lo menos una vez al encontrar una radio que manipular (Aunque no siempre)
+-NPC no deja orbes, es un modelo custom oscuro 100% de las veces.
+-Se deberia esconder en las esquinas oscuras (Les gusta la oscuridad segun el lore) y en ellas ser visible mientras observa al jugador, mientras se moviliza es invisible.
+-Deberia hacer una aparicion donde se muestra totalmente corre hasta el jugador y empieza a reproducir "preacherwhispers", en ese momento el jugador deberia quedar paralizado escuchando y mirando al alternate. Luego de eso el alternate desaparece para seguir atacando.
+-NPC no canta y al moverse si tiene pisadas tenues.
+-Contesta el spiritbox con los sonidos de ataque a la sanidad, cada respuesta daña la cordura y ataca mas seguido si el jugador habla.
+-Genera huellas dactilares.
+-EMF 5 al interactuar con los objetos.
+-Usar la paramic lo hace hablar y dañarte si lo escuchas.
+-Toma posesion de la TV del camion, debe mostrar su cara ahi y dañar la cordura si estas cerca cuando pasa (Paso un .png?) (30% si lo hace)
+-Tomar posesion de las pantallas del equipamiento y dañar tu cordura cuando lo haga. (30% si lo hace)
+-No es helado el ambiente.
+-No escribe.
+-No lo muestra DOTS.
+-Hace su caceria al 50% y se mueve rapido (Velocidad de revenant).
+-Detecta jugadores escondidos.
+-Cada ataque a la cordura daña en un 15%
+-Una variante del NPC es doppelganger (Chance de comportarse distinto), deberia tomar el playermodel de un jugador y pasearse a lo lejos, la cara de este doppelganger deberia estar deformada (Ahi aplica random de los flex de la cara), si el jugador se acerca lo caza y mata.
+-No destierra, mata directamente.
+-Son entidades que no se pueden matar, atacarlos te daña la cordura (%5 por cada hit al alternate, porque estas simulando desesperacion al intentar matarlo, dispararle lo ralentiza a un mero demonio por unos 15 segundos)
+-La idea del alternate es matar al jugador cuando este lo suficiente lejos del camion o escape (Si no hay lo hace igual, pero la idea es esa, que si hubiera este espere para trazar un camino hasta el camion y ver la distancia. Puede esperar un tiempo y hacerlo de todos modos, es decir no ataca de inmediato, simula que investiga a su victima)

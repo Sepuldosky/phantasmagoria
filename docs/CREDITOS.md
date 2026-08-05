@@ -29,6 +29,22 @@ conservan todos sus derechos. Esta página existe para que el crédito sea expl�
 
 Los tres formaban parte de un gamemode de Phasmophobia para GMod que quedó abandonado.
 
+### Jeff the Hunter — el modelo del Alternate
+
+- **Autor del modelo:** **SpongePierre** (*Pierre CHOSEROT*) — [perfil](http://steamcommunity.com/id/spongepierre)
+- **Base:** el **Hunter de Left 4 Dead 2**, de **Valve** (malla y texturas `newinfec` / `hunter_01`)
+- **Reupload por el que nos llegó:** **Foxy** (`FoxyTLG`), con co-creador *"ima made nando mo"* —
+  Workshop [806714233](https://steamcommunity.com/sharedfiles/filedetails/?id=806714233), 26 nov 2016,
+  declarado como *"Server content for 'Prop Hunt OXPLAY.RU'"*
+- **Rutas:** `models/newinfec/`, `materials/models/newinfec/hunter/` *(pendiente de re-namespacear —
+  ver [ALTERNATE.md](ALTERNATE.md) §3.2)*
+- 1 modelo, 6 texturas.
+
+> **El ítem es un REUPLOAD y el crédito no sale del subidor.** La API de Steam devuelve como
+> `creator` al que lo resubió; el autor está escrito en la descripción de la página, en texto plano.
+> **El pedido de retiro, si llega, es de SpongePierre** — no del que lo publicó. El detalle y la
+> lección de método están en [ALTERNATE.md](ALTERNATE.md) §11.1.
+
 ### Huellas UV — **derivadas** de `[gm] paranormal events`
 
 - **Rutas nuestras:** `materials/phantasmagoria/uv/` (4 PNG)
