@@ -7,6 +7,35 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-05 — Sesión 14b: **LA PRIMERA CORRIDA**. Camina, y refutó al documento
+
+**El proyecto dejó de ser papel.** `terminator_nextbot_phantom` aparece en el spawnmenu, spawnea,
+**camina y persigue al jugador**. Tres filas verdes del check de cinco.
+
+**Y el juego ganó de entrada.** El aviso de navmesh decía *«SIN NAVMESH: el bot no va a caminar»*,
+había **0 navareas**, y **el bot caminaba igual**. La medición del instante era correcta; **la
+predicción era falsa**. La causa estaba en el código que había leído *para escribir ese mismo aviso*:
+con 0 areas la base llama a **`TryGeneratingAreas()`** (`shared.lua:3072-3075`) y el **parcheador**
+(`terminator_areapatcher.lua`, convar `terminator_areapatching_enable`, **default 1**) sigue creando
+areas donde caminan bots y jugadores. **Leí la rama del mensaje y no la línea de abajo, que es la que
+actúa** — copié el `if` y me salteé la consecuencia.
+
+**Arreglo: un instrumento no predice.** Ahora mide, espera 10 s y **vuelve a medir**, informando
+cuántas areas construyó el parche — o confirmando el 0, que ahí sí es terminal. De paso el aviso dice
+lo que antes callaba: que caminar sobre un mapa **parcheado** no es caminar sobre un navmesh de
+verdad, y hay que esperar caminos raros.
+
+**Segundo defecto, misma clase: la etiqueta del marcador estaba sobre el techo.** Se veían la caja y
+el haz, y el texto no. Estaba a 250 u sobre la cabeza —~322 del piso— y la corrida fue **adentro de
+una casa**. **El instrumento se diseñó para un mapa abierto y se probó en un interior.** Bajada a 14
+u, pegada a la cabeza; el haz largo se queda, que es lo que te dice desde otra habitación en qué
+dirección está.
+
+**Los dos defectos son del instrumento, no del fantasma** — y los dos son *diseñar contra un
+escenario y probar en otro*. El fantasma anduvo a la primera.
+
+---
+
 ## 2026-08-05 — Sesión 14: la primera entidad, escrita como instrumento
 
 **La primera línea de código del proyecto.** `lua/entities/terminator_nextbot_phantom/` —

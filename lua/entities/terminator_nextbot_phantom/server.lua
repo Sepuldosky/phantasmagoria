@@ -11,6 +11,10 @@ local function ghostPrint( ... )
 
 end
 
+-- Segundos entre "spawneo con 0 navareas" y volver a medir. El parcheador de la
+-- base trabaja de a poco, asi que medir en el mismo frame no dice nada.
+local NAVCHECK_DELAY = 10
+
 ---------------------------------------------------------------------------
 -- El modelo
 ---------------------------------------------------------------------------
@@ -89,15 +93,37 @@ function ENT:AdditionalInitialize()
         "  skin ", self:GetSkin(),
         "  pos ", tostring( self:GetPos() ), "\n" )
 
-    -- La causa numero uno de "spawnea y no camina" no vive en esta entidad:
-    -- vive en el mapa. La base tiene su propio aviso pero se lo manda solo al
-    -- creador ( shared.lua:3047-3066 ), y si lo spawnea un script no hay
-    -- creador a quien avisarle.
-    if navmesh.GetNavAreaCount() <= 0 then
-        ghostPrint( "SIN NAVMESH EN ESTE MAPA: el bot no va a caminar. " ..
-            "Corre nav_generate, o usa un mapa con navmesh.\n" )
+    -- El navmesh se mide DOS VECES a proposito, y esta es la correccion mas
+    -- cara de la primera corrida (2026-08-05). La version anterior de este
+    -- aviso decia "SIN NAVMESH: el bot no va a caminar" -- y el bot caminaba.
+    -- Medicion correcta, prediccion falsa: con 0 areas la base llama a
+    -- TryGeneratingAreas() ( shared.lua:3072-3075 ) y el parcheador
+    -- ( terminator_areapatcher.lua, convar terminator_areapatching_enable,
+    -- default 1 ) sigue creando areas donde caminan bots y jugadores. O sea que
+    -- 0 al spawnear NO es 0 diez segundos despues.
+    --
+    -- Un instrumento no predice: mide, espera, y vuelve a medir.
+    local areasAlSpawnear = navmesh.GetNavAreaCount()
+    if areasAlSpawnear > 0 then return end
 
-    end
+    ghostPrint( "0 navareas al spawnear. La base va a intentar parchear el mapa; " ..
+        "se vuelve a medir en ", NAVCHECK_DELAY, " s.\n" )
+
+    timer.Simple( NAVCHECK_DELAY, function()
+        if not IsValid( self ) then return end
+
+        local ahora = navmesh.GetNavAreaCount()
+
+        if ahora > 0 then
+            ghostPrint( "el parcheador construyo ", ahora, " navareas. El bot camina sobre un " ..
+                "mapa PARCHEADO, no sobre un navmesh de verdad: esperar caminos raros.\n" )
+
+        else
+            ghostPrint( "SIGUEN 0 navareas: aca si el bot no va a caminar. " ..
+                "nav_generate, o un mapa con navmesh.\n" )
+
+        end
+    end )
 end
 
 ---------------------------------------------------------------------------

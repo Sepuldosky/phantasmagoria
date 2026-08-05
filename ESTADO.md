@@ -35,7 +35,7 @@ Lo que existe:
 | Entidad `terminator_nextbot_phantom` | **ESCRITA, SIN CORRER** — `lua/entities/terminator_nextbot_phantom/`, 3 archivos. Es un **instrumento**, no un fantasma (ver abajo) |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
-| Nada de esto en juego | **0 corridas** |
+| Nada de esto en juego | **1 corrida** (2026-08-05) — el fantasma spawnea, camina y persigue. Refutó una predicción del documento |
 
 ---
 
@@ -78,13 +78,31 @@ un ciudadano de HL2. Si querés el modelo bueno, está desempacado en
 > comprimidos con LZMA** — lo delató que el control (Jeff, que sí está suscrito) tampoco aparecía en
 > su propio archivo.
 
-| # | Qué se hace | Verde | Rojo |
-|---|---|---|---|
-| 1 | Abrir el spawnmenu, pestaña **NPCs** | hay categoría **Phantasmagoria → Fantasmas** con *Phantasmagoria Ghost* | no está |
-| 2 | Clickearlo | aparece un cuerpo, y la consola imprime `[Phantasmagoria] spawn #N modelo … pos …` | error de Lua, o nada |
-| 3 | Mirarlo | hay caja violeta + haz + `PHANTOM #N` + distancia en metros, **también a través de una pared** | no se dibuja nada |
-| 4 | Alejarse y esperar | **camina hacia el jugador** — el marcador se mueve y la distancia baja | se queda clavado |
-| 5 | `phantasmagoria_ghost_where` en consola | lista pos, vida, modelo, enemigo, tareas y navareas | dice 0 fantasmas con uno vivo |
+| # | Qué se hace | Verde | Rojo | **Corrida 1** (2026-08-05) |
+|---|---|---|---|---|
+| 1 | Abrir el spawnmenu, pestaña **NPCs** | hay categoría **Phantasmagoria → Fantasmas** con *Phantasmagoria Ghost* | no está | ✅ |
+| 2 | Clickearlo | aparece un cuerpo, y la consola imprime `[Phantasmagoria] spawn #N modelo … pos …` | error de Lua, o nada | ✅ `spawn #253 modelo …male_04.mdl skin 1` |
+| 3 | Mirarlo | hay caja violeta + haz + `PHANTOM #N` + distancia en metros, **también a través de una pared** | no se dibuja nada | ⚠️ **caja y haz sí, etiqueta no** |
+| 4 | Alejarse y esperar | **camina hacia el jugador** — el marcador se mueve y la distancia baja | se queda clavado | ✅ camina y persigue |
+| 5 | `phantasmagoria_ghost_where` en consola | lista pos, vida, modelo, enemigo, tareas y navareas | dice 0 fantasmas con uno vivo | sin correr |
+
+**La entidad funciona.** Existe, aparece en el menú, spawnea, camina y te sigue. Los dos defectos
+que salieron son **del instrumento**, no del fantasma, y los dos son la misma clase de error: *se
+diseñó contra un escenario y se probó en otro*.
+
+**① El aviso de navmesh predecía en vez de medir — y el juego lo refutó.** Decía «SIN NAVMESH: el bot
+no va a caminar», había 0 navareas, y **el bot caminaba**. La medición del instante era correcta; la
+predicción, falsa. La causa estaba en el código que yo mismo había leído para escribir el aviso: con
+0 areas la base llama a **`TryGeneratingAreas()`** (`shared.lua:3072-3075`) y el **parcheador**
+(`terminator_areapatcher.lua`, convar `terminator_areapatching_enable`, **default 1**) sigue creando
+areas donde caminan bots y jugadores. Leí la rama del mensaje y no la línea de abajo, que es la que
+actúa. **Arreglado midiendo dos veces**: informa el 0 al spawnear y **vuelve a medir a los 10 s**,
+diciendo cuántas areas construyó el parche — o confirmando el 0, que ahí sí es terminal.
+
+**② La etiqueta del marcador estaba sobre el techo.** Se veían la caja y el haz y no el texto: estaba
+a 250 u sobre la cabeza (~322 del piso), y la corrida fue **adentro de una casa**. El instrumento se
+diseñó para un mapa abierto. Bajada a 14 u — pegada a la cabeza. El haz largo se queda: es lo que te
+dice desde otra habitación en qué dirección está.
 
 El 3 y el 5 son **dos instrumentos que fallan distinto**: el marcador solo ve lo que está en el PVS,
 el comando corre en el servidor y los ve a todos. Si el 5 lo encuentra y el 3 no, el bot existe y el

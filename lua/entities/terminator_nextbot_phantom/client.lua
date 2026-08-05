@@ -24,8 +24,17 @@ local UNITS_PER_METER = 52.5
 local colGhost = Color( 190, 120, 255 )
 local colText  = Color( 255, 255, 255 )
 
-local BEAM_HEIGHT  = 220
-local LABEL_HEIGHT = 250
+-- El haz sigue siendo largo a proposito: es lo que te dice desde otra
+-- habitacion en que direccion esta, y atraviesa el techo porque se dibuja con
+-- IgnoreZ.
+local BEAM_HEIGHT = 220
+
+-- La etiqueta va PEGADA A LA CABEZA, no arriba del haz. Primera corrida
+-- (2026-08-05): en un mapa de casa se veian la caja y el haz y NO el texto.
+-- Estaba a 250 u sobre la cabeza, o sea a ~322 del piso, por encima del techo y
+-- fuera del campo de vision de un jugador parado al lado. El instrumento estaba
+-- pensado para un mapa abierto y se probo adentro de una casa.
+local LABEL_HEIGHT = 14
 
 hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", function( _bDrawingDepth, bDrawingSkybox, isDraw3DSkybox )
     if bDrawingSkybox or isDraw3DSkybox then return end
