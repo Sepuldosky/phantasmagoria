@@ -210,12 +210,39 @@ jugador** justamente para que el addon se calibre solo en cualquier servidor. No
 este bloque —nunca se tocó la velocidad— pero **es la cuarta vez que «heredado» resulta no ser
 «correcto»**, y esta vez lo agarró el juego y no la lectura. Queda abierto abajo.
 
-### Lo que falta correr
+### Lo que falta correr → **está en planilla**: `dev/checks/phantasmagoria-hunt-r1.html`
 
-Cuatro filas, todas baratas: **2 y 5** son un `phantasmagoria_ghost_rel` y un
-`phantasmagoria_ghost_where` con el hunt en 0; **9** es `phantasmagoria_hunt 0` y mirar si suelta al
-enemigo en ≤ 3 s; **10** es pegarle un tiro con el hunt en 0. La 9 y la 10 son las dos que pueden
-salir rojas y pedir código.
+La corrida 4 se llevó adelante contra la tabla de acá arriba, que es lo que el encargo pedía. **Para
+lo que falta se armó la planilla**, que es la convención de la casa para checks en juego
+(`dev/PLANTILLA_CHECKS.md`; hay 24 ejemplares en `dev/checks/`) y que la tabla markdown no da: un
+campo de nota por check —*«la nota se llena aunque el check pase»*—, `SIN CORRER` como estado
+legítimo, y el botón que arma el reporte.
+
+Son **8 checks**: las cuatro filas que quedaron sin correr, más cuatro que salieron de la corrida
+misma.
+
+| En la planilla | De dónde sale |
+|---|---|
+| 01 · hay **un** fantasma vivo y arrancó en calma | precondición nueva: los comandos iteran sobre todos y con dos las lecturas se mezclan |
+| 02 · la puerta cerrada **y** la relación abierta | la fila 2 — y es la **primera ejecución en la historia** de `phantasmagoria_ghost_rel` |
+| 03 · el cerebro sigue entero | la fila 5 — y `ghost_where` **se refactorizó** (`makeSay` + `eachGhost`) y no se volvió a correr |
+| 04 · deambula, **medido** | la fila 4, que salió **[a ojo]**: acá se toman las dos `pos` |
+| 05 · el contador **fuera del instante** del flip | cierra la única debilidad de la corrida 4 |
+| 06 · al apagar suelta al enemigo en ≤ 3 s | la fila 9 |
+| 07 · aguanta un balazo | la fila 10 — **guardia de regresión** del interruptor |
+| 08 · en calma mueve la vista **menos** que cazando | fija la observación que expliqué antes de caracterizarla |
+
+**Los dos instrumentos sin ejercer son la razón por la que 02 y 03 van antes que nada:** si tiran
+error de Lua, el que falló es el instrumento y no el fantasma, y hay que anotarlo igual. La **06** y
+la **07** son las dos que pueden salir rojas y pedir código.
+
+> **La planilla también es un tercero, y se auditó.** Seis bloques: sin arrastre del bloque anterior
+> (0 ocurrencias de «paramic»), sin bloque `RESULTS` que pise el estado al cargar, `STORE` único
+> —contrastado contra **23 de las 25** planillas; las dos que faltan no declaran la clave en ninguna
+> forma que el patrón reconozca, y queda dicho—, el título del reporte cambiado (que es el que no se
+> ve en la página y por eso se olvida), 32 campos con HTML crudo balanceados, y los 8 checks en
+> `idle`. **El primer barrido cubrió 20 de 24 porque mi propio patrón pedía `const STORE` y cuatro
+> planillas lo escriben sin `const`** — un inventario a medias, otra vez, esta vez en el auditor.
 
 **Predicciones, para que la refutación sea barata:** 1-3 verdes, 4 **deambula** (`movement_handler`
 cae en `movement_inertia` con el comentario *«nothing better to do»*, `shared.lua:4184-4187`), 5
