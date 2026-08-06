@@ -187,6 +187,83 @@ function ENT:phantom_IsHunting()
 end
 
 ---------------------------------------------------------------------------
+-- Que mire hacia donde camina cuando NO esta cazando
+---------------------------------------------------------------------------
+-- DEFECTO MEDIDO EN JUEGO (corrida 7): en calma el yaw se congela y no se mueve
+-- mas. Once lecturas con "mira yaw 141.7" mientras el bot cruzaba el mapa, y una
+-- de ellas con "mirada vs marcha 179.9 grados", o sea caminando EXACTAMENTE de
+-- espaldas. En hunt, en cambio, "mirada vs jugador" da 0.0-1.5 grados: te apunta
+-- clavado.
+--
+-- LA CAUSA NO ES LA QUE YO HABIA ESCRITO, y el numero que lo corrige es uno:
+-- terminator_Extras.term_DefaultSpeedToAimAtProps = 30^2 ( motionoverrides.lua:1735 ),
+-- comparado contra Length2DSqr, o sea un umbral de 30 u/s. Yo habia anotado el
+-- gate de TERM_FISTS ( :2838 ) como el motivo, y es solo la mitad: aun CON puños
+-- ese camino pide ademas velocidad POR DEBAJO de 30 u/s, y este bot camina a 130
+-- y corre a 550. Devolverle los puños NO lo habria arreglado -- habria sido una
+-- ronda entera gastada en el arreglo obvio.
+--
+-- El motivo de verdad es mas simple: de los cuatro sitios que llaman
+-- SetDesiredEyeAngles, el unico que puede correr caminando es el del ENEMIGO
+-- ( enemyoverrides.lua:1874 ). Un terminator normal siempre tiene enemigo, asi
+-- que siempre mira; nuestro fantasma en calma no tiene ninguno A PROPOSITO, y
+-- ahi no queda nadie que le mueva la cara. Los otros dos son caida y salto
+-- ( motionoverrides.lua:3306 y :3311 ).
+--
+-- No es cosa de HIM ni de la base: HIM tambien pone TERM_FISTS = false
+-- ( him/.../terminator_nextbot_homeless/server.lua:22 ), igual que
+-- terminator_nextbot_fakeply:35 y csoldier:26. Lo que HIM y el terminator tienen
+-- y nosotros no es un enemigo permanente.
+--
+-- El arreglo es la mitad que falta y nada mas: cuando no hay a quien mirar, mirar
+-- hacia donde se camina. Es lo mismo que hace la base al saltar
+-- ( motionoverrides.lua:3311, SetDesiredEyeAngles( self, GetVelocity():Angle() ) ),
+-- aplicado al caso que ella no cubre.
+local cvFaceWalk = CreateConVar( "phantasmagoria_ghost_facewalk", "1", FCVAR_ARCHIVE,
+    "El fantasma mira hacia donde camina cuando no esta cazando. En 0 se desliza sin girar, que es el defecto original: sirve para el A/B.", 0, 1 )
+
+-- Debajo de esto no hay direccion de marcha que valga la pena mirar. Es el mismo
+-- numero que la base usa como frontera de "casi quieto", pero por el otro lado:
+-- ella apunta al goal por DEBAJO de 30 u/s, nosotros a la marcha por ARRIBA.
+local FACEWALK_MIN_SPEED = 30
+
+function ENT:BehaveUpdate( interval )
+    local myTbl = self:GetTable()
+
+    -- El BaseClass PRIMERO: es el que corre el cerebro entero. Lo nuestro es un
+    -- retoque de la cara despues, y solo en el hueco que la base deja vacio.
+    myTbl.BaseClass.BehaveUpdate( self, interval )
+
+    if not cvFaceWalk:GetBool() then return end
+
+    -- Cazando manda la base: apunta al enemigo y lo hace mejor que esto.
+    if myTbl.phantom_Hunting then return end
+    if IsValid( myTbl.GetEnemy( self ) ) then return end
+
+    local loco = myTbl.loco
+    if not loco then return end
+
+    -- Saltando y en el aire tambien manda la base ( :3306 y :3311 ), que ademas
+    -- mira hacia donde va a aterrizar. Pisarla seria romper algo que funciona.
+    if myTbl.m_JumpingToPos then return end
+    if not loco:IsOnGround() then return end
+
+    local vel = loco:GetVelocity()
+    if vel:Length2D() < FACEWALK_MIN_SPEED then return end
+
+    local ang = vel:Angle()
+
+    -- Plano a proposito. La base tambien aplana el pitch cuando no hay un cambio
+    -- de altura dramatico ( enemyoverrides.lua:1866-1869 ), y un fantasma mirando
+    -- al piso mientras baja una rampa se ve peor que uno mirando al frente.
+    ang.p = 0
+    ang.r = 0
+
+    self:SetDesiredEyeAngles( ang )
+
+end
+
+---------------------------------------------------------------------------
 -- Initialize
 ---------------------------------------------------------------------------
 -- AdditionalInitialize corre DESPUES de que la base resolvio modelo y FOV

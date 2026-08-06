@@ -7,6 +7,54 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-06 (4) — El fantasma ya mira hacia donde camina, y mi diagnóstico anterior culpaba al candado equivocado
+
+Con el instrumento arreglado, la corrida 7 dio los números que faltaban:
+
+| Medición | Calma (10 lecturas) | Hunt (6 lecturas) |
+|---|---:|---:|
+| `mirada vs jugador` | media **111,1°** (13,7–177,3) | media **2,8°** (0,0–14,6) |
+| `mirada vs marcha` | media **74,4°**, máx **179,9°** | 0,8–34,6° |
+
+**179,9° es caminar exactamente de espaldas.** Y del lado bueno: en hunt te apunta con 0,0–1,5° en
+cuatro de seis lecturas, así que la columna `al ply` —agregada justamente para eso— discrimina.
+
+### La corrección: culpé a los puños y era la mitad equivocada
+
+Había escrito que la causa era el gate `if not myTbl.TERM_FISTS then return end`
+(`motionoverrides.lua:2838`). Es real, **pero ese camino tiene DOS candados**: la línea siguiente
+exige además `currentSpeed < term_DefaultSpeedToAimAtProps`, que vale **`30^2`**
+(`motionoverrides.lua:1735`) contra `Length2DSqr` → un umbral de **30 u/s**. Este bot camina a 130 y
+corre a 550, así que **devolverle los puños no lo habría arreglado**: una ronda entera gastada en el
+arreglo obvio.
+
+La causa real es más simple: **el único call site de `SetDesiredEyeAngles` que puede correr
+*caminando* es el del enemigo** (`enemyoverrides.lua:1874`). Un terminator normal siempre tiene
+enemigo; nuestro fantasma en calma no tiene ninguno **a propósito**.
+
+**Y contesta la pregunta del autor —*«¿será que HIM funciona así? porque el terminator parece moverse
+bien»*—: no es HIM ni es la base.** HIM también pone `TERM_FISTS = false`
+(`him/…/terminator_nextbot_homeless/server.lua:22`), igual que `terminator_nextbot_fakeply:35` y
+`csoldier:26`. Lo que ellos tienen y nosotros no es un enemigo permanente.
+
+*Un camino cerrado por dos condiciones se diagnostica leyendo las dos. Con una sola, el arreglo
+apunta al candado que no era.*
+
+### El arreglo
+
+`ENT:BehaveUpdate` encadena al `BaseClass` y **después** rellena el hueco: sin hunt, sin enemigo, en
+el piso y a más de 30 u/s, apunta el facing a la dirección de marcha con el pitch aplanado — lo mismo
+que hace la base al saltar (`motionoverrides.lua:3311`), aplicado al caso que no cubre.
+`phantasmagoria_ghost_facewalk` (default 1) lo apaga para el A/B, así que auditarlo es un comando y
+no una reversión.
+
+**Sin correr.** El criterio está escrito antes: `mirada vs marcha` tiene que bajar de ~75° de media a
+menos de 20°, **y `mirada vs jugador` tiene que seguir siendo grande y aleatorio** — si también se va
+a cero, el fantasma quedó siguiéndote con la vista fuera del hunt, que es peor que el defecto
+original.
+
+---
+
 ## 2026-08-06 (3) — El instrumento de mirada falló tres veces, y destapó el primer defecto del FANTASMA
 
 La planilla se vació y se volvió a correr con el instrumento de mirada puesto. Mismo veredicto —**7
