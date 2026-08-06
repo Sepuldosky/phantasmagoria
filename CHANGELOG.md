@@ -7,6 +7,94 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-05 — El plato del micrófono parabólico: CERRADO en juego, en cuatro rondas
+
+Los tres platos parabólicos se ven **translúcidos a la mitad**, con brillo, y se ve el cañón y el
+mundo a través. Planilla `dev/checks/paramic-vidrio-r4.html`, **8/8**. Cerraron de paso los dos
+checks que arrastraba la ronda 2 sin correr: el parpadeo del LED del tier 1 y el desmontaje del
+RenderTarget, los dos PASA.
+
+### `$alpha` no vuelve translúcido a nada
+
+Seis mediciones en juego sobre el tier 1, con controles de los dos lados:
+
+| Prueba | Resultado |
+|---|---|
+| `$alpha 0` (**control nulo**) | el plato **no cambia** |
+| `$alpha 0.5` | el plato **no cambia** |
+| `$alpha 0.5` + phong | idéntico → el phong no era |
+| `$alpha 0.5` sobre el **cuerpo** | tampoco → no es de la submalla del plato |
+| `$translucent 1` | el plato **DESAPARECE**, a la primera |
+| `SetRenderMode` + alfa de entidad | el prop **entero** sí se vuelve translúcido |
+
+Los cuatro primeros son el mismo hecho. **`$alpha` es la *modulación* de alfa: escala un material
+que ya está en el camino translúcido, y no lo pone ahí.** El que lo pone es `$translucent`. El
+control nulo es lo que lo vuelve concluyente — con `$alpha 0` el plato tenía que desaparecer y no se
+movió, así que ninguna lectura de «se ve un poco translúcido» podía haber sido cierta.
+
+### La advertencia que estaba escrita, era correcta, y por eso costó dos rondas
+
+Los tres `.vmt` decían desde el primer día: *«NO se puede usar `$translucent` acá — el alpha del
+`$basetexture` es la máscara de `$selfillum` y haría desaparecer el plato»*. **Era cierto**, y ahora
+está medido por los dos lados: el alfa del atlas tiene el **99,9 % de los texeles en cero** en el
+tier 1 y el 97,6 % en el 3.
+
+Pero estaba escrita como **advertencia**, no como pregunta, y por eso cerró el camino que era el
+bueno. Medirla costó un comando. *Una advertencia sin medición es una rama podada a ciegas.*
+
+### El arreglo: darle al material su propia textura
+
+`$translucent` cobra el alfa **por texel**, y el plato compartía el atlas del cuerpo, donde ese canal
+ya tenía otro trabajo. `dev/phastools/glass_tex.py` copia el atlas cambiando **un solo canal** —el
+alfa, a la constante 128 (= el `_Opacity 0.5` medido de Unity)— y sale `paramic1_glass.vtf` y
+`paramic3_glass.vtf`; los tiers 2 y 3 comparten plato, así que comparten textura. Verificado por
+**round-trip VTF→PNG**: el alfa vuelve 128/128, sobrevivió a DXT5. El cuerpo conserva su atlas con la
+máscara de selfillum intacta —es la que prende el LED— porque ahora son dos archivos.
+
+**Regla:** *`$alpha` no vuelve translúcido a nada; `$translucent` sí, y cobra el alfa de la textura.
+Si esa textura está compartida con otra pieza que la usa para otra cosa, la translucidez no se
+resuelve en el `.vmt`: se resuelve dándole al material su propia textura.*
+
+### Tres lecturas anotadas como propiedad del sujeto, siendo del instrumento
+
+1. **`$mostlyopaque` no era la causa.** Se aplicó al tier 3 dejando los otros dos de control, y el
+   tier 3 con `TRANSLUCENT_TWOPASS` se veía **igual de opaco**. Refutado en juego. La bandera se dejó
+   puesta —es la declaración correcta para un modelo mixto— pero *lo que se refutó fue la hipótesis,
+   no el flag*.
+2. **`$alpha` leído del material daba 1**, y eso no dice que el `.vmt` no lo declare: es la
+   modulación, que el motor pisa al dibujar. El check medía el runtime creyendo medir el archivo, y
+   estuvo a un paso de anotarse como «el `.vmt` no declara el alpha» con el archivo declarándolo. Se
+   arregló leyendo el `.vmt` **como archivo**, que además dice **cuál** montó el juego.
+3. **`GetRenderGroup()` daba 7 en los tres, y anoté que «no discrimina». Falso** — en la ronda 4 da
+   **9**. Los tres casos de la ronda 3 estaban en el mismo estado (materiales opacos), así que el
+   valor constante no probaba un instrumento ciego sino un conjunto sin variación en lo que
+   importaba. *Un valor que sale igual en todos los casos sólo desacredita al instrumento si los
+   casos diferían en lo que se estaba midiendo.* De paso deja medido que **el motor decide el grupo
+   de render por los MATERIALES**: con el flag puesto y los materiales opacos seguía en 7.
+
+Y un defecto de Lua con firma reusable: **`IMaterial:GetInt()` sobre una clave que el material no
+define devuelve *cero valores*, no `nil`**, así que `tostring()` revienta. El volcado se cortaba
+**justo después** de la línea que se leyó como resultado — parecía completo y el error parecía ruido
+aparte.
+
+### Lo demás de la sesión
+
+- Los tres `.mdl` recompilados con `$mostlyopaque` (`flags=9`), geometría **byte a byte idéntica**
+  salvo el checksum, **7/7 los tres** contra control.
+- El LED del tier 1 a **×1,8** (`PHANTASMAGORIA.PARAMIC_LED_BOOST`), a pedido del autor. **Sin
+  medir**: no hay número de Unity que lo fije.
+- Instrumento nuevo: `phantasmagoria_paramic_vidrio`
+  (`info`/`plano`/`trans`/`cero`/`phong`/`cuerpo`/`ent`/`off`), en
+  `lua/autorun/client/phantasmagoria_paramic_glass.lua`.
+- Y un defecto de la **planilla misma**, que venía en cuatro bloques: su `render()` pasaba
+  `pass`/`fail`/`cmdNote` por `esc()`, y esos tres campos se escriben con `<code>` — el criterio se
+  leía con el marcado literal adentro de la frase que decide el veredicto.
+
+**Falta:** los tres siguen siendo props, no ítems. `PHANTASMAGORIA.ParamicData` arranca en cero y
+nada lo llena; el disparador del LED no existe.
+
+---
+
 ## 2026-08-05 — Sesión 14b: **LA PRIMERA CORRIDA**. Camina, y refutó al documento
 
 **El proyecto dejó de ser papel.** `terminator_nextbot_phantom` aparece en el spawnmenu, spawnea,

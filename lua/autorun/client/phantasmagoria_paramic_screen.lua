@@ -320,12 +320,31 @@ local function ensureLED()
     return ledMat
 end
 
--- `f` de 0 a 1. 0 apaga el LED; 1 lo deja como viene del modelo.
+--[[
+    El brillo del LED encendido, y por que es una constante con nombre.
+
+    `$selfillumtint` MULTIPLICA la emision, asi que no esta acotado a 1: subirlo
+    sube el brillo del LED y no toca el resto del cuerpo, porque fuera de la
+    mascara no hay emision que multiplicar.
+
+    Arranco en 1.0 y el autor lo juzgo en juego: *«funciona pero el brillo podria
+    ser un poquito mas alto»* (ronda 3b, check 09). Va a 1.8. El verde y el azul
+    quedan en la misma proporcion de antes (0.25 del rojo) para no correr el
+    color hacia el rosa: lo que se pidio es mas brillo, no otro color.
+
+    NO esta medido cual es el valor "correcto" — no hay un numero de Unity que
+    decirle. Es un ajuste a ojo y por eso vive aca arriba, con nombre, en vez de
+    estar escrito adentro de la cuenta.
+]]
+PHANTASMAGORIA.PARAMIC_LED_BOOST = 1.8
+
+-- `f` de 0 a 1. 0 apaga el LED; 1 lo deja en el brillo elegido.
 function PHANTASMAGORIA.SetParamicLED( ent, f )
     if not IsValid( ent ) then return false end
     if ent:GetModel() ~= "models/phantasmagoria/paramic1.mdl" then return false end
     local m = ensureLED()
-    m:SetVector( "$selfillumtint", Vector( f, f * 0.25, f * 0.25 ) )
+    local b = f * ( PHANTASMAGORIA.PARAMIC_LED_BOOST or 1 )
+    m:SetVector( "$selfillumtint", Vector( b, b * 0.25, b * 0.25 ) )
     ent:SetSubMaterial( 0, "!phantasmagoria_paramic1_led" )
     return true
 end

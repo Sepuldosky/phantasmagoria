@@ -248,10 +248,17 @@ Las trampas de la base están en §4.3 y §4.4 de la referencia. Resumidas:
 - **Los pasos lejanos** (§7.5, pedido del autor): un ghost event de pisadas lentas a distancia, sin
   fuente visible. **No necesita assets nuevos** —es el banco de botas sonando lejos— y el rasgo
   (`ability.paranormalSoundInterval`) ya existe. Falta escribirlo, como todo lo demás.
-- **La parabólica y el sound sensor no existen**: 36 modelos y ninguno es un micrófono
-  ([EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §9). Con la identificación de sonido cerrada, la mecánica
-  de **delatar por sonido tiene audio y le faltan props dos veces** — también a la Music Box, que ya
-  tiene su tarareo. Sin decidir cuál de los tres caminos se toma.
+- ~~**La parabólica no existe**~~ **PORTADA Y CERRADA EN JUEGO** (2026-08-05): los **tres tiers**
+  del Parabolic Microphone están en el árbol (`models/phantasmagoria/paramic1-3.mdl`), con su plato
+  parabólico translúcido, sus pantallas dibujando un RenderTarget con el contenido real del Canvas
+  del juego, y el LED del tier 1 parpadeando. Cuatro rondas de checks en juego, la última 8/8
+  (`dev/checks/paramic-vidrio-r4.html`). Ver el CHANGELOG del 2026-08-05.
+  **Lo que falta no es el asset sino la mecánica:** siguen siendo props, no ítems —falta la forma
+  (SWEP/entidad) y sobre todo **conectar las pantallas a datos reales**, porque
+  `PHANTASMAGORIA.ParamicData` arranca en CERO y nada lo llena. El disparador del LED tampoco existe.
+- **El sound sensor sigue sin prop.** Con la identificación de sonido cerrada, la mecánica de
+  **delatar por sonido tiene audio y ya tiene la mitad de sus props** — le falta a la Music Box, que
+  ya tiene su tarareo.
 - **Los equipos.** La **forma** ya está decidida ([docs/EQUIPAMIENTO.md](docs/EQUIPAMIENTO.md) §5):
   SWEP lo que se sostiene, entidad lo que se planta y la escenografía, ítem con `onUse` lo que se
   consume. Falta **elegir cuáles entran primero** — EMF reader, spirit box, cámara, termómetro, libro
