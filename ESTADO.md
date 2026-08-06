@@ -46,6 +46,75 @@ Lo que existe:
 
 ---
 
+## 🔜 Traspaso al próximo bloque: **velocidad** y **puertas**
+
+Dos temas que el autor eligió para seguir, con lo que ya está leído y medido. **Nada de esto se
+escribió**; es el punto de partida para no volver a leerlo.
+
+### A. La velocidad — hay un hook declarado, no hace falta overridear nada
+
+**El problema, medido en juego:** el fantasma corre a **550 u/s** y camina a **130** (se ve en
+`marcha loco 550 u/s` de las corridas 7 y 8). La carrera del autor con Better Movement es **280**, o
+sea **1,96×**. §1.1 del diseño manda lo contrario: la velocidad se **deriva** de la carrera real del
+jugador, y los 30 tipos son **multiplicadores** sobre ella, para que el addon se calibre solo en
+cualquier servidor.
+
+**De dónde salen esos números:** `ENT.RunSpeed = 550`, `ENT.MoveSpeed = 300`, `ENT.WalkSpeed = 130`
+(`shared.lua:130-132`, con el comentario del autor de la base *«bit faster than players... in a
+straight line»*). El fantasma no los pisa.
+
+**El punto único donde se aplican, y el hook que evita tocarlo:**
+`SetupSpeed` (`motionoverrides.lua:3785-3807`) elige entre `RunSpeed`/`WalkSpeed`/`MoveSpeed`/
+`CrouchSpeed` y **después** hace:
+
+```lua
+speed = myTbl.RunTask( self, "ModifyMovementSpeed", speed ) or speed
+myTbl.loco:SetDesiredSpeed( speed )
+```
+
+**`ModifyMovementSpeed` es un callback de tarea y su único call site es ése** — o sea que es el
+punto de extensión declarado para escalar la velocidad **sin overridear `SetupSpeed`**. Lo llama
+`BehaveUpdate` cada tick (`behaviouroverrides.lua:110`).
+
+**La trampa de Better Movement, ya verificada contra su código:** `ply:GetRunSpeed()` **no sirve** —
+lo multiplica por `_bmfraction`, un factor dinámico clampeado 1..2, así que devuelve entre 280 y 560
+**según el instante**. Hay que leer la convar base **`sv_bm_speed_run`**, y
+`GetConVar( "sv_bm_enabled" ) == nil` es el chequeo de existencia del mod. Sin Better Movement montado
+tiene que haber camino propio.
+
+**Y una que puede volver a subirla por atrás:** `overcharging.lua:20-22` hace
+`self.RunSpeed = math.max( self.RunSpeed * 1.40, 550 )` — un piso de 550 metido a mano. Si el
+overcharge se dispara alguna vez, se lleva puesta la conversión.
+
+### B. Las puertas — la hipótesis más fuerte es **la otra mitad de la trampa ⑦**
+
+**El síntoma, reportado por el autor:** *«suele quedarse pegado abriéndolas»*. **Sin medir todavía.**
+
+**La pista, y hay que medirla antes de creerle:** `ENT.TERM_FISTS = false` apaga **dos** cosas que no
+son el puño (Referencia §4.4⑦). La primera —*no mira hacia su objetivo al moverse*— **ya mordió esta
+sesión** y fue el defecto del giro. La segunda es
+`tryToHitUnstuck = isstring( myTbl.TERM_FISTS )` (`shared.lua:2142`, usado en `:2151`): **sin puños
+el bot no pega para desatascarse.** Y en el manejo de puertas, las dos ramas que abren a golpes piden
+`isFists` explícitamente (`shared.lua:1336` para la trabada, `:1340` para la que se atascó):
+**las dos están muertas en nuestro fantasma.** Una puerta cerrada con llave no tiene salida.
+
+> **Es hipótesis, no diagnóstico**, y esta sesión ya mostró por qué importa la diferencia: culpé al
+> gate de `TERM_FISTS` por el giro y **era la mitad equivocada** (había un segundo candado de 30 u/s).
+> Antes de tocar nada: reproducirlo con `phantasmagoria_ghost_where` al lado, que ya imprime `mira`,
+> `marcha` y `pos`, y mirar si se queda **quieto** contra la puerta o **empujando**.
+
+**Descartado por lectura, para que nadie lo persiga:** el interruptor **no** es la causa. La rama que
+mi `ShouldBeEnemy` hace tomar siempre (`shared.lua:1387`) está **después** de la rama propia de
+`prop_door_rotating` (`:1334`), que es la puerta común de GMod y gana antes. Sólo afecta a otros
+bloqueadores.
+
+**Y ojo con el marco del diseño:** un fantasma de Phasmophobia **atraviesa** las puertas, así que
+«arreglar el bashing» y «dejarlo pasar» son dos diseños distintos y hay que elegir cuál. Lo que ya
+está en el árbol para el primero: `terminator_doorbash.lua` (`terminator_Extras.CanBashDoor`,
+`:32`), `ENT:CanBashLockedDoor` (`shared.lua:2330`) y `ENT:BashLockedDoor` (`:2344`).
+
+---
+
 ## El próximo paso concreto
 
 **El interruptor está cerrado.** Lo que sigue son dos cosas, en el orden que decida el autor:
