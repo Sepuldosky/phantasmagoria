@@ -7,6 +7,92 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-06 — El interruptor fantasma/cazador: escrito, y §3.1 nombraba la función equivocada
+
+El primer comportamiento propio del fantasma. Arranca en `phantom_Hunting = false` y **no ataca a
+nadie**; con el hunt prendido vuelve a ser el cazador que ya sabía ser. **Sin correr**: hay un check
+de 10 filas con los criterios escritos antes y ninguna fila ejercida.
+
+### La relación no sirve de interruptor, por dos motivos independientes
+
+§3.1 proponía `OnFirstRelationWithPlayer` devolviendo `D_HT`/`D_NU`, con la frase *«al entrar en hunt
+se re-evalúan relaciones y la base hace el resto sola»*. Leyendo el código:
+
+**① Nada re-evalúa.** `SetupRelationships` corre una vez, desde `Initialize` (`shared.lua:3079`), y
+el resultado se **guarda** con `Term_SetEntityRelationship` (`enemyoverrides.lua:883`, cuerpo en
+`terminator_nextbot_base/enemy.lua:44-47`). Es un cache. **El nombre lo venía diciendo: `OnFirst…`.**
+
+**② Y aunque re-evaluara, no aguanta.** `MakeFeud` (`enemyoverrides.lua:1046-1048`) reescribe la
+relación del jugador a `D_HT` prioridad 1000 en cuanto al bot le pegan (`PostTookDamage`,
+`damageandhealth.lua:482`). **Un interruptor de relaciones se reabre de un balazo.**
+
+El ② no salió de buscar un segundo motivo: salió de preguntarse quién más escribe en
+`m_EntityRelationships`. El grep daba cuatro sitios de `Term_SetEntityRelationship` fuera del setup y
+había que leerlos todos —la regla de §18.7—; el que rompía la historia era el último.
+
+### El interruptor es `ShouldBeEnemy`
+
+Es donde la base **lee** ese cache (`enemyoverrides.lua:493`) y se consulta en vivo por seis caminos:
+las tres rutas de adquisición de §18.7, `ForgetOldEnemies` (`:676`, el que **suelta** al enemigo), la
+revalidación de `shared.lua:3282` y `HaveEnemy`. Un `false` ahí **no congela nada** — las 31 tareas
+siguen corriendo enteras. Es literalmente la última línea de §3.1, *«el bot nunca deja de pensar,
+sólo deja de tener a quién odiar»*, en la función de al lado. Y **no** es `DisableBehaviour`.
+
+Es además **el mismo punto único** que §18.7 ya reservaba para el corte por distancia de la ruta 3,
+así que las dos cosas van a convivir ahí.
+
+`OnFirstRelationWithPlayer` se escribió igual, pero **como instrumento**: cuenta cuántas veces la
+base evalúa la relación y con qué flag, y **encadena al `BaseClass`** (trampa ①: la implementación
+default no está vacía, implementa `ExtraSpawnHealthPerPlayer`, `damageandhealth.lua:872`). Devuelve
+`nil`, así que **la relación queda en `D_HT` siempre, a propósito**: un `D_NU` ahí trabaría el
+interruptor **cerrado para siempre**, porque `:493` exige `D_HT` y nada re-evalúa el cache.
+
+### El bloqueante era el gatillo, y se resolvió con andamio declarado
+
+La cordura no existe, así que nada dispara el hunt y el interruptor no se podía ver. Tres comandos:
+
+| Comando | Qué es |
+|---|---|
+| `phantasmagoria_hunt 0\|1` | **ANDAMIO**. Mueve **sólo el flag** — ni relación, ni memoria, ni tareas |
+| `phantasmagoria_hunt_reeval` | **CONTROL** del contador, no mecanismo: si el contador no sube al prender el hunt, esto prueba que el contador no está roto |
+| `phantasmagoria_ghost_rel` | Instrumento: la relación **cacheada** al lado del `ShouldBeEnemy` **en vivo** |
+
+Que `phantasmagoria_hunt` mueva **sólo** el flag es deliberado: si además re-disparara la relación,
+la fila que mide §3.1 no mediría nada.
+
+### Dos cosas que el código dijo y no eran obvias
+
+**El efecto secundario que si no se lee como bug:** `shared.lua:1387` usa `ShouldBeEnemy` sobre lo
+que le bloquea el paso —`not ShouldBeEnemy( blocker )` → `openDoorTime`—, o sea **abrir en vez de
+romper**. Con el interruptor en fantasma esa rama se toma siempre. Es la que queremos.
+
+**Y una trampa dormida en el propio control:** `phantasmagoria_hunt_reeval` vuelve a pasar por el
+cuerpo default de `OnFirstRelationWithPlayer`, que lleva la cuenta `ExtraSpawnHealthPlayersDone` y
+suma vida por jugador. Hoy sale por el `if not extraHpPerPly then return end` de la primera línea. El
+día que se declare el campo, **el control infla la vida del fantasma cada vez que se lo llama** — que
+es por qué está declarado como control de desarrollo y no como mecánica.
+
+### El límite honesto de esta corrida
+
+Como la relación **nunca sale de `D_HT`**, el motivo ② no se mide: no hay nada que `MakeFeud` pueda
+reabrir. Sigue siendo **[lectura]**. Lo que la última fila del check sí mide es su consecuencia
+práctica —que el interruptor aguante un balazo—, y funciona como guardia de regresión: si alguien
+alguna vez «simplifica» esto a un interruptor de relaciones, esa fila se pone roja.
+
+### La fila 4 del check anterior cambia de premisa
+
+Decía «camina hacia el jugador» y salía verde porque el bot era hostil **a propósito**, para que el
+criterio «camina hacia algo» tuviera un algo. Con el interruptor, esa fila **sólo vale con
+`phantasmagoria_hunt 1`**. No es una regresión: el criterio viejo medía un andamio.
+
+### El instrumento, otra vez
+
+`luaparser` da rojo en los tres archivos propios **y también en los tres de tercero que sí corren en
+GMod**, todos por el `continue` que Lua 5.1 no tiene. Con `continue`, `!=` y `!` traducidos, los seis
+quedan en verde. *Un rojo que también sale en el control no es un defecto del sujeto.*
+
+---
+
 ## 2026-08-05 — El plato del micrófono parabólico: CERRADO en juego, en cuatro rondas
 
 Los tres platos parabólicos se ven **translúcidos a la mitad**, con brillo, y se ve el cañón y el

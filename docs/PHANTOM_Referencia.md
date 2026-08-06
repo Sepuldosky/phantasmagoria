@@ -139,6 +139,13 @@ function ENT:OnFirstRelationWithPlayer( ply ) return D_NU end
 
 Alternativa sin subclasear: el hook `terminator_blocktarget` (línea 497).
 
+> **⚠ Sirve para un bot pacífico, NO para un interruptor — 2026-08-06 [lectura].** El párrafo de
+> arriba es cierto **al spawnear** y nada más: el retorno se **guarda** en `m_EntityRelationships`
+> (`enemyoverrides.lua:883`) y `SetupRelationships` corre **una vez** (`shared.lua:3079`). Un bot que
+> nace pacífico y se queda pacífico se resuelve así; uno que tiene que **alternar** en caliente, no
+> — y encima `MakeFeud` (`:1046-1048`) reescribe la relación a `D_HT` de un balazo. Para alternar el
+> punto es `ShouldBeEnemy`, que es donde se **lee** ese cache (`:493`). Ver §3.1 del diseño.
+
 > **Dos correcciones a lo que decía este párrafo, del 2026-08-05, al escribir la entidad**
 > [verificado]:
 >

@@ -6,21 +6,29 @@
     spawnear, caminar hacia algo, y -sobre todo- MOSTRAR DONDE ESTA.
     Todo lo demas viene despues de verla caminar una vez.
 
+    YA NO ES SOLO UN INSTRUMENTO: tiene el primer comportamiento propio, el
+    interruptor fantasma/cazador ( server.lua ). Fuera del hunt no ataca a
+    nadie; dentro, si. El gatillo es MANUAL y PROVISORIO -- el concommand
+    phantasmagoria_hunt -- porque la cordura, que es la que deberia dispararlo
+    (Diseno 4 y 19), todavia no existe.
+
     LO QUE DELIBERADAMENTE NO TIENE, Y POR QUE:
 
       ENT.IsWraith                 un instrumento invisible no sirve para ver
                                    donde esta. Es un campo y se enciende solo
                                    cuando haya que ver el cloak, no antes.
-      OnFirstRelationWithPlayer    el interruptor fantasma/cazador. Hoy el bot
-                                   queda HOSTIL A PROPOSITO: el criterio de
-                                   cierre es "camina hacia algo" y hace falta
-                                   un algo. El interruptor va en esta funcion
-                                   y NUNCA en DisableBehaviour (Diseno 3.1).
       SetupDataTables              la base no lo usa: networkea con slots
                                    hardcodeados y el Bool 0 ya es Crouching
-                                   (Referencia 4.3, defecto D-6 de HIM).
+                                   (Referencia 4.3, defecto D-6 de HIM). El
+                                   estado del hunt viaja por SetNWBool, que es
+                                   otro sistema y no colisiona.
       todo lo demas                maquina de estados, 30 tipos, rasgos,
-                                   cordura, hunt, sonidos, eventos.
+                                   cordura, sonidos, eventos.
+
+    Y OJO CON DISENO 3.1: nombra a OnFirstRelationWithPlayer como el
+    interruptor, y NO lo es. La relacion es un cache que se escribe una sola
+    vez, y encima MakeFeud la reescribe a D_HT de un balazo. El interruptor de
+    verdad es ShouldBeEnemy; el detalle esta en server.lua con archivo y linea.
 
     Nada de esto se corrio en GMod antes de escribirlo. Si el juego contradice
     a los documentos, gana el juego.

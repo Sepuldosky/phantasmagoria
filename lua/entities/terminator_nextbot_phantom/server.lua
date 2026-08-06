@@ -1,9 +1,12 @@
 --[[-------------------------------------------------------------------------
     Phantasmagoria - terminator_nextbot_phantom / server
 
-    Configuracion minima + los dos instrumentos server-side:
+    Configuracion minima, EL INTERRUPTOR fantasma/cazador, y los instrumentos
+    server-side:
       - el aviso de spawn (que modelo salio, donde, y si hay navmesh)
       - phantasmagoria_ghost_where, que dice donde esta cada fantasma vivo
+      - phantasmagoria_ghost_rel, que dice a quien odia y por que
+      - phantasmagoria_hunt / _reeval, el gatillo MANUAL y PROVISORIO del hunt
 ---------------------------------------------------------------------------]]
 
 local function ghostPrint( ... )
@@ -72,6 +75,118 @@ ENT.DefaultWeapon = false
 ENT.TERM_FISTS    = false
 
 ---------------------------------------------------------------------------
+-- EL INTERRUPTOR FANTASMA / CAZADOR
+---------------------------------------------------------------------------
+-- Fuera del hunt el fantasma NO ataca; dentro, si. Arranca en fantasma.
+--
+-- OJO: esto cambia la fila 4 del check anterior. Ese check pedia "camina hacia
+-- el jugador" y por eso el bot quedaba hostil A PROPOSITO. Con este campo en
+-- false ya NO persigue al spawnear: la fila 4 vale solo con hunt = 1.
+ENT.phantom_Hunting = false
+
+-- El interruptor NO es OnFirstRelationWithPlayer, y esa es la correccion mas
+-- cara de este bloque. Diseno 3.1 dice "al entrar en hunt se re-evaluan
+-- relaciones y la base hace el resto sola". Leyendo el codigo, nada dispara esa
+-- re-evaluacion, y peor: la relacion NO SIRVE como interruptor. El recorrido:
+--
+--   SetupRelationships corre UNA sola vez, desde Initialize ( shared.lua:3079 ).
+--   Por cada entidad llama SetupEntityRelationship -> GetDesiredEnemyRelationship
+--   -> OnFirstRelationWithPlayer, y GUARDA el resultado en m_EntityRelationships
+--   con Term_SetEntityRelationship ( enemyoverrides.lua:883, y el cuerpo del
+--   guardado en terminator_nextbot_base/enemy.lua:44-47 ). Es un CACHE. El
+--   nombre lo venia diciendo: OnFIRSTRelationWithPlayer.
+--
+-- Y hay un segundo motivo, mas fuerte, que sale de leer MakeFeud
+-- ( enemyoverrides.lua:1046-1048 ): cuando al bot le pegan, PostTookDamage
+-- ( damageandhealth.lua:482 ) llama MakeFeud, que para un jugador reescribe la
+-- relacion a D_HT con prioridad 1000, sin preguntarle nada a nadie. O sea que un
+-- interruptor hecho de relaciones se REABRE de un balazo, y no se vuelve a
+-- cerrar nunca porque nada re-evalua el cache.
+--
+-- El interruptor de verdad es ShouldBeEnemy, que es donde la base LEE ese cache
+-- ( enemyoverrides.lua:493 ) y que se consulta EN VIVO todo el tiempo:
+--   FindEnemies / processFindingEnt  enemyoverrides.lua:596   ( ruta 1 de 18.7 )
+--   ForgetOldEnemies                 enemyoverrides.lua:676   ( limpia memoria )
+--   FindPriorityEnemy                enemyoverrides.lua:719   ( elige enemigo )
+--   el fallback "sin enemigos"       shared.lua:3203          ( ruta 3 de 18.7 )
+--   revalidar el enemigo anterior    shared.lua:3282
+--   HaveEnemy                        terminator_nextbot_base/enemy.lua:136
+--
+-- Un false ahi no congela nada: el cerebro sigue corriendo entero y las 31
+-- tareas siguen ahi. Es literalmente lo que pide Diseno 3.1 en su ultima linea
+-- -- "el bot nunca deja de pensar, solo deja de tener a quien odiar" -- solo que
+-- en la funcion de al lado. Y NO es DisableBehaviour: saltear no es apagar.
+function ENT:ShouldBeEnemy( ent, fov, myTbl, entsTbl )
+    myTbl = myTbl or self:GetTable()
+
+    -- Fuera del hunt no hay enemigos. Ni jugadores ni NPCs: Diseno 3.1 dice
+    -- "deja de tener a quien odiar", no "a quien odiar menos".
+    if not myTbl.phantom_Hunting then return false end
+
+    return myTbl.BaseClass.ShouldBeEnemy( self, ent, fov, myTbl, entsTbl )
+
+end
+
+-- CONSECUENCIA MEDIDA EN EL CODIGO, no cosmetica: shared.lua:1387 usa
+-- ShouldBeEnemy sobre lo que le bloquea el paso -- "not ShouldBeEnemy( blocker )"
+-- -> openDoorTime = CurTime(), o sea ABRIR en vez de ROMPER. Con el interruptor
+-- en fantasma esa rama se toma siempre. Es la que queremos, pero hay que
+-- saberlo antes de leerlo como bug.
+
+-- Este es el override que Diseno 3.1 nombraba, y aca queda como INSTRUMENTO y
+-- no como mecanismo: cuenta cuantas veces la base evalua la relacion y con que
+-- flag. Si 3.1 tuviera razon, prender el hunt la haria subir. El control de que
+-- el contador no este simplemente roto es phantasmagoria_hunt_reeval, que la
+-- dispara a mano: si ese comando lo mueve y prender el hunt no, el contador
+-- funciona y lo que no ocurre es la re-evaluacion.
+--
+-- Trampa 1 ( Referencia 4.2b ): la implementacion default NO esta vacia --
+-- implementa ExtraSpawnHealthPerPlayer ( damageandhealth.lua:872 ) -- asi que
+-- hay que ENCADENAR al BaseClass o se mata en silencio. Hoy no duele porque no
+-- declaramos el campo, y por eso mismo el defecto seria invisible.
+--
+-- Trampa 2 ( Referencia 4.2c ): la llamada pasa CUATRO argumentos
+-- ( enemyoverrides.lua:947 ) y la declaracion de la base nombra uno. Se nombran
+-- los cuatro aca para que se lea que existen.
+--
+-- Devuelve lo que devuelva el BaseClass, que es nil: enemyoverrides.lua:948 hace
+-- "if newDisp then disp = newDisp end", asi que un nil deja pasar el D_HT de
+-- :942. La relacion del fantasma con el jugador queda en D_HT SIEMPRE, a
+-- proposito: un D_NU aca trabaria el interruptor cerrado para siempre, porque
+-- la base exige D_HT en :493 y nada re-evalua el cache.
+function ENT:OnFirstRelationWithPlayer( ply, disp, priority, theirDisp )
+    self.phantom_relCalls       = ( self.phantom_relCalls or 0 ) + 1
+    self.phantom_relLastTime    = CurTime()
+    self.phantom_relLastHunting = self.phantom_Hunting == true
+
+    return self.BaseClass.OnFirstRelationWithPlayer( self, ply, disp, priority, theirDisp )
+
+end
+
+-- La puerta unica para prender y apagar. Cuando exista la cordura ( Diseno 19 )
+-- va a llamar a ESTO y no a tocar el campo, asi que el networkeo no se puede
+-- olvidar en el camino.
+--
+-- SetNWBool y NO SetupDataTables: trampa 3 ( Referencia 4.3 ) dice que la base
+-- networkea con slots hardcodeados y el Bool 0 ya es Crouching. Los NW vars van
+-- por nombre y son otro sistema; ademas la base no usa ninguno ( grep de
+-- SetNWBool/SetNW2Bool sobre sus 71 archivos: cero ).
+function ENT:phantom_SetHunting( hunting )
+    hunting = hunting == true
+
+    self.phantom_Hunting = hunting
+    self:SetNWBool( "phantasmagoria_hunting", hunting )
+
+    return hunting
+
+end
+
+function ENT:phantom_IsHunting()
+    return self.phantom_Hunting == true
+
+end
+
+---------------------------------------------------------------------------
 -- Initialize
 ---------------------------------------------------------------------------
 -- AdditionalInitialize corre DESPUES de que la base resolvio modelo y FOV
@@ -88,10 +203,17 @@ function ENT:AdditionalInitialize()
     self.Term_FOV      = 180
     self.AutoUpdateFOV = false -- HIM pone nil aca ( server.lua:852 ); las dos son falsy
 
+    -- Sincroniza el NW var con el campo. Va ANTES del return temprano de abajo:
+    -- si queda del otro lado, el marcador del cliente miente en todo mapa que
+    -- tenga navmesh, que son casi todos.
+    self:phantom_SetHunting( self.phantom_Hunting )
+
     ghostPrint( "spawn #", self:EntIndex(),
         "  modelo ", tostring( self:GetModel() ),
         "  skin ", self:GetSkin(),
-        "  pos ", tostring( self:GetPos() ), "\n" )
+        "  pos ", tostring( self:GetPos() ),
+        "  hunt ", self.phantom_Hunting and "SI" or "NO",
+        "\n" )
 
     -- El navmesh se mide DOS VECES a proposito, y esta es la correccion mas
     -- cara de la primera corrida (2026-08-05). La version anterior de este
@@ -147,8 +269,11 @@ end
 -- silencio es peor que no tenerlo.
 local MAX_LINEA = 180 -- con margen: al trozo se le suma la sangria
 
-concommand.Add( "phantasmagoria_ghost_where", function( ply )
-    local function say( line )
+-- Fabrica el "say" de un comando. Extraido a proposito: era un local adentro de
+-- phantasmagoria_ghost_where, y todo comando nuevo que imprimiera por su cuenta
+-- volvia a caer en el mismo pozo de 255 bytes sin avisar.
+local function makeSay( ply )
+    return function( line )
         line = tostring( line )
 
         if not IsValid( ply ) then -- consola del servidor, sin limite
@@ -173,7 +298,13 @@ concommand.Add( "phantasmagoria_ghost_where", function( ply )
 
         end
     end
+end
 
+-- Itera los fantasmas vivos. Misma busqueda que usaba ghost_where: por el campo
+-- IsPhantasmagoriaGhost y NO por clase, porque los 30 tipos de Diseno 12.2 van a
+-- llamarse phantasmagoria_<tipo> y una busqueda por clase exacta va a envejecer
+-- mal.
+local function eachGhost( fn )
     local found = 0
 
     for _, ghost in ipairs( ents.GetAll() ) do
@@ -181,7 +312,18 @@ concommand.Add( "phantasmagoria_ghost_where", function( ply )
         if not IsValid( ghost ) then continue end
 
         found = found + 1
+        fn( ghost )
 
+    end
+
+    return found
+
+end
+
+concommand.Add( "phantasmagoria_ghost_where", function( ply )
+    local say = makeSay( ply )
+
+    local found = eachGhost( function( ghost )
         local enemy = ghost:GetEnemy() -- terminator_nextbot_base/enemy.lua:20
         local tasks = {}
 
@@ -201,6 +343,7 @@ concommand.Add( "phantasmagoria_ghost_where", function( ply )
         say( "    pos     " .. tostring( ghost:GetPos() ) )
         say( "    vida    " .. ghost:Health() .. " / " .. ghost:GetMaxHealth() )
         say( "    modelo  " .. tostring( ghost:GetModel() ) )
+        say( "    hunt    " .. ( ghost.phantom_Hunting and "SI ( cazador )" or "NO ( fantasma )" ) )
         say( "    enemigo " .. ( IsValid( enemy ) and tostring( enemy ) or "ninguno" ) )
 
         -- una por linea: son el dato que mas dice y el que mas largo se pone
@@ -215,8 +358,7 @@ concommand.Add( "phantasmagoria_ghost_where", function( ply )
 
             end
         end
-
-    end
+    end )
 
     if found <= 0 then
         say( "[Phantasmagoria] no hay ningun fantasma vivo." )
@@ -226,3 +368,190 @@ concommand.Add( "phantasmagoria_ghost_where", function( ply )
     say( "[Phantasmagoria] " .. found .. " fantasma(s). Navareas en el mapa: " .. navmesh.GetNavAreaCount() .. "." )
 
 end, nil, "Imprime donde esta cada fantasma de Phantasmagoria, y si el mapa tiene navmesh." )
+
+---------------------------------------------------------------------------
+-- Instrumento: a quien odia, y por que
+---------------------------------------------------------------------------
+-- Separa las DOS cosas que Diseno 3.1 confundia en una:
+--   rel            el CACHE  ( m_EntityRelationships, escrito una sola vez )
+--   ShouldBeEnemy  la PUERTA ( leida en vivo, y donde vive el interruptor )
+-- Sin las dos al lado, "el bot no me ataca" no distingue entre "no me odia" y
+-- "me odia y no puede".
+--
+-- Los nombres de las disposiciones se leen de los globales y no se hardcodean:
+-- son enums del engine, o sea de un tercero.
+local DISP_NAMES = {}
+
+for _, name in ipairs( { "D_ER", "D_HT", "D_FR", "D_LI", "D_NU" } ) do
+    local value = _G[ name ]
+    if value then DISP_NAMES[ value ] = name end
+
+end
+
+local function dispName( d )
+    return DISP_NAMES[ d ] or ( "??? (" .. tostring( d ) .. ")" )
+
+end
+
+concommand.Add( "phantasmagoria_ghost_rel", function( ply )
+    local say = makeSay( ply )
+
+    local found = eachGhost( function( ghost )
+        local enemy = ghost:GetEnemy()
+
+        say( "#" .. ghost:EntIndex() .. "  " .. ghost:GetClass() )
+        say( "    hunt      " .. ( ghost.phantom_Hunting and "SI ( cazador )" or "NO ( fantasma )" ) ..
+            "   NW " .. ( ghost:GetNWBool( "phantasmagoria_hunting", false ) and "SI" or "NO" ) )
+        say( "    enemigo   " .. ( IsValid( enemy ) and tostring( enemy ) or "ninguno" ) )
+
+        -- El contador de la re-evaluacion. Si Diseno 3.1 tuviera razon, prender
+        -- el hunt lo haria subir. El control es phantasmagoria_hunt_reeval.
+        local calls = ghost.phantom_relCalls or 0
+        local lastT = ghost.phantom_relLastTime
+
+        say( "    OnFirstRelationWithPlayer  " .. calls .. " llamada(s)" ..
+            ( lastT and ( ", la ultima a t=" .. math.Round( lastT, 1 ) ..
+                " con hunt=" .. ( ghost.phantom_relLastHunting and "SI" or "NO" ) ) or "" ) )
+
+        local players = player.GetAll()
+
+        if #players <= 0 then
+            say( "    ( no hay jugadores )" )
+            return
+
+        end
+
+        for _, target in ipairs( players ) do
+            -- GetRelationship es el wrapper publico de TERM_GetRelationship
+            -- ( enemyoverrides.lua:813-816 ). Lee el cache, no lo escribe.
+            local disp, priority = ghost:GetRelationship( target )
+
+            -- ShouldBeEnemy SI toca estado: adentro cachea shouldNotSeeEnemy
+            -- ( enemyoverrides.lua:295-317 ). Se llama igual porque es LA puerta
+            -- y no hay forma honesta de preguntarla sin preguntarla; el bot la
+            -- corre solo cada ~0,5 s ( shared.lua:3164 ), asi que el instrumento
+            -- no agrega una clase de perturbacion que no estuviera ya ahi.
+            local should = ghost:ShouldBeEnemy( target, nil, ghost:GetTable(), target:GetTable() )
+
+            say( "    ply " .. target:Nick() ..
+                "   rel " .. dispName( disp ) .. " pri " .. tostring( priority ) ..
+                "   ShouldBeEnemy " .. ( should and "SI" or "NO" ) ..
+                "   dist " .. math.Round( ghost:GetRangeTo( target ) ) .. " u" )
+
+        end
+    end )
+
+    if found <= 0 then
+        say( "[Phantasmagoria] no hay ningun fantasma vivo." )
+
+    end
+end, nil, "Imprime, por fantasma y por jugador, la relacion cacheada y el resultado en vivo de ShouldBeEnemy." )
+
+---------------------------------------------------------------------------
+-- ANDAMIO: el gatillo manual del hunt
+---------------------------------------------------------------------------
+-- ESTO NO ES DISENO, ES UN ANDAMIO, y se tira cuando exista la cordura.
+--
+-- El hunt de Phasmophobia lo dispara la cordura del jugador ( Diseno 4 y 19 ), y
+-- la cordura no existe todavia. Sin gatillo, el interruptor no se puede ver en
+-- juego: quedaria escrito y sin ejercer, que es exactamente la clase de cosa que
+-- este proyecto arrastra en la advertencia final de ESTADO.md.
+--
+-- Cuando la cordura exista, el que llama a phantom_SetHunting es ella y este
+-- comando se borra ( o queda de utileria de test, pero nunca de mecanica ).
+local function adminOnly( ply )
+    if not IsValid( ply ) then return true end -- consola del servidor
+    if ply:IsAdmin() then return true end
+
+    ply:PrintMessage( HUD_PRINTCONSOLE, "[Phantasmagoria] hace falta ser admin." )
+    return false
+
+end
+
+concommand.Add( "phantasmagoria_hunt", function( ply, _, args )
+    if not adminOnly( ply ) then return end
+
+    local say = makeSay( ply )
+    local arg = args and args[ 1 ]
+
+    if arg ~= "0" and arg ~= "1" then
+        say( "[Phantasmagoria] uso: phantasmagoria_hunt 0|1   ( 0 = fantasma, 1 = cazador )" )
+
+        local found = eachGhost( function( ghost )
+            say( "    #" .. ghost:EntIndex() .. " hunt " .. ( ghost.phantom_Hunting and "SI" or "NO" ) )
+
+        end )
+
+        if found <= 0 then say( "    no hay ningun fantasma vivo." ) end
+        return
+
+    end
+
+    local hunting = arg == "1"
+
+    -- SOLO toca el flag. No re-dispara la relacion, no limpia memoria, no toca
+    -- tareas: es el interruptor de Diseno 3.1 tal cual esta escrito, para que la
+    -- corrida pueda medir que hace la base sola y que no.
+    local found = eachGhost( function( ghost )
+        ghost:phantom_SetHunting( hunting )
+
+        say( "    #" .. ghost:EntIndex() .. "  hunt -> " .. ( hunting and "SI ( cazador )" or "NO ( fantasma )" ) ..
+            "   llamadas a OnFirstRelationWithPlayer: " .. ( ghost.phantom_relCalls or 0 ) )
+
+    end )
+
+    if found <= 0 then
+        say( "[Phantasmagoria] no hay ningun fantasma vivo." )
+        return
+
+    end
+
+    say( "[Phantasmagoria] " .. found .. " fantasma(s) en " .. ( hunting and "HUNT" or "calma" ) ..
+        ". Solo se movio el flag: ni la relacion ni la memoria se tocaron." )
+
+end, nil, "ANDAMIO. Prende ( 1 ) o apaga ( 0 ) el hunt de todos los fantasmas. Lo va a reemplazar la cordura." )
+
+-- CONTROL del contador de arriba, no mecanismo.
+--
+-- Si phantasmagoria_hunt 1 no mueve las llamadas a OnFirstRelationWithPlayer,
+-- hay dos explicaciones posibles: la base no re-evalua, o el contador esta roto.
+-- Este comando dispara la re-evaluacion a mano. Si con el SI sube, el contador
+-- funciona y lo que no ocurre es la re-evaluacion -- que es lo que hay que
+-- medir, no suponer.
+--
+-- SetupEntityRelationship es ENT:SetupEntityRelationship( myTbl, ent, entsTbl )
+-- ( enemyoverrides.lua:880 ). Su timer.Simple( 0 ) le pone la relacion reciproca
+-- a ent, pero solo "if ent.AddEntityRelationship" ( :893 ), y un jugador no
+-- tiene ese metodo: sobre jugadores es no-op.
+--
+-- OJO CON UN EFECTO QUE HOY NO SE VE: cada re-disparo vuelve a pasar por el
+-- cuerpo default de OnFirstRelationWithPlayer, que lleva la cuenta
+-- ExtraSpawnHealthPlayersDone y suma vida por jugador ( damageandhealth.lua:872-885 ).
+-- Hoy sale por el "if not extraHpPerPly then return end" de la primera linea,
+-- porque no declaramos ExtraSpawnHealthPerPlayer. El dia que se declare, este
+-- comando INFLA la vida del fantasma cada vez que se lo llama -- que es
+-- precisamente por que es un control de desarrollo y no una mecanica.
+concommand.Add( "phantasmagoria_hunt_reeval", function( ply )
+    if not adminOnly( ply ) then return end
+
+    local say = makeSay( ply )
+
+    local found = eachGhost( function( ghost )
+        local before = ghost.phantom_relCalls or 0
+        local myTbl  = ghost:GetTable()
+
+        for _, target in ipairs( player.GetAll() ) do
+            ghost:SetupEntityRelationship( myTbl, target, target:GetTable() )
+
+        end
+
+        say( "    #" .. ghost:EntIndex() .. "  llamadas a OnFirstRelationWithPlayer: " ..
+            before .. " -> " .. ( ghost.phantom_relCalls or 0 ) )
+
+    end )
+
+    if found <= 0 then
+        say( "[Phantasmagoria] no hay ningun fantasma vivo." )
+
+    end
+end, nil, "CONTROL. Re-dispara SetupEntityRelationship por jugador, para probar que el contador de re-evaluaciones esta vivo." )

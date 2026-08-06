@@ -24,6 +24,14 @@ local UNITS_PER_METER = 52.5
 local colGhost = Color( 190, 120, 255 )
 local colText  = Color( 255, 255, 255 )
 
+-- El estado del interruptor fantasma/cazador, en el color de la caja y en una
+-- palabra. Es lo que hace que la corrida se pueda leer SIN consola: "no me
+-- ataca" y "no puede atacarme" se ven igual desde adentro del juego.
+-- Viene por NW var ( server.lua, phantom_SetHunting ) y NO por SetupDataTables:
+-- la base networkea con slots hardcodeados y el Bool 0 ya es Crouching
+-- ( Referencia 4.3, trampa 3 ).
+local colHunt = Color( 255, 70, 70 )
+
 -- El haz sigue siendo largo a proposito: es lo que te dice desde otra
 -- habitacion en que direccion esta, y atraviesa el techo porque se dibuja con
 -- IgnoreZ.
@@ -71,8 +79,11 @@ hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", funct
         local mins, maxs = ghost:OBBMins(), ghost:OBBMaxs()
         local top = pos + Vector( 0, 0, maxs.z )
 
-        render.DrawWireframeBox( pos, angle_zero, mins, maxs, colGhost, true )
-        render.DrawLine( top, top + Vector( 0, 0, BEAM_HEIGHT ), colGhost, true )
+        local hunting = ghost:GetNWBool( "phantasmagoria_hunting", false )
+        local col = hunting and colHunt or colGhost
+
+        render.DrawWireframeBox( pos, angle_zero, mins, maxs, col, true )
+        render.DrawLine( top, top + Vector( 0, 0, BEAM_HEIGHT ), col, true )
 
         local distU = eyePos:Distance( pos )
         local dist = math.Round( distU / UNITS_PER_METER, 1 )
@@ -87,7 +98,7 @@ hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", funct
 
         cam.Start3D2D( top + Vector( 0, 0, LABEL_HEIGHT ), Angle( 0, yaw - 90, 90 ), escala )
             draw.SimpleText( "PHANTOM #" .. ghost:EntIndex(), "DermaLarge", 0, 0, colText, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM )
-            draw.SimpleText( dist .. " m", "DermaLarge", 0, 6, colGhost, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP )
+            draw.SimpleText( dist .. " m  " .. ( hunting and "HUNT" or "calma" ), "DermaLarge", 0, 6, col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP )
         cam.End3D2D()
 
     end

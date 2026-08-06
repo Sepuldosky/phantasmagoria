@@ -155,17 +155,59 @@ Fuera del hunt el bot **no debe atacar**. La tentación es congelarlo con `Disab
 un error: en este proyecto ya se pagó dos veces la lección de que **una puerta implementada como *no
 correr* congela el estado — saltear no es apagar**.
 
-La forma correcta es la **relación**, que es un solo lugar y no congela nada:
+La forma correcta es **un solo lugar que no congela nada**. Este párrafo decía que ese lugar era la
+*relación*, y **era la función equivocada** — la corrección está abajo.
 
-```lua
--- fuera del hunt: el jugador no es enemigo, el cerebro sigue corriendo
-function ENT:OnFirstRelationWithPlayer( ply )
-    return self.phantom_Hunting and D_HT or D_NU
-end
-```
+> ### ⚠ CORREGIDO 2026-08-06 **[lectura]** — la relación no sirve de interruptor
+>
+> Lo que decía este bloque:
+>
+> ```lua
+> function ENT:OnFirstRelationWithPlayer( ply )
+>     return self.phantom_Hunting and D_HT or D_NU
+> end
+> -- "Al entrar en hunt se re-evalúan relaciones y la base hace el resto sola."
+> ```
+>
+> **No funciona, por dos razones independientes:**
+>
+> **① Nada re-evalúa.** `SetupRelationships` corre **una sola vez**, desde `Initialize`
+> ([`shared.lua:3079`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/shared.lua#L3079)),
+> y el resultado se **guarda** con `Term_SetEntityRelationship`
+> ([`enemyoverrides.lua:883`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L883),
+> cuerpo en [`terminator_nextbot_base/enemy.lua:44-47`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot_base/enemy.lua#L44)).
+> Es un **cache**. El nombre lo venía diciendo: `OnFirst…`.
+>
+> **② Y aunque re-evaluara, no aguanta.** `MakeFeud`
+> ([`enemyoverrides.lua:1046-1048`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L1046))
+> reescribe la relación del jugador a `D_HT` prioridad 1000 en cuanto al bot le pegan
+> (`PostTookDamage`, [`damageandhealth.lua:482`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/damageandhealth.lua#L482)).
+> **Un interruptor de relaciones se reabre de un balazo** y no se vuelve a cerrar.
+>
+> **El interruptor es `ShouldBeEnemy`**, que es donde la base *lee* ese cache
+> ([`enemyoverrides.lua:493`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/enemyoverrides.lua#L493))
+> y se consulta en vivo por seis caminos —los tres de adquisición de §18.7 más `ForgetOldEnemies`
+> (`:676`, el que **suelta** al enemigo), la revalidación de `shared.lua:3282` y `HaveEnemy`—:
+>
+> ```lua
+> function ENT:ShouldBeEnemy( ent, fov, myTbl, entsTbl )
+>     myTbl = myTbl or self:GetTable()
+>     if not myTbl.phantom_Hunting then return false end
+>     return myTbl.BaseClass.ShouldBeEnemy( self, ent, fov, myTbl, entsTbl )
+> end
+> ```
+>
+> `OnFirstRelationWithPlayer` **sigue habiendo que escribirla**, pero encadenando al `BaseClass`
+> (implementa `ExtraSpawnHealthPerPlayer`, `damageandhealth.lua:872`) y **sin devolver `D_NU`**: un
+> `D_NU` ahí trabaría el interruptor **cerrado para siempre**, porque `:493` exige `D_HT` y nada
+> re-evalúa el cache. Queda como instrumento que cuenta re-evaluaciones.
+>
+> Es el **mismo punto único** que §18.7 ya reservaba para el corte por distancia, así que las dos
+> cosas van a convivir en esta función. **Sin correr:** el check está en
+> [ESTADO.md](../ESTADO.md).
 
-Al entrar en hunt se re-evalúan relaciones y el jugador pasa a `D_HT`: la base hace el resto sola.
-Al salir, vuelve a `D_NU`. El bot nunca deja de pensar, sólo deja de tener a quién odiar.
+El bot nunca deja de pensar, sólo deja de tener a quién odiar — esa última frase sí se sostiene, y es
+justamente lo que un `false` en `ShouldBeEnemy` consigue: las 31 tareas siguen corriendo enteras.
 
 ---
 

@@ -1,6 +1,6 @@
 # Phantasmagoria — Estado actual y handoff
 
-**Última actualización:** 2026-08-05
+**Última actualización:** 2026-08-06
 **Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
@@ -15,9 +15,12 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 **El proyecto dejó de ser papel el 2026-08-05: el fantasma camina en GMod.** Hay investigación
 exhaustiva de la base, un diseño completo, la tabla de los 30 tipos generada desde datos reales del
-juego, y ahora **una entidad que existe, spawnea del menú, camina y te persigue**, verificada en
-**tres corridas sobre dos mapas**. Sigue siendo el esqueleto: no hay máquina de estados, ni tipos, ni
-cordura, ni hunt.
+juego, y **una entidad que existe, spawnea del menú, camina y te persigue**, verificada en **tres
+corridas sobre dos mapas**.
+
+**El 2026-08-06 se le escribió el primer comportamiento propio: el interruptor fantasma/cazador.**
+Está **sin correr** — hay un check de 10 filas con los criterios escritos y ninguna fila ejercida.
+Sigue sin haber máquina de estados, ni tipos, ni cordura.
 
 Lo que existe:
 
@@ -34,7 +37,8 @@ Lo que existe:
 | Cordura: tasa, ámbito, oscuridad, camión | **DISEÑADO** — §19; falta la forma de la capa NEAD (§19.5) |
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
-| Entidad `terminator_nextbot_phantom` | **CORRIENDO EN JUEGO** — `lua/entities/terminator_nextbot_phantom/`, 3 archivos. Check de 5 filas **cerrado en verde**. Es un **instrumento**, no todavía un fantasma (ver abajo) |
+| Entidad `terminator_nextbot_phantom` | **CORRIENDO EN JUEGO** — `lua/entities/terminator_nextbot_phantom/`, 3 archivos. Check de 5 filas **cerrado en verde** |
+| Interruptor fantasma / cazador | **ESCRITO, SIN CORRER** — el primer comportamiento propio. Check de 10 filas escrito y **sin ejercer** (ver abajo) |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
 | Corridas en GMod | **3** (2026-08-05, `gm_uh_house` + `gm_graysonhouse`) — refutaron una predicción del documento y destaparon 4 defectos, **los 4 del instrumento** |
@@ -43,37 +47,123 @@ Lo que existe:
 
 ## El próximo paso concreto
 
-**El esqueleto está cerrado. Lo que sigue es el primer comportamiento propio**, y la puerta es la que
-esta pasada dejó deliberadamente sin escribir: **`OnFirstRelationWithPlayer`**, el interruptor limpio
-entre «fantasma» y «cazador» (§3.1 del diseño). Hoy el bot es hostil siempre; el fantasma de
-Phasmophobia sólo lo es durante el hunt.
+**Correr el check de 10 filas de abajo.** El interruptor fantasma/cazador está escrito y **no se
+ejerció**. Hasta que corra, todo lo que sigue es lectura.
 
-Al escribirlo hay que **encadenar al `BaseClass`**: la implementación default **no está vacía**,
-implementa `ExtraSpawnHealthPerPlayer` (`damageandhealth.lua:872`), y un override que no la llame la
-mata en silencio.
+---
 
-> ### ⚠ El diseño §3.1 tiene una suposición que la lectura contradice — **medirla primero**
->
-> §3.1 dice: *«Al entrar en hunt se re-evalúan relaciones y el jugador pasa a `D_HT`: la base hace el
-> resto sola.»* **Nada en el código dispara esa re-evaluación.** El recorrido, leído el 2026-08-06:
->
-> - `SetupRelationships` corre **una sola vez**, desde `Initialize` (`shared.lua:3079`).
->   Itera `ents.Iterator()` y registra un hook `terminator_postentitycreated`
->   (`enemyoverrides.lua:846-869`) — o sea que cubre a los que aparecen **después**, no a los que ya
->   estaban.
-> - Por cada entidad llama `SetupEntityRelationship` → `GetDesiredEnemyRelationship` →
->   `OnFirstRelationWithPlayer`, y **guarda** el resultado con `Term_SetEntityRelationship`
->   (`enemyoverrides.lua:880-898`).
->
-> **El nombre lo venía diciendo: `OnFirst…`.** Para un jugador que ya estaba en el server cuando
-> spawneó el bot, ese override corre **una vez y nunca más**, así que cambiar `self.phantom_Hunting`
-> después **no cambiaría nada** y el interruptor de §3.1 no funcionaría como está escrito.
->
-> **Esto es [lectura], no medición** — es exactamente la clase de afirmación que este arco ya vio
-> caer cuatro veces. El primer trabajo del próximo bloque es **medirlo**: flipear el flag en caliente
-> y ver si el bot cambia de actitud. Si no cambia, el interruptor necesita **re-disparar** la
-> relación (candidato: volver a llamar `SetupEntityRelationship` o `Term_SetEntityRelationship` por
-> jugador), y eso hay que leerlo antes de escribirlo.
+## El interruptor fantasma / cazador — **ESCRITO, SIN CORRER**
+
+El fantasma arranca en `phantom_Hunting = false` y **no ataca a nadie**; con el hunt prendido vuelve
+a ser el cazador que ya sabía ser. El gatillo es **manual y provisorio** —un concommand— porque la
+cordura, que es la que debería dispararlo (§4 y §19), todavía no existe.
+
+### ⚠ §3.1 nombra la función equivocada, y hay dos motivos
+
+§3.1 propone `OnFirstRelationWithPlayer` devolviendo `D_HT` o `D_NU`, y dice *«al entrar en hunt se
+re-evalúan relaciones y la base hace el resto sola»*. Leyendo el código, **eso no funciona**, por dos
+razones independientes:
+
+**① Nada re-evalúa.** `SetupRelationships` corre **una sola vez**, desde `Initialize`
+(`shared.lua:3079`). Itera `ents.Iterator()` y registra un hook `terminator_postentitycreated`
+(`enemyoverrides.lua:846-869`), que cubre a los que aparecen **después**, no a los que ya estaban.
+Por cada entidad llama `SetupEntityRelationship` → `GetDesiredEnemyRelationship` →
+`OnFirstRelationWithPlayer` y **guarda** el resultado con `Term_SetEntityRelationship`
+(`enemyoverrides.lua:883`, cuerpo en `terminator_nextbot_base/enemy.lua:44-47`). Es un **cache**.
+El nombre lo venía diciendo: `OnFirst…`.
+
+**② Y aunque re-evaluara, la relación no aguanta.** `MakeFeud` (`enemyoverrides.lua:1046-1048`)
+reescribe la relación del jugador a `D_HT` con prioridad 1000 en cuanto al bot le pegan
+(`PostTookDamage`, `damageandhealth.lua:482`), sin preguntarle nada a nadie. **Un interruptor hecho
+de relaciones se reabre de un balazo** y no se vuelve a cerrar, porque nada re-evalúa el cache.
+
+**El interruptor de verdad es `ShouldBeEnemy`** — el lugar donde la base **lee** ese cache
+(`enemyoverrides.lua:493`) y que se consulta en vivo por seis caminos:
+
+| Quién lo llama | Dónde | Para qué |
+|---|---|---|
+| `processFindingEnt` (barrido) | `enemyoverrides.lua:596` | ruta 1 de §18.7 |
+| `ForgetOldEnemies` | `enemyoverrides.lua:676` | limpiar memoria — **es el que suelta al enemigo** |
+| `FindPriorityEnemy` | `enemyoverrides.lua:719` | elegir enemigo |
+| el fallback «sin enemigos» | `shared.lua:3203` | ruta 3 de §18.7 |
+| revalidar el enemigo anterior | `shared.lua:3282` | continuidad |
+| `HaveEnemy` | `terminator_nextbot_base/enemy.lua:136` | la pregunta pública |
+
+Un `false` ahí **no congela nada**: el cerebro sigue corriendo entero y las 31 tareas siguen ahí. Es
+literalmente lo que pide la última línea de §3.1 —*«el bot nunca deja de pensar, sólo deja de tener a
+quién odiar»*— sólo que en la función de al lado. Y **no** es `DisableBehaviour`.
+
+**Entonces `OnFirstRelationWithPlayer` queda escrito, pero como INSTRUMENTO y no como mecanismo:**
+cuenta cuántas veces la base evalúa la relación y con qué flag, y encadena al `BaseClass` (trampa ①:
+la implementación default **no está vacía**, implementa `ExtraSpawnHealthPerPlayer`,
+`damageandhealth.lua:872`). Devuelve lo que devuelva el `BaseClass` —`nil`—, así que **la relación
+del fantasma con el jugador queda en `D_HT` siempre, a propósito**: un `D_NU` ahí trabaría el
+interruptor cerrado para siempre, porque la base exige `D_HT` en `:493` y nada re-evalúa el cache.
+
+> **Consecuencia honesta para el check:** como la relación nunca sale de `D_HT`, **el motivo ② no se
+> mide en esta corrida** — no hay nada que `MakeFeud` pueda reabrir. Sigue siendo **[lectura]**. Lo
+> que la fila 10 sí mide es su **consecuencia práctica**: que el interruptor aguante un balazo. Si
+> alguien alguna vez «simplifica» esto a un interruptor de relaciones, esa fila se pone roja.
+
+### Lo que se agregó
+
+```
+lua/entities/terminator_nextbot_phantom/
+    server.lua    ENT.phantom_Hunting, ShouldBeEnemy, OnFirstRelationWithPlayer,
+                  phantom_SetHunting/phantom_IsHunting, y tres comandos
+    client.lua    el marcador cambia de color y dice HUNT / calma
+```
+
+| Comando | Qué es | Qué hace |
+|---|---|---|
+| `phantasmagoria_hunt 0\|1` | **ANDAMIO** | mueve **sólo el flag**. Ni relación ni memoria ni tareas — para que la corrida pueda medir qué hace la base sola |
+| `phantasmagoria_hunt_reeval` | **CONTROL** | re-dispara `SetupEntityRelationship` a mano. Existe para probar que el contador de la fila 6 **no está roto** |
+| `phantasmagoria_ghost_rel` | instrumento | por fantasma y por jugador: el flag, la relación **cacheada**, y el resultado **en vivo** de `ShouldBeEnemy` |
+
+El estado viaja por `SetNWBool`, **no** por `SetupDataTables` (trampa ③: el `Bool 0` ya es
+`Crouching`). Son sistemas distintos y no colisionan; la base no usa ningún NW var —grep sobre sus 71
+archivos: cero—.
+
+**Un efecto secundario medido en el código, que si no se lee como bug:** `shared.lua:1387` usa
+`ShouldBeEnemy` sobre lo que le bloquea el paso —`not ShouldBeEnemy( blocker )` → `openDoorTime`—, o
+sea **abrir en vez de romper**. Con el interruptor en fantasma esa rama se toma siempre. Es la que
+queremos.
+
+### El check — **criterios escritos ANTES de correr, ninguno corrido**
+
+Precondiciones ya medidas y sin cambios: junction, base WSID `2944078031`, `scaryblackman` **no**
+montado → sale `male_04` por el fallback y está bien.
+
+| # | Qué se hace | Verde | Rojo | C4 |
+|---|---|---|---|---|
+| 1 | Spawnearlo y mirar consola + marcador | consola dice `hunt NO`; el marcador es **violeta** y dice `calma` | dice `hunt SI`, o el marcador es rojo | |
+| 2 | `phantasmagoria_ghost_rel` de una | `ShouldBeEnemy NO` y `enemigo ninguno` para todos los jugadores | `ShouldBeEnemy SI`, o ya tiene enemigo | |
+| 3 | Quedarse **quieto y a la vista** 30 s | **no se acerca**: la distancia del marcador no baja de forma sostenida | camina hacia vos y la distancia baja |  |
+| 4 | **La pregunta abierta.** Dos `phantasmagoria_ghost_where` separados ≥ 30 s, con el jugador quieto | la `pos` cambió **> 200 u**: deambula | cambió ≤ 200 u: **se quedó clavado**, y «no te ataca» se volvió «no hace nada» | |
+| 5 | En el mismo `ghost_where`, mirar las tareas | la lista **no está vacía** y sigue apareciendo `movement_handler` | no hay tareas → algo se congeló y saltear fue apagar | |
+| 6 | **La medición que puede tirar abajo §3.1.** `phantasmagoria_hunt 1` y **nada más**; después `phantasmagoria_ghost_rel` | las llamadas a `OnFirstRelationWithPlayer` **NO subieron** → nada re-evalúa | subieron → la base **sí** re-evalúa, §3.1 tenía razón y se corrige este documento | |
+| 7 | **Control de la fila 6:** `phantasmagoria_hunt_reeval` | las llamadas **suben** (+1 por jugador por fantasma) | no suben → el contador está roto y **la fila 6 no midió nada** | |
+| 8 | Con `hunt 1`, alejarse y esperar | **te persigue**: `enemigo Player [N]`, `ShouldBeEnemy SI`, marcador **rojo** con `HUNT` | no te toma como enemigo | |
+| 9 | `phantasmagoria_hunt 0` y **nada más** | en **≤ 3 s** `enemigo` pasa a `ninguno` y deja de perseguir | sigue con enemigo pasados 3 s → hay que limpiar la memoria a mano | |
+| 10 | Con `hunt 0`, **pegarle un tiro** y esperar 5 s | sigue en `enemigo ninguno` y `ShouldBeEnemy NO` | te toma como enemigo → el interruptor no aguanta un balazo | |
+
+**Predicciones, para que la refutación sea barata:** 1-3 verdes, 4 **deambula** (`movement_handler`
+cae en `movement_inertia` con el comentario *«nothing better to do»*, `shared.lua:4184-4187`), 5
+verde, **6 verde en el sentido de que §3.1 queda refutado**, 7 verde, 8-10 verdes. Si algo sale
+distinto, **gana el juego** y se corrige el documento.
+
+> **Dos cosas de la fila 10 que hay que saber antes de leerla mal.** ① El tiro **sí** te mete en su
+> memoria: la ruta 4 de §18.7 (`PostTookDamage` → `UpdateEnemyMemory`, `damageandhealth.lua:500`)
+> **no chequea línea de vista ni relación**. Lo que la fila mide es que `ForgetOldEnemies` y
+> `FindPriorityEnemy` te descarten igual, porque las dos preguntan `ShouldBeEnemy`. ② El bot **va a
+> girar la cabeza** hacia el disparo — `TookDamagePos` (`damageandhealth.lua:515`) — y eso **no** es
+> tomarte de enemigo: si girar contara como rojo, la fila mediría otra cosa. La vida es 900, así que
+> unos tiros no lo matan.
+
+> **La fila 4 del check anterior cambia de premisa.** Decía «camina hacia el jugador» y salía verde
+> porque el bot era hostil **a propósito**. Con el interruptor, esa fila **sólo vale con
+> `phantasmagoria_hunt 1`** — que es exactamente lo que mide la fila 8 de acá. No es una regresión:
+> es que el criterio viejo medía un andamio.
 
 ---
 
@@ -196,9 +286,9 @@ Si algo sale distinto de lo que este documento predice, **gana el juego** y se c
 | Ausente | Por qué |
 |---|---|
 | `ENT.IsWraith` | un instrumento invisible no sirve para ver dónde está |
-| `OnFirstRelationWithPlayer` | es el interruptor fantasma/cazador (§3.1 del diseño), y hoy queremos al bot hostil para que camine hacia algo. Va en esa función y **nunca** en `DisableBehaviour` |
+| ~~`OnFirstRelationWithPlayer`~~ | **ya no está ausente** — se escribió el 2026-08-06, pero como instrumento y no como interruptor. Ver el bloque de arriba |
 | `SetupDataTables` | el `Bool 0` ya es `Crouching` en la base (trampa ③) |
-| máquina de estados, 30 tipos, rasgos, cordura, hunt, sonidos | todo eso venía **después** de verla caminar una vez — y ya caminó |
+| máquina de estados, 30 tipos, rasgos, cordura, sonidos | todo eso venía **después** de verla caminar una vez — y ya caminó |
 
 **Dato de la corrida 3 que es decisión de diseño pendiente: la vida es 900**, el default de la base
 (`terminator_Extras.healthDefault`). Un fantasma de Phasmophobia no se mata a balazos: §5.4 dice que
@@ -210,7 +300,10 @@ Las trampas de la base están en §4.3 y §4.4 de la referencia. Resumidas:
 1. **`ENT.Models`, no `ENT.Model`** — si no, spawnea con Arnold.
 2. **`Term_FOV` necesita `AutoUpdateFOV = false`** o la convar global lo pisa en caliente.
 3. **No usar `SetupDataTables` con `Bool 0`** — la base ya usa ese slot para `Crouching`.
-4. **El interruptor fantasma/cazador es `OnFirstRelationWithPlayer`**, no `DisableBehaviour`.
+4. **El interruptor fantasma/cazador es `ShouldBeEnemy`** —y **nunca** `DisableBehaviour`—. Esta
+   línea decía `OnFirstRelationWithPlayer`, que es lo que dice §3.1, y **es la función equivocada**:
+   ésa escribe un cache que se llena una vez. Corregido el 2026-08-06 leyendo el código; el detalle,
+   arriba.
 5. **`ENT.Base = "terminator_nextbot"`**, no `"terminator_nextbot_base"` — el `_base` no tiene cerebro.
 6. **El punto de entrada de una entidad-carpeta es `shared.lua`**, no `init.lua`: el registro tiene
    que correr **en el cliente**, que es donde se arma el spawnmenu (§4.4④).
