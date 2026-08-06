@@ -48,7 +48,11 @@
 AddCSLuaFile()
 
 SWEP.Base       = "weapon_base"
-SWEP.PrintName  = "Camara de fotos [prueba de viewmodel]"
+-- El nombre arranca con NIVEL 0 y no con "Camara" a proposito: en el menu Q las
+-- dos camaras quedan una al lado de la otra y las dos rondas 5 se corrieron
+-- enteras con esta cuando se creia estar midiendo la otra. Ordenar por lo que
+-- las DISTINGUE y no por lo que comparten.
+SWEP.PrintName  = "NIVEL 0 · camara (c_medkit prestado)"
 SWEP.Author     = "Phantasmagoria"
 SWEP.Purpose    = "Prototipo nivel 0: manos animadas sin compilar modelo."
 SWEP.Category   = "Phantasmagoria"
@@ -184,6 +188,36 @@ function SWEP:Think()
         self.IdleAt = nil
         self:PlaySeq( SEQ_IDLE )
     end
+end
+
+---------------------------------------------------------------------------
+-- ph_vm_use 0|1 : equipar la camara correcta, sin pasar por el menu
+--
+-- Existe porque el menu Q es donde se rompe el metodo, no la consola. La ronda
+-- 5 se corrio DOS VECES entera con el arma del nivel 0 creyendo medir el nivel
+-- 1 -- la segunda con el aviso ">>> NIVEL 0" impreso en la segunda linea del
+-- dump. Un aviso informa despues; el error ya paso al elegir el arma.
+--
+-- Esto da Y selecciona, asi que despues de correrlo no hay ambiguedad sobre
+-- que se esta midiendo. Es la misma idea que "un comando por boton".
+---------------------------------------------------------------------------
+if SERVER then
+    concommand.Add( "ph_vm_use", function( ply, _, args )
+        if not IsValid( ply ) then return end
+        local n = tonumber( args[1] or "" )
+        if n ~= 0 and n ~= 1 then
+            ply:PrintMessage( HUD_PRINTCONSOLE, "[ph_vm_use] uso: ph_vm_use 0  (prestado)  |  ph_vm_use 1  (compilado)" )
+            return
+        end
+        local cls = ( n == 0 ) and "phantasmagoria_camera_test" or "phantasmagoria_camera_vm"
+        if not weapons.Get( cls ) then
+            ply:PrintMessage( HUD_PRINTCONSOLE, "[ph_vm_use] la clase " .. cls .. " NO EXISTE (no se registro el SWEP)" )
+            return
+        end
+        if not ply:HasWeapon( cls ) then ply:Give( cls ) end
+        ply:SelectWeapon( cls )
+        ply:PrintMessage( HUD_PRINTCONSOLE, "[ph_vm_use] equipado NIVEL " .. n .. " -> " .. cls )
+    end )
 end
 
 if not CLIENT then return end

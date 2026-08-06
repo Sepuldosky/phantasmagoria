@@ -35,7 +35,7 @@
 AddCSLuaFile()
 
 SWEP.Base       = "weapon_base"
-SWEP.PrintName  = "Camara de fotos [viewmodel compilado]"
+SWEP.PrintName  = "NIVEL 1 · camara (viewmodel compilado)"
 SWEP.Author     = "Phantasmagoria"
 SWEP.Purpose    = "Nivel 1: la camara vive dentro del viewmodel."
 SWEP.Category   = "Phantasmagoria"
