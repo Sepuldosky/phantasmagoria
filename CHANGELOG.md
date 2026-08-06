@@ -34,6 +34,23 @@ dirección está.
 **Los dos defectos son del instrumento, no del fantasma** — y los dos son *diseñar contra un
 escenario y probar en otro*. El fantasma anduvo a la primera.
 
+### Corrida 2, en `gm_uh_house`: cuatro filas verdes y el tercer defecto del instrumento
+
+La etiqueta **se ve** (`PHANTOM #1090` · `4 m`): era la altura, confirmado. El bot se movió 68 u
+entre el spawn y la consulta y tiene `enemigo Player [1]`, así que la adquisición también anda.
+
+**Y el comando perdía su mejor línea sin decir cuál.** `phantasmagoria_ghost_where` imprimió pos,
+vida, modelo y enemigo — **y no las tareas**. `HUD_PRINTCONSOLE` viaja por un user message `TextMsg`
+con techo de **255 bytes**, y al pasarse **no trunca: el servidor se niega a mandar la línea entera**
+(`Refusing to send user message TextMsg of 256 bytes`). De las seis líneas se perdió exactamente la
+única que crece sin techo, que era la más informativa. **El único rastro fue un aviso del engine que
+no nombra la línea perdida**, así que la salida pasa por completa si no se la lee contra la esperada.
+Arreglado troceando toda línea a 180 bytes y sacando una tarea por renglón.
+
+**Y queda un check sin ejercer, dicho en voz alta:** `gm_uh_house` trae **3340 navareas**, así que el
+arreglo del aviso —el `timer` que re-mide a los 10 s— **no corrió**. El silencio fue el resultado
+correcto para este mapa y **no prueba la rama nueva**: hace falta volver al mapa de la corrida 1.
+
 ---
 
 ## 2026-08-05 — Sesión 14: la primera entidad, escrita como instrumento

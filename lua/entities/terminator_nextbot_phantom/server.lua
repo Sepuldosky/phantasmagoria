@@ -132,13 +132,39 @@ end
 -- Complementa al marcador del cliente y falla distinto: el marcador solo
 -- dibuja fantasmas dentro del PVS del jugador, este los ve todos. Si uno
 -- aparece aca y no en pantalla, el bot existe y el que fallo es el dibujo.
+-- HUD_PRINTCONSOLE viaja por un user message TextMsg con techo de 255 BYTES, y
+-- lo que pasa al pasarse NO es que se trunque: el servidor se NIEGA a mandarlo
+-- ( "Refusing to send user message TextMsg of 256 bytes to client, user message
+-- size limit is 255 bytes" ) y la linea entera se pierde. Medido en la primera
+-- corrida (2026-08-05): la linea de TAREAS -- la mas informativa de las seis --
+-- fue justo la unica que se paso, y el unico rastro fue ese aviso del engine,
+-- que no dice cual se perdio. Un instrumento que pierde su mejor dato en
+-- silencio es peor que no tenerlo.
+local MAX_LINEA = 180 -- con margen: al trozo se le suma la sangria
+
 concommand.Add( "phantasmagoria_ghost_where", function( ply )
     local function say( line )
-        if IsValid( ply ) then
-            ply:PrintMessage( HUD_PRINTCONSOLE, line )
+        line = tostring( line )
 
-        else
+        if not IsValid( ply ) then -- consola del servidor, sin limite
             print( line )
+            return
+
+        end
+
+        if line == "" then
+            ply:PrintMessage( HUD_PRINTCONSOLE, "" )
+            return
+
+        end
+
+        local primero = true
+
+        while #line > 0 do
+            local trozo = string.sub( line, 1, MAX_LINEA )
+            line = string.sub( line, MAX_LINEA + 1 )
+            ply:PrintMessage( HUD_PRINTCONSOLE, primero and trozo or "            " .. trozo )
+            primero = false
 
         end
     end
@@ -171,7 +197,19 @@ concommand.Add( "phantasmagoria_ghost_where", function( ply )
         say( "    vida    " .. ghost:Health() .. " / " .. ghost:GetMaxHealth() )
         say( "    modelo  " .. tostring( ghost:GetModel() ) )
         say( "    enemigo " .. ( IsValid( enemy ) and tostring( enemy ) or "ninguno" ) )
-        say( "    tareas  " .. ( #tasks > 0 and table.concat( tasks, ", " ) or "ninguna" ) )
+
+        -- una por linea: son el dato que mas dice y el que mas largo se pone
+        if #tasks <= 0 then
+            say( "    tareas  ninguna" )
+
+        else
+            say( "    tareas  " .. #tasks )
+
+            for _, name in ipairs( tasks ) do
+                say( "        - " .. name )
+
+            end
+        end
 
     end
 

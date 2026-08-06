@@ -78,17 +78,27 @@ un ciudadano de HL2. Si querés el modelo bueno, está desempacado en
 > comprimidos con LZMA** — lo delató que el control (Jeff, que sí está suscrito) tampoco aparecía en
 > su propio archivo.
 
-| # | Qué se hace | Verde | Rojo | **Corrida 1** (2026-08-05) |
-|---|---|---|---|---|
-| 1 | Abrir el spawnmenu, pestaña **NPCs** | hay categoría **Phantasmagoria → Fantasmas** con *Phantasmagoria Ghost* | no está | ✅ |
-| 2 | Clickearlo | aparece un cuerpo, y la consola imprime `[Phantasmagoria] spawn #N modelo … pos …` | error de Lua, o nada | ✅ `spawn #253 modelo …male_04.mdl skin 1` |
-| 3 | Mirarlo | hay caja violeta + haz + `PHANTOM #N` + distancia en metros, **también a través de una pared** | no se dibuja nada | ⚠️ **caja y haz sí, etiqueta no** |
-| 4 | Alejarse y esperar | **camina hacia el jugador** — el marcador se mueve y la distancia baja | se queda clavado | ✅ camina y persigue |
-| 5 | `phantasmagoria_ghost_where` en consola | lista pos, vida, modelo, enemigo, tareas y navareas | dice 0 fantasmas con uno vivo | sin correr |
+| # | Qué se hace | Verde | Rojo | **Corrida 1** (casa moderna) | **Corrida 2** (`gm_uh_house`) |
+|---|---|---|---|---|---|
+| 1 | Abrir el spawnmenu, pestaña **NPCs** | hay categoría **Phantasmagoria → Fantasmas** con *Phantasmagoria Ghost* | no está | ✅ | ✅ |
+| 2 | Clickearlo | aparece un cuerpo, y la consola imprime `[Phantasmagoria] spawn #N modelo … pos …` | error de Lua, o nada | ✅ `spawn #253 …male_04.mdl skin 1` | ✅ `spawn #1090` |
+| 3 | Mirarlo | hay caja violeta + haz + `PHANTOM #N` + distancia en metros, **también a través de una pared** | no se dibuja nada | ⚠️ caja y haz sí, etiqueta no | ✅ `PHANTOM #1090` · `4 m` |
+| 4 | Alejarse y esperar | **camina hacia el jugador** — el marcador se mueve y la distancia baja | se queda clavado | ✅ camina y persigue | ✅ se movió 68 u y `enemigo Player [1]` |
+| 5 | `phantasmagoria_ghost_where` en consola | lista pos, vida, modelo, enemigo, tareas y navareas | dice 0 fantasmas con uno vivo | sin correr | ⚠️ **todo menos las tareas** |
 
-**La entidad funciona.** Existe, aparece en el menú, spawnea, camina y te sigue. Los dos defectos
-que salieron son **del instrumento**, no del fantasma, y los dos son la misma clase de error: *se
-diseñó contra un escenario y se probó en otro*.
+**LA ENTIDAD FUNCIONA, y las cuatro primeras filas están verdes** (2026-08-05, dos mapas). Existe,
+aparece en el menú, spawnea, camina, te sigue y te toma como enemigo. **Los tres defectos que
+salieron son del INSTRUMENTO, no del fantasma.**
+
+### Dos cosas que la corrida 2 dejó sin cerrar
+
+**① El arreglo del navmesh no se ejerció.** `gm_uh_house` trae **3340 navareas**, así que
+`areasAlSpawnear > 0` y el código sale sin imprimir: **el silencio es el resultado correcto**, pero
+sólo prueba que el aviso no molesta cuando hay navmesh. La rama nueva —el `timer` que re-mide a los
+10 s— **necesita el mapa de la corrida 1**, que era el que tenía 0.
+
+**② La vida es 824/900.** El default de la base para un fantasma es un número de diseño que todavía
+no se decidió (§5 del diseño).
 
 **① El aviso de navmesh predecía en vez de medir — y el juego lo refutó.** Decía «SIN NAVMESH: el bot
 no va a caminar», había 0 navareas, y **el bot caminaba**. La medición del instante era correcta; la
@@ -102,7 +112,16 @@ diciendo cuántas areas construyó el parche — o confirmando el 0, que ahí s�
 **② La etiqueta del marcador estaba sobre el techo.** Se veían la caja y el haz y no el texto: estaba
 a 250 u sobre la cabeza (~322 del piso), y la corrida fue **adentro de una casa**. El instrumento se
 diseñó para un mapa abierto. Bajada a 14 u — pegada a la cabeza. El haz largo se queda: es lo que te
-dice desde otra habitación en qué dirección está.
+dice desde otra habitación en qué dirección está. **Corregido y confirmado en la corrida 2.**
+
+**③ `phantasmagoria_ghost_where` perdía su mejor línea, y el aviso no decía cuál.**
+`HUD_PRINTCONSOLE` viaja por un user message `TextMsg` con techo de **255 bytes**, y al pasarse **no
+se trunca: el servidor se niega a mandarlo** — `Refusing to send user message TextMsg of 256 bytes`.
+De las seis líneas por fantasma se perdió exactamente una: **la de tareas**, que es la más
+informativa y la única que crece sin techo. El único rastro fue ese aviso del engine, que **no dice
+cuál se perdió**: sin leer la salida esperada al lado de la real, pasa por completa.
+Arreglado troceando toda línea a 180 bytes —red de seguridad para las seis— y sacando **una tarea por
+línea**, que además se lee mejor.
 
 El 3 y el 5 son **dos instrumentos que fallan distinto**: el marcador solo ve lo que está en el PVS,
 el comando corre en el servidor y los ve a todos. Si el 5 lo encuentra y el 3 no, el bot existe y el
