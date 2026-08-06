@@ -7,11 +7,53 @@ que se **midió**, no lo que se planea.
 
 ---
 
-## 2026-08-06 — El interruptor fantasma/cazador: escrito, y §3.1 nombraba la función equivocada
+## 2026-08-06 — El interruptor fantasma/cazador CORRIÓ, y §3.1 quedó refutado en juego
 
 El primer comportamiento propio del fantasma. Arranca en `phantom_Hunting = false` y **no ataca a
-nadie**; con el hunt prendido vuelve a ser el cazador que ya sabía ser. **Sin correr**: hay un check
-de 10 filas con los criterios escritos antes y ninguna fila ejercida.
+nadie**; con el hunt prendido vuelve a ser el cazador que ya sabía ser. **Corrió**: **6 de 10 filas
+en verde, 4 sin correr, 0 rojos**.
+
+### §3.1 refutado, con el control disparado un segundo antes
+
+El orden real de la corrida fue **al revés** del que pedía la tabla, y eso la hace más fuerte:
+
+```
+] phantasmagoria_hunt_reeval
+    #1066  llamadas a OnFirstRelationWithPlayer: 1 -> 2      <- el contador está VIVO, medido acá
+] phantasmagoria_hunt 1
+    #1066  hunt -> SI ( cazador )   llamadas ...: 2          <- y prender el hunt NO lo movió
+```
+
+Con el control corriendo inmediatamente antes, «el contador no se movió» no puede ser «el contador
+está roto». **Nada re-evalúa relaciones al entrar en hunt.** Y el bot **sí** cambió de actitud, lo
+que confirma que el cambio viene del `ShouldBeEnemy` leyendo el flag en vivo.
+
+**Pero la fila se midió en un INSTANTE, y eso ya salió mal tres veces acá.** `phantasmagoria_hunt`
+imprime el contador en el mismo frame del flip; una re-evaluación un tick después no aparecería. Es
+el mismo defecto que *«0 navareas al spawnear» no es «0 navareas»*. Se cierra con un
+`phantasmagoria_ghost_rel` posterior, que sigue pendiente.
+
+### La pregunta abierta contestada: **deambula**
+
+*«En calma sólo mira en una dirección y se mueve aleatoriamente, onda deambulando.»* La predicción se
+sostiene (`movement_handler` → `movement_inertia`, *«nothing better to do»*, `shared.lua:4184-4187`):
+**«no te ataca» no se volvió «no hace nada»**. Queda como **[a ojo]**: la fila pedía dos `pos`
+separadas y no se tomaron.
+
+### Dos hallazgos que no salieron de ninguna fila
+
+**① El fantasma va a 1,96× la carrera del jugador.** Lo reportó el autor y el código pone el número:
+la base trae `ENT.RunSpeed = 550` (`shared.lua:132`, con el comentario *«bit faster than players...
+in a straight line»*), el fantasma **no lo pisa**, y `sv_bm_speed_run` del autor es **280**.
+**Contradice §1.1**, que manda derivar la velocidad de la carrera real. **Cuarta vez que «heredado»
+no es «correcto»** — y la primera que lo agarra el juego y no la lectura.
+
+**② Me pasé de explicar, y el autor lo corrigió en el mismo mensaje.** Leí *«sólo mira en una
+dirección»* del reporte y le colgué encima la trampa ⑦ de Referencia §4.4 (sin `TERM_FISTS` el bot no
+mira hacia su objetivo al moverse). El autor: **en calma sí mueve la vista, sólo que menos.** La cita
+puede ser cierta en su alcance y aun así no ser la explicación de lo reportado. *Una observación en
+prosa todavía no es una medición, y explicarla antes de fijarla convierte una frase suelta en un
+hecho con cita.*
 
 ### La relación no sirve de interruptor, por dos motivos independientes
 

@@ -158,7 +158,12 @@ correr* congela el estado — saltear no es apagar**.
 La forma correcta es **un solo lugar que no congela nada**. Este párrafo decía que ese lugar era la
 *relación*, y **era la función equivocada** — la corrección está abajo.
 
-> ### ⚠ CORREGIDO 2026-08-06 **[lectura]** — la relación no sirve de interruptor
+> ### ⚠ CORREGIDO 2026-08-06 — **REFUTADO EN JUEGO**: la relación no sirve de interruptor
+>
+> **El motivo ① está MEDIDO** (corrida 4): con el control disparado un segundo antes
+> (`phantasmagoria_hunt_reeval` movió el contador `1 -> 2`), prender el hunt lo dejó **en 2**. Nada
+> re-evalúa. El motivo ② sigue siendo **[lectura]** — ver el límite declarado en
+> [ESTADO.md](../ESTADO.md).
 >
 > Lo que decía este bloque:
 >

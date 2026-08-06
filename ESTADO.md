@@ -18,8 +18,9 @@ exhaustiva de la base, un diseño completo, la tabla de los 30 tipos generada de
 juego, y **una entidad que existe, spawnea del menú, camina y te persigue**, verificada en **tres
 corridas sobre dos mapas**.
 
-**El 2026-08-06 se le escribió el primer comportamiento propio: el interruptor fantasma/cazador.**
-Está **sin correr** — hay un check de 10 filas con los criterios escritos y ninguna fila ejercida.
+**El 2026-08-06 se le escribió el primer comportamiento propio: el interruptor fantasma/cazador, y
+CORRIÓ.** Fuera del hunt deambula y no ataca; dentro, caza. **6 de 10 filas en verde, 4 sin correr,
+0 rojos** — y §3.1 del diseño quedó **refutado en juego**, con su control disparado un segundo antes.
 Sigue sin haber máquina de estados, ni tipos, ni cordura.
 
 Lo que existe:
@@ -38,21 +39,25 @@ Lo que existe:
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
 | Entidad `terminator_nextbot_phantom` | **CORRIENDO EN JUEGO** — `lua/entities/terminator_nextbot_phantom/`, 3 archivos. Check de 5 filas **cerrado en verde** |
-| Interruptor fantasma / cazador | **ESCRITO, SIN CORRER** — el primer comportamiento propio. Check de 10 filas escrito y **sin ejercer** (ver abajo) |
+| Interruptor fantasma / cazador | **CORRIENDO EN JUEGO** — el primer comportamiento propio. Check de 10 filas: **6 verdes, 4 sin correr, 0 rojos**. §3.1 **refutado en juego** |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
-| Corridas en GMod | **3** (2026-08-05, `gm_uh_house` + `gm_graysonhouse`) — refutaron una predicción del documento y destaparon 4 defectos, **los 4 del instrumento** |
+| Corridas en GMod | **4** (2026-08-05 ×3, `gm_uh_house` + `gm_graysonhouse`; 2026-08-06 ×1) — refutaron **dos** predicciones del documento y destaparon 4 defectos, **los 4 del instrumento** |
 
 ---
 
 ## El próximo paso concreto
 
-**Correr el check de 10 filas de abajo.** El interruptor fantasma/cazador está escrito y **no se
-ejerció**. Hasta que corra, todo lo que sigue es lectura.
+**Cerrar las 4 filas que faltan del check de abajo** —dos son un comando cada una— y **de paso
+confirmar la fila 6 fuera del instante del flip**, que es la única debilidad de la corrida 4.
+
+Después, dos cosas en el orden que decida el autor: **la velocidad** (el fantasma va a 1,96× la
+carrera del jugador, contra lo que pide §1.1) y **la cordura** (§19), que es la que tiene que
+reemplazar al andamio `phantasmagoria_hunt`.
 
 ---
 
-## El interruptor fantasma / cazador — **ESCRITO, SIN CORRER**
+## El interruptor fantasma / cazador — **CORRIENDO EN JUEGO**
 
 El fantasma arranca en `phantom_Hunting = false` y **no ataca a nadie**; con el hunt prendido vuelve
 a ser el cazador que ya sabía ser. El gatillo es **manual y provisorio** —un concommand— porque la
@@ -134,18 +139,83 @@ queremos.
 Precondiciones ya medidas y sin cambios: junction, base WSID `2944078031`, `scaryblackman` **no**
 montado → sale `male_04` por el fallback y está bien.
 
-| # | Qué se hace | Verde | Rojo | C4 |
+| # | Qué se hace | Verde | Rojo | **C4** `#1066` |
 |---|---|---|---|---|
-| 1 | Spawnearlo y mirar consola + marcador | consola dice `hunt NO`; el marcador es **violeta** y dice `calma` | dice `hunt SI`, o el marcador es rojo | |
-| 2 | `phantasmagoria_ghost_rel` de una | `ShouldBeEnemy NO` y `enemigo ninguno` para todos los jugadores | `ShouldBeEnemy SI`, o ya tiene enemigo | |
-| 3 | Quedarse **quieto y a la vista** 30 s | **no se acerca**: la distancia del marcador no baja de forma sostenida | camina hacia vos y la distancia baja |  |
-| 4 | **La pregunta abierta.** Dos `phantasmagoria_ghost_where` separados ≥ 30 s, con el jugador quieto | la `pos` cambió **> 200 u**: deambula | cambió ≤ 200 u: **se quedó clavado**, y «no te ataca» se volvió «no hace nada» | |
-| 5 | En el mismo `ghost_where`, mirar las tareas | la lista **no está vacía** y sigue apareciendo `movement_handler` | no hay tareas → algo se congeló y saltear fue apagar | |
-| 6 | **La medición que puede tirar abajo §3.1.** `phantasmagoria_hunt 1` y **nada más**; después `phantasmagoria_ghost_rel` | las llamadas a `OnFirstRelationWithPlayer` **NO subieron** → nada re-evalúa | subieron → la base **sí** re-evalúa, §3.1 tenía razón y se corrige este documento | |
-| 7 | **Control de la fila 6:** `phantasmagoria_hunt_reeval` | las llamadas **suben** (+1 por jugador por fantasma) | no suben → el contador está roto y **la fila 6 no midió nada** | |
-| 8 | Con `hunt 1`, alejarse y esperar | **te persigue**: `enemigo Player [N]`, `ShouldBeEnemy SI`, marcador **rojo** con `HUNT` | no te toma como enemigo | |
-| 9 | `phantasmagoria_hunt 0` y **nada más** | en **≤ 3 s** `enemigo` pasa a `ninguno` y deja de perseguir | sigue con enemigo pasados 3 s → hay que limpiar la memoria a mano | |
-| 10 | Con `hunt 0`, **pegarle un tiro** y esperar 5 s | sigue en `enemigo ninguno` y `ShouldBeEnemy NO` | te toma como enemigo → el interruptor no aguanta un balazo | |
+| 1 | Spawnearlo y mirar consola + marcador | consola dice `hunt NO`; el marcador es **violeta** y dice `calma` | dice `hunt SI`, o el marcador es rojo | ✅ `hunt NO`, violeta, `3.9 m calma` |
+| 2 | `phantasmagoria_ghost_rel` de una | `ShouldBeEnemy NO` y `enemigo ninguno` para todos los jugadores | `ShouldBeEnemy SI`, o ya tiene enemigo | ⬜ **sin correr** |
+| 3 | Quedarse **quieto y a la vista** 30 s | **no se acerca**: la distancia del marcador no baja de forma sostenida | camina hacia vos y la distancia baja | ✅ no se acerca |
+| 4 | **La pregunta abierta.** Dos `phantasmagoria_ghost_where` separados ≥ 30 s, con el jugador quieto | la `pos` cambió **> 200 u**: deambula | cambió ≤ 200 u: **se quedó clavado**, y «no te ataca» se volvió «no hace nada» | ✅ **deambula** (a ojo, no por `pos`) |
+| 5 | En el mismo `ghost_where`, mirar las tareas | la lista **no está vacía** y sigue apareciendo `movement_handler` | no hay tareas → algo se congeló y saltear fue apagar | ⬜ **sin correr** |
+| 6 | **La medición que puede tirar abajo §3.1.** `phantasmagoria_hunt 1` y **nada más**; después `phantasmagoria_ghost_rel` | las llamadas a `OnFirstRelationWithPlayer` **NO subieron** → nada re-evalúa | subieron → la base **sí** re-evalúa, §3.1 tenía razón y se corrige este documento | ✅ **quedaron en 2** → §3.1 REFUTADO |
+| 7 | **Control de la fila 6:** `phantasmagoria_hunt_reeval` | las llamadas **suben** (+1 por jugador por fantasma) | no suben → el contador está roto y **la fila 6 no midió nada** | ✅ `1 -> 2` |
+| 8 | Con `hunt 1`, alejarse y esperar | **te persigue**: `enemigo Player [N]`, `ShouldBeEnemy SI`, marcador **rojo** con `HUNT` | no te toma como enemigo | ✅ persigue, rojo, `3 m HUNT` |
+| 9 | `phantasmagoria_hunt 0` y **nada más** | en **≤ 3 s** `enemigo` pasa a `ninguno` y deja de perseguir | sigue con enemigo pasados 3 s → hay que limpiar la memoria a mano | ⬜ **sin correr** |
+| 10 | Con `hunt 0`, **pegarle un tiro** y esperar 5 s | sigue en `enemigo ninguno` y `ShouldBeEnemy NO` | te toma como enemigo → el interruptor no aguanta un balazo | ⬜ **sin correr** |
+
+## Corrida 4 (2026-08-06) — **6 de 10 en verde, 4 sin correr, 0 rojos**
+
+**El interruptor funciona en las dos direcciones**, y las capturas lo muestran: en calma, caja violeta
+y `3.9 m calma`; en hunt, caja roja y `3 m HUNT`.
+
+**§3.1 quedó REFUTADO, y con el control disparado un segundo antes.** El orden real de la corrida fue
+**al revés** del que pide la tabla, y eso la hace **más fuerte**, no más débil:
+
+```
+] phantasmagoria_hunt_reeval
+    #1066  llamadas a OnFirstRelationWithPlayer: 1 -> 2      ← el contador está VIVO, medido acá
+] phantasmagoria_hunt 1
+    #1066  hunt -> SI ( cazador )   llamadas ...: 2          ← y prender el hunt NO lo movió
+```
+
+Con el control corriendo inmediatamente antes, «el contador no se movió» no puede ser «el contador
+está roto». **Nada re-evalúa relaciones al entrar en hunt.** Y el bot **sí** cambia de actitud —fila
+8—, lo que confirma que el cambio viene del `ShouldBeEnemy` leyendo el flag en vivo y **no** de
+ninguna re-evaluación: exactamente la distinción que el aviso de arriba pedía no confundir.
+
+> ### ⚠ La fila 6 se midió en un INSTANTE, y eso ya salió mal tres veces en este proyecto
+>
+> `phantasmagoria_hunt` imprime el contador **en el mismo frame del flip**. Si la base re-evaluara un
+> tick después, esa línea no lo vería. La lectura del código dice que no puede pasar —nada observa
+> `phantom_Hunting`— pero **eso es lectura, y la medición que tengo es una foto**. Es literalmente el
+> defecto ① de la corrida 1 (*«0 navareas al spawnear» no es «0 navareas»*) y el del contador de
+> areas que pasó de 42 a 137. **Se cierra con un `phantasmagoria_ghost_rel` ahora**: si sigue
+> diciendo 2, la fila queda cerrada y de paso cae la fila 2, que tampoco se corrió.
+
+**La pregunta abierta quedó contestada: deambula.** *«En calma sólo mira en una dirección y se mueve
+aleatoriamente, onda deambulando»* — la predicción se sostiene (`movement_handler` cae en
+`movement_inertia` con el comentario *«nothing better to do»*, `shared.lua:4184-4187`). **«No te
+ataca» no se volvió «no hace nada».** Queda como **[a ojo]** y no como medición: la fila pedía dos
+`pos` separadas y no se tomaron, así que el número no existe. Lo que sí quedó descartado es la rama
+catastrófica.
+
+> **Y acá me pasé de explicar, en el mismo párrafo en que lo anotaba.** Leí *«sólo mira en una
+> dirección»* del reporte y le colgué encima la trampa ⑦ de Referencia §4.4 —sin `TERM_FISTS` el bot
+> no mira hacia su objetivo al moverse, `motionoverrides.lua:2838`—. El autor corrigió enseguida:
+> **en calma sí mueve la vista, sólo que menos.** La cita puede seguir siendo cierta en su propio
+> alcance (mirar *hacia el goal* al moverse) y aun así **no era la explicación de lo que se estaba
+> reportando**. *Una observación en prosa todavía no es una medición, y explicarla antes de fijarla
+> convierte una frase suelta en un hecho con cita.* Queda **sin caracterizar**: cuánto mueve la vista
+> en calma, y qué la mueve.
+
+### El hallazgo nuevo, que es del autor y no de ninguna fila: **va casi al doble que el jugador**
+
+*«Se mueve a una velocidad muy rápida, muchísimo más rápido que yo por el mod Better Movement.»*
+El número: la base trae `ENT.RunSpeed = 550` (`shared.lua:132`, con el comentario del propio autor de
+la base *«bit faster than players... in a straight line»*) y el fantasma **no lo pisa**, así que
+hereda 550 contra los **280** de `sv_bm_speed_run`. Son **1,96×**. También hereda `MoveSpeed = 300` y
+`WalkSpeed = 130`.
+
+**Esto contradice §1.1 del diseño**, que dice que la velocidad se **deriva de la carrera real del
+jugador** justamente para que el addon se calibre solo en cualquier servidor. No es un defecto de
+este bloque —nunca se tocó la velocidad— pero **es la cuarta vez que «heredado» resulta no ser
+«correcto»**, y esta vez lo agarró el juego y no la lectura. Queda abierto abajo.
+
+### Lo que falta correr
+
+Cuatro filas, todas baratas: **2 y 5** son un `phantasmagoria_ghost_rel` y un
+`phantasmagoria_ghost_where` con el hunt en 0; **9** es `phantasmagoria_hunt 0` y mirar si suelta al
+enemigo en ≤ 3 s; **10** es pegarle un tiro con el hunt en 0. La 9 y la 10 son las dos que pueden
+salir rojas y pedir código.
 
 **Predicciones, para que la refutación sea barata:** 1-3 verdes, 4 **deambula** (`movement_handler`
 cae en `movement_inertia` con el comentario *«nothing better to do»*, `shared.lua:4184-4187`), 5
@@ -332,6 +402,17 @@ Las trampas de la base están en §4.3 y §4.4 de la referencia. Resumidas:
 ---
 
 ## Lo que está abierto
+
+- **LA VELOCIDAD: el fantasma va a 1,96× la carrera del jugador, y §1.1 dice que tiene que derivarse
+  de ella.** Medido en juego por el autor (corrida 4) y con número desde el código: la base trae
+  `ENT.RunSpeed = 550` (`shared.lua:132`), el fantasma **no lo pisa**, y `sv_bm_speed_run` del autor
+  es **280**. También hereda `MoveSpeed = 300` y `WalkSpeed = 130`. El arreglo ya está diseñado —§1.1:
+  los tipos son **multiplicadores de la carrera real**, y el getter de Better Movement **no sirve**
+  porque lo multiplica por `_bmfraction` (1..2), así que hay que leer la convar— pero **no está
+  escrito**. Ojo con `overcharging.lua:20-22`, que puede volver a subirlo (`RunSpeed * 1.40`, piso
+  550).
+- **Cuánto mueve la vista el fantasma en calma, y qué se la mueve.** Sin caracterizar. El autor
+  reporta que **sí** la mueve, menos que cazando.
 
 - ~~La forma de la capa de compat con NEAD~~ **DECIDIDO: no se integra** (§19.5). NEAD hace
   `ply:SetNoTarget(true)` a un segundo a oscuras sin linterna, y la base respeta `FL_NOTARGET` en
