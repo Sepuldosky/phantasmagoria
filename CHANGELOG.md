@@ -7,6 +7,66 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-06 (2) — El interruptor CERRADO, y los dos defectos de la ronda fueron de la planilla
+
+`dev/checks/phantasmagoria-hunt-r1.html`: **7 pasa, 1 falla**. Las cuatro filas que faltaban salieron
+verdes, incluidas las dos que podían pedir código — el bot **suelta al enemigo solo** al apagar el
+hunt (*«pasa inmediatamente a calma»*) y **aguanta un balazo** a fondo.
+
+**La línea que vale por todo el bloque** es la fila 02: `rel D_HT pri 1000` **y**
+`ShouldBeEnemy NO`, juntas. La relación no se apagó —sigue odiándote— y el bot igual no ataca. Es la
+separación que §3.1 confundía, exhibida en una salida.
+
+**Y la fila 05 salió más fuerte que su criterio:** tres lecturas mientras cazaba, a 62, 568 y 310 u,
+las tres con `1 llamada(s), la ultima a t=101 con hunt=NO`. **El timestamp es el dato** — la última
+evaluación fue con el hunt apagado y el hunt se prendió después. No es que el contador no se movió en
+el frame del flip: es que no se movió nunca más, y se ve el reloj.
+
+### Los dos defectos de la planilla, los dos escritos por mí
+
+**① El criterio de la 05 pedía «2 llamadas» y lo correcto era 1: arrastre de bloque anterior,
+adentro de la planilla que existe para impedirlo.** Copié el contador del fantasma **#1066 de la
+corrida 4**, que había recibido un `hunt_reeval`. El #1069 es otro fantasma. El autor lo juzgó por la
+sustancia y marcó PASA, que es lo correcto: **el criterio decía el número equivocado, no la cosa
+equivocada.**
+
+**② El criterio de la 04 pedía DOS muestras, y las dos primeras habrían dado ROJO** — 42 u y 153 u
+contra un umbral de 200. Los saltos siguientes fueron 470, 1.076 y **3.144 u**, para un camino total
+de **4.885 u (93 m)**. Salió inequívoco porque el autor tomó **seis** muestras. El umbral estaba
+bien; el número de muestras estaba mal — y la regla ya estaba escrita en `dev/PLANTILLA_CHECKS.md`:
+*«un caso suelto no juzga»*. `movement_inertia` se turna con `movement_wait` y `movement_camp`, así
+que una ventana de 30 s puede caer entera adentro de una pausa. **Escribí la regla en la plantilla y
+no la apliqué al check que la necesitaba.**
+
+**③ Y uno del instrumento:** `ghost_rel` no mostraba la vida, así que *«acá lo baleo»* era una
+afirmación de quien corre la planilla y no un dato. Ahora imprime `vida N / M` con
+`( recibio dano )` / `( INTACTO: nadie le pego )`.
+
+### La fila 08 falla, y la falla vindica lo que yo había retractado
+
+*«Por fijo es que mira a un lado generalmente, es muy poco que gira a ver otros lados y eso es cuando
+está quieto.»* La rama de falla que escribí decía *«la explicación que descarté era la buena»*, y el
+código dice eso: `motionoverrides.lua:2838` sale con `if not myTbl.TERM_FISTS then return end -- only
+look towards goal if we have fists`, y aun con puños sólo apunta **por debajo** de un umbral de
+velocidad. No gira mientras camina; lo poco que gira es estando quieto.
+
+**Pero la lección es la contraria a «yo tenía razón».** El error nunca fue la cita: fue colgarla de
+una frase suelta **antes de fijar la observación**, y después **retractarla de más** al primer «no,
+sí mueve la vista». Las dos veces expliqué en vez de medir. Lo que lo cerró fue un check con
+lado-que-falla escrito. Y sigue sin leerse la otra mitad: **qué** le mueve la cabeza cuando está
+quieto.
+
+### El instrumento que pidió el autor
+
+*«Falta que el comando muestre a dónde está mirando el phantom.»* `phantasmagoria_ghost_where` ahora
+imprime tres líneas que **se discriminan entre sí**: `mira` (`GetEyeAngles()` — y el yaw es **el del
+cuerpo**, la función sólo pisa el pitch), `quiere` (`GetDesiredEyeAngles()`) y `marcha`
+(`loco:GetVelocity()`, no `Entity:GetVelocity()`, que en un NextBot puede dar cero y leerse como
+«está quieto»). `quiere ≠ mira` es *«algo le pide girar y no llega»*; `quiere == mira` quietos y
+caminando es **que nadie se lo pide**. Sin las tres, «no mueve la cabeza» no distingue las dos causas.
+
+---
+
 ## 2026-08-06 — El interruptor fantasma/cazador CORRIÓ, y §3.1 quedó refutado en juego
 
 El primer comportamiento propio del fantasma. Arranca en `phantom_Hunting = false` y **no ataca a

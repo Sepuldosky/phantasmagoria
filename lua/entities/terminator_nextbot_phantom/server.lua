@@ -300,6 +300,58 @@ local function makeSay( ply )
     end
 end
 
+---------------------------------------------------------------------------
+-- Instrumento: hacia donde mira
+---------------------------------------------------------------------------
+-- Pedido del autor en la corrida 5, y es el que faltaba: "que el comando muestre
+-- a donde esta mirando el phantom, porque yo lo veo moverse mirando a un solo
+-- lado todo el tiempo". Sin esto, "mueve la vista" era una impresion y no un
+-- numero, y ya me costo explicar la observacion antes de fijarla.
+--
+-- Se imprimen TRES cosas y no una, porque son las que se discriminan entre si:
+--
+--   mira    ENT:GetEyeAngles()         terminator_nextbot_base/shared.lua:81
+--           OJO: el yaw NO es un yaw de cabeza. La funcion arma el angulo con
+--           self:GetAngles() y solo le pisa el PITCH con GetAimPitch(). O sea
+--           que horizontalmente "donde mira" ES hacia donde apunta el cuerpo.
+--   quiere  ENT:GetDesiredEyeAngles()  terminator_nextbot_base/motion.lua:139
+--           lo que alguna tarea le PIDIO mirar. Es el que separa las dos causas
+--           posibles de una cabeza quieta.
+--   marcha  loco:GetVelocity()         la direccion en la que se esta moviendo
+--
+-- Como se leen juntos:
+--   quiere =/= mira        algo le pide girar y no llega -> es velocidad de giro
+--   quiere == mira, quietos, caminando  -> NADIE le pide girar, que es lo que
+--                          predice no tener TERM_FISTS ( motionoverrides.lua:2838,
+--                          "only look towards goal if we have fists" )
+--   mira =/= marcha        camina para un lado mirando para otro
+local function lookLines( ghost, say )
+    local eye  = ghost:GetEyeAngles()
+    local want = ghost:GetDesiredEyeAngles()
+
+    -- La base mueve al bot por el locomotion, no por la fisica de la entidad:
+    -- el que tiene la velocidad de verdad es loco ( motionoverrides.lua:2840 usa
+    -- locoMeta.GetVelocity( myTbl.loco ) ). Entity:GetVelocity() en un NextBot
+    -- puede dar cero y leerse como "esta quieto".
+    local vel = IsValid( ghost.loco ) and ghost.loco:GetVelocity() or vector_origin
+    local spd = vel:Length()
+
+    say( "    mira    yaw " .. math.Round( eye.y, 1 ) .. "  pitch " .. math.Round( eye.p, 1 ) )
+
+    say( "    quiere  yaw " .. math.Round( want.y, 1 ) .. "  pitch " .. math.Round( want.p, 1 ) ..
+        "   delta " .. math.Round( math.abs( math.AngleDifference( want.y, eye.y ) ), 1 ) .. " grados" )
+
+    if spd < 1 then
+        say( "    marcha  quieto ( " .. math.Round( spd, 1 ) .. " u/s )" )
+
+    else
+        local marcha = vel:Angle().y
+        say( "    marcha  yaw " .. math.Round( marcha, 1 ) .. "  a " .. math.Round( spd ) .. " u/s" ..
+            "   mirada vs marcha " .. math.Round( math.abs( math.AngleDifference( marcha, eye.y ) ), 1 ) .. " grados" )
+
+    end
+end
+
 -- Itera los fantasmas vivos. Misma busqueda que usaba ghost_where: por el campo
 -- IsPhantasmagoriaGhost y NO por clase, porque los 30 tipos de Diseno 12.2 van a
 -- llamarse phantasmagoria_<tipo> y una busqueda por clase exacta va a envejecer
@@ -345,6 +397,8 @@ concommand.Add( "phantasmagoria_ghost_where", function( ply )
         say( "    modelo  " .. tostring( ghost:GetModel() ) )
         say( "    hunt    " .. ( ghost.phantom_Hunting and "SI ( cazador )" or "NO ( fantasma )" ) )
         say( "    enemigo " .. ( IsValid( enemy ) and tostring( enemy ) or "ninguno" ) )
+
+        lookLines( ghost, say )
 
         -- una por linea: son el dato que mas dice y el que mas largo se pone
         if #tasks <= 0 then
@@ -403,6 +457,14 @@ concommand.Add( "phantasmagoria_ghost_rel", function( ply )
         say( "    hunt      " .. ( ghost.phantom_Hunting and "SI ( cazador )" or "NO ( fantasma )" ) ..
             "   NW " .. ( ghost:GetNWBool( "phantasmagoria_hunting", false ) and "SI" or "NO" ) )
         say( "    enemigo   " .. ( IsValid( enemy ) and tostring( enemy ) or "ninguno" ) )
+
+        -- La vida NO es decoracion aca: el check del balazo ( ronda 1, fila 07 )
+        -- tiene como precondicion que al bot le hayan pegado, y este comando no
+        -- la mostraba. "Le tire" quedaba como afirmacion del que corre la
+        -- planilla en vez de dato del instrumento. Con la vida a la vista, la
+        -- precondicion se ve en la misma salida que el veredicto.
+        say( "    vida      " .. ghost:Health() .. " / " .. ghost:GetMaxHealth() ..
+            ( ghost:Health() < ghost:GetMaxHealth() and "   ( recibio dano )" or "   ( INTACTO: nadie le pego )" ) )
 
         -- El contador de la re-evaluacion. Si Diseno 3.1 tuviera razon, prender
         -- el hunt lo haria subir. El control es phantasmagoria_hunt_reeval.

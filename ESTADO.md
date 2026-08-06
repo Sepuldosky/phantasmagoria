@@ -39,21 +39,22 @@ Lo que existe:
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
 | Entidad `terminator_nextbot_phantom` | **CORRIENDO EN JUEGO** — `lua/entities/terminator_nextbot_phantom/`, 3 archivos. Check de 5 filas **cerrado en verde** |
-| Interruptor fantasma / cazador | **CORRIENDO EN JUEGO** — el primer comportamiento propio. Check de 10 filas: **6 verdes, 4 sin correr, 0 rojos**. §3.1 **refutado en juego** |
+| Interruptor fantasma / cazador | **CERRADO EN JUEGO** — el primer comportamiento propio. Dos rondas: la tabla de 10 filas (6 verdes) y la planilla de 8 (**7 pasa, 1 falla**). §3.1 **refutado en juego** |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
-| Corridas en GMod | **4** (2026-08-05 ×3, `gm_uh_house` + `gm_graysonhouse`; 2026-08-06 ×1) — refutaron **dos** predicciones del documento y destaparon 4 defectos, **los 4 del instrumento** |
+| Corridas en GMod | **5** (2026-08-05 ×3; 2026-08-06 ×2) — refutaron **dos** predicciones del documento y destaparon **7** defectos, **los 7 del instrumento** |
 
 ---
 
 ## El próximo paso concreto
 
-**Cerrar las 4 filas que faltan del check de abajo** —dos son un comando cada una— y **de paso
-confirmar la fila 6 fuera del instante del flip**, que es la única debilidad de la corrida 4.
+**El interruptor está cerrado.** Lo que sigue son dos cosas, en el orden que decida el autor:
+**la velocidad** (el fantasma va a 1,96× la carrera del jugador, contra lo que pide §1.1) y
+**la cordura** (§19), que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`.
 
-Después, dos cosas en el orden que decida el autor: **la velocidad** (el fantasma va a 1,96× la
-carrera del jugador, contra lo que pide §1.1) y **la cordura** (§19), que es la que tiene que
-reemplazar al andamio `phantasmagoria_hunt`.
+Y una barata que quedó de la ronda 1: **qué le mueve la cabeza al fantasma cuando está quieto**.
+El instrumento para contestarlo ya está escrito (`mira` / `quiere` / `marcha` en
+`phantasmagoria_ghost_where`) y **no se corrió**.
 
 ---
 
@@ -210,7 +211,112 @@ jugador** justamente para que el addon se calibre solo en cualquier servidor. No
 este bloque —nunca se tocó la velocidad— pero **es la cuarta vez que «heredado» resulta no ser
 «correcto»**, y esta vez lo agarró el juego y no la lectura. Queda abierto abajo.
 
-### Lo que falta correr → **está en planilla**: `dev/checks/phantasmagoria-hunt-r1.html`
+## Corrida 5 (2026-08-06) — la planilla CORRIDA: **7 pasa, 1 falla**
+
+`dev/checks/phantasmagoria-hunt-r1.html`. **El interruptor queda cerrado**: las cuatro filas que
+faltaban salieron verdes, incluidas las dos que podían pedir código.
+
+| # | Resultado |
+|---|---|
+| 01 · un fantasma, arrancó en calma | ✅ `spawn #1069 … hunt NO` |
+| 02 · la puerta cerrada y la relación abierta | ✅ **`rel D_HT pri 1000` + `ShouldBeEnemy NO`** — el resultado del bloque en una línea |
+| 03 · el cerebro entero | ✅ **31 tareas**, con `movement_handler`; el refactor no rompió nada |
+| 04 · deambula, medido | ✅ **4.885 u de camino** (93 m), neto 2.161 u |
+| 05 · el contador fuera del instante | ✅ **1 llamada**, `la ultima a t=101 con hunt=NO`, en **tres** lecturas |
+| 06 · suelta al enemigo al apagar | ✅ *«pasa inmediatamente a calma»* — la base lo hace sola |
+| 07 · aguanta un balazo | ✅ baleado a fondo: sigue `enemigo ninguno` / `ShouldBeEnemy NO` |
+| 08 · la vista en calma | ❌ **FALLA** — y la falla vindica lo que yo había retractado |
+
+**La fila 02 es la que vale por todo el bloque:** `rel D_HT pri 1000` **y** `ShouldBeEnemy NO` en la
+misma línea. La relación **no** se apagó —sigue odiándote— y el bot igual no ataca. Eso es
+exactamente la separación que §3.1 confundía, exhibida.
+
+**Y la 05 salió más fuerte que lo que pedía el criterio.** Tres `ghost_rel` mientras cazaba, a 62,
+568 y 310 u, las tres con `1 llamada(s), la ultima a t=101 con hunt=NO`. El **timestamp** es el dato:
+la última evaluación fue a t=101 **con el hunt apagado**, y el hunt se prendió después. No es que el
+contador no se movió en el frame del flip — es que **no se movió nunca más**, y se ve el reloj.
+
+### ⚠ Tres defectos de esta ronda, y **DOS son de la planilla**
+
+**① El criterio de la fila 05 pedía «2 llamadas», y lo correcto era 1 — arrastre de bloque anterior,
+cometido por mí adentro de la planilla que existe para impedirlo.** Escribí el 2 copiando el contador
+del fantasma **#1066 de la corrida 4**, que había recibido un `hunt_reeval`. El #1069 es otro
+fantasma y nunca lo recibió: su contador arranca y se queda en 1. *«Una planilla mide un bloque y no
+arrastra información de bloques anteriores»* — y el que arrastró fue el criterio. El autor lo juzgó
+por la sustancia y marcó PASA, que es lo correcto: **el criterio decía el número equivocado, no la
+cosa equivocada.**
+
+**② El criterio de la fila 04 pedía DOS muestras, y las dos primeras habrían dado ROJO.** Los saltos
+reales, con el jugador quieto:
+
+| Intervalo | Δ | Contra mi umbral de 200 u |
+|---|---:|---|
+| 03 → 04#1 | **42 u** | ❌ habría dicho «clavado» |
+| 04#1 → #2 | **153 u** | ❌ habría dicho «clavado» |
+| #2 → #3 | 470 u | ✅ |
+| #3 → #4 | 1.076 u | ✅ |
+| #4 → #5 | **3.144 u** | ✅ |
+
+Salió inequívoco porque el autor tomó **seis** muestras y no dos. El umbral estaba bien; **el número
+de muestras estaba mal**, y lo peor es que la regla ya estaba escrita en `dev/PLANTILLA_CHECKS.md`:
+*«un caso suelto no juzga; si el resultado depende de un sorteo, repetir»*. `movement_inertia` se
+turna con `movement_wait` y `movement_camp`, así que una ventana de 30 s puede caer entera adentro de
+una pausa. **Escribí la regla en la plantilla y no la apliqué al check que la necesitaba.**
+
+**③ `phantasmagoria_ghost_rel` no muestra la vida, así que la precondición de la fila 07 no era
+visible.** *«Acá lo baleo completamente bajándole la vida»* quedaba como afirmación del que corre la
+planilla y no como dato del instrumento — y la regla de la casa es que **el comando imprima con qué
+está midiendo**. Corregido: ahora imprime `vida N / M` y dice `( recibio dano )` o `( INTACTO: nadie
+le pego )`.
+
+### La fila 08 falla, y la falla vindica la explicación que yo había retractado
+
+*«Por fijo es que mira a un lado generalmente, es muy poco que gira a ver otros lados y eso es cuando
+está quieto.»*
+
+La rama de falla que escribí decía: *«en calma la cabeza está totalmente fija → la explicación que
+descarté era la buena»*. Y el código dice exactamente eso
+([`motionoverrides.lua:2838-2845`](../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/motionoverrides.lua#L2838)):
+
+```lua
+if not myTbl.TERM_FISTS then return end -- only look towards goal if we have fists
+
+local currentSpeed = vecMeta.Length2DSqr( locoMeta.GetVelocity( myTbl.loco ) )
+if currentSpeed < terminator_Extras.term_DefaultSpeedToAimAtProps then
+    ...justLookAt( self, towardsPos )
+```
+
+Sin puños ese camino **no corre nunca**; y aun con puños, sólo apunta **por debajo** de un umbral de
+velocidad. Las dos mitades coinciden con lo observado: **la cabeza no gira mientras camina, y lo poco
+que gira es estando quieto.**
+
+> **Pero la lección no es «yo tenía razón», es la contraria.** Mi error nunca fue la cita: fue
+> **colgarla de una frase suelta antes de fijar la observación**, y después **retractarla de más** al
+> primer «no, sí mueve la vista». Las dos veces expliqué en vez de medir. Lo que cerró esto fue un
+> check con lado-que-falla escrito, no un argumento. *Y lo que sigue sin leerse es la otra mitad:
+> **qué** le mueve la cabeza cuando está quieto.*
+
+**Por eso el instrumento cambió, y es el pedido literal del autor** —*«falta que el comando muestre a
+dónde está mirando»*—. `phantasmagoria_ghost_where` ahora imprime **tres** líneas que se discriminan
+entre sí:
+
+| Línea | De dónde sale | Qué separa |
+|---|---|---|
+| `mira` | `GetEyeAngles()` (`terminator_nextbot_base/shared.lua:81`) | **el yaw es el del CUERPO**: la función sólo pisa el *pitch* con `GetAimPitch()` |
+| `quiere` | `GetDesiredEyeAngles()` (`motion.lua:139`) | lo que alguna tarea le **pidió** mirar |
+| `marcha` | `loco:GetVelocity()` | hacia dónde se mueve, y el ángulo contra `mira` |
+
+`quiere ≠ mira` significa *«algo le pide girar y no llega»*; `quiere == mira`, los dos quietos y
+caminando, significa **que nadie se lo pide** — que es lo que predice no tener `TERM_FISTS`. Sin las
+tres juntas, «no mueve la cabeza» no distingue las dos causas.
+
+> Ojo con el `loco`: la base mueve al bot por el locomotion, no por la física de la entidad
+> (`motionoverrides.lua:2840` usa `locoMeta.GetVelocity( myTbl.loco )`). Un `Entity:GetVelocity()`
+> sobre un NextBot puede dar cero y leerse como «está quieto».
+
+---
+
+### La planilla de la ronda 1 → **CORRIDA**: `dev/checks/phantasmagoria-hunt-r1.html`
 
 La corrida 4 se llevó adelante contra la tabla de acá arriba, que es lo que el encargo pedía. **Para
 lo que falta se armó la planilla**, que es la convención de la casa para checks en juego
