@@ -39,10 +39,10 @@ Lo que existe:
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
 | Entidad `terminator_nextbot_phantom` | **CORRIENDO EN JUEGO** — `lua/entities/terminator_nextbot_phantom/`, 3 archivos. Check de 5 filas **cerrado en verde** |
-| Interruptor fantasma / cazador | **CERRADO EN JUEGO** — el primer comportamiento propio. Dos rondas: la tabla de 10 filas (6 verdes) y la planilla de 8 (**7 pasa, 1 falla**). §3.1 **refutado en juego** |
+| Interruptor fantasma / cazador | **CERRADO EN JUEGO** — el primer comportamiento propio. Tabla de 10 filas (6 verdes) + planilla de 8 (7 pasa, 1 falla), y la falla **cerrada en la corrida 8**. §3.1 **refutado en juego** |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
-| Corridas en GMod | **7** (2026-08-05 ×3; 2026-08-06 ×4) — refutaron **dos** predicciones del documento y **una lectura mía sobre la causa del giro**; destaparon **11** defectos: **10 del instrumento y 1 del fantasma** |
+| Corridas en GMod | **8** (2026-08-05 ×3; 2026-08-06 ×5) — refutaron **dos** predicciones del documento y **una lectura mía sobre la causa del giro**; destaparon **13** defectos: **12 del instrumento y 1 del fantasma**, y el del fantasma ya está **cerrado en juego** |
 
 ---
 
@@ -52,10 +52,11 @@ Lo que existe:
 **la velocidad** (el fantasma va a 1,96× la carrera del jugador, contra lo que pide §1.1) y
 **la cordura** (§19), que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`.
 
-Y **correr el A/B del giro en calma**, que ya está escrito: `phantasmagoria_ghost_facewalk` en 1 y
-en 0, mirando `mirada vs marcha` en `phantasmagoria_ghost_where`. Tiene que bajar de ~75° de media a
-menos de 20°, **y `mirada vs jugador` tiene que seguir siendo grande** — si también se va a cero, el
-fantasma quedó siguiéndote con la vista fuera del hunt.
+El giro en calma **ya está cerrado en juego** (corrida 8: `mirada vs marcha` 74,4° → **1,9°**, y
+`mirada vs jugador` siguió grande). Queda **la velocidad**: el fantasma corre a `550 u/s`, que es
+**1,96×** la carrera del jugador, contra lo que pide §1.1 — la conversión ya está diseñada y no
+escrita. Y después **la cordura** (§19), que es la que tiene que reemplazar al andamio
+`phantasmagoria_hunt`.
 
 ---
 
@@ -211,6 +212,60 @@ hereda 550 contra los **280** de `sv_bm_speed_run`. Son **1,96×**. También her
 jugador** justamente para que el addon se calibre solo en cualquier servidor. No es un defecto de
 este bloque —nunca se tocó la velocidad— pero **es la cuarta vez que «heredado» resulta no ser
 «correcto»**, y esta vez lo agarró el juego y no la lectura. Queda abierto abajo.
+
+## Corrida 8 (2026-08-06) — **el fantasma ya mira hacia donde camina**, y el criterio se cumplió en las dos mitades
+
+Escrito **antes** de correr: `mirada vs marcha` tenía que bajar de ~75° a **menos de 20°**, y
+`mirada vs jugador` tenía que **seguir siendo grande y aleatorio**. Las dos:
+
+| Medición | Antes (corrida 7) | Ahora (corrida 8) | Criterio |
+|---|---:|---:|---|
+| `mirada vs marcha` | media **74,4°**, máx **179,9°** | media **1,9°**, máx **6,2°** | < 20° ✅ |
+| `mirada vs jugador` | media 111,1° | media **130,5°**, rango 2,2–168,8 | seguir grande ✅ |
+
+**La mitad que podía salir mal no salió mal.** Si el arreglo hubiera dejado al fantasma siguiéndote
+con la vista fuera del hunt, `mirada vs jugador` sería ~0 en **las seis** lecturas. Es < 20° en
+**una sola**, y esa una se explica sola con la tabla al lado: en esa lectura `marcha yaw 88,6` y
+`al ply yaw 93,5` — **iba caminando derecho hacia el jugador**, a 111 u. El ángulo chico es
+geometría, no seguimiento, y el instrumento lo exhibe sin que haya que argumentarlo.
+
+> **Y hay una confirmación independiente que salió de la columna que yo había degradado a control:**
+> el `delta` entre `mira` y `quiere` valía **0 en 15 de 15 lecturas** antes del arreglo, y ahora vale
+> 2,7 · 6,2 · 0,6 · 0,1. **La columna que no medía nada se movió justo cuando el arreglo entró**, lo
+> que ata el cambio a nuestro código y no a otra cosa.
+
+### ⚠ Pero eso mismo la invalidó, y hay que decirlo: `delta` == `mirada vs marcha` **por construcción**
+
+| Lectura | `delta` | `mirada vs marcha` |
+|---|---:|---:|
+| 130 u/s | 2,7 | **2,7** |
+| 421 u/s | 6,2 | **6,2** |
+| 550 u/s | 0,6 | **0,6** |
+| 550 u/s | 0,1 | **0,1** |
+
+Son el mismo número en las cuatro, y no es coincidencia: **desde el arreglo, en calma el que escribe
+`DesiredEyeAngles` somos nosotros, con la dirección de marcha.** La columna te devuelve lo que tu
+propio código acaba de escribir. *Un instrumento que reporta el valor que vos mismo escribiste no es
+una medición independiente* — sigue valiendo en hunt (ahí lo escribe la base) y con
+`phantasmagoria_ghost_facewalk 0`.
+
+Corregido en la etiqueta, que además decía **`( control: 0 es lo esperado )`** y con el arreglo puesto
+eso pasó a ser falso: un delta distinto de 0 se habría leído como falla. Ahora dice **quién** lo
+pide: *«lo pide la base ( enemigo )»*, *«lo pedimos NOSOTROS: = mirada vs marcha, no es dato aparte»*
+o *«no lo pide nadie: 0 es lo esperado»*.
+
+### Dos cosas menores, medidas y sin explicar de más
+
+- **Las dos fuentes de velocidad coinciden exactamente a régimen y se separan acelerando:** `130/130`
+  y `550/550` en las lecturas estables, `421/402` en una. Queda anotado como observación; **no** se
+  le pone causa.
+- **El cambio tomó sin recargar el mapa.** El autor lo dice y el fantasma nuevo (#409) sale ya con el
+  comportamiento nuevo. Anotado como hecho, no como regla: no se probó que valga siempre.
+
+**Y sigue a la vista el pendiente de la velocidad:** `550 u/s` en calma es la `RunSpeed` heredada, o
+sea 1,96× la carrera del jugador, contra lo que pide §1.1.
+
+---
 
 ## Corrida 6 (2026-08-06) — el instrumento nuevo falló **tres veces**, y destapó el primer defecto del FANTASMA
 

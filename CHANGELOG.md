@@ -7,6 +7,44 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-06 (5) — CERRADO en juego: el fantasma mira hacia donde camina, y una columna se invalidó al arreglarlo
+
+Criterio escrito **antes** de correr, cumplido en las dos mitades:
+
+| Medición | Antes | Ahora | Criterio |
+|---|---:|---:|---|
+| `mirada vs marcha` | media **74,4°**, máx **179,9°** | media **1,9°**, máx **6,2°** | < 20° ✅ |
+| `mirada vs jugador` | media 111,1° | media **130,5°**, rango 2,2–168,8 | seguir grande ✅ |
+
+**La mitad que podía salir mal no salió mal.** Si el arreglo hubiera dejado al fantasma siguiéndote
+con la vista fuera del hunt, `mirada vs jugador` sería ~0 en las seis lecturas; es < 20° en **una**, y
+esa se explica con la tabla al lado (`marcha yaw 88,6` contra `al ply yaw 93,5`: iba caminando derecho
+hacia el jugador). **Geometría, no seguimiento** — y el instrumento lo exhibe sin argumentar.
+
+### La confirmación salió de la columna que yo había degradado a control
+
+El `delta` entre `mira` y `quiere` valía **0 en 15 de 15** lecturas antes del arreglo, y ahora vale
+2,7 · 6,2 · 0,6 · 0,1. La columna que no medía nada **se movió justo cuando el arreglo entró**, lo que
+ata el cambio a nuestro código.
+
+### Y eso mismo la invalidó: `delta` == `mirada vs marcha` por construcción
+
+Son el mismo número en las cuatro lecturas, y no es coincidencia: **desde el arreglo, en calma el que
+escribe `DesiredEyeAngles` somos nosotros, con la dirección de marcha.** *Un instrumento que reporta
+el valor que vos mismo escribiste no es una medición independiente.* Sigue valiendo en hunt (ahí lo
+escribe la base) y con `phantasmagoria_ghost_facewalk 0`.
+
+Corregida la etiqueta, que además decía `( control: 0 es lo esperado )` y con el arreglo puesto pasó a
+ser **falsa** —un delta distinto de 0 se habría leído como falla—. Ahora dice **quién** lo pide.
+
+### Dos observaciones que quedan sin explicación a propósito
+
+Las dos fuentes de velocidad coinciden exactamente a régimen (`130/130`, `550/550`) y se separan
+acelerando (`421/402`). Y el cambio tomó **sin recargar el mapa**. Las dos anotadas como hechos, no
+como reglas.
+
+---
+
 ## 2026-08-06 (4) — El fantasma ya mira hacia donde camina, y mi diagnóstico anterior culpaba al candado equivocado
 
 Con el instrumento arreglado, la corrida 7 dio los números que faltaban:

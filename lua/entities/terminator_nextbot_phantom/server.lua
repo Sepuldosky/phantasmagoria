@@ -428,10 +428,31 @@ local function lookLines( ghost, say )
     say( "    mira    yaw " .. math.Round( eyeYaw, 1 ) ..
         "  pitch " .. math.Round( math.NormalizeAngle( eye.p ), 1 ) )
 
+    -- El delta es el RETRASO del aim contra lo que se le pidio mirar, y lo que
+    -- significa depende de QUIEN se lo pidio. Ojo con leerlo mal en calma:
+    -- desde que existe el facewalk, en calma el que escribe DesiredEyeAngles
+    -- somos nosotros con la direccion de marcha, asi que este delta pasa a ser
+    -- identico a "mirada vs marcha" POR CONSTRUCCION -- medido en la corrida 8:
+    -- 2.7/2.7, 6.2/6.2, 0.6/0.6, 0.1/0.1. Una columna que te devuelve lo que tu
+    -- propio codigo acaba de escribir NO es una medicion independiente.
+    -- Sigue valiendo como medicion en hunt ( ahi lo escribe la base ) y con
+    -- phantasmagoria_ghost_facewalk 0.
+    local quienPide
+    if ghost.phantom_Hunting then
+        quienPide = "lo pide la base ( enemigo )"
+
+    elseif cvFaceWalk:GetBool() then
+        quienPide = "lo pedimos NOSOTROS: = mirada vs marcha, no es dato aparte"
+
+    else
+        quienPide = "no lo pide nadie: 0 es lo esperado"
+
+    end
+
     say( "    quiere  yaw " .. math.Round( wantYaw, 1 ) ..
         "  pitch " .. math.Round( math.NormalizeAngle( want.p ), 1 ) ..
         "   delta " .. math.Round( math.abs( math.AngleDifference( wantYaw, eyeYaw ) ), 1 ) ..
-        " grados ( control: 0 es lo esperado )" )
+        " grados ( " .. quienPide .. " )" )
 
     -- DOS fuentes de velocidad y las dos se imprimen, para que el instrumento
     -- diga con que esta midiendo. La de la base es GetCurrentSpeed
