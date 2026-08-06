@@ -1,6 +1,6 @@
 # Phantasmagoria — Estado actual y handoff
 
-**Última actualización:** 2026-08-01
+**Última actualización:** 2026-08-05
 **Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
@@ -13,9 +13,11 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## Dónde está parado esto
 
-**En diseño cerrado, sin una sola línea de entidad escrita.** Hay investigación exhaustiva de la
-base, un diseño completo, y la tabla de los 30 tipos generada desde datos reales del juego.
-**No hay nada corrido en GMod todavía** — ni una vez.
+**El proyecto dejó de ser papel el 2026-08-05: el fantasma camina en GMod.** Hay investigación
+exhaustiva de la base, un diseño completo, la tabla de los 30 tipos generada desde datos reales del
+juego, y ahora **una entidad que existe, spawnea del menú, camina y te persigue**, verificada en
+**tres corridas sobre dos mapas**. Sigue siendo el esqueleto: no hay máquina de estados, ni tipos, ni
+cordura, ni hunt.
 
 Lo que existe:
 
@@ -32,16 +34,29 @@ Lo que existe:
 | Cordura: tasa, ámbito, oscuridad, camión | **DISEÑADO** — §19; falta la forma de la capa NEAD (§19.5) |
 | **Props de equipamiento** | **EN EL ÁRBOL** — 36 modelos verificados, 0 referencias rotas |
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
-| Entidad `terminator_nextbot_phantom` | **ESCRITA, SIN CORRER** — `lua/entities/terminator_nextbot_phantom/`, 3 archivos. Es un **instrumento**, no un fantasma (ver abajo) |
+| Entidad `terminator_nextbot_phantom` | **CORRIENDO EN JUEGO** — `lua/entities/terminator_nextbot_phantom/`, 3 archivos. Check de 5 filas **cerrado en verde**. Es un **instrumento**, no todavía un fantasma (ver abajo) |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
-| Nada de esto en juego | **1 corrida** (2026-08-05) — el fantasma spawnea, camina y persigue. Refutó una predicción del documento |
+| Corridas en GMod | **3** (2026-08-05, `gm_uh_house` + `gm_graysonhouse`) — refutaron una predicción del documento y destaparon 4 defectos, **los 4 del instrumento** |
 
 ---
 
-## El próximo paso concreto: **correrla**
+## El próximo paso concreto
 
-La entidad **está escrita** (2026-08-05) y **no se corrió ni una vez**. Son tres archivos:
+**El esqueleto está cerrado. Lo que sigue es el primer comportamiento propio**, y la puerta es la que
+esta pasada dejó deliberadamente sin escribir: **`OnFirstRelationWithPlayer`**, el interruptor limpio
+entre «fantasma» y «cazador» (§3.1 del diseño). Hoy el bot es hostil siempre; el fantasma de
+Phasmophobia sólo lo es durante el hunt.
+
+Al escribirlo hay que **encadenar al `BaseClass`**: la implementación default **no está vacía**,
+implementa `ExtraSpawnHealthPerPlayer` (`damageandhealth.lua:872`), y un override que no la llame la
+mata en silencio.
+
+---
+
+## El check de la entidad mínima — **CERRADO EN VERDE**
+
+Son tres archivos:
 
 ```
 lua/entities/terminator_nextbot_phantom/
@@ -54,9 +69,7 @@ lua/entities/terminator_nextbot_phantom/
 —corrige el snippet que este documento traía, que lo incluía— y por eso el bot queda **hostil a
 propósito**: el criterio de cierre dice «camina hacia algo» y hace falta un algo.
 
-### El check, declarado antes de correr
-
-**Las precondiciones, medidas en la máquina del autor el 2026-08-05** (no supuestas):
+### Las precondiciones, medidas en la máquina del autor (no supuestas)
 
 | Precondición | Estado | Cómo se midió |
 |---|---|---|
@@ -78,27 +91,22 @@ un ciudadano de HL2. Si querés el modelo bueno, está desempacado en
 > comprimidos con LZMA** — lo delató que el control (Jeff, que sí está suscrito) tampoco aparecía en
 > su propio archivo.
 
-| # | Qué se hace | Verde | Rojo | **Corrida 1** (casa moderna) | **Corrida 2** (`gm_uh_house`) |
-|---|---|---|---|---|---|
-| 1 | Abrir el spawnmenu, pestaña **NPCs** | hay categoría **Phantasmagoria → Fantasmas** con *Phantasmagoria Ghost* | no está | ✅ | ✅ |
-| 2 | Clickearlo | aparece un cuerpo, y la consola imprime `[Phantasmagoria] spawn #N modelo … pos …` | error de Lua, o nada | ✅ `spawn #253 …male_04.mdl skin 1` | ✅ `spawn #1090` |
-| 3 | Mirarlo | hay caja violeta + haz + `PHANTOM #N` + distancia en metros, **también a través de una pared** | no se dibuja nada | ⚠️ caja y haz sí, etiqueta no | ✅ `PHANTOM #1090` · `4 m` |
-| 4 | Alejarse y esperar | **camina hacia el jugador** — el marcador se mueve y la distancia baja | se queda clavado | ✅ camina y persigue | ✅ se movió 68 u y `enemigo Player [1]` |
-| 5 | `phantasmagoria_ghost_where` en consola | lista pos, vida, modelo, enemigo, tareas y navareas | dice 0 fantasmas con uno vivo | sin correr | ⚠️ **todo menos las tareas** |
+| # | Qué se hace | Verde | Rojo | **C1** `gm_graysonhouse` | **C2** `gm_uh_house` | **C3** `gm_graysonhouse` |
+|---|---|---|---|---|---|---|
+| 1 | Abrir el spawnmenu, pestaña **NPCs** | hay categoría **Phantasmagoria → Fantasmas** con *Phantasmagoria Ghost* | no está | ✅ | ✅ | ✅ |
+| 2 | Clickearlo | aparece un cuerpo, y la consola imprime `[Phantasmagoria] spawn #N modelo … pos …` | error de Lua, o nada | ✅ `#253` | ✅ `#1090` | ✅ `#276` |
+| 3 | Mirarlo | hay caja violeta + haz + `PHANTOM #N` + distancia en metros, **también a través de una pared** | no se dibuja nada | ⚠️ sin etiqueta | ✅ `4 m` | ✅ `1.3 m` |
+| 4 | Alejarse y esperar | **camina hacia el jugador** — el marcador se mueve y la distancia baja | se queda clavado | ✅ camina y persigue | ✅ se movió 68 u, `enemigo Player [1]` | ✅ se movió 137 u |
+| 5 | `phantasmagoria_ghost_where` en consola | lista pos, vida, modelo, enemigo, tareas y navareas | dice 0 fantasmas con uno vivo | sin correr | ⚠️ todo menos las tareas | ✅ **las 31 tareas** |
 
-**LA ENTIDAD FUNCIONA, y las cuatro primeras filas están verdes** (2026-08-05, dos mapas). Existe,
-aparece en el menú, spawnea, camina, te sigue y te toma como enemigo. **Los tres defectos que
-salieron son del INSTRUMENTO, no del fantasma.**
+## ✅ CHECK CERRADO — las cinco filas en verde
 
-### Dos cosas que la corrida 2 dejó sin cerrar
+**La entidad funciona.** Existe, aparece en el menú, spawnea, camina, te persigue, te toma como
+enemigo, y los dos instrumentos reportan. Verificado en **tres corridas sobre dos mapas**, uno con
+navmesh y otro sin.
 
-**① El arreglo del navmesh no se ejerció.** `gm_uh_house` trae **3340 navareas**, así que
-`areasAlSpawnear > 0` y el código sale sin imprimir: **el silencio es el resultado correcto**, pero
-sólo prueba que el aviso no molesta cuando hay navmesh. La rama nueva —el `timer` que re-mide a los
-10 s— **necesita el mapa de la corrida 1**, que era el que tenía 0.
-
-**② La vida es 824/900.** El default de la base para un fantasma es un número de diseño que todavía
-no se decidió (§5 del diseño).
+**Los CUATRO defectos que salieron son del INSTRUMENTO, no del fantasma.** El fantasma anduvo a la
+primera y nunca falló. Los cuatro están corregidos; tres, confirmados en juego.
 
 **① El aviso de navmesh predecía en vez de medir — y el juego lo refutó.** Decía «SIN NAVMESH: el bot
 no va a caminar», había 0 navareas, y **el bot caminaba**. La medición del instante era correcta; la
@@ -107,7 +115,13 @@ predicción, falsa. La causa estaba en el código que yo mismo había leído par
 (`terminator_areapatcher.lua`, convar `terminator_areapatching_enable`, **default 1**) sigue creando
 areas donde caminan bots y jugadores. Leí la rama del mensaje y no la línea de abajo, que es la que
 actúa. **Arreglado midiendo dos veces**: informa el 0 al spawnear y **vuelve a medir a los 10 s**,
-diciendo cuántas areas construyó el parche — o confirmando el 0, que ahí sí es terminal.
+diciendo cuántas areas lleva el parche — o confirmando el 0, que ahí sí es terminal.
+**Confirmado en la corrida 3**: `0 navareas al spawnear` → `van 42 navareas a los 10 s`.
+
+> **Y el número sigue creciendo, lo cual obligó a cambiar el verbo.** El mismo `ghost_where`, un rato
+> después, dio **137**. El parcheador crea areas donde pisan bots y jugadores, así que la lectura es
+> **una foto y no un total** — decía «construyó 42» y ahora dice «van 42 … y sigue trabajando».
+> Tercera vez en este arco que un número medido en un instante se escribe como si fuera permanente.
 
 **② La etiqueta del marcador estaba sobre el techo.** Se veían la caja y el haz y no el texto: estaba
 a 250 u sobre la cabeza (~322 del piso), y la corrida fue **adentro de una casa**. El instrumento se
@@ -121,7 +135,17 @@ De las seis líneas por fantasma se perdió exactamente una: **la de tareas**, q
 informativa y la única que crece sin techo. El único rastro fue ese aviso del engine, que **no dice
 cuál se perdió**: sin leer la salida esperada al lado de la real, pasa por completa.
 Arreglado troceando toda línea a 180 bytes —red de seguridad para las seis— y sacando **una tarea por
-línea**, que además se lee mejor.
+línea**, que además se lee mejor. **Confirmado en la corrida 3: llegaron las 31.**
+
+**④ La etiqueta tapaba media pantalla de cerca.** Con escala fija, `cam.Start3D2D` crece sin techo al
+acercarse: a **1,3 m** el `PHANTOM #276` no entraba en la pantalla — justo cuando más querés ver.
+Ahora **la escala sigue a la distancia** para ocupar siempre lo mismo, calibrada contra la corrida 2
+(a 4 m, escala 0,35) y con topes en 0,12 y 1,5. **Sin confirmar en juego.**
+
+> **Las 31 tareas de la fila 5 no son ruido: son el inventario del cerebro heredado**, y ahí está la
+> §5 de la referencia hecha lista — `movement_watch` (el comportamiento HIM ya escrito),
+> `movement_stalkenemy`, `movement_camp`, `movement_backthehellup`, `movement_followsound`. Todo eso
+> ya corre. Lo que falta no es escribirlo: es elegir cuándo.
 
 El 3 y el 5 son **dos instrumentos que fallan distinto**: el marcador solo ve lo que está en el PVS,
 el comando corre en el servidor y los ve a todos. Si el 5 lo encuentra y el 3 no, el bot existe y el
@@ -151,7 +175,12 @@ Si algo sale distinto de lo que este documento predice, **gana el juego** y se c
 | `ENT.IsWraith` | un instrumento invisible no sirve para ver dónde está |
 | `OnFirstRelationWithPlayer` | es el interruptor fantasma/cazador (§3.1 del diseño), y hoy queremos al bot hostil para que camine hacia algo. Va en esa función y **nunca** en `DisableBehaviour` |
 | `SetupDataTables` | el `Bool 0` ya es `Crouching` en la base (trampa ③) |
-| máquina de estados, 30 tipos, rasgos, cordura, hunt, sonidos | todo eso viene **después** de verla caminar una vez |
+| máquina de estados, 30 tipos, rasgos, cordura, hunt, sonidos | todo eso venía **después** de verla caminar una vez — y ya caminó |
+
+**Dato de la corrida 3 que es decisión de diseño pendiente: la vida es 900**, el default de la base
+(`terminator_Extras.healthDefault`). Un fantasma de Phasmophobia no se mata a balazos: §5.4 dice que
+el desenlace es `kill` o `banish` por tipo, así que ese número va a dejar de ser salud y a pasar a
+ser otra cosa.
 
 Las trampas de la base están en §4.3 y §4.4 de la referencia. Resumidas:
 
@@ -371,7 +400,15 @@ Las trampas de la base están en §4.3 y §4.4 de la referencia. Resumidas:
 
 ## Advertencia que vale para todo el proyecto
 
-**Nada de lo escrito hasta ahora se ejerció en juego.** Los documentos marcan **[verificado]** cuando
-algo se leyó en el código y se auditó, y **[lectura]** cuando se leyó una sola vez. Ninguna de las dos
-marcas significa "funciona": significan "el código dice esto". La primera corrida en GMod es la que
-convierte esto en conocimiento.
+**Casi nada de lo escrito se ejerció en juego** — la excepción es la entidad mínima, cerrada en tres
+corridas el 2026-08-05. Todo lo demás sigue siendo lectura. Los documentos marcan **[verificado]**
+cuando algo se leyó en el código y se auditó, y **[lectura]** cuando se leyó una sola vez. Ninguna de
+las dos marcas significa "funciona": significan "el código dice esto".
+
+**Y la primera corrida mostró para qué sirve la distinción.** Las cuatro filas del fantasma salieron
+verdes a la primera: la lectura de la base **era buena**. Los cuatro defectos salieron todos de la
+parte que ningún documento cubría — **lo que yo agregué encima**, y cada uno por medir un escenario y
+escribir sobre otro: un aviso que predijo el futuro desde un instante, un marcador de exteriores
+probado en un interior, un límite de 255 bytes que descarta en vez de truncar, y un texto calibrado a
+4 m mirado a 1,3 m. **La lectura del tercero aguantó; lo que no aguantó fue suponer el contexto de
+uso.**

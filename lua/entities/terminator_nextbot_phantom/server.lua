@@ -115,8 +115,13 @@ function ENT:AdditionalInitialize()
         local ahora = navmesh.GetNavAreaCount()
 
         if ahora > 0 then
-            ghostPrint( "el parcheador construyo ", ahora, " navareas. El bot camina sobre un " ..
-                "mapa PARCHEADO, no sobre un navmesh de verdad: esperar caminos raros.\n" )
+            -- "van" y no "construyo": el numero SIGUE CRECIENDO. Medido en la
+            -- corrida 3 (gm_graysonhouse): 42 aca y 137 un rato despues, con el
+            -- bot caminando. El parcheador crea areas donde pisan bots y
+            -- jugadores, asi que esto es una foto y no un total.
+            ghostPrint( "van ", ahora, " navareas parcheadas a los ", NAVCHECK_DELAY,
+                " s, y el parcheador sigue trabajando mientras alguien camine. El bot se mueve " ..
+                "sobre un mapa PARCHEADO, no sobre un navmesh de verdad: esperar caminos raros.\n" )
 
         else
             ghostPrint( "SIGUEN 0 navareas: aca si el bot no va a caminar. " ..

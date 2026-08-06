@@ -139,6 +139,34 @@ Arreglado troceando toda línea a 180 bytes y sacando una tarea por renglón.
 arreglo del aviso —el `timer` que re-mide a los 10 s— **no corrió**. El silencio fue el resultado
 correcto para este mapa y **no prueba la rama nueva**: hace falta volver al mapa de la corrida 1.
 
+### Corrida 3, en `gm_graysonhouse`: **CHECK CERRADO, cinco filas verdes**
+
+El check que la corrida 2 dejó abierto se cerró volviendo al mapa sin navmesh:
+`0 navareas al spawnear` → **`van 42 navareas a los 10 s`**. Y `ghost_where` trajo **las 31 tareas**,
+que era la línea que se perdía.
+
+**Las 31 tareas no son ruido: son el inventario del cerebro heredado.** Ahí está la §5 de la
+referencia hecha lista y corriendo — `movement_watch` (el comportamiento HIM ya escrito),
+`movement_stalkenemy`, `movement_camp`, `movement_backthehellup`, `movement_followsound`. **Lo que
+falta no es escribir eso: es elegir cuándo.**
+
+**Y el mismo comando destapó que el número era una foto.** A los 10 s: 42 navareas. Un rato después:
+**137**. El parcheador sigue creando areas donde pisan bots y jugadores, así que el mensaje decía
+«construyó 42» de algo que seguía creciendo — **tercera vez en este arco que un número medido en un
+instante se escribe como si fuera permanente**. Ahora dice «van 42 … y sigue trabajando».
+
+**Cuarto defecto del instrumento: la etiqueta tapaba media pantalla de cerca.** `cam.Start3D2D` con
+escala fija crece sin techo al acercarse, y a **1,3 m** el `PHANTOM #276` no entraba en la pantalla —
+justo cuando más querés ver. La escala ahora sigue a la distancia, calibrada contra la corrida 2 (a
+4 m, escala 0,35), con topes. Sin confirmar en juego.
+
+**El balance del arco: cuatro defectos, los cuatro del instrumento, ninguno del fantasma.** Las
+cuatro filas del bot salieron verdes a la primera — **la lectura de la base era buena**. Todo lo que
+falló fue lo que se agregó encima, y cada caso por lo mismo: **medir un escenario y escribir sobre
+otro**. Un aviso que predijo el futuro desde un instante, un marcador de exteriores probado en un
+interior, un límite de 255 bytes que descarta en vez de truncar, y un texto calibrado a 4 m mirado a
+1,3 m.
+
 ---
 
 ## 2026-08-05 — Sesión 14: la primera entidad, escrita como instrumento

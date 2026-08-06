@@ -36,6 +36,10 @@ local BEAM_HEIGHT = 220
 -- pensado para un mapa abierto y se probo adentro de una casa.
 local LABEL_HEIGHT = 14
 
+-- Escala del texto por unidad de distancia. Calibrada contra la corrida 2: a
+-- 4 m ( 4 * 52,5 u ) la escala fija 0.35 se leia bien, asi que esa es la razon.
+local LABEL_SCALE_PER_UNIT = 0.35 / ( 4 * UNITS_PER_METER )
+
 hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", function( _bDrawingDepth, bDrawingSkybox, isDraw3DSkybox )
     if bDrawingSkybox or isDraw3DSkybox then return end
     if not cvMarker:GetBool() then return end
@@ -70,9 +74,18 @@ hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", funct
         render.DrawWireframeBox( pos, angle_zero, mins, maxs, colGhost, true )
         render.DrawLine( top, top + Vector( 0, 0, BEAM_HEIGHT ), colGhost, true )
 
-        local dist = math.Round( eyePos:Distance( pos ) / UNITS_PER_METER, 1 )
+        local distU = eyePos:Distance( pos )
+        local dist = math.Round( distU / UNITS_PER_METER, 1 )
 
-        cam.Start3D2D( top + Vector( 0, 0, LABEL_HEIGHT ), Angle( 0, yaw - 90, 90 ), 0.35 )
+        -- La escala sigue a la distancia para que el texto ocupe SIEMPRE lo
+        -- mismo en pantalla. Con la escala fija que tenia, a 1,3 m tapaba media
+        -- pantalla (corrida 3) -- justo cuando mas querias ver -- y de lejos no
+        -- se leia. La constante sale de la corrida 2: a 4 m con 0.35 se leia
+        -- bien. Los topes evitan el texto microscopico de cerca y uno de
+        -- kilometros de largo del otro lado del mapa.
+        local escala = math.Clamp( distU * LABEL_SCALE_PER_UNIT, 0.12, 1.5 )
+
+        cam.Start3D2D( top + Vector( 0, 0, LABEL_HEIGHT ), Angle( 0, yaw - 90, 90 ), escala )
             draw.SimpleText( "PHANTOM #" .. ghost:EntIndex(), "DermaLarge", 0, 0, colText, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM )
             draw.SimpleText( dist .. " m", "DermaLarge", 0, 6, colGhost, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP )
         cam.End3D2D()
