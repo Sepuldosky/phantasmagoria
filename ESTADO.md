@@ -152,6 +152,13 @@ cae en `movement_inertia` con el comentario *«nothing better to do»*, `shared.
 verde, **6 verde en el sentido de que §3.1 queda refutado**, 7 verde, 8-10 verdes. Si algo sale
 distinto, **gana el juego** y se corrige el documento.
 
+> **⚠ La fila 6 se puede leer mal de la forma más fácil.** Al prender el hunt el bot **sí** va a
+> cambiar de actitud —eso es la fila 8— y es tentador anotarlo como que §3.1 tenía razón. **No lo
+> tiene:** el cambio viene del `ShouldBeEnemy`, que lee el flag **en vivo**, y §3.1 afirmaba otra
+> cosa muy concreta —que se **re-evalúan las relaciones**—. Lo único que mide la fila 6 es el
+> contador, y la fila 7 existe para que un contador quieto no se pueda confundir con un contador
+> roto. *Medir la consecuencia no es medir el mecanismo.*
+
 > **Dos cosas de la fila 10 que hay que saber antes de leerla mal.** ① El tiro **sí** te mete en su
 > memoria: la ruta 4 de §18.7 (`PostTookDamage` → `UpdateEnemyMemory`, `damageandhealth.lua:500`)
 > **no chequea línea de vista ni relación**. Lo que la fila mide es que `ForgetOldEnemies` y
