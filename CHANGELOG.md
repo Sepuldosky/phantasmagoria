@@ -7,6 +7,53 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-06 (3) — El instrumento de mirada falló tres veces, y destapó el primer defecto del FANTASMA
+
+La planilla se vació y se volvió a correr con el instrumento de mirada puesto. Mismo veredicto —**7
+pasa, 1 falla**— y **cuatro defectos nuevos: los tres primeros míos, el cuarto del bot**.
+
+### ① Una guarda defensiva que fallaba hacia un valor creíble — la pescó el autor
+
+`marcha` decía `quieto ( 0 u/s )` **siempre**, con el bot cruzando 1.400 u entre lecturas. La causa:
+`IsValid( ghost.loco )`. **`CLuaLocomotion` no tiene método `IsValid`**, y el `IsValid()` de GMod
+devuelve `false` para todo objeto que no lo tenga, así que la guarda caía siempre al vector cero.
+**La base nunca envuelve `self.loco` en `IsValid`: lo llama directo**
+(`terminator_nextbot_base/motion.lua:54`; grep sobre sus 71 archivos: cero).
+
+*Una guarda defensiva que falla hacia un valor creíble es peor que no tenerla.* No tiró error ni
+`nil`: tiró **«quieto»**, que es una lectura posible. Se detectó sólo porque el autor sabía que el
+bot caminaba. Corregido sin guarda y **con las dos fuentes impresas** (`GetCurrentSpeed()` y
+`Entity:GetVelocity()`), para que si alguna vuelve a dar cero se vea **cuál**.
+
+### ② Ángulos sin normalizar: el mismo ángulo leído como dos opuestos
+
+`mira yaw -449.7` al lado de `quiere yaw 270.4`, **con `delta 0` en la misma línea**. Las nueve
+parejas del reporte son el mismo ángulo (−449,7 → −89,7; −451,9 → −91,9; −313,6 → 46,4). El delta
+estaba bien; mentían los números de al lado. Todo pasa ahora por `math.NormalizeAngle`.
+
+### ③ Vendí como discriminante una pareja que no podía discriminar ni en principio
+
+**15 de 15 lecturas dieron `delta 0`** entre `mira` y `quiere`. No es calibración: `GetEyeAngles`
+(`terminator_nextbot_base/shared.lua:81-93`) arma el ángulo con `self:GetAngles()` y **sólo pisa el
+pitch** — el yaw de «dónde mira» **es** el del cuerpo, y no hay un yaw de cabeza aparte. Se conserva
+como **control** (que el delta sea 0 es el dato) y el discriminante pasa a ser una línea nueva,
+**`al ply`**: el rumbo al jugador más cercano y el ángulo contra la mirada, que es lo que separa
+*girar siguiéndote* de *girar solo*.
+
+### ④ Y el que no es del instrumento: **el fantasma no gira nunca en calma**
+
+Cuatro lecturas cruzando el mapa (X de −598 a +3.520) con **`mira yaw 3.2` en las cuatro**; después
+del hunt quedó clavado en 46,4. **No vuelve a un default: se congela en el último valor.** Censados
+los cuatro call sites de `SetDesiredEyeAngles` —enemigo (`enemyoverrides.lua:1874`), caída y salto
+(`motionoverrides.lua:3306` y `:3311`), y `justLookAt` vía el «mirar hacia el goal» que sale antes con
+`if not myTbl.TERM_FISTS then return end` (`:2838`)—: **en calma no queda ni uno vivo.** Medición y
+lectura coinciden, y es **el primer defecto del arco que no es del instrumento**.
+
+Sin arreglar a propósito: un fantasma que se desliza sin girar puede leerse como bug o como rasgo, y
+la línea que lo corrige cambia cómo se ve el bot. Es decisión del autor y necesita su propio check.
+
+---
+
 ## 2026-08-06 (2) — El interruptor CERRADO, y los dos defectos de la ronda fueron de la planilla
 
 `dev/checks/phantasmagoria-hunt-r1.html`: **7 pasa, 1 falla**. Las cuatro filas que faltaban salieron

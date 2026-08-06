@@ -42,7 +42,7 @@ Lo que existe:
 | Interruptor fantasma / cazador | **CERRADO EN JUEGO** — el primer comportamiento propio. Dos rondas: la tabla de 10 filas (6 verdes) y la planilla de 8 (**7 pasa, 1 falla**). §3.1 **refutado en juego** |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
-| Corridas en GMod | **5** (2026-08-05 ×3; 2026-08-06 ×2) — refutaron **dos** predicciones del documento y destaparon **7** defectos, **los 7 del instrumento** |
+| Corridas en GMod | **6** (2026-08-05 ×3; 2026-08-06 ×3) — refutaron **dos** predicciones del documento y destaparon **11** defectos: **10 del instrumento y 1 del fantasma** (el primero del arco) |
 
 ---
 
@@ -52,9 +52,10 @@ Lo que existe:
 **la velocidad** (el fantasma va a 1,96× la carrera del jugador, contra lo que pide §1.1) y
 **la cordura** (§19), que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`.
 
-Y una barata que quedó de la ronda 1: **qué le mueve la cabeza al fantasma cuando está quieto**.
-El instrumento para contestarlo ya está escrito (`mira` / `quiere` / `marcha` en
-`phantasmagoria_ghost_where`) y **no se corrió**.
+Y una **decisión del autor** que destapó la corrida 6: **el fantasma no gira nunca en calma** —se
+congela en el último yaw y se desliza—. Está medido y leído (los cuatro call sites de
+`SetDesiredEyeAngles`, ninguno vivo en calma). El arreglo es una línea, pero **cambia cómo se ve el
+bot**: hay que decidir si es bug o rasgo antes de tocarlo.
 
 ---
 
@@ -210,6 +211,81 @@ hereda 550 contra los **280** de `sv_bm_speed_run`. Son **1,96×**. También her
 jugador** justamente para que el addon se calibre solo en cualquier servidor. No es un defecto de
 este bloque —nunca se tocó la velocidad— pero **es la cuarta vez que «heredado» resulta no ser
 «correcto»**, y esta vez lo agarró el juego y no la lectura. Queda abierto abajo.
+
+## Corrida 6 (2026-08-06) — el instrumento nuevo falló **tres veces**, y destapó el primer defecto del FANTASMA
+
+La planilla se vació y se volvió a correr con el instrumento de mirada puesto. **Mismo veredicto —7
+pasa, 1 falla— y cuatro defectos nuevos: los tres primeros míos, el cuarto del bot.**
+
+### ① `marcha` decía `quieto ( 0 u/s )` SIEMPRE — y lo pescó el autor
+
+*«Lo raro es que muestre que la marcha esté en 0 o quieto»*, con el bot cruzando 1.400 u entre
+lecturas. **La causa fue una guarda que escribí para estar seguro:** `IsValid( ghost.loco )`.
+`CLuaLocomotion` **no tiene método `IsValid`**, y el `IsValid()` de GMod devuelve `false` para todo
+objeto que no lo tenga — así que la guarda caía **siempre** al vector cero.
+
+**La base nunca envuelve `self.loco` en `IsValid`: lo llama directo**
+(`terminator_nextbot_base/motion.lua:54`). Grep sobre sus 71 archivos: cero ocurrencias.
+
+> *Una guarda defensiva que falla hacia un valor creíble es peor que no tenerla.* No tiró error, no
+> tiró `nil`: tiró **«quieto»**, que es una lectura perfectamente posible. La única razón por la que
+> se detectó es que el autor sabía que el bot estaba caminando. **Sexta vez en el arco que el defecto
+> es del instrumento**, y la primera en que el modo de falla es *hacia un valor plausible*.
+
+Corregido: sin guarda, y **con las dos fuentes impresas** —`GetCurrentSpeed()` (la de la base) y
+`Entity:GetVelocity()`— para que si alguna vuelve a dar cero se vea **cuál**.
+
+### ② Los yaws se imprimían sin normalizar, así que el mismo ángulo se leía como dos opuestos
+
+`mira yaw -449.7` al lado de `quiere yaw 270.4`, **con `delta 0` en la misma línea**. Los dos números
+eran el mismo ángulo y el delta estaba bien; lo que mentía eran los números de al lado.
+
+| Lectura | `mira` crudo | `quiere` crudo | `mira` norm. | `quiere` norm. |
+|---|---:|---:|---:|---:|
+| 08 a | −449,7 | 270,4 | **−89,7** | **−89,6** |
+| 08 b | −451,9 | 268,1 | **−91,9** | **−91,9** |
+| 06 | −313,6 | 46,4 | **46,4** | **46,4** |
+
+**Las nueve parejas del reporte son el mismo ángulo.** Todo pasa ahora por `math.NormalizeAngle`.
+
+### ③ `quiere` lo declaré como el discriminante y no discrimina — y el motivo es estructural
+
+**15 de 15 lecturas dieron `delta 0`.** No es calibración: `GetEyeAngles`
+(`terminator_nextbot_base/shared.lua:81-93`) arma el ángulo con `self:GetAngles()` y **sólo pisa el
+`pitch`**. O sea que **el yaw de «dónde mira» *es* el yaw del cuerpo, y no existe un yaw de cabeza
+aparte** que se le pueda comparar. La pareja `mira`/`quiere` no podía separar cabeza de cuerpo **ni
+en principio**, y yo la vendí como el par que lo separaba.
+
+Se conserva **como control** —que el delta sea 0 es el dato: el aim converge en el mismo frame— y el
+discriminante de verdad pasa a ser una línea nueva: **`al ply`**, el rumbo al jugador más cercano y
+el ángulo contra la mirada. Sin eso, «el yaw cambió» no distingue *girar siguiéndote* de *girar solo*.
+
+### ④ Y el que NO es del instrumento: **el fantasma no gira nunca en calma**
+
+Cuatro lecturas cruzando el mapa —de X = −598 a X = +3.520— con **`mira yaw 3.2` en las cuatro**.
+Después del hunt quedó clavado en 46,4 por tres lecturas más. **No vuelve a un default: se congela en
+el último valor y deja de actualizarse.** Es lo que el autor venía diciendo desde la corrida 4:
+*«se mueve mirando a un solo lado todo el tiempo»*.
+
+Y la lectura del código coincide, censando **los cuatro** call sites de `SetDesiredEyeAngles`:
+
+| Dónde | Cuándo dispara | ¿En calma? |
+|---|---|---|
+| `enemyoverrides.lua:1874` | apuntando al **enemigo** | **no** — en calma no hay enemigo |
+| `motionoverrides.lua:3306` | **cayendo** | no |
+| `motionoverrides.lua:3311` | **saltando** a una posición | no |
+| `shared.lua:1543` (`justLookAt`) | vía el «mirar hacia el goal» de `motionoverrides.lua:2838` | **no** — sale antes con `if not myTbl.TERM_FISTS then return end` |
+| `terminator_nextbot_base/init.lua:161` | una vez, al inicializar | — |
+
+**En calma, sin enemigo, sin caer, sin saltar y sin puños, no queda ni un solo call site vivo.**
+Medición y lectura coinciden, y esta vez el defecto **es del fantasma**: es el primero del arco que
+no es del instrumento.
+
+> **Decisión pendiente, y es del autor:** un fantasma que **se desliza sin girar** puede leerse como
+> bug o como rasgo. El arreglo es una línea —apuntar el facing a la dirección de marcha cuando no hay
+> enemigo— pero **cambia cómo se ve el bot y necesita su propio check**, así que no se tocó.
+
+---
 
 ## Corrida 5 (2026-08-06) — la planilla CORRIDA: **7 pasa, 1 falla**
 

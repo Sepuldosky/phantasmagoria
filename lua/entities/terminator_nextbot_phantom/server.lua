@@ -308,48 +308,97 @@ end
 -- lado todo el tiempo". Sin esto, "mueve la vista" era una impresion y no un
 -- numero, y ya me costo explicar la observacion antes de fijarla.
 --
--- Se imprimen TRES cosas y no una, porque son las que se discriminan entre si:
+-- LA VERSION ANTERIOR DE ESTE BLOQUE TUVO TRES DEFECTOS, LOS TRES MIOS, Y LOS
+-- TRES ESTAN CORREGIDOS ACA. Se dejan escritos porque los tres fallaban HACIA UN
+-- VALOR PLAUSIBLE y ninguno tiraba error:
 --
---   mira    ENT:GetEyeAngles()         terminator_nextbot_base/shared.lua:81
---           OJO: el yaw NO es un yaw de cabeza. La funcion arma el angulo con
---           self:GetAngles() y solo le pisa el PITCH con GetAimPitch(). O sea
---           que horizontalmente "donde mira" ES hacia donde apunta el cuerpo.
---   quiere  ENT:GetDesiredEyeAngles()  terminator_nextbot_base/motion.lua:139
---           lo que alguna tarea le PIDIO mirar. Es el que separa las dos causas
---           posibles de una cabeza quieta.
---   marcha  loco:GetVelocity()         la direccion en la que se esta moviendo
+-- (1) marcha decia "quieto ( 0 u/s )" SIEMPRE, incluso con el bot cruzando el
+--     mapa. La causa fue una guarda MIA: IsValid( ghost.loco ). CLuaLocomotion
+--     NO tiene metodo IsValid, y el IsValid() de GMod devuelve false para todo
+--     objeto que no lo tenga -- asi que la guarda caia siempre al vector cero.
+--     La base NUNCA envuelve self.loco en IsValid: la llama directo
+--     ( terminator_nextbot_base/motion.lua:54 ). Una guarda defensiva que falla
+--     hacia un valor creible es peor que no tenerla: no se ve.
 --
--- Como se leen juntos:
---   quiere =/= mira        algo le pide girar y no llega -> es velocidad de giro
---   quiere == mira, quietos, caminando  -> NADIE le pide girar, que es lo que
---                          predice no tener TERM_FISTS ( motionoverrides.lua:2838,
---                          "only look towards goal if we have fists" )
---   mira =/= marcha        camina para un lado mirando para otro
+-- (2) Los yaws se imprimian SIN NORMALIZAR, asi que -449.7 y 270.4 -- que son
+--     EL MISMO ANGULO -- se leian como direcciones opuestas, con el delta
+--     diciendo 0 al lado. El delta estaba bien; los numeros de al lado lo
+--     desmentian. Ahora todo pasa por math.NormalizeAngle.
+--
+-- (3) "quiere" se declaro como el discriminante y NO discrimina nada:
+--     15 de 15 lecturas dieron delta 0. Y el motivo es estructural, no de
+--     tuning: GetEyeAngles ( terminator_nextbot_base/shared.lua:81-93 ) arma el
+--     angulo con self:GetAngles() y solo pisa el PITCH. O sea que el yaw de
+--     "donde mira" ES el yaw del cuerpo, y no existe un yaw de cabeza aparte
+--     que se le pueda comparar. La pareja mira/quiere no podia separar cabeza
+--     de cuerpo ni en principio. Se conserva como CONTROL -- que el delta sea 0
+--     es el dato -- y el discriminante de verdad pasa a ser otro: contra que
+--     esta apuntado.
+--
+-- Las lineas, y que separa cada una:
+--   mira       el yaw del CUERPO ( = donde mira ) y el pitch del aim
+--   quiere     GetDesiredEyeAngles: control, el aim converge en el mismo frame
+--   marcha     hacia donde se mueve y a que velocidad, por DOS fuentes
+--   al jugador el rumbo al jugador mas cercano, y el angulo contra la mirada
+--              -- ESTE es el que separa "gira siguiendote" de "gira solo"
 local function lookLines( ghost, say )
     local eye  = ghost:GetEyeAngles()
     local want = ghost:GetDesiredEyeAngles()
 
-    -- La base mueve al bot por el locomotion, no por la fisica de la entidad:
-    -- el que tiene la velocidad de verdad es loco ( motionoverrides.lua:2840 usa
-    -- locoMeta.GetVelocity( myTbl.loco ) ). Entity:GetVelocity() en un NextBot
-    -- puede dar cero y leerse como "esta quieto".
-    local vel = IsValid( ghost.loco ) and ghost.loco:GetVelocity() or vector_origin
-    local spd = vel:Length()
+    local eyeYaw  = math.NormalizeAngle( eye.y )
+    local wantYaw = math.NormalizeAngle( want.y )
 
-    say( "    mira    yaw " .. math.Round( eye.y, 1 ) .. "  pitch " .. math.Round( eye.p, 1 ) )
+    say( "    mira    yaw " .. math.Round( eyeYaw, 1 ) ..
+        "  pitch " .. math.Round( math.NormalizeAngle( eye.p ), 1 ) )
 
-    say( "    quiere  yaw " .. math.Round( want.y, 1 ) .. "  pitch " .. math.Round( want.p, 1 ) ..
-        "   delta " .. math.Round( math.abs( math.AngleDifference( want.y, eye.y ) ), 1 ) .. " grados" )
+    say( "    quiere  yaw " .. math.Round( wantYaw, 1 ) ..
+        "  pitch " .. math.Round( math.NormalizeAngle( want.p ), 1 ) ..
+        "   delta " .. math.Round( math.abs( math.AngleDifference( wantYaw, eyeYaw ) ), 1 ) ..
+        " grados ( control: 0 es lo esperado )" )
 
-    if spd < 1 then
-        say( "    marcha  quieto ( " .. math.Round( spd, 1 ) .. " u/s )" )
+    -- DOS fuentes de velocidad y las dos se imprimen, para que el instrumento
+    -- diga con que esta midiendo. La de la base es GetCurrentSpeed
+    -- ( terminator_nextbot_base/motion.lua:51, Length2D del loco, cacheada
+    -- 0,01 s ); Entity:GetVelocity() es la de la entidad y en un NextBot puede
+    -- no ser la misma cosa. Si alguna vuelve a dar 0 con el bot caminando, se
+    -- ve CUAL, que es lo que la version anterior no dejaba ver.
+    local vel     = ghost.loco and ghost.loco:GetVelocity() or vector_origin
+    local spdLoco = ghost:GetCurrentSpeed()
+    local spdEnt  = ghost:GetVelocity():Length()
+
+    if spdLoco < 1 and spdEnt < 1 then
+        say( "    marcha  quieto   ( loco " .. math.Round( spdLoco, 1 ) ..
+            " u/s · ent " .. math.Round( spdEnt, 1 ) .. " u/s )" )
 
     else
-        local marcha = vel:Angle().y
-        say( "    marcha  yaw " .. math.Round( marcha, 1 ) .. "  a " .. math.Round( spd ) .. " u/s" ..
-            "   mirada vs marcha " .. math.Round( math.abs( math.AngleDifference( marcha, eye.y ) ), 1 ) .. " grados" )
+        local marchaYaw = math.NormalizeAngle( vel:Angle().y )
+
+        say( "    marcha  yaw " .. math.Round( marchaYaw, 1 ) ..
+            "   loco " .. math.Round( spdLoco ) .. " u/s · ent " .. math.Round( spdEnt ) .. " u/s" ..
+            "   mirada vs marcha " .. math.Round( math.abs( math.AngleDifference( marchaYaw, eyeYaw ) ), 1 ) .. " grados" )
 
     end
+
+    -- El discriminante que faltaba. En hunt el bot deberia apuntarte; en calma,
+    -- no. Sin esta linea, "el yaw cambio" no distingue seguirte de girar solo.
+    local nearest, nearestDist
+    for _, target in ipairs( player.GetAll() ) do
+        local d = ghost:GetRangeTo( target )
+        if not nearest or d < nearestDist then nearest, nearestDist = target, d end
+
+    end
+
+    if not IsValid( nearest ) then
+        say( "    al ply  ( no hay jugadores )" )
+        return
+
+    end
+
+    local rumbo = math.NormalizeAngle( ( nearest:GetPos() - ghost:GetPos() ):Angle().y )
+
+    say( "    al ply  yaw " .. math.Round( rumbo, 1 ) .. "  a " .. math.Round( nearestDist ) .. " u" ..
+        "   mirada vs jugador " .. math.Round( math.abs( math.AngleDifference( rumbo, eyeYaw ) ), 1 ) .. " grados" )
+
 end
 
 -- Itera los fantasmas vivos. Misma busqueda que usaba ghost_where: por el campo
