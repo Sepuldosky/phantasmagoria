@@ -52,6 +52,29 @@ Al escribirlo hay que **encadenar al `BaseClass`**: la implementación default *
 implementa `ExtraSpawnHealthPerPlayer` (`damageandhealth.lua:872`), y un override que no la llame la
 mata en silencio.
 
+> ### ⚠ El diseño §3.1 tiene una suposición que la lectura contradice — **medirla primero**
+>
+> §3.1 dice: *«Al entrar en hunt se re-evalúan relaciones y el jugador pasa a `D_HT`: la base hace el
+> resto sola.»* **Nada en el código dispara esa re-evaluación.** El recorrido, leído el 2026-08-06:
+>
+> - `SetupRelationships` corre **una sola vez**, desde `Initialize` (`shared.lua:3079`).
+>   Itera `ents.Iterator()` y registra un hook `terminator_postentitycreated`
+>   (`enemyoverrides.lua:846-869`) — o sea que cubre a los que aparecen **después**, no a los que ya
+>   estaban.
+> - Por cada entidad llama `SetupEntityRelationship` → `GetDesiredEnemyRelationship` →
+>   `OnFirstRelationWithPlayer`, y **guarda** el resultado con `Term_SetEntityRelationship`
+>   (`enemyoverrides.lua:880-898`).
+>
+> **El nombre lo venía diciendo: `OnFirst…`.** Para un jugador que ya estaba en el server cuando
+> spawneó el bot, ese override corre **una vez y nunca más**, así que cambiar `self.phantom_Hunting`
+> después **no cambiaría nada** y el interruptor de §3.1 no funcionaría como está escrito.
+>
+> **Esto es [lectura], no medición** — es exactamente la clase de afirmación que este arco ya vio
+> caer cuatro veces. El primer trabajo del próximo bloque es **medirlo**: flipear el flag en caliente
+> y ver si el bot cambia de actitud. Si no cambia, el interruptor necesita **re-disparar** la
+> relación (candidato: volver a llamar `SetupEntityRelationship` o `Term_SetEntityRelationship` por
+> jugador), y eso hay que leerlo antes de escribirlo.
+
 ---
 
 ## El check de la entidad mínima — **CERRADO EN VERDE**
