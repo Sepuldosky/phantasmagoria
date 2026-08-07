@@ -11,7 +11,7 @@
     bien: eso lo contesta mirar, y va en los checks visuales de la planilla.
 
     CADA BARRIDO LLEVA SU CONTROL NEGATIVO
-    Un barrido que devuelve "65/65 OK" no distingue "estan todos" de
+    Un barrido que devuelve "66/66 OK" no distingue "estan todos" de
     "la funcion dice que si siempre". Por eso cada comando corre ademas una
     ruta deliberadamente inexistente y publica su resultado. Si el control
     negativo no falla, el resultado del barrido NO VALE y el check va SIN
@@ -66,7 +66,8 @@ local MODELOS = {
   "photo_camera_iii",
   "repellent_i",
   "repellent_ii",
-  "repellent_iii",
+  "repellent_iii_hanging",
+  "repellent_iii_wrapped",
   "salt_i",
   "salt_ii",
   "salt_iii",
@@ -428,9 +429,9 @@ local BLANCOS = {
 -- Se eligen los extremos del lote a proposito: si el lector devolviera una
 -- constante, dos objetos que difieren varias veces en tamano lo delatan.
 local ESCALA = {
-  { "eqp_igniter_iii", 2.97 },
-  { "eqp_repellent_ii", 8.44 },
-  { "eqp_tripod_ii", 41.49 },
+  { "igniter_iii", 2.97 },
+  { "motion_sensor_iii", 7.20 },
+  { "tripod_ii", 41.49 },
 }
 
 -- rutas que NO existen: el control negativo de cada barrido
@@ -459,20 +460,92 @@ end
 
 concommand.Add("ph_eq_modelos", function()
   linea("=== eq: MODELOS (" .. #MODELOS .. " esperados)")
-  local ok, malos = 0, {}
+  linea("  DOS lecturas, porque NO contestan lo mismo:")
+  linea("    file.Exists       el motor ENTREGA el archivo. Es el criterio.")
+  linea("    util.IsValidModel NO contesta por la validez. MEDIDO: dio false en")
+  linea("                      los 66 mientras esos modelos spawneaban bien")
+  linea("                      (ronda 2), y despues DOS corridas seguidas de")
+  linea("                      este mismo comando dieron 57 y 66 sin que")
+  linea("                      cambiara un byte en disco (ronda 2b). Un lector")
+  linea("                      de validez no cambia de respuesta ahi. Se publica")
+  linea("                      al lado, con un control POSITIVO: si el modelo")
+  linea("                      del jugador -que seguro esta cargado- tambien")
+  linea("                      diera false, el lector estaria clavado en false.")
+  local hay, cargados, faltan, nocargados = 0, 0, {}, {}
   for _, m in ipairs(MODELOS) do
     local ruta = "models/phantasmagoria/eq/" .. m .. ".mdl"
+    if file.Exists(ruta, "GAME") then hay = hay + 1 else faltan[#faltan + 1] = m end
     if util.IsValidModel(ruta) then
-      ok = ok + 1
+      cargados = cargados + 1
     else
-      malos[#malos + 1] = m
+      nocargados[#nocargados + 1] = m
     end
   end
-  linea(("  validos: %d de %d"):format(ok, #MODELOS))
-  for _, m in ipairs(malos) do linea("    NO VALIDO: " .. m) end
+  linea(("  ENTREGA (file.Exists) : %d de %d"):format(hay, #MODELOS))
+  for _, m in ipairs(faltan) do linea("    NO LO ENTREGA: " .. m) end
+  linea(("  CARGA (IsValidModel)  : %d de %d"):format(cargados, #MODELOS))
+  if #nocargados > 0 and #nocargados <= 8 then
+    for _, m in ipairs(nocargados) do linea("    sin cargar: " .. m) end
+  end
+
+  -- Un control negativo SOLO detecta el lector clavado en TRUE. El de la ronda
+  -- 2 dijo "false, correcto" con el barrido entero en cero: para el otro lado
+  -- hace falta un control POSITIVO, o sea una ruta que TIENE que dar true.
   local ctrl = util.IsValidModel(MODELO_FALSO)
-  linea("  CONTROL NEGATIVO (" .. MODELO_FALSO .. "): " ..
-        (ctrl and "DEVOLVIO TRUE -> el barrido NO MIDE NADA" or "false, correcto"))
+  linea("  CONTROL NEGATIVO (" .. MODELO_FALSO .. "):")
+  linea("    " .. (ctrl and "DEVOLVIO TRUE -> el barrido NO MIDE NADA" or "false, correcto"))
+  local yo = IsValid(LocalPlayer()) and LocalPlayer():GetModel() or nil
+  if not yo then
+    linea("  CONTROL POSITIVO: no hay LocalPlayer -> SIN CONTROL, el barrido no vale")
+  else
+    local pos = util.IsValidModel(yo)
+    linea("  CONTROL POSITIVO (" .. yo .. "):")
+    linea("    " .. (pos and "true, correcto -> el lector SI discrimina"
+                    or "DIO FALSE sobre el modelo del propio jugador -> clavado en false"))
+    linea("    Si el positivo da true y los nuestros false, lo que falta es la")
+    linea("    CARGA: volver a correr esto DESPUES de spawnear uno y comparar.")
+  end
+  -- Los DOS lados del file.Exists, por lo mismo: la ruta falsa ataja al lector
+  -- clavado en true, y las rutas que SI existen -de otros addons ya montados,
+  -- que no son de este lote- atajan al clavado en false. Con un solo lado, un
+  -- "0 de 66" y un "66 de 66" se leen los dos como correctos.
+  linea("  CONTROL NEGATIVO file.Exists (" .. MODELO_FALSO .. "):")
+  linea("    " .. (file.Exists(MODELO_FALSO, "GAME") and "TRUE -> NO MIDE NADA"
+                  or "false, correcto"))
+  local nvivos = 0
+  for _, t in ipairs(TERCEROS) do
+    if file.Exists(t[2], "GAME") then nvivos = nvivos + 1 end
+  end
+  linea(("  CONTROL POSITIVO file.Exists (%d rutas montadas que NO son de este lote): %d"):format(
+    #TERCEROS, nvivos))
+  linea("    " .. (nvivos > 0 and "al menos una da true -> el lector SI discrimina"
+                  or "NINGUNA da true -> el lector esta clavado en false, NO MIDE NADA"))
+
+  -- EXPERIMENTO: que dispara la transicion false -> true.
+  --
+  -- EL SUJETO TIENE QUE SER UNO QUE HOY DE false. La primera version tomaba
+  -- MODELOS[1] a secas y en la ronda 2b salio "antes=true despues=true" sobre
+  -- crucifix_i, que ya estaba cargado: un experimento cuyo sujeto YA CUMPLE el
+  -- resultado no puede mostrar ninguna transicion.
+  local sujeto = nocargados[1]
+  if not sujeto then
+    linea("  EXPERIMENTO: los " .. #MODELOS .. " ya dan true -> no hay sujeto sin")
+    linea("    cargar. NO APLICA en esta corrida; para tenerlo, correrlo apenas")
+    linea("    arranca GMod, antes de spawnear nada del lote.")
+  elseif not util.PrecacheModel then
+    linea("  EXPERIMENTO: util.PrecacheModel no existe en este realm -> sin medir")
+  else
+    local uno = "models/phantasmagoria/eq/" .. sujeto .. ".mdl"
+    local antes = util.IsValidModel(uno)
+    util.PrecacheModel(uno)
+    local despues = util.IsValidModel(uno)
+    linea(("  EXPERIMENTO precache (%s, elegido por dar false): antes=%s  despues=%s"):format(
+      sujeto, tostring(antes), tostring(despues)))
+    linea("    false->true : lo que dispara la transicion es el PRECACHE.")
+    linea("    false->false: el precache de cliente no alcanza -- la transicion")
+    linea("                  la dispara otra cosa (spawnear, o la propia")
+    linea("                  consulta). No confirmada != refutada.")
+  end
 end)
 
 concommand.Add("ph_eq_materiales", function()
@@ -530,27 +603,82 @@ concommand.Add("ph_eq_rutas", function()
   end
 end)
 
-concommand.Add("ph_eq_escala", function(ply)
-  linea("=== eq: ESCALA en juego, contra el valor medido del lado de Unity")
-  linea("  El .mdl y el valor esperado salen de DOS rutas distintas: el esperado")
-  linea("  se midio del GLB + la cadena TRS, sin pasar por Blender ni studiomdl.")
-  for _, e in ipairs(ESCALA) do
-    local ruta = "models/phantasmagoria/eq/" .. e[1] .. ".mdl"
-    local mn, mx = Vector(), Vector()
-    local ent = ClientsideModel(ruta)
-    if not IsValid(ent) then
-      linea(("  %-30s NO SE PUDO CREAR -> SIN CORRER"):format(e[1]))
-    else
-      mn, mx = ent:GetModelBounds()
-      ent:Remove()
-      local d = mx - mn
-      local dims = { math.abs(d.x), math.abs(d.y), math.abs(d.z) }
-      table.sort(dims, function(a, b) return a > b end)
-      local err = 100 * (dims[1] - e[2]) / e[2]
-      linea(("  %-30s mayor=%6.2f u   esperado=%6.2f u   error=%+6.1f %%  %s"):format(
-        e[1], dims[1], e[2], err, (math.abs(err) <= 5 and "OK" or "FUERA DE BANDA")))
+-- Tamano mayor de la MALLA de un modelo, leido de la geometria que el cliente
+-- carga. Devuelve (mayor, n_vertices) o nil.
+--
+-- POR QUE NO `ent:GetModelBounds()`: ese devuelve hull_min/hull_max del header
+-- del .mdl, que es el bbox del HULL DE COLISION y no el de la malla. Medido en
+-- la ronda 2: dio 3.40 / 8.34 / 41.99 donde el .vvd mide 2.965 / 7.863 / 41.49
+-- -- casi media unidad de mas en los tres, con tamanos que van de 3 a 42 u.
+-- El esperado se midio del lado de Unity y es la MALLA: comparar contra el
+-- hull era comparar dos cosas distintas, y los +14 % no eran del modelo.
+local function mayor_de_la_malla(ruta)
+  local ms = util.GetModelMeshes(ruta)
+  if not ms or #ms == 0 then return nil, 0 end
+  local lo = { 1e9, 1e9, 1e9 }
+  local hi = { -1e9, -1e9, -1e9 }
+  local n = 0
+  for _, m in ipairs(ms) do
+    local vs = m.triangles or m.verticies
+    if vs then
+      for _, v in ipairs(vs) do
+        local p = v.pos
+        if p then
+          n = n + 1
+          if p.x < lo[1] then lo[1] = p.x end
+          if p.y < lo[2] then lo[2] = p.y end
+          if p.z < lo[3] then lo[3] = p.z end
+          if p.x > hi[1] then hi[1] = p.x end
+          if p.y > hi[2] then hi[2] = p.y end
+          if p.z > hi[3] then hi[3] = p.z end
+        end
+      end
     end
   end
+  -- Un cero se lee igual que "el modelo mide cero": si no se leyo un solo
+  -- vertice, esto NO devuelve un numero.
+  if n == 0 then return nil, 0 end
+  local dims = { hi[1] - lo[1], hi[2] - lo[2], hi[3] - lo[3] }
+  table.sort(dims, function(a, b) return a > b end)
+  return dims[1], n
+end
+
+concommand.Add("ph_eq_escala", function(ply)
+  linea("=== eq: ESCALA en juego, contra el valor medido del lado de Unity")
+  linea("  El esperado y lo leido salen de DOS rutas distintas: el esperado se")
+  linea("  midio del GLB + la cadena TRS, sin Blender ni studiomdl. Y es el")
+  linea("  tamano de la MALLA, asi que aca se lee la malla (util.GetModelMeshes)")
+  linea("  y no el bbox: GetModelBounds da el HULL DE COLISION, que es MAS")
+  linea("  GRANDE y no por una cantidad fija -- medido en juego, +0.30 u en el")
+  linea("  sensor de movimiento y +0.43 / +0.50 en los otros dos, sobre objetos")
+  linea("  de 3 a 42 u. Se imprime al lado para que la diferencia se vea.")
+  for _, e in ipairs(ESCALA) do
+    local ruta = "models/phantasmagoria/eq/" .. e[1] .. ".mdl"
+    local malla, nv = mayor_de_la_malla(ruta)
+    if not malla then
+      linea(("  %-22s SIN MALLA (util.GetModelMeshes no devolvio vertices) -> SIN CORRER"):format(e[1]))
+    else
+      local hull = 0
+      local ent = ClientsideModel(ruta)
+      if IsValid(ent) then
+        local mn, mx = ent:GetModelBounds()
+        ent:Remove()
+        local hd = { math.abs(mx.x - mn.x), math.abs(mx.y - mn.y), math.abs(mx.z - mn.z) }
+        table.sort(hd, function(a, b) return a > b end)
+        hull = hd[1]
+      end
+      local err = 100 * (malla - e[2]) / e[2]
+      linea(("  %-22s malla=%6.2f u  esperado=%6.2f u  error=%+6.1f %%  %-13s (hull=%6.2f u, %d verts)"):format(
+        e[1], malla, e[2], err, (math.abs(err) <= 5 and "OK" or "FUERA DE BANDA"), hull, nv))
+    end
+  end
+  -- El control negativo del LECTOR NUEVO: la misma funcion sobre una ruta que
+  -- no existe tiene que devolver nada. Si devolviera un numero, los tres de
+  -- arriba podrian ser ese mismo numero.
+  local falso = mayor_de_la_malla(MODELO_FALSO)
+  linea("  CONTROL NEGATIVO (" .. MODELO_FALSO .. "):")
+  linea("    " .. (falso and ("DEVOLVIO " .. falso .. " -> el lector NO MIDE NADA")
+                  or "sin malla, correcto"))
   linea("  Los tres tienen que dar numeros DISTINTOS entre si: si dieran el")
   linea("  mismo, el lector devuelve una constante y no mide el modelo.")
 end)
