@@ -691,15 +691,36 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_where", function( ply )
         local enemy = ghost:GetEnemy() -- terminator_nextbot_base/enemy.lua:20
         local tasks = {}
 
-        -- m_TaskList es la tabla que lee HasTask ( taskoverride.lua:148 ),
-        -- indexada por nombre de tarea.
+        -- ⚠ ESTA LISTA DECIA MENOS DE LO QUE TODO EL MUNDO LEYO EN ELLA, Y LO
+        -- DESTAPO EL BLOQUE DEL ENCAJE. m_TaskList es el REGISTRO estatico:
+        -- SetupTasks lo llena con todas las tareas declaradas
+        -- ( taskoverride.lua:398-402 ) y nadie lo vacia nunca, ni cuando una
+        -- tarea termina. Es lo que lee HasTask ( :148 ), que pregunta si la tarea
+        -- EXISTE.
+        --
+        -- Lo que dice si una tarea esta CORRIENDO es m_ActiveTasks
+        -- ( terminator_nextbot_base/tasks.lua:104, que es lo que lee
+        -- IsTaskActive ), y de ahi si la saca endTask.
+        --
+        -- La diferencia no es academica: el reallystuck_handler de la base se
+        -- termina a si mismo en su propio OnStart si ReallyStuckDisable esta
+        -- puesto o si MoveSpeed <= 0 ( shared.lua:3660 y :3664 ), y en los dos
+        -- casos SEGUIRIA APARECIENDO ACA. La unica evidencia que teniamos de que
+        -- el rescate estaba vivo era esta lista, y esta lista no lo podia decir.
+        -- *Una lista de lo que existe no puede contestar por lo que corre.*
+        local activas = istable( ghost.m_ActiveTasks ) and ghost.m_ActiveTasks or {}
+        local nActivas = 0
+
         if istable( ghost.m_TaskList ) then
             for name, _ in pairs( ghost.m_TaskList ) do
-                table.insert( tasks, name )
+                local viva = activas[ name ] ~= nil
+                if viva then nActivas = nActivas + 1 end
+
+                table.insert( tasks, { name = name, viva = viva } )
 
             end
 
-            table.sort( tasks )
+            table.sort( tasks, function( a, b ) return a.name < b.name end )
 
         end
 
@@ -735,10 +756,11 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_where", function( ply )
             say( "    tareas  ninguna" )
 
         else
-            say( "    tareas  " .. #tasks )
+            say( "    tareas  " .. nActivas .. " ACTIVAS de " .. #tasks .. " registradas" )
 
-            for _, name in ipairs( tasks ) do
-                say( "        - " .. name )
+            for _, task in ipairs( tasks ) do
+                say( "        " .. ( task.viva and "* " or "  " ) .. task.name ..
+                    ( task.viva and "" or "   ( solo registrada: NO esta corriendo )" ) )
 
             end
         end
@@ -1057,6 +1079,15 @@ include( "server_doors.lua" )
 -- comportamiento, y meterlo en la misma ronda que un mecanismo nuevo convierte
 -- un rojo en un misterio.
 include( "server_steps.lua" )
+
+-- Reportado por el autor: el fantasma salta, queda encajado entre props y el
+-- techo, y hay que sacarlo con el physgun. INSTRUMENTO SOLO -- mide el rescate
+-- de la base ( reallystuck_handler ) y los saltos, y no cambia comportamiento.
+--
+-- VA DESPUES DE server_doors.lua, y la guarda del final de ese archivo lo
+-- comprueba: no usa ENT.MyClassTask ( la clave Think ya es de las puertas ) sino
+-- ENT:AdditionalThink, que la base declara como stub libre.
+include( "server_stuck.lua" )
 
 ---------------------------------------------------------------------------
 -- GUARDA: un campo pisado por un metodo del mismo nombre

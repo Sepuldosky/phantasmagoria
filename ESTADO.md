@@ -1,6 +1,6 @@
 # Phantasmagoria — Estado actual y handoff
 
-**Última actualización:** 2026-08-06
+**Última actualización:** 2026-08-07
 **Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
@@ -11,9 +11,25 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ---
 
-## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-06 (velocidad y puertas)
+## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-**Todo pusheado en `3694412`.** Lo de esta sesión son dos archivos nuevos
+> **LO ÚLTIMO QUE PASÓ (2026-08-07): el bloque del ENCAJE está ESCRITO y SIN CORRER.**
+> `lua/entities/terminator_nextbot_phantom/server_stuck.lua`, planilla
+> [`dev/checks/phantasmagoria-encaje-r9.html`](../dev/checks/phantasmagoria-encaje-r9.html) con
+> **9 filas**. **No cambia ningún comportamiento**: es sólo instrumento, a propósito — los tres
+> candidatos son lectura y ninguno está medido, y en este proyecto el arreglo obvio ya apuntó al
+> candado equivocado dos veces. El detalle está en «El encaje — el bloque escrito» más abajo, y lo
+> primero que hay que saber es esto:
+>
+> ⚠ **La evidencia de que el rescate estaba corriendo no servía como evidencia.** Era *«aparece en la
+> lista de 32 tareas de `phantasmagoria_ghost_where`»*, y esa lista sale de `m_TaskList`, que es el
+> **registro estático** y nadie lo vacía nunca. Lo que dice si una tarea *corre* es `m_ActiveTasks`.
+> El handler se termina a sí mismo en su `OnStart` si `ReallyStuckDisable` o `MoveSpeed <= 0`
+> (`shared.lua:3660`, `:3664`) — **y seguiría apareciendo en esa lista igual.** *Una lista de lo que
+> existe no puede contestar por lo que corre.* Ya está arreglado: `_where` imprime
+> `N ACTIVAS de M registradas`, y **la fila 01 de la planilla es exactamente eso**.
+
+**Lo anterior a esta sesión está pusheado en `c92dca2`.** Lo de la sesión de velocidad y puertas son dos archivos nuevos
 (`server_speed.lua`, `server_doors.lua`) colgados de `ENT.MyClassTask`, y **cinco rondas corridas en
 juego**. Las planillas viven en `dev/checks/` y **no están versionadas** (`dev/` está fuera de todo
 repo), igual que `dev/other/`.
@@ -45,10 +61,11 @@ en «Ronda 7 corrida».
 [`dev/PROMPT_phantasmagoria_encaje.txt`](../dev/PROMPT_phantasmagoria_encaje.txt) — el punto 2 de
 abajo **ya se hizo**, y el prompt viejo `…_encaje_y_pisadas.txt` queda sólo como registro):
 
-1. **El encaje contra el techo.** Primero el instrumento —que `reallystuck_handler` diga cuándo
-   arranca y qué hace— y recién después tocar el salto. La hipótesis del autor (*«tal vez se
-   soluciona evitando que salte tanto»*) es razonable y **no está medida**; darla por buena antes de
-   instrumentar es exactamente lo que costó las rondas 5 y 6.
+1. **El encaje contra el techo — INSTRUMENTO ESCRITO, PLANILLA SIN CORRER.** Lo que falta es
+   correrla. Primero el instrumento —que `reallystuck_handler` diga cuándo arranca y qué hace— y
+   recién después tocar el salto. La hipótesis del autor (*«tal vez se soluciona evitando que salte
+   tanto»*) es razonable y **no está medida**; darla por buena antes de instrumentar es exactamente
+   lo que costó las rondas 5 y 6.
 
    > **Hay tres mecanismos candidatos leídos en la base, y ninguno medido.** El más fuerte:
    > **el teletransporte está vetado mientras el bot te ve** — `shared.lua:3868` es
@@ -58,12 +75,19 @@ abajo **ya se hizo**, y el prompt viejo `…_encaje_y_pisadas.txt` queda sólo c
    > **detectarlo tarda ~80 s si no está en el piso** (`noNav`, `:3714`, exige `IsOnGround`, y sin él
    > `size` queda en 80 en vez de 10 con una inserción por segundo), y **la primera pasada nunca es
    > la del teletransporte** (`IsUnderDisplacement` mide terreno, no props, así que `extremeStuck` da
-   > false). Detalle y anclas en el prompt.
+   > false).
    >
    > **Y la base regala el botón:** `myTbl.overrideVeryStuck` (`:3747`, usado en el `if` de `:3816`)
    > fuerza la rama de rescate en ~1 s, sin esperar los 80. Permite el A/B de `IsSeeEnemy` **sin
    > encajar al bot de verdad** — pero eso mide *qué rama toma el rescate*, no *que un bot encajado
-   > llegue a ella*. Las dos mediciones hacen falta y son fáciles de confundir.
+   > llegue a ella*. Las dos mediciones hacen falta y son fáciles de confundir; en la planilla son
+   > las filas **02-04** y las **05-06**.
+   >
+   > ⚠ **Y el A/B no se puede correr de un solo disparo, que es como estaba planteado.** Con los dos
+   > relojes en 0, `canGotoEscape` es `true` y `extremeStuck or not canGotoEscape` da **false**: el
+   > **primer** disparo va a caminar *aunque `hunt` esté en 0*. Hace falta un **segundo** disparo
+   > entre 5 y 80 s después. Un A/B corrido una sola vez habría leído eso como *«(a) es falsa»* — la
+   > conclusión inversa.
 2. **El silencio de las PISADAS, por flag** — **CORRIDO, 4 de 8 cerradas** (2026-08-07). Es
    `server_steps.lua`. **La restricción del autor quedó CERRADA en juego** —39 pisadas calladas y
    publicadas al consumidor— y las otras cuatro filas se marcaron verdes sin la medición que pedían.
@@ -135,6 +159,63 @@ referencia:
 llevan `<code>`/`<strong>`, así que los siete títulos se leían literales. La corrección anterior
 había arreglado el criterio y se olvidó del encabezado. Arreglado, con `plain()` para que el
 reporte que se pega en el chat no salga con tags.
+
+---
+
+## El encaje — el bloque escrito (2026-08-07), **sin correr**
+
+`server_stuck.lua`, colgado de `ENT:AdditionalThink` y **no** de `ENT.MyClassTask` — esa clave
+(`Think`) ya es de `server_doors.lua`, y una segunda asignación la pisaría entera con el síntoma de
+un bloque que deja de correr sin un solo error. Hay una guarda al final del archivo que lo comprueba
+en vez de confiar en el comentario. Planilla
+[`phantasmagoria-encaje-r9.html`](../dev/checks/phantasmagoria-encaje-r9.html), **9 filas**
+(7 del encaje + 2 de regresión de pisadas).
+
+**No cambia ningún comportamiento del NPC.** Ni una convar de mecanismo, ni un flag nuevo.
+
+| Qué entró | Por qué |
+|---|---|
+| Lectura de `m_ActiveTasks["reallystuck_handler"]` | Es **la misma tabla `data`** que el handler muta (`taskoverride.lua:201`), así que `canGotoEscape` sale **exacto** y no recalculado |
+| `phantasmagoria_ghost_stuck` | El reporte: las cuatro salidas, `IsSeeEnemy`, `IsOnGround`, `hist N/umbral` con cuenta regresiva, los dos relojes con signo, y la **predicción** de la rama |
+| `… force` | **El botón.** `overrideVeryStuck` dispara la rama en ~1 s. Con muestreador propio, porque la ventana dura menos que el trámite de medirla |
+| `… watch [seg]` | La otra medición: encajar al bot con el physgun y ver si `IsOnGround` da true o false. Imprime **por transición**, con latido cada 10 s |
+| Override de `StartTask` | La rama tomada se lee del `reason` que **la base ya escribe** (`reallystuck AFTER TELEPORT` / `SUCCESS` / `partial FAIL`) |
+| Override de `Jump` y `JumpToPos` | Los saltos, separando **pedidos** de **ocurridos** (`ENT:Jump` se sale en silencio fuera del piso, `motionoverrides.lua:2971`) |
+| `_where` marca `* activa` | El arreglo del párrafo de arriba |
+
+**La rama de caminar NO se detecta por `freedomGotoPosSimple`**, que es lo obvio: el bloque de
+`:3674` lo borra apenas la distancia baja de 150 u, o sea que aparece y desaparece entre dos muestras
+nuestras. Se detecta por `nextUnstuckGotoEscape`, que la rama pone en `+80 s` y **nadie baja nunca**.
+*Un instrumento más frágil que lo que mide se rompe justo cuando hace falta.*
+
+### Una cuarta salida que no estaba en ninguna lista, y sale de la aritmética
+
+La rama de caminar pone el reloj en `CurTime() + 80` (`:3911`) y **vacía `historicPositions`**
+(`:3923`). Para un bot que no está en el piso, volver a juntar 81 posiciones a una por segundo tarda
+**81 s** — o sea que cuando el handler vuelve a poder evaluar, el reloj de 80 **ya venció** y
+`canGotoEscape` es `true` otra vez. Si eso es así, **un bot encajado en el aire nunca alcanza
+`not canGotoEscape`, ni siquiera sin mirar a nadie**, y (a) no sería la única puerta cerrada. Son 80
+contra 81: un margen de un segundo, que es la clase de número que no se cierra leyendo. El reporte
+imprime los dos relojes con su signo y la cuenta regresiva de `hist` al lado; las filas 05 y 06
+traen los datos.
+
+### Los saltos: contados, no juzgados
+
+`ENT.JumpHeight` es **245** (`shared.lua:111`, `70 * 3.5`). Y `ENT.Term_Leaps` es **`nil`** en la base
+(`:112`) y este fantasma no lo declara, así que las dos ramas de salto-hacia-el-enemigo
+(`motionoverrides.lua:2693`, `:2697`) y el **único** call site de `JumpToPos` (`:2744`) están muertos
+para nosotros. Eso deja un control gratis: **`saltos leap` tiene que dar 0 siempre.** Lo que sí puede
+saltar es `:2749`, por `GetJumpBlockState` o por «está arriba nuestro» + `IsAngry`.
+
+### El instrumento que audita a los instrumentos también tenía el defecto
+
+`dev/glua_check.py --selftest` se declaraba **NO USABLE** sobre este addon. La causa no era el parser
+sino su **control positivo**: mutaba con un `re.sub` crudo y caía adentro del comentario de cabecera
+de `client.lua`, cuyo primer `(` está en la línea 13. El código seguía siendo válido y el parser lo
+aceptaba con razón. Arreglado extrayendo el scanner del traductor a `_scan()` — la mutación ahora
+sólo toca código, y el refactor se controló exigiendo **el mismo veredicto sobre los 100 archivos**
+de la base y el addon. *Un control que se rompe a sí mismo desacredita al instrumento sano que
+audita.*
 
 ---
 
@@ -226,7 +307,9 @@ lados: la ayuda ya no promete un control global, y `la decidio` imprime ahora la
 - Los pasos **②③④** de la fila 04: que `stepsilent 2` mate el click de la puerta (el acople que
   documenté), el listado de **cinco** flags, y `doorsilent 2`.
 
-Nada de eso bloquea el bloque: son coberturas, no defectos abiertos. Van a la próxima ronda.
+Nada de eso bloquea el bloque: son coberturas, no defectos abiertos. **Ya están colgadas de la
+planilla del encaje como las filas de regresión 08 y 09** — el ③ en la 08, y la mitad audible del
+salto más el acople con la puerta en la 09.
 
 ---
 

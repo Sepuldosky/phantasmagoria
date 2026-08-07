@@ -1,0 +1,1057 @@
+--[[-------------------------------------------------------------------------
+    Phantasmagoria - terminator_nextbot_phantom / EL ENCAJE CONTRA EL TECHO
+
+    LO QUE REPORTO EL AUTOR, literal, y no salio de ninguna planilla sino de
+    preguntarle por su experiencia con el NPC:
+
+        "he visto que salta y queda pegado entre objetos y el techo de un
+         interior, ahi hay que sacarlo con el physgun"
+
+    Es peor que cualquier atasco de puerta: de un atasco de puerta el fantasma
+    sale solo, de este no sale nunca.
+
+    ---------------------------------------------------------------------------
+    ESTE ARCHIVO NO ARREGLA NADA, Y ES A PROPOSITO
+    ---------------------------------------------------------------------------
+
+    La base TIENE rescate -- reallystuck_handler ( shared.lua:3647-3926 ) manda
+    al bot a caminar a un costado y, si eso falla, LO TELETRANSPORTA. O sea que
+    el rescate existe y NO RESCATO, y eso es lo que hay que explicar antes de
+    tocar una sola linea de comportamiento.
+
+    Hay tres mecanismos candidatos leidos en la base y NINGUNO medido. Los tres
+    son LECTURA, no diagnostico, y en este proyecto esa diferencia ya costo dos
+    rondas: en el bloque del giro se culpo al gate de TERM_FISTS y era la mitad
+    equivocada, y en el silencio se culpo a la ventana y era el hook. La
+    hipotesis del autor ( "tal vez se soluciona evitando que salte tanto" ) es
+    razonable y tampoco esta medida.
+
+    Asi que aca no hay perillas de comportamiento. Solo se mide.
+
+    ---------------------------------------------------------------------------
+    LA CORRECCION QUE DESTAPA ESTE BLOQUE, Y ES DE UN INSTRUMENTO NUESTRO
+    ---------------------------------------------------------------------------
+
+    ESTADO.md y el prompt del bloque dan por hecho que el rescate esta corriendo,
+    con esta evidencia: "aparece en la lista de 32 tareas de cada
+    phantasmagoria_ghost_where". Y esa lista NO PUEDE probar eso.
+
+    _where recorre ghost.m_TaskList ( server.lua ), que es el REGISTRO estatico:
+    SetupTasks lo llena con TODAS las tareas declaradas ( taskoverride.lua:398-402 )
+    y nadie lo vacia nunca. Lo que dice si una tarea esta CORRIENDO es
+    m_ActiveTasks ( terminator_nextbot_base/tasks.lua:104, que es lo que lee
+    IsTaskActive ), y de ahi la saca endTask cuando termina.
+
+    Y el reallystuck_handler puede terminarse SOLO, en su propio OnStart:
+
+        if myTbl.ReallyStuckDisable then  self:TaskComplete( ... )   -- :3660
+        if myTbl.MoveSpeed <= 0 then      self:TaskComplete( ... )   -- :3664
+
+    En los dos casos la tarea sale de m_ActiveTasks y SIGUE en m_TaskList. O sea
+    que _where la habria listado igual. *Una lista de lo que existe no puede
+    contestar por lo que corre*, y la unica prueba que teniamos de que el rescate
+    estaba vivo era exactamente esa lista.
+
+    No se afirma que ese sea el defecto -- ReallyStuckDisable no lo declara nadie
+    y MoveSpeed es 300 ( shared.lua:131 ), asi que lo mas probable es que la tarea
+    este activa. Se afirma que NO ESTABA MEDIDO. Este archivo lo mide, y _where
+    ahora marca cada tarea con "activa" o "solo registrada".
+
+    ---------------------------------------------------------------------------
+    DE DONDE SALE EL DATO: LA TABLA `data` DE LA BASE, NO UNA COPIA NUESTRA
+    ---------------------------------------------------------------------------
+
+    StartTask guarda la tabla de datos de cada tarea en myTbl.m_ActiveTasks[task]
+    ( taskoverride.lua:201 ), y esa es LA MISMA TABLA que el handler recibe como
+    `data` y va mutando. O sea que
+
+        ghost.m_ActiveTasks[ "reallystuck_handler" ]
+
+    da acceso de lectura al estado interno del rescate: historicPositions,
+    historicNavs, maybeUnderCount, extremeUnstuckingUntil, nextUnstuckGotoEscape
+    y freedomGotoPosSimple. No hace falta ninguna sombra.
+
+    ESO IMPORTA MAS DE LO QUE PARECE. Una sombra -- recalcular por nuestra cuenta
+    lo que la base calcula -- es el modo de falla que este proyecto ya pago: *un
+    control que toma las dos mitades de la misma fuente no puede ver que esa
+    fuente esta mal*. Lo unico que aca SI se recalcula son `stuck` y `sortaStuck`,
+    porque son locales del pase y no viven en `data` -- pero se recalculan sobre
+    los ARRAYS DE LA BASE, no sobre posiciones nuestras, y el reporte lo dice en
+    la linea.
+
+    ---------------------------------------------------------------------------
+    LAS CUATRO SALIDAS QUE APAGAN EL RESCATE, Y SE MIDEN EN VEZ DE SUPONERSE
+    ---------------------------------------------------------------------------
+
+      1. myTbl.ReallyStuckDisable          shared.lua:3660   ( OnStart )
+      2. myTbl.MoveSpeed <= 0              shared.lua:3664   ( OnStart )
+      3. termhunter_doextremeunstucking    shared.lua:246, default 1
+      4. que la tarea no este en m_ActiveTasks
+
+    Nosotros no ponemos ninguna. El reporte las imprime igual: *hay que VERLO, no
+    suponerlo* -- y la 3 es una convar de un tercero, que cualquiera puede haber
+    movido en su servidor.
+
+    ---------------------------------------------------------------------------
+    LOS TRES CANDIDATOS, CON LA LINEA QUE LOS SEPARA
+    ---------------------------------------------------------------------------
+
+    (a) EL TELETRANSPORTE ESTA VETADO MIENTRAS EL BOT TE VE.  shared.lua:3868
+
+            if not myTbl.IsSeeEnemy and extremeUnstucking:GetBool()
+               and ( extremeStuck or not canGotoEscape ) then
+
+        Si el fantasma se encaja SALTANDO HACIA VOS -- que es cuando pasa --
+        sigue viendote, cae al elseif de :3899 y lo unico que hace es volver a
+        intentar CAMINAR a un costado, cada 10 s, para siempre.
+        Lo separa: la linea `ve al enemigo`.
+
+    (b) DETECTARLO TARDA ~80 s SI NO ESTA EN EL PISO.  shared.lua:3714
+
+        noNav exige myTbl.loco:IsOnGround(). Sin eso size queda en 80 en vez de
+        10 ( :3710, :3718 ) y doAddCount en 1 en vez de 4 ( :3715, :3719 ), con
+        una insercion por segundo ( nextCache, :3706 ). La evaluacion vive dentro
+        de "if #data.historicPositions > size" ( :3771 ).
+        Lo separa: la linea `en el piso`, y la cuenta regresiva de `hist`.
+
+        OJO: no esta medido si un bot encajado entre props y el techo da
+        IsOnGround true o false. Puede estar apoyado en un prop. ESO es lo
+        primero que este instrumento tiene que contestar, y solo lo puede
+        contestar con el bot encajado de verdad.
+
+    (c) LA PRIMERA PASADA NUNCA ES LA DEL TELETRANSPORTE.  shared.lua:3864-3865
+
+        extremeStuck = underDisplacement or not freedomPos, y IsUnderDisplacement
+        ( :1986 ) mide DISPLACEMENTS DEL TERRENO, no props contra un techo.
+        freedomPos casi siempre se encuentra. Y en el primer pase
+        nextUnstuckGotoEscape y extremeUnstuckingUntil valen 0, asi que
+        canGotoEscape es true y "not canGotoEscape" es false: la condicion entera
+        da false y se va a caminar.
+        Lo separa: la linea `escape`, y por eso el boton de abajo se aprieta DOS
+        VECES.
+
+    ---------------------------------------------------------------------------
+    Y UNA CUARTA COSA QUE NINGUN PROMPT LISTABA, PORQUE SALE DE LA ARITMETICA
+    ---------------------------------------------------------------------------
+
+    La rama de caminar pone nextUnstuckGotoEscape = CurTime() + 80 ( :3911 ) y
+    ademas vacia historicPositions ( :3923 ) con nextCache = CurTime() + 5
+    ( :3915 ). Para un bot que NO esta en el piso, volver a juntar 81 posiciones
+    a una por segundo tarda 81 s -- o sea que cuando el handler vuelve a poder
+    evaluar, el reloj de 80 s YA VENCIO y canGotoEscape vuelve a ser true.
+
+    Si eso es asi, el bot encajado en el aire no llega nunca a "not canGotoEscape"
+    ni siquiera SIN mirar a nadie, y (a) no seria la unica puerta cerrada. Son 80
+    contra 81: un margen de UN segundo, que es exactamente la clase de numero que
+    no se puede cerrar leyendo. Por eso el reporte imprime los dos relojes con su
+    signo y la cuenta regresiva de `hist` al lado -- para que la corrida lo
+    conteste, no este comentario.
+
+    ( isUnstucking duplica doAddCount ( :3725 ) y cambiaria la cuenta, pero dura
+      a lo sumo 10 s ( unstuckingTimeout, :2143 ) y pide un path valido
+      ( :2135 ). Se imprime tambien. )
+
+    ---------------------------------------------------------------------------
+    EL SALTO, QUE ES LA HIPOTESIS DEL AUTOR Y TAMPOCO ESTA MEDIDA
+    ---------------------------------------------------------------------------
+
+    ENT.JumpHeight de este fantasma es 245 -- lo hereda de la base
+    ( shared.lua:111, 70 * 3.5 ) y lo confirmo phantasmagoria_ghost_steps jump.
+    Es alto de verdad. Pero que el salto SEA la causa del encaje sigue sin
+    medirse, y aca no se decide: se cuenta.
+
+    Dato leido y con consecuencia: ENT.Term_Leaps es nil en la base
+    ( shared.lua:112 ) y este fantasma no lo declara, asi que las dos ramas de
+    salto-hacia-el-enemigo ( motionoverrides.lua:2693 y :2697 ) estan MUERTAS
+    para nosotros, y con ellas el unico call site de JumpToPos ( :2744 ). O sea
+    que `saltos leap` tiene que dar 0 SIEMPRE. Es un control gratis: si algun dia
+    da otra cosa, alguien declaro Term_Leaps y no lo dijo.
+
+    Lo que si puede saltar es la rama de :2749 -- Jump( jumpingHeight + 20 ),
+    clampeado a JumpHeight -- por jumpstate == 1 ( GetJumpBlockState ) o por
+    goalBasedJump ( "esta arriba nuestro" + IsAngry, :2668 ).
+
+    Y un salto PEDIDO no es un salto OCURRIDO: ENT:Jump se sale en silencio si no
+    esta en el piso ( motionoverrides.lua:2971 ). Los contadores separan las dos
+    cosas, que es la leccion del boton `jump` de las pisadas: *un salto que no
+    ocurre se lee igual que un salto sin consecuencia.*
+---------------------------------------------------------------------------]]
+
+local TASK = "reallystuck_handler"
+
+---------------------------------------------------------------------------
+-- Las constantes de la base, espejadas UNA VEZ y con su linea
+---------------------------------------------------------------------------
+-- Ningun numero de este reporte se tipea a mano. Es la misma regla que el
+-- reporte de puertas: un instrumento que anuncia "el umbral es 80" con un 80
+-- escrito al lado deja de decir la verdad el dia que la base cambia, y lo hace
+-- en silencio.
+local B = {
+    SIZE          = 80,   -- shared.lua:3710
+    SIZE_DIV      = 8,    -- shared.lua:3718   size = size / 8  -> 10
+    ADD           = 1,    -- shared.lua:3715
+    ADD_NONAV     = 4,    -- shared.lua:3719   doAddCount * 4
+    ADD_UNSTUCK   = 2,    -- shared.lua:3726   doAddCount * 2
+    CACHE_SECS    = 1,    -- shared.lua:3706   una insercion por segundo
+    STUCK_RADIUS  = 15,   -- shared.lua:3792   SqrDistGreaterThan( distSqr, 15 )
+    NAV_RADIUS    = 50,   -- shared.lua:3709   criterio "pretty tight"
+    NAV_FAR       = 200,  -- shared.lua:3807   el instant unstuck check
+    UNDER_THRESH  = 6,    -- shared.lua:3767   3 si IsFodder
+    UNDER_FODDER  = 3,
+    FREEDOM_BOX   = 3000, -- shared.lua:3833
+    ESCAPE_SECS   = 80,   -- shared.lua:3911   nextUnstuckGotoEscape
+    WALK_SECS     = 10,   -- shared.lua:3913   extremeUnstuckingUntil
+    AFTER_WALK    = 5,    -- shared.lua:3915   nextCache
+    ARRIVED_DIST  = 150,  -- shared.lua:3676   dist < 150 -> SUCCESS
+}
+
+-- El umbral de verdad es "#historicPositions > size", o sea size + 1 entradas.
+local function threshold( size )
+    return size + 1
+
+end
+
+---------------------------------------------------------------------------
+-- Acceso a la tabla `data` del handler
+---------------------------------------------------------------------------
+-- Devuelve DOS cosas y la segunda es el motivo, por lo mismo que resolve() en
+-- las puertas: "no hay data" tiene causas distintas que desde afuera se ven
+-- igual -- la tarea nunca se registro, o se registro y su OnStart la termino.
+local function stuckData( ghost )
+    local activas = ghost.m_ActiveTasks
+
+    if not istable( activas ) then
+        return nil, "el bot no tiene m_ActiveTasks todavia ( no termino de inicializar )"
+
+    end
+
+    local data = activas[ TASK ]
+
+    if istable( data ) then return data, "activa" end
+
+    -- Y aca esta la distincion que _where no podia hacer.
+    local registrada = istable( ghost.m_TaskList ) and ghost.m_TaskList[ TASK ] ~= nil
+
+    if registrada then
+        return nil, "REGISTRADA PERO NO ACTIVA: su OnStart la termino ( ReallyStuckDisable o MoveSpeed <= 0 )"
+
+    end
+
+    return nil, "NI SIQUIERA REGISTRADA: DoCustomTasks la saco del arbol de tareas"
+
+end
+
+---------------------------------------------------------------------------
+-- Los contadores
+---------------------------------------------------------------------------
+-- `rescates` no es la suma de `teleport` + `caminar`: la rama de caminar se
+-- cuenta por el reloj ( ver el poll ) y la del teleport por el motivo con el que
+-- la base arranca movement_handler. Si alguna vez rescates > teleport + caminar,
+-- hubo un pase que entro al if de :3816 y no salio por ninguna de las dos, que
+-- es un caso que hoy el codigo no tiene -- y verlo seria el dato.
+local function stuckStats( ghost )
+    ghost.phantom_stuckStats = ghost.phantom_stuckStats or {
+        rescates = 0, teleport = 0, caminar = 0, exitos = 0, fallos = 0,
+        saltos = 0, saltosEnPiso = 0, saltosLeap = 0,
+    }
+
+    return ghost.phantom_stuckStats
+
+end
+
+---------------------------------------------------------------------------
+-- La bitacora: TRANSICIONES, no muestras
+---------------------------------------------------------------------------
+-- Mismo criterio que la de pisadas: una linea por muestra serian 4 por segundo y
+-- eso no es una bitacora, es ruido que tapa el dato. Y la identidad va con
+-- GetCreationID al lado del EntIndex porque GMod REUSA el indice: la ronda 8
+-- mostro dos NPCs distintos leidos como uno.
+local BITACORA_MAX = 40
+
+PHANTASMAGORIA.StuckLog = PHANTASMAGORIA.StuckLog or {}
+
+local function anotar( ghost, texto )
+    local log = PHANTASMAGORIA.StuckLog
+
+    log[ #log + 1 ] = string.format( "%6.1f  #%s/c%s  %s",
+        CurTime(), ghost:EntIndex(), ghost:GetCreationID(), texto )
+
+    while #log > BITACORA_MAX do table.remove( log, 1 ) end
+
+end
+
+PHANTASMAGORIA.AnotarStuck = anotar
+
+---------------------------------------------------------------------------
+-- El estado completo, en un solo lugar
+---------------------------------------------------------------------------
+-- Todo lo que devuelve sale de la base. Lo unico calculado por nosotros son
+-- `stuck`, `sortaStuck` y `quieto`, y los tres van etiquetados como tales en el
+-- reporte -- porque *un instrumento que no dice de donde saca cada numero deja
+-- que un recalculo pase por medicion*.
+function ENT:phantom_StuckState()
+    local myTbl = self:GetTable()
+    local data, porQue = stuckData( self )
+    local loco = myTbl.loco
+
+    local s = {
+        data      = data,
+        dataPorQue = porQue,
+        pos       = self:GetPos(),
+        enPiso    = loco and loco:IsOnGround() or false,
+        veEnemigo = myTbl.IsSeeEnemy == true,
+        enemigo   = self:GetEnemy(),
+        fodder    = myTbl.IsFodder == true,
+        unstuck   = myTbl.isUnstucking == true,
+        override  = myTbl.overrideVeryStuck,
+        saltando  = myTbl.m_Jumping == true,
+        leapeando = myTbl.m_JumpingToPos == true,
+        cayendo   = myTbl.m_Falling == true,
+
+        -- Las cuatro salidas
+        disable   = myTbl.ReallyStuckDisable,
+        moveSpeed = myTbl.MoveSpeed,
+    }
+
+    local cv = GetConVar( "termhunter_doextremeunstucking" )
+
+    -- Con guarda, y no es paranoia: la convar es de la BASE. Si la base no cargo
+    -- o le cambian el nombre, esto tiene que decirlo y no caerse.
+    -- ( shared.lua:246, default 1 )
+    s.teleportOn   = cv and cv:GetBool() or false
+    s.teleportConv = cv and cv:GetInt() or nil
+
+    -- El navarea con los MISMOS argumentos que :3709. Es una funcion pura de la
+    -- posicion, asi que preguntarla dos veces no la mueve.
+    local nav = navmesh.GetNearestNavArea( s.pos, false, B.NAV_RADIUS, false, false, -2 )
+
+    s.nav      = IsValid( nav ) and nav or nil
+    s.navVecin = s.nav and #s.nav:GetAdjacentAreas() or 0
+
+    -- noNav es la condicion ENTERA de :3714, con el IsOnGround adelante. Se
+    -- escribe igual que alla, en el mismo orden, para que se pueda comparar.
+    s.noNav = s.enPiso and ( not s.nav or s.navVecin <= 0 )
+
+    s.size    = s.noNav and ( B.SIZE / B.SIZE_DIV ) or B.SIZE
+    s.umbral  = threshold( s.size )
+    s.porPase = ( s.noNav and B.ADD_NONAV or B.ADD ) * ( s.unstuck and B.ADD_UNSTUCK or 1 )
+
+    -- La nav mas lejana que mira el "instant unstuck check" de :3807. Se imprime
+    -- porque es la otra puerta rapida y pide lo mismo ( noNav ), o sea que
+    -- tampoco salva a un bot en el aire.
+    local navLejos = navmesh.GetNearestNavArea( s.pos, false, B.NAV_FAR, false, false, -2 )
+    s.navLejos = IsValid( navLejos ) and navLejos or nil
+
+    if not data then return s end
+
+    local hist = data.historicPositions
+    local navs = data.historicNavs
+
+    s.hist = istable( hist ) and #hist or 0
+    s.navs = istable( navs ) and #navs or 0
+
+    s.faltan = math.max( s.umbral - s.hist, 0 ) / math.max( s.porPase, 1 ) * B.CACHE_SECS
+    s.evalua = s.hist >= s.umbral
+
+    -- RECALCULADO, y sobre los arrays de la BASE. `stuck` y `sortaStuck` son
+    -- locales del pase ( :3745-3746 ) y no sobreviven a la llamada; lo que si
+    -- sobrevive son las dos listas, que es de donde salen.
+    if istable( hist ) then
+        s.stuck = true
+
+        for _, historicPos in ipairs( hist ) do
+            if s.pos:DistToSqr( historicPos ) > B.STUCK_RADIUS ^ 2 then
+                s.stuck = false
+                break
+
+            end
+        end
+    end
+
+    if istable( navs ) then
+        s.sortaStuck = true
+
+        for _, historicNav in ipairs( navs ) do
+            if historicNav ~= nav then
+                s.sortaStuck = false
+                break
+
+            end
+        end
+    end
+
+    s.maybeUnder  = data.maybeUnderCount or 0
+    s.underThresh = s.fodder and B.UNDER_FODDER or B.UNDER_THRESH
+    s.under       = s.maybeUnder >= s.underThresh
+
+    -- LOS DOS RELOJES, con su signo. Negativo = ya vencio.
+    s.escapeIn = ( data.nextUnstuckGotoEscape or 0 ) - CurTime()
+    s.walkIn   = ( data.extremeUnstuckingUntil or 0 ) - CurTime()
+    s.cacheIn  = ( data.nextCache or 0 ) - CurTime()
+
+    -- canGotoEscape, EXACTO: los dos terminos salen de `data`. :3865
+    s.canEscape = s.escapeIn < 0 and s.walkIn < 0
+
+    s.caminandoA = data.freedomGotoPosSimple
+
+    return s
+
+end
+
+---------------------------------------------------------------------------
+-- ¿Existe freedomPos? -- PREDICCION, no medicion, y se dice
+---------------------------------------------------------------------------
+-- extremeStuck = underDisplacement or not freedomPos ( :3864 ), asi que sin
+-- saber si freedomPos existe no se puede predecir la rama. freedomPos se elige
+-- en el loop de :3836-3859, que ademas prefiere areas visibles -- pero eso
+-- decide CUAL, no SI. Para el binario alcanza con la primera que pase los dos
+-- filtros, que es exactamente lo que hace el "if not freedomPos then" de :3846.
+--
+-- ES UNA RE-DERIVACION Y PUEDE DIVERGIR. Se marca como prediccion en el reporte
+-- y la medicion de verdad sigue siendo por que rama salio la base. Tener las dos
+-- es lo que permite que una refute a la otra; si el reporte predijera "camina" y
+-- la base teletransportara, el que esta mal es este loop y se ve.
+local function freedomPosExists( ghost )
+    local myPos   = ghost:GetPos()
+    local enemigo = ghost:GetEnemy()
+
+    local distToEnemy = 0
+    local enemyPos    = myPos
+
+    if IsValid( enemigo ) then
+        distToEnemy = ghost.DistToEnemy or 0
+        enemyPos    = ghost.EnemyLastPos or enemigo:GetPos()
+
+    end
+
+    -- El nearestNavArea del loop NO es el de :3709: usa 10000 de radio y otros
+    -- flags ( :3830 ). Se copia tal cual, porque es el que se excluye.
+    local nearest = navmesh.GetNearestNavArea( myPos, false, 10000, false, true, 2 )
+
+    local maxs  = Vector( B.FREEDOM_BOX, B.FREEDOM_BOX, B.FREEDOM_BOX )
+    local caja  = navmesh.FindInBox( myPos + maxs, myPos + -maxs )
+    local total = #caja
+
+    for _, area in ipairs( caja ) do
+        if area == nearest then continue end
+        if not IsValid( area ) then continue end
+        if area:GetCenter():Distance( enemyPos ) < distToEnemy then continue end
+
+        return true, total
+
+    end
+
+    return false, total
+
+end
+
+---------------------------------------------------------------------------
+-- La prediccion de la rama, escrita ANTES de correr
+---------------------------------------------------------------------------
+-- Devuelve la rama y el termino que la decide. Que devuelva el TERMINO y no
+-- solo la rama es lo que la hace util: "camina" no dice si fue por el veto de
+-- IsSeeEnemy o por canGotoEscape, y esas son dos hipotesis distintas que desde
+-- afuera se ven iguales -- que es el motivo entero de este archivo.
+local function predecirRama( s, hayFreedom )
+    if not s.data then return "NINGUNA", "el rescate no esta corriendo ( " .. s.dataPorQue .. " )" end
+    if not s.teleportOn then
+        return "CAMINAR", "termhunter_doextremeunstucking esta en 0: el teleport esta apagado en el servidor"
+
+    end
+
+    local extremeStuck = s.under or not hayFreedom
+
+    if s.veEnemigo then
+        return "CAMINAR", "el VETO de :3868 -- IsSeeEnemy es true. Es el candidato (a), y es el unico termino que lo cierra"
+
+    end
+
+    if not ( extremeStuck or not s.canEscape ) then
+        return "CAMINAR", "extremeStuck NO ( underDisplacement " .. ( s.under and "SI" or "NO" ) ..
+            ", freedomPos " .. ( hayFreedom and "EXISTE" or "no existe" ) .. " ) y canGotoEscape SI. Es el candidato (c)"
+
+    end
+
+    return "TELEPORT", "no ve al enemigo, y " ..
+        ( extremeStuck and "extremeStuck SI" or "canGotoEscape NO ( el reloj de " .. B.ESCAPE_SECS .. " s sigue corriendo )" )
+
+end
+
+---------------------------------------------------------------------------
+-- EL POLL
+---------------------------------------------------------------------------
+-- Cuelga de ENT:AdditionalThink, que la base declara como stub vacio
+-- ( shared.lua:2872, "THINK stub, inside coroutine! for your convenience" ) y
+-- llama en cada pase de la corrutina de prioridad ( behaviouroverrides.lua:676 ).
+--
+-- NO va en ENT.MyClassTask.Think, y no es una preferencia: server_doors.lua ya
+-- declaro esa clave, y una segunda asignacion la pisaria entera. El sintoma
+-- seria el bloque de puertas dejando de correr sin un solo error. Al final del
+-- archivo hay una guarda que lo comprueba en vez de confiar en que me acuerde.
+--
+-- QUE MIRA, Y POR QUE NO MIRA freedomGotoPosSimple:
+--
+-- El marcador obvio de "arranco la rama de caminar" seria que
+-- data.freedomGotoPosSimple pase de nil a un vector. Y es FRAGIL: el bloque de
+-- :3674 corre al principio de CADA pase y lo borra apenas la distancia baja de
+-- 150 u, o sea que puede aparecer y desaparecer entre dos muestras nuestras.
+-- *Un instrumento mas fragil que lo que mide se rompe justo cuando hace falta.*
+--
+-- El marcador que si sirve es data.nextUnstuckGotoEscape: la rama de caminar lo
+-- pone en CurTime() + 80 ( :3911 ) y NADIE lo baja nunca. Un valor que sube y se
+-- queda 80 s arriba no se lo pierde un muestreo de 4 Hz.
+local POLL_HZ = 0.25
+
+local function poll( self, myTbl )
+    local nxt = myTbl.phantom_stuckNextPoll or 0
+    if nxt > CurTime() then return end
+
+    myTbl.phantom_stuckNextPoll = CurTime() + POLL_HZ
+
+    local data = myTbl.m_ActiveTasks and myTbl.m_ActiveTasks[ TASK ]
+    local pos  = self:GetPos()
+
+    ---------------------------------------------------------------------------
+    -- Cuanto hace que no se mueve. ES NUESTRO, y con el radio de la base.
+    ---------------------------------------------------------------------------
+    -- No reemplaza a `stuck`: la base pide que TODAS las posiciones historicas
+    -- esten dentro del radio, esto solo mide desde la ultima vez que salio de el.
+    -- Sirve para el caso que la base todavia no puede evaluar, que es justamente
+    -- el del bot encajado en el aire durante los primeros 80 s.
+    local ancla = myTbl.phantom_stuckAnchor
+
+    if not ancla or pos:DistToSqr( ancla ) > B.STUCK_RADIUS ^ 2 then
+        myTbl.phantom_stuckAnchor = pos
+        myTbl.phantom_stuckSince  = CurTime()
+
+    end
+
+    ---------------------------------------------------------------------------
+    -- La rama de CAMINAR, por el reloj que no baja nunca
+    ---------------------------------------------------------------------------
+    if not data then return end
+
+    local escape = data.nextUnstuckGotoEscape or 0
+    local visto  = myTbl.phantom_stuckLastEscape
+
+    -- La primera muestra solo ancla: sin esto, un fantasma que ya venia con el
+    -- reloj puesto contaria un rescate que ocurrio antes de que mirasemos.
+    if visto == nil then
+        myTbl.phantom_stuckLastEscape = escape
+        return
+
+    end
+
+    if escape <= visto then return end
+
+    myTbl.phantom_stuckLastEscape = escape
+
+    local st = stuckStats( self )
+    st.rescates = st.rescates + 1
+    st.caminar  = st.caminar + 1
+
+    local s = self:phantom_StuckState()
+
+    -- EL CONTEXTO VIAJA CON EL EVENTO. Un "rescate 3" suelto no dice nada; lo
+    -- que separa las hipotesis es con que valores arranco -- y esos valores
+    -- cambian en el segundo siguiente. Es la regla 5 de la plantilla: la
+    -- precondicion incluye el instante en que se lee.
+    anotar( self, "RESCATE -> CAMINAR   ve " .. ( s.veEnemigo and "SI" or "NO" ) ..
+        " · piso " .. ( s.enPiso and "SI" or "NO" ) ..
+        " · hist " .. tostring( s.hist ) .. "/" .. tostring( s.umbral ) ..
+        " · canEscape " .. ( s.canEscape and "SI" or "NO" ) ..
+        " · under " .. tostring( s.maybeUnder ) .. "/" .. tostring( s.underThresh ) ..
+        " · quieto " .. string.format( "%.1f", CurTime() - ( myTbl.phantom_stuckSince or CurTime() ) ) .. " s" )
+
+end
+
+function ENT:AdditionalThink( myTbl )
+    myTbl = myTbl or self:GetTable()
+
+    poll( self, myTbl )
+
+    -- Se encadena aunque el stub de la base este vacio, por lo mismo que
+    -- AdditionalFootstep: es gratis y evita que una version futura de la base
+    -- que SI ponga algo ahi quede muerta por nuestro override.
+    return myTbl.BaseClass.AdditionalThink( self, myTbl )
+
+end
+
+---------------------------------------------------------------------------
+-- LA RAMA DEL TELEPORT, POR EL MOTIVO QUE LA BASE YA ESCRIBE
+---------------------------------------------------------------------------
+-- La base pasa un `reason` en cada StartTask y su propio comentario dice por que
+-- ( taskoverride.lua:189: "This is an essential debugging tool, Use it." ).
+-- El handler usa tres motivos, y los tres son unicos:
+--
+--   "reallystuck AFTER TELEPORT"   :3896   la rama del TELEPORT corrio
+--   "reallystuck SUCCESS"          :3679   la caminata llego ( < 150 u )
+--   "reallystuck partial FAIL"     :3697   la caminata se quedo sin los 10 s
+--
+-- Se anota ANTES de encadenar a proposito. StartTask se sale temprano si la
+-- tarea ya estaba activa ( :167 ), asi que anotar despues perderia el evento --
+-- y lo que interesa no es que movement_handler haya arrancado, sino que LA RAMA
+-- haya corrido, que es lo que el motivo dice.
+--
+-- Y no se detecta por terminator_Extras.TeleportTermTo: eso es un global que
+-- comparten todos los terminators del servidor, y envolverlo seria tocar a
+-- terceros para medirnos a nosotros. Tampoco por SetPosNoTeleport, que tiene
+-- otros seis call sites ( motionoverrides.lua:376, :1691, :2578, :2936, :3364 )
+-- y contaria movimientos que no son rescates.
+local MOTIVOS = {
+    [ "reallystuck AFTER TELEPORT" ] = { campo = "teleport", texto = "RESCATE -> TELEPORT" },
+    [ "reallystuck SUCCESS" ]        = { campo = "exitos",   texto = "la caminata LLEGO   ( < " .. B.ARRIVED_DIST .. " u )" },
+    [ "reallystuck partial FAIL" ]   = { campo = "fallos",   texto = "la caminata SE VENCIO ( " .. B.WALK_SECS .. " s )" },
+}
+
+function ENT:StartTask( task, data, reason )
+    -- El shim de argumentos de la base ( taskoverride.lua:160 ): si `data` es un
+    -- string, ESE es el motivo. Copiarlo aca no es duplicar logica, es leer el
+    -- mismo argumento que ella va a leer -- sin esto el motivo del handler, que
+    -- viaja en la tercera posicion con un nil en el medio, se leeria igual, pero
+    -- cualquier otro call site del proyecto no.
+    local motivo = isstring( data ) and data or reason
+
+    if isstring( motivo ) then
+        local hit = MOTIVOS[ motivo ]
+
+        if hit then
+            local st = stuckStats( self )
+            st[ hit.campo ] = st[ hit.campo ] + 1
+
+            if hit.campo == "teleport" then st.rescates = st.rescates + 1 end
+
+            local s = self:phantom_StuckState()
+
+            anotar( self, hit.texto .. "   ve " .. ( s.veEnemigo and "SI" or "NO" ) ..
+                " · piso " .. ( s.enPiso and "SI" or "NO" ) ..
+                " · pos " .. tostring( s.pos ) )
+
+        end
+    end
+
+    return self.BaseClass.StartTask( self, task, data, reason )
+
+end
+
+---------------------------------------------------------------------------
+-- LOS SALTOS
+---------------------------------------------------------------------------
+-- La hipotesis del autor es que el encaje viene del salto. Contarlos no la
+-- prueba, pero sin contarlos "se encaja saltando" no se puede pasar de
+-- impresion a dato: lo que la convierte en medicion es que el reporte pueda
+-- decir "el ultimo salto fue hace 2,3 s" al lado de "quieto hace 40 s".
+--
+-- PEDIDO NO ES OCURRIDO. ENT:Jump se sale sin avisar si no esta en el piso
+-- ( motionoverrides.lua:2971 ), asi que se separan las dos cuentas. La guarda se
+-- re-deriva aca -- es la misma condicion de esa linea, escrita igual -- y por
+-- eso el reporte dice `pedidos` y `en el piso` en vez de un solo numero.
+function ENT:Jump( height, fakeJump )
+    local myTbl = self:GetTable()
+    local st    = stuckStats( self )
+
+    st.saltos = st.saltos + 1
+
+    -- Sin IsValid( loco ): CLuaLocomotion no tiene ese metodo y el IsValid() de
+    -- GMod devuelve false para todo objeto que no lo tenga. La base la llama
+    -- directo y nosotros ya pagamos esa guarda una vez ( defecto 1 de lookLines ).
+    local enPiso = myTbl.loco and myTbl.loco:IsOnGround() or false
+
+    if fakeJump or enPiso then
+        st.saltosEnPiso = st.saltosEnPiso + 1
+
+        myTbl.phantom_lastJumpTime   = CurTime()
+        myTbl.phantom_lastJumpHeight = height
+        myTbl.phantom_lastJumpPos    = self:GetPos()
+        myTbl.phantom_lastJumpLeap   = myTbl.phantom_jumpFromLeap == true
+
+        if myTbl.phantom_jumpFromLeap then st.saltosLeap = st.saltosLeap + 1 end
+
+        anotar( self, "SALTA   altura pedida " .. tostring( height ) ..
+            " · tope JumpHeight " .. tostring( myTbl.JumpHeight ) ..
+            ( myTbl.phantom_jumpFromLeap and " · LEAP ( JumpToPos )" or "" ) )
+
+    end
+
+    return myTbl.BaseClass.Jump( self, height, fakeJump )
+
+end
+
+-- Marca el origen para el Jump de adentro. JumpToPos llama a myTbl.Jump
+-- ( motionoverrides.lua:3144 ), que resuelve a NUESTRO override -- o sea que sin
+-- esta marca los leaps se contarian dos veces o ninguna, segun donde se contara.
+--
+-- Con Term_Leaps nil este camino esta muerto ( ver el encabezado ), asi que
+-- `saltos leap` tiene que dar 0. Es el control de que el encabezado no miente.
+function ENT:JumpToPos( pos, height )
+    local myTbl = self:GetTable()
+
+    myTbl.phantom_jumpFromLeap = true
+
+    local ok = myTbl.BaseClass.JumpToPos( self, pos, height )
+
+    myTbl.phantom_jumpFromLeap = nil
+
+    return ok
+
+end
+
+---------------------------------------------------------------------------
+-- EL INSTRUMENTO
+---------------------------------------------------------------------------
+local function lineas( ghost, say, corto )
+    local s = ghost:phantom_StuckState()
+    local st = stuckStats( ghost )
+
+    say( "#" .. ghost:EntIndex() .. "/c" .. ghost:GetCreationID() ..
+        "   " .. ( ghost.phantom_Hunting and "CAZANDO" or "en calma" ) ..
+        "   a " .. math.Round( ghost:GetCurrentSpeed() ) .. " u/s" ..
+        "   pos " .. tostring( s.pos ) )
+
+    -- LAS CUATRO SALIDAS, SIEMPRE, aunque esten todas abiertas. Una linea que
+    -- solo aparece cuando hay problema no deja distinguir "no hay" de "no se
+    -- midio", y tres de estas cuatro las puede haber movido un tercero.
+    say( "    el rescate   " .. string.upper( s.dataPorQue ) )
+    say( "    las salidas  ReallyStuckDisable " .. tostring( s.disable ) ..
+        " · MoveSpeed " .. tostring( s.moveSpeed ) ..
+        " · termhunter_doextremeunstucking " .. tostring( s.teleportConv ) )
+
+    -- EL VETO, primero, porque es el candidato (a) y el unico termino que separa
+    -- las tres hipotesis. Sin esta linea las tres se ven iguales desde afuera:
+    -- en las tres el bot se queda quieto y no lo rescata nadie.
+    say( "    ve al enemigo " .. ( s.veEnemigo and "SI  <- VETA el teleport ( :3868 )" or "NO" ) ..
+        "   enemigo " .. ( IsValid( s.enemigo ) and tostring( s.enemigo ) or "ninguno" ) )
+
+    say( "    en el piso    " .. ( s.enPiso and "SI" or "NO  <- sin esto noNav es false ( :3714 )" ) ..
+        "   saltando " .. ( s.saltando and "SI" or "NO" ) ..
+        " · leap " .. ( s.leapeando and "SI" or "NO" ) ..
+        " · cayendo " .. ( s.cayendo and "SI" or "NO" ) )
+
+    local quieto = CurTime() - ( ghost.phantom_stuckSince or CurTime() )
+
+    say( "    quieto desde  " .. string.format( "%.1f", quieto ) .. " s" ..
+        "   ( NUESTRO, no de la base: desde que salio de un radio de " .. B.STUCK_RADIUS .. " u )" )
+
+    if not s.data then
+        say( "    ^ sin la tarea activa no hay nada mas que leer: el resto vive en su tabla `data`." )
+        return
+
+    end
+
+    say( "    hist          " .. s.hist .. " / " .. s.umbral ..
+        "   ( +" .. s.porPase .. " por segundo )   " ..
+        ( s.evalua and "YA EVALUA" or ( "faltan ~" .. math.Round( s.faltan ) .. " s para que PUEDA evaluar" ) ) )
+
+    say( "    noNav         " .. ( s.noNav and "SI" or "NO" ) ..
+        "   navarea " .. ( s.nav and ( "#" .. s.nav:GetID() .. " con " .. s.navVecin .. " vecinas" ) or "NINGUNA a " .. B.NAV_RADIUS .. " u" ) ..
+        " · a " .. B.NAV_FAR .. " u " .. ( s.navLejos and ( "#" .. s.navLejos:GetID() ) or "NINGUNA" ) )
+
+    -- Recalculado, y se dice en la misma linea. Los arrays son los de la base;
+    -- la cuenta es nuestra porque `stuck` y `sortaStuck` son locales del pase.
+    say( "    stuck " .. ( s.stuck and "SI " or "NO " ) ..
+        " · sortaStuck " .. ( s.sortaStuck and "SI " or "NO " ) ..
+        "  ( RECALCULADO sobre los arrays de la base, no sobre posiciones nuestras )" )
+
+    say( "    displacement  maybeUnderCount " .. s.maybeUnder .. " / " .. s.underThresh ..
+        "  -> underDisplacement " .. ( s.under and "SI" or "NO" ) ..
+        "   ( mide TERRENO, no props: shared.lua:1986 )" )
+
+    say( "    override      overrideVeryStuck " .. tostring( s.override ) ..
+        " · isUnstucking " .. tostring( s.unstuck ) )
+
+    say( "    escape        canGotoEscape " .. ( s.canEscape and "SI" or "NO" ) ..
+        "   nextUnstuckGotoEscape " .. string.format( "%+.1f", s.escapeIn ) .. " s" ..
+        " · extremeUnstuckingUntil " .. string.format( "%+.1f", s.walkIn ) .. " s" ..
+        " · proximo pase " .. string.format( "%+.1f", s.cacheIn ) .. " s" )
+
+    say( "    caminando a   " .. ( s.caminandoA and ( tostring( s.caminandoA ) ..
+        "  a " .. math.Round( s.pos:Distance2D( s.caminandoA ) ) .. " u ( llega con < " .. B.ARRIVED_DIST .. " )" ) or "ninguna ( freedomGotoPosSimple nil )" ) )
+
+    if not corto then
+        -- La re-derivacion cuesta un FindInBox de +-3000 u, asi que no va en el
+        -- muestreador: un instrumento que lagea el servidor cambia lo que mide.
+        local hay, total = freedomPosExists( ghost )
+        local rama, porQue = predecirRama( s, hay )
+
+        say( "    freedomPos    " .. ( hay and "EXISTE" or "NO EXISTE" ) ..
+            "   ( " .. total .. " navareas en la caja de +-" .. B.FREEDOM_BOX .. " u )" ..
+            "   RE-DERIVADO de :3836 -- prediccion, no medicion" )
+
+        say( "    PREDICCION    si el rescate arrancara AHORA iria por " .. rama )
+        say( "                  " .. porQue )
+
+    end
+
+    local jt = ghost.phantom_lastJumpTime
+
+    say( "    saltos        " .. st.saltos .. " pedidos · " .. st.saltosEnPiso .. " ocurrieron · " ..
+        st.saltosLeap .. " leap ( tiene que ser 0: Term_Leaps es " .. tostring( ghost.Term_Leaps ) .. " )" )
+
+    say( "    el ultimo     " .. ( jt and ( "hace " .. string.format( "%.1f", CurTime() - jt ) .. " s" ..
+        " · altura pedida " .. tostring( ghost.phantom_lastJumpHeight ) ..
+        " · tope " .. tostring( ghost.JumpHeight ) ..
+        " · a " .. math.Round( s.pos:Distance( ghost.phantom_lastJumpPos or s.pos ) ) .. " u de aca" ) or "no salto nunca" ) )
+
+    say( "    rescates      " .. st.rescates ..
+        "   ( TELEPORT " .. st.teleport .. " · CAMINAR " .. st.caminar ..
+        " · llego " .. st.exitos .. " · se vencio " .. st.fallos .. " )" )
+
+end
+
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_stuck", function( ply, _, args )
+    local say = PHANTASMAGORIA.MakeSay( ply )
+    local sub = args and args[ 1 ]
+
+    ---------------------------------------------------------------------------
+    if sub == "reset" then
+        local n = PHANTASMAGORIA.EachGhost( function( ghost )
+            ghost.phantom_stuckStats      = nil
+            ghost.phantom_lastJumpTime    = nil
+            ghost.phantom_stuckLastEscape = nil
+
+        end )
+
+        PHANTASMAGORIA.StuckLog = {}
+
+        say( "[Phantasmagoria] contadores de encaje reseteados en " .. n .. " fantasma(s), y bitacora vaciada." )
+        return
+
+    end
+
+    ---------------------------------------------------------------------------
+    -- EL BOTON: provocar la precondicion sin encajar al bot
+    ---------------------------------------------------------------------------
+    -- myTbl.overrideVeryStuck ( leido en :3747, usado en el if de :3816 ) fuerza
+    -- la rama de rescate SIN esperar los 80 segundos. O sea que el boton para
+    -- provocar la precondicion ya existe en la base y es un campo.
+    --
+    -- ⚠ ESTO NO ES EL ENCAJE, Y CONFUNDIRLO SERIA EL ERROR MAS CARO DE ESTA
+    -- RONDA. Forzar la bandera prueba POR QUE RAMA sale el rescate. NO prueba
+    -- que un bot encajado llegue a esa bandera -- para eso hay que encajarlo con
+    -- el physgun, y lo que contesta ahi es `en el piso` y la cuenta de `hist`.
+    -- Son dos mediciones y miden cosas distintas.
+    --
+    -- ⚠ Y NO ES GRATIS: la primera linea de la rama es self:ReallyAnger( 60 )
+    -- ( :3817 ). El bot queda REALMENTE ENOJADO un minuto, y eso mueve el bloque
+    -- de velocidad ( canDoRun consulta IsReallyAngry, motionoverrides.lua:754 y
+    -- :784 ). Se avisa porque una corrida de velocidad hecha justo despues de
+    -- esto mediria otra cosa.
+    if sub == "force" then
+        local n = PHANTASMAGORIA.EachGhost( function( ghost )
+            local s = ghost:phantom_StuckState()
+
+            if not s.data then
+                say( "#" .. ghost:EntIndex() .. "  NO SE PUEDE: " .. s.dataPorQue )
+                say( "    Sin la tarea activa el campo no lo lee nadie. Eso YA es el resultado del check." )
+                return
+
+            end
+
+            local hay = freedomPosExists( ghost )
+            local rama, porQue = predecirRama( s, hay )
+
+            say( "#" .. ghost:EntIndex() .. "/c" .. ghost:GetCreationID() .. "  DISPARO" )
+            say( "    ve al enemigo " .. ( s.veEnemigo and "SI" or "NO" ) ..
+                " · hunt " .. ( ghost.phantom_Hunting and "SI" or "NO" ) ..
+                "   <- ESTE es el lado del A/B en el que estas" )
+            say( "    canGotoEscape " .. ( s.canEscape and "SI" or "NO" ) ..
+                "   escape " .. string.format( "%+.1f", s.escapeIn ) .. " s" ..
+                " · walk " .. string.format( "%+.1f", s.walkIn ) .. " s" )
+            say( "    PREDICCION    " .. rama .. "   ( " .. porQue .. " )" )
+
+            if s.canEscape then
+                -- LA TRAMPA (c), DICHA POR EL INSTRUMENTO Y NO POR LA PLANILLA.
+                -- Con los dos relojes vencidos, "extremeStuck or not canGotoEscape"
+                -- es false salvo que underDisplacement o la falta de freedomPos
+                -- lo salven -- o sea que el primer disparo NUNCA teletransporta,
+                -- ni con hunt 0. Un check que se corra una sola vez leeria eso
+                -- como "(a) es falsa", que es la conclusion inversa.
+                say( "    ⚠ PRIMER DISPARO: la rama del teleport esta cerrada por (c), pase lo que pase con IsSeeEnemy." )
+                say( "      Volve a tirar entre " .. B.AFTER_WALK .. " s y " .. B.ESCAPE_SECS .. " s. EL QUE MIDE ES EL SEGUNDO." )
+
+            end
+
+            say( "    el proximo pase del handler es en " .. string.format( "%.1f", math.max( s.cacheIn, 0 ) ) .. " s" ..
+                "   ( ReallyAnger 60 s de regalo: no medir velocidad justo despues )" )
+
+            ghost.overrideVeryStuck = true
+
+        end )
+
+        if n == 0 then
+            say( "[Phantasmagoria] no hay ningun fantasma vivo." )
+            return
+
+        end
+
+        -- EL MUESTREADOR, porque la ventana dura menos que el tramite de
+        -- medirla. Es la regla 5 de la plantilla: si el estado que medis dura
+        -- menos que tipear el comando, el check mide el tramite y devuelve el
+        -- valor de reposo, que se lee como un resultado.
+        local antes = {}
+
+        PHANTASMAGORIA.EachGhost( function( ghost )
+            local st = stuckStats( ghost )
+            antes[ ghost:GetCreationID() ] = { r = st.rescates, t = st.teleport, c = st.caminar, pos = ghost:GetPos() }
+
+        end )
+
+        local quien = ply
+
+        timer.Create( "phantasmagoria_stuck_force", 0.25, 48, function()
+            local fin = PHANTASMAGORIA.MakeSay( quien )
+
+            PHANTASMAGORIA.EachGhost( function( ghost )
+                local st  = stuckStats( ghost )
+                local ant = antes[ ghost:GetCreationID() ]
+                if not ant then return end
+                if st.rescates <= ant.r then return end
+
+                antes[ ghost:GetCreationID() ] = nil
+
+                local salioPor = st.teleport > ant.t and "TELEPORT" or ( st.caminar > ant.c and "CAMINAR" or "??" )
+
+                fin( "#" .. ghost:EntIndex() .. "/c" .. ghost:GetCreationID() ..
+                    "  SALIO POR " .. salioPor ..
+                    "   se movio " .. math.Round( ghost:GetPos():Distance( ant.pos ) ) .. " u" ..
+                    "   ve al enemigo " .. ( ghost.IsSeeEnemy and "SI" or "NO" ) )
+
+            end )
+
+            if table.IsEmpty( antes ) then timer.Remove( "phantasmagoria_stuck_force" ) end
+
+        end )
+
+        say( "    ( muestreando 12 s: el resultado sale solo cuando la rama corra )" )
+        return
+
+    end
+
+    ---------------------------------------------------------------------------
+    -- EL OTRO BOTON: mirar el encaje DE VERDAD, mientras dura
+    ---------------------------------------------------------------------------
+    -- La medicion que el `force` no puede dar: encajar al bot con el physgun y
+    -- props contra un techo, y ver si IsOnGround da true o false y si `hist`
+    -- llega a su umbral alguna vez. Eso tarda ~81 s en el aire, o sea mas de lo
+    -- que nadie va a mirar la consola tipeando.
+    --
+    -- Imprime por transicion y no por muestra -- 90 lineas iguales tapan el
+    -- cambio, que es lo unico informativo -- con un latido cada 10 s para que un
+    -- tramo sin cambios se distinga de un muestreador muerto.
+    if sub == "watch" then
+        local segs = math.Clamp( tonumber( args[ 2 ] or "" ) or 90, 5, 240 )
+
+        timer.Remove( "phantasmagoria_stuck_watch" )
+
+        local quien = ply
+        local prev, n = {}, 0
+
+        say( "[Phantasmagoria] MIRANDO el encaje durante " .. segs .. " s, una muestra por segundo." )
+        say( "    Encajar al fantasma AHORA con el physgun. Solo imprime cuando algo CAMBIA, y late cada 10 s." )
+
+        timer.Create( "phantasmagoria_stuck_watch", 1, segs, function()
+            n = n + 1
+            local fin = PHANTASMAGORIA.MakeSay( quien )
+            local latido = ( n % 10 ) == 0
+
+            PHANTASMAGORIA.EachGhost( function( ghost )
+                local s   = ghost:phantom_StuckState()
+                local key = ghost:GetCreationID()
+                local ant = prev[ key ]
+
+                -- La firma es lo que decide si hubo cambio. Va SIN la posicion y
+                -- sin los relojes a proposito: los dos cambian todo el tiempo y
+                -- harian que cada muestra pareciera una transicion.
+                local firma = tostring( s.enPiso ) .. tostring( s.veEnemigo ) .. tostring( s.evalua ) ..
+                    tostring( s.stuck ) .. tostring( s.sortaStuck ) .. tostring( s.canEscape ) ..
+                    tostring( s.noNav ) .. tostring( s.data ~= nil )
+
+                if not latido and ant == firma then return end
+
+                prev[ key ] = firma
+
+                local quieto = CurTime() - ( ghost.phantom_stuckSince or CurTime() )
+
+                fin( string.format( "%3d s  #%s/c%s  piso %s · ve %s · hist %s/%s · stuck %s · sorta %s · esc %s · quieto %.0f s%s",
+                    n, ghost:EntIndex(), key,
+                    s.enPiso and "SI" or "NO",
+                    s.veEnemigo and "SI" or "NO",
+                    tostring( s.hist or "-" ), tostring( s.umbral ),
+                    s.stuck and "SI" or "NO",
+                    s.sortaStuck and "SI" or "NO",
+                    s.canEscape and "SI" or "NO",
+                    quieto,
+                    latido and "  ( latido )" or "  <- CAMBIO" ) )
+
+            end )
+
+            if n >= segs then
+                fin( "[Phantasmagoria] fin del muestreo: " .. n .. " muestras. El resumen completo con phantasmagoria_ghost_stuck." )
+
+            end
+        end )
+
+        return
+
+    end
+
+    ---------------------------------------------------------------------------
+    -- El reporte
+    ---------------------------------------------------------------------------
+    local cv = GetConVar( "termhunter_doextremeunstucking" )
+
+    say( "[Phantasmagoria] termhunter_doextremeunstucking " .. ( cv and cv:GetInt() or "?? ( la convar de la base no existe )" ) ..
+        "   ( 0 = el teleport de rescate esta APAGADO en este servidor )" )
+
+    local vivos = PHANTASMAGORIA.EachGhost( function( ghost )
+        say( "" )
+        lineas( ghost, say, false )
+
+    end )
+
+    if vivos == 0 then
+        say( "[Phantasmagoria] no hay ningun fantasma vivo." )
+        return
+
+    end
+
+    local log = PHANTASMAGORIA.StuckLog
+
+    say( "" )
+    say( "bitacora ( " .. #log .. " eventos, no una linea por muestra ):" )
+
+    if #log == 0 then
+        -- UN VACIO QUE SIGNIFICA ALGO. Sin saltos ni rescates tiene que estar
+        -- vacia; con el fantasma saltando y esto vacio, el que fallo es el
+        -- override de Jump y no el bot.
+        say( "    ( vacia: o no salto ni se rescato nadie todavia, o los overrides no se estan llamando )" )
+
+    end
+
+    for _, linea in ipairs( log ) do
+        say( "    " .. linea )
+
+    end
+
+end, "Reporte del rescate de atascos de la base: si esta corriendo, en que estado esta el bot y por que rama saldria. " ..
+    "'reset' limpia · 'force' fuerza la rama con overrideVeryStuck ( DOS VECES: el que mide es el segundo ) · " ..
+    "'watch [seg]' muestrea mientras encajas al bot con el physgun." )
+
+---------------------------------------------------------------------------
+-- GUARDA: la clave de MyClassTask pisada
+---------------------------------------------------------------------------
+-- server.lua ya avisa que si dos archivos declaran la misma clave de
+-- MyClassTask el segundo pisa al primero y el sintoma es un bloque entero que no
+-- corre, sin un solo error. Este archivo NO usa MyClassTask -- usa
+-- AdditionalThink -- justamente por eso, y la guarda comprueba que sigue siendo
+-- cierto en vez de confiar en el comentario.
+--
+-- Es la misma forma que la guarda del campo pisado del final de server.lua: *un
+-- default que coincide con lo esperado convierte un campo roto en un check
+-- verde*, y eso no lo agarra una corrida, lo agarra una guarda o nadie.
+if not isfunction( ENT.MyClassTask and ENT.MyClassTask.Think ) then
+    ErrorNoHalt( "[Phantasmagoria] server_stuck.lua esperaba encontrar ENT.MyClassTask.Think ya declarado " ..
+        "por server_doors.lua y no esta. O cambio el orden de los includes, o el bloque de puertas " ..
+        "dejo de colgar de ahi -- en los dos casos la guarda de este archivo dejo de cubrir nada.\n" )
+
+end

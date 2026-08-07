@@ -7,6 +7,104 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-07 (15) — El encaje contra el techo: **el instrumento, no el arreglo**
+
+`server_stuck.lua` (nuevo, ~640 líneas de las que la mayoría son el porqué), más un arreglo en
+`phantasmagoria_ghost_where`. Planilla `dev/checks/phantasmagoria-encaje-r9.html`, **9 filas, sin
+correr**. **No cambia ningún comportamiento del NPC**: este bloque sólo mide.
+
+### El defecto, y de dónde salió
+
+Lo reportó el autor y **no salió de ninguna planilla** sino de preguntarle por su experiencia:
+*«he visto que salta y queda pegado entre objetos y el techo de un interior, ahí hay que sacarlo con
+el physgun»*. Es peor que un atasco de puerta: de aquél el fantasma sale solo, de éste no sale nunca.
+
+La base **tiene** rescate (`reallystuck_handler`, `shared.lua:3647-3926`) y está registrado en
+nuestro fantasma. **O sea que el rescate existe y no rescató**, y no había ningún instrumento que
+dijera por qué. Hay tres candidatos leídos en la base —el veto de `IsSeeEnemy` (`:3868`), los ~80 s
+de detección fuera del piso (`:3714`), y que la primera pasada nunca teletransporta (`:3864`)— y
+**ninguno medido**. La hipótesis del autor (*«tal vez se soluciona evitando que salte tanto»*) tampoco.
+Por eso esta ronda no toca el salto: en este proyecto el arreglo obvio ya apuntó al candado
+equivocado dos veces.
+
+### ⚠ Lo que se creía probado y no lo estaba: «el rescate está corriendo»
+
+La evidencia era *«aparece en la lista de 32 tareas de `phantasmagoria_ghost_where`»*. Y esa lista no
+puede probarlo. `_where` recorre `m_TaskList`, que es el **registro estático**: `SetupTasks` lo llena
+con todas las tareas declaradas (`taskoverride.lua:398-402`) y **nadie lo vacía nunca**. Lo que dice
+si una tarea *corre* es `m_ActiveTasks` (`terminator_nextbot_base/tasks.lua:104`).
+
+Y el handler se termina a sí mismo en su propio `OnStart` si `ReallyStuckDisable` está puesto o si
+`MoveSpeed <= 0` (`:3660`, `:3664`) — **y en los dos casos seguiría apareciendo en esa lista igual**.
+*Una lista de lo que existe no puede contestar por lo que corre.* `_where` ahora imprime
+`N ACTIVAS de M registradas` y marca cada una.
+
+### El dato sale de la tabla `data` de la base, no de una sombra
+
+`StartTask` guarda la tabla de cada tarea en `m_ActiveTasks[task]` (`taskoverride.lua:201`), y **es la
+misma tabla** que el handler muta. Así que `ghost.m_ActiveTasks["reallystuck_handler"]` da lectura
+directa de `historicPositions`, `maybeUnderCount`, `nextUnstuckGotoEscape` y
+`extremeUnstuckingUntil` — o sea `canGotoEscape` **exacto**, no recalculado. Sólo `stuck` y
+`sortaStuck` se recalculan, porque son locales del pase, y se recalculan **sobre los arrays de la
+base**; el reporte lo dice en la misma línea. *Un control que toma las dos mitades de la misma fuente
+no puede ver que esa fuente está mal.*
+
+### La rama que tomó el rescate se lee del motivo que la base ya escribe
+
+`StartTask` recibe un `reason` y el comentario de la base dice para qué (`:189`, *«This is an
+essential debugging tool, Use it»*). El handler usa tres, y los tres son únicos:
+`reallystuck AFTER TELEPORT` (`:3896`), `reallystuck SUCCESS` (`:3679`) y `reallystuck partial FAIL`
+(`:3697`). No se detecta por `TeleportTermTo` —es un global de todos los terminators del servidor— ni
+por `SetPosNoTeleport`, que tiene otros seis call sites.
+
+**Y la rama de caminar no se detecta por `freedomGotoPosSimple`**, que es lo obvio: el bloque de
+`:3674` lo borra apenas la distancia baja de 150 u, o sea que aparece y desaparece entre dos muestras.
+Se detecta por `nextUnstuckGotoEscape`, que la rama pone en `+80 s` y **nadie baja nunca**. *Un
+instrumento más frágil que lo que mide se rompe justo cuando hace falta.*
+
+### El botón, y la trampa que tiene adentro
+
+`overrideVeryStuck` (`:3747`, usado en `:3816`) fuerza la rama en ~1 s sin esperar los 80. Pero
+**el primer disparo nunca teletransporta, ni con `hunt 0`**: con los dos relojes en 0,
+`canGotoEscape` es `true` y `extremeStuck or not canGotoEscape` da false. Hace falta un **segundo**
+disparo entre 5 y 80 s después. Un A/B corrido una sola vez habría leído eso como *«(a) es falsa»*,
+que es la conclusión inversa. El botón lo imprime y la planilla lo separa en dos filas.
+
+Tampoco es gratis: la primera línea de la rama es `ReallyAnger( 60 )`, y `canDoRun` consulta
+`IsReallyAngry` (`motionoverrides.lua:754`, `:784`) — o sea que mueve el bloque de velocidad.
+
+### Una cuarta salida que no estaba en ninguna lista, y sale de la aritmética
+
+La rama de caminar pone el reloj en `CurTime() + 80` (`:3911`) y **vacía `historicPositions`**
+(`:3923`). Para un bot que no está en el piso, volver a juntar 81 posiciones a una por segundo tarda
+**81 s**. Si eso es así, cuando el handler vuelve a poder evaluar el reloj de 80 ya venció y
+`canGotoEscape` es `true` otra vez: **un bot encajado en el aire nunca alcanzaría
+`not canGotoEscape`, ni siquiera sin mirar a nadie**. Son 80 contra 81 — la clase de margen que no se
+cierra leyendo. El reporte imprime los dos relojes con su signo y la cuenta regresiva al lado.
+
+### Los saltos: contados, no juzgados
+
+`ENT.JumpHeight` es 245 (`shared.lua:111`, `70 * 3.5`). Y `ENT.Term_Leaps` es `nil` en la base
+(`:112`) y este fantasma no lo declara, así que las dos ramas de salto-hacia-el-enemigo
+(`motionoverrides.lua:2693`, `:2697`) y el **único** call site de `JumpToPos` (`:2744`) están muertos
+para nosotros. Eso da un control gratis: **`saltos leap` tiene que dar 0 siempre**.
+
+Y **pedido no es ocurrido**: `ENT:Jump` se sale en silencio si no está en el piso (`:2971`), así que
+los contadores separan `N pedidos` de `M ocurrieron`. Es la lección del botón `jump` de las pisadas.
+
+### El instrumento que audita a los instrumentos también tenía el defecto
+
+`dev/glua_check.py --selftest` se declaraba **NO USABLE** sobre este addon: 3 de 4 mutaciones daban
+rojo y la del paréntesis daba verde. La causa no era el parser —era el **control positivo**, que
+mutaba con un `re.sub` crudo sobre el texto y caía adentro del comentario de cabecera de
+`client.lua`, cuyo primer `(` está en la línea 13. El código seguía siendo válido y el parser lo
+aceptaba **con razón**. Se extrajo el scanner del traductor (que ya respetaba strings y comentarios)
+a `_scan()`, y la mutación ahora sólo toca código. **Control de que el refactor no movió nada: los
+100 archivos de la base + el addon dan el mismo veredicto que antes, byte por byte.**
+*Un control que se rompe a sí mismo desacredita al instrumento sano que audita.*
+
+---
+
 ## 2026-08-07 (14) — El silencio de las PISADAS, y **silenciar no puede significar «que no pase»**
 
 `server_steps.lua`. Planillas `dev/checks/phantasmagoria-pisadas-r8.html` (8 filas) y `-r8b.html`
