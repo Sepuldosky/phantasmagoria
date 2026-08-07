@@ -253,6 +253,10 @@ local function stuckStats( ghost )
     ghost.phantom_stuckStats = ghost.phantom_stuckStats or {
         rescates = 0, teleport = 0, caminar = 0, exitos = 0, fallos = 0,
         saltos = 0, saltosEnPiso = 0, saltosLeap = 0,
+        -- El arreglo. `sinReemplazo` NO es lo mismo que `corregidos = 0`: uno
+        -- dice que el destino estaba bien, el otro que estaba mal y no habia
+        -- adonde mandarlo. Un solo contador confundiria las dos cosas.
+        corregidos = 0, sinReemplazo = 0, cortosVistos = 0,
     }
 
     return ghost.phantom_stuckStats
@@ -411,7 +415,11 @@ end
 -- y la medicion de verdad sigue siendo por que rama salio la base. Tener las dos
 -- es lo que permite que una refute a la otra; si el reporte predijera "camina" y
 -- la base teletransportara, el que esta mal es este loop y se ve.
-local function freedomPosExists( ghost )
+--
+-- Con minDist > 0 deja de ser una re-derivacion y pasa a ser EL ARREGLO: la
+-- misma busqueda, pero exigiendo que el destino este a mas de esa distancia.
+-- Devuelve el MAS CERCANO que la pase, para no mandar al bot a cruzar el mapa.
+local function buscarEscape( ghost, minDist )
     local myPos   = ghost:GetPos()
     local enemigo = ghost:GetEnemy()
 
@@ -432,18 +440,88 @@ local function freedomPosExists( ghost )
     local caja  = navmesh.FindInBox( myPos + maxs, myPos + -maxs )
     local total = #caja
 
+    local mejor, mejorDist, pasaron = nil, math.huge, 0
+
     for _, area in ipairs( caja ) do
         if area == nearest then continue end
         if not IsValid( area ) then continue end
-        if area:GetCenter():Distance( enemyPos ) < distToEnemy then continue end
 
-        return true, total
+        local centro = area:GetCenter()
 
+        -- El filtro de la base que NO se puede perder: no desatascar al bot
+        -- acercandolo al enemigo ( :3843 ).
+        if centro:Distance( enemyPos ) < distToEnemy then continue end
+
+        local distToMe = centro:Distance2D( myPos )
+
+        if distToMe < minDist then continue end
+
+        pasaron = pasaron + 1
+
+        if distToMe < mejorDist then
+            mejorDist = distToMe
+            mejor     = centro
+
+        end
     end
 
-    return false, total
+    return mejor, total, pasaron, mejorDist
 
 end
+
+local function freedomPosExists( ghost )
+    local mejor, total = buscarEscape( ghost, 0 )
+
+    return mejor ~= nil, total
+
+end
+
+---------------------------------------------------------------------------
+-- EL ARREGLO: un destino que no puede nacer ya cumplido
+---------------------------------------------------------------------------
+-- MEDIDO EN LA RONDA 9, y no es ninguno de los tres candidatos que se leyeron.
+-- El rescate ARRANCA -- siete veces en 60 s, cada 10 s clavados -- y no mueve al
+-- bot un centimetro. La bitacora lo dijo con dos numeros que no se pueden
+-- discutir: `quieto` subiendo monotono de 1,5 a 59,7 s, y cinco
+-- `la caminata LLEGO` sobre la MISMA posicion exacta. Los teleports de la misma
+-- sesion movieron 83, 8 y 46 u: ninguno llega a dos metros.
+--
+-- LA CAUSA, en dos lineas de la base que se muerden entre si:
+--
+--   :3849   elseif not wasVisible and distToMe < bestDist then   -> el MAS CERCANO
+--   :3676   if dist < 150 then ... reallystuck SUCCESS           -> llego
+--
+-- El destino se elige por distancia minima entre las navareas de una caja de
+-- +-3000 u, excluyendo solo la de abajo. En un mapa PARCHEADO por la propia base
+-- ( 1715 navareas en la corrida, y el parcheador crea areas donde camina
+-- alguien ) "la mas cercana que no es la mia" esta pegada -- y nace ya debajo
+-- del umbral con el que :3676 la va a dar por cumplida.
+--
+-- *Un rescate cuyo destino nace debajo de su propio umbral de exito se anuncia
+-- exitoso sin rescatar.*
+--
+-- EL ARREGLO ES EL MINIMO QUE ATACA ESA CAUSA: cuando la base pone un destino
+-- mas cerca que MIN, lo reemplazamos por el mas cercano que este MAS LEJOS que
+-- MIN. No se toca el handler, no se copia la tarea, no se envuelve ningun
+-- global de terceros: se corrige un campo de `data`, que es el mismo que ya
+-- leiamos para medir.
+--
+-- POR QUE ALCANZA CON LA CAMINATA, aunque el teleport tenga el mismo defecto:
+-- la rama del teleport solo se alcanza con `not canGotoEscape`, y ese reloj lo
+-- pone la caminata al fallar ( :3911 ). Si la caminata funciona, el bot se
+-- despega y no se llega al teleport. Es una prediccion, no una medicion -- y el
+-- instrumento sigue contando los teleports con su distancia, asi que si siguen
+-- apareciendo cortos se va a ver.
+--
+-- EL DEFAULT ES 300 Y SALE DE UN NUMERO DE LA BASE, no de un gusto: es el DOBLE
+-- del umbral de :3676. Un destino a mas de 2x el radio de exito no puede nacer
+-- cumplido ni quedar cumplido por el primer paso.
+--
+-- Y 0 ES EL CONTROL, con la convencion de la casa: apaga la correccion y deja el
+-- comportamiento de la ronda 9, que es el lado del A/B que ya esta medido.
+local cvEscapeDist = CreateConVar( "phantasmagoria_ghost_escapedist", tostring( B.ARRIVED_DIST * 2 ), FCVAR_ARCHIVE,
+    "Distancia MINIMA a la que se corrige el destino del rescate de la base. 0 = sin corregir ( control: el comportamiento medido en la ronda 9 ). " ..
+    "El default es el doble del umbral con el que shared.lua:3676 da la caminata por terminada.", 0, 3000 )
 
 ---------------------------------------------------------------------------
 -- La prediccion de la rama, escrita ANTES de correr
@@ -654,8 +732,87 @@ local function poll( self, myTbl )
 
 end
 
+---------------------------------------------------------------------------
+-- LA CORRECCION DEL DESTINO
+---------------------------------------------------------------------------
+-- ⚠ EL LUGAR IMPORTA Y NO ES INTERCAMBIABLE CON EL POLL. La corrutina de
+-- prioridad corre, en este orden ( behaviouroverrides.lua:669-696 ):
+--
+--     myTbl.AdditionalThink( self, myTbl )        :676   <- ACA estamos
+--     ...
+--     myTbl.RunTask( self, "BehaveUpdatePriority" ) :694 <- ACA lee :3674
+--
+-- O sea que corriendo aca llegamos SIEMPRE antes que el bloque que declara la
+-- llegada, en el mismo pase. Si esto colgara del poll de 4 Hz, entre que la base
+-- pone el destino y nosotros lo miraramos podrian pasar hasta 0,25 s -- y en ese
+-- hueco :3674 ya lo dio por cumplido. *Un arreglo que llega tarde a veces es un
+-- arreglo intermitente, que es peor que ninguno porque no se puede medir.*
+--
+-- Por eso NO tiene gate de frecuencia. El costo por pase es una comparacion de
+-- vectores; la busqueda cara solo corre cuando aparece un destino corto NUEVO,
+-- o sea una vez por rescate.
+local function corregirDestino( self, myTbl, data )
+    local minDist = cvEscapeDist:GetInt()
+
+    local destino = data.freedomGotoPosSimple
+
+    if not destino then
+        myTbl.phantom_escapeVisto = nil
+        return
+
+    end
+
+    -- Ya decidimos sobre ESTE destino. Sin esta guarda volveriamos a corregir a
+    -- medida que el bot se acerca caminando, y una llegada legitima -- el bot
+    -- camino de verdad y entro en el radio -- quedaria cancelada para siempre.
+    if myTbl.phantom_escapeVisto == destino then return end
+
+    myTbl.phantom_escapeVisto = destino
+
+    if minDist <= 0 then return end -- control: sin corregir
+
+    local pos  = self:GetPos()
+    local dist = pos:Distance2D( destino )
+
+    if dist >= minDist then return end
+
+    -- El destino nacio corto. Se cuenta SIEMPRE, se corrija o no: es el numero
+    -- que dice cuantas veces la base habria dado por bueno un rescate nulo.
+    local st = stuckStats( self )
+    st.cortosVistos = st.cortosVistos + 1
+
+    local mejor, total, pasaron, mejorDist = buscarEscape( self, minDist )
+
+    if not mejor then
+        -- NO SE INVENTA UN PUNTO. La base tiene un fallback que tira un vector
+        -- al azar ( :3902-3907 ) y nosotros no lo copiamos: si no hay adonde ir,
+        -- lo que corresponde es decirlo y dejar que la base haga lo suyo. Un
+        -- destino inventado se veria igual que uno bueno en la bitacora.
+        st.sinReemplazo = st.sinReemplazo + 1
+
+        anotar( self, "DESTINO CORTO ( " .. math.Round( dist ) .. " u ) y SIN REEMPLAZO a mas de " ..
+            minDist .. " u   ( " .. total .. " navareas miradas, " .. pasaron .. " pasaron el filtro )" )
+        return
+
+    end
+
+    data.freedomGotoPosSimple = mejor
+    myTbl.phantom_escapeVisto = mejor
+
+    st.corregidos = st.corregidos + 1
+
+    anotar( self, "DESTINO CORREGIDO   " .. math.Round( dist ) .. " u -> " .. math.Round( mejorDist ) .. " u" ..
+        "   ( minimo " .. minDist .. ", umbral de LLEGO " .. B.ARRIVED_DIST .. " · " ..
+        pasaron .. " de " .. total .. " navareas pasaron )" )
+
+end
+
 function ENT:AdditionalThink( myTbl )
     myTbl = myTbl or self:GetTable()
+
+    local data = myTbl.m_ActiveTasks and myTbl.m_ActiveTasks[ TASK ]
+
+    if data then corregirDestino( self, myTbl, data ) end
 
     poll( self, myTbl )
 
@@ -942,6 +1099,19 @@ local function lineas( ghost, say )
         "   ( TELEPORT " .. st.teleport .. " · CAMINAR " .. st.caminar ..
         " · llego " .. st.exitos .. " · se vencio " .. st.fallos .. " )" )
 
+    -- EL ARREGLO, CON LOS TRES NUMEROS SEPARADOS. `cortos 0` significa que la
+    -- base eligio bien y la correccion no hizo falta; `corregidos 0` con
+    -- `cortos > 0` significa que hizo falta y no pudo. Un solo contador
+    -- confundiria las dos cosas, que es como se lee un arreglo que no corrio
+    -- igual que uno que no hacia falta.
+    say( "    el arreglo    escapedist " .. cvEscapeDist:GetInt() ..
+        ( cvEscapeDist:GetInt() <= 0 and "  ( 0 = SIN CORREGIR, el comportamiento de la ronda 9 )" or
+            ( "  ( minimo; el umbral de LLEGO de la base es " .. B.ARRIVED_DIST .. " )" ) ) )
+
+    say( "                  destinos cortos vistos " .. st.cortosVistos ..
+        " · corregidos " .. st.corregidos ..
+        " · sin reemplazo " .. st.sinReemplazo )
+
 end
 
 PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_stuck", function( ply, _, args )
@@ -983,12 +1153,77 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_stuck", function( ply, _, args 
     -- :784 ). Se avisa porque una corrida de velocidad hecha justo despues de
     -- esto mediria otra cosa.
     if sub == "force" then
+        ---------------------------------------------------------------------------
+        -- ⚠ EL BOTON AHORA SE NIEGA, Y ESO SALIO DE LA RONDA 9
+        ---------------------------------------------------------------------------
+        -- TRES de las nueve filas se corrieron FUERA de su precondicion y se
+        -- marcaron verdes igual. La 02 pedia `canGotoEscape SI` y salio NO; la
+        -- 04 -- la fila estrella del A/B -- pedia `ve al enemigo SI` y salio NO
+        -- las dos veces. El boton IMPRIMIA los dos valores en la primera linea
+        -- de su salida y aun asi la corrida siguio de largo.
+        --
+        -- *Imprimir la precondicion al lado del veredicto no alcanza: hay que
+        -- negarse.* Es exactamente lo que la ronda 6 dejo escrito con testdoor,
+        -- que gritaba ESCUCHA AHORA sobre una apertura que el veto se iba a
+        -- comer -- y ahi tambien el dato estaba impreso al lado.
+        --
+        -- El argumento declara QUE FILA estas corriendo, y el comando comprueba
+        -- que el mundo este de ese lado antes de gastar el disparo. Sin
+        -- argumento se comporta como en la r9, porque para explorar sirve.
+        local ESPERA = {
+            [ "primero" ] = {
+                fila  = "la del candidato (c): el primer disparo NO teletransporta",
+                ok    = function( s ) return s.canEscape end,
+                pide  = "canGotoEscape SI",
+                pista = "Ya venis de un disparo anterior. Espera a que venza el reloj de " .. B.ESCAPE_SECS .. " s, o corre la fila 'segundo'.",
+            },
+            [ "segundo" ] = {
+                fila  = "la del control POSITIVO: sin verte, TIENE que teletransportar",
+                ok    = function( s ) return not s.canEscape and not s.veEnemigo end,
+                pide  = "canGotoEscape NO y ve al enemigo NO",
+                pista = "Si canGotoEscape da SI, corre 'primero' y volve en " .. B.AFTER_WALK .. "-" .. B.ESCAPE_SECS .. " s. Si te ve, apaga el hunt o salite de su linea de vision.",
+            },
+            [ "veto" ] = {
+                fila  = "la del candidato (a): VIENDOTE no tiene que teletransportar",
+                ok    = function( s ) return not s.canEscape and s.veEnemigo end,
+                pide  = "canGotoEscape NO y ve al enemigo SI",
+                pista = "`hunt 1` NO alcanza: IsSeeEnemy es lo que consulta :3868, y pide linea de vista. Parate delante del fantasma.",
+            },
+        }
+
+        local quiere = sub and args[ 2 ] and ESPERA[ string.lower( args[ 2 ] ) ]
+
+        if args[ 2 ] and not quiere then
+            say( "[Phantasmagoria] uso: phantasmagoria_ghost_stuck force [primero|segundo|veto]" )
+            say( "    Sin argumento dispara igual que antes. Con argumento, se NIEGA si la precondicion no esta." )
+
+            for _, key in ipairs( { "primero", "segundo", "veto" } ) do
+                say( "    " .. key .. string.rep( " ", 9 - #key ) .. ESPERA[ key ].pide .. "   -- " .. ESPERA[ key ].fila )
+
+            end
+
+            return
+
+        end
+
         local n = PHANTASMAGORIA.EachGhost( function( ghost )
             local s = ghost:phantom_StuckState()
 
             if not s.data then
                 say( "#" .. ghost:EntIndex() .. "  NO SE PUEDE: " .. s.dataPorQue )
                 say( "    Sin la tarea activa el campo no lo lee nadie. Eso YA es el resultado del check." )
+                return
+
+            end
+
+            if quiere and not quiere.ok( s ) then
+                say( "#" .. ghost:EntIndex() .. "/c" .. ghost:GetCreationID() .. "  SIN DISPARAR: la precondicion NO se cumple." )
+                say( "    la fila pide   " .. quiere.pide )
+                say( "    ahora mismo    canGotoEscape " .. ( s.canEscape and "SI" or "NO" ) ..
+                    " · ve al enemigo " .. ( s.veEnemigo and "SI" or "NO" ) ..
+                    "   ( escape " .. string.format( "%+.1f", s.escapeIn ) .. " s · walk " .. string.format( "%+.1f", s.walkIn ) .. " s )" )
+                say( "    " .. quiere.pista )
+                say( "    ESTA FILA ES 'Sin correr'. No se gasto el disparo, asi que el estado no cambio." )
                 return
 
             end
@@ -1187,7 +1422,7 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_stuck", function( ply, _, args 
     end
 
 end, "Reporte del rescate de atascos de la base: si esta corriendo, en que estado esta el bot y por que rama saldria. " ..
-    "'reset' limpia · 'force' fuerza la rama con overrideVeryStuck ( DOS VECES: el que mide es el segundo ) · " ..
+    "'reset' limpia · 'force [primero|segundo|veto]' fuerza la rama con overrideVeryStuck y SE NIEGA si la precondicion de esa fila no esta · " ..
     "'watch [seg]' muestrea mientras encajas al bot con el physgun." )
 
 ---------------------------------------------------------------------------

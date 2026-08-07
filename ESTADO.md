@@ -24,10 +24,19 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 > destino nace pegado; y `:3676` declara la caminata terminada con `dist < 150`. *El rescate se
 > anuncia exitoso sin rescatar.* Detalle en «Ronda 9 CORRIDA» más abajo.
 >
-> **Lo que queda para la ronda 10, en orden:** (1) medir por qué el ciclo dura **10 s** y no un tick
-> —el instrumento ya imprime la distancia al destino en el evento, falta correrlo—; (2) decidir el
-> arreglo, que es sobre `freedomPos` y no sobre el salto; (3) rehacer las filas **02, 04 y 08**, que
-> son *Sin correr* por su propia precondición.
+> **EL ARREGLO YA ESTÁ ESCRITO Y SIN CORRER:** `phantasmagoria_ghost_escapedist` (default **300** =
+> 2×150, y **0 es el control**) reemplaza el destino cuando nace a menos de esa distancia. Planilla
+> [`dev/checks/phantasmagoria-encaje-r10.html`](../dev/checks/phantasmagoria-encaje-r10.html),
+> **8 filas** — el A/B sobre un encaje real, las tres filas de la r9 rehechas, y **un control de que
+> no rompa el caso sano**, porque esto escribe en la tabla `data` de una tarea de la base.
+>
+> ⚠ **Y el botón `force` ahora SE NIEGA.** Toma `primero` / `segundo` / `veto` y no gasta el disparo
+> si el mundo no está de ese lado. Sale de que tres filas de la r9 se corrieron fuera de su
+> precondición **con los valores impresos a la vista**: *imprimir la precondición al lado del
+> veredicto no alcanza.*
+>
+> **Lo único del mecanismo que sigue sin explicar** es por qué el ciclo dura **10 s** y no un tick;
+> es la fila 05 y el instrumento ya imprime lo que hace falta.
 >
 > **El salto queda descartado como causa, con número:** las alturas pedidas fueron 60, 60, 12, 67,9,
 > 67,9 y 32. El tope es 245 y **nadie pide 245**. La hipótesis del autor era razonable y el
@@ -246,6 +255,41 @@ Encajado entre props y el techo, el `watch` dio **`piso SI`** en casi todas las 
 queda **apoyado en un prop**. Así que el umbral es **11 y no 81**, y la detección tarda ~3 s, no ~81.
 La cuenta de los 80-contra-81 del bloque anterior **no aplica a este caso** — sigue abierta para un
 encaje que sí quede en el aire.
+
+### El arreglo elegido (decisión del autor), escrito y sin correr
+
+**`phantasmagoria_ghost_escapedist`, default 300, `0` = control.** Cuando la base pone un destino a
+menos de esa distancia, lo reemplazamos por el **más cercano que esté más lejos** que ella —
+conservando el filtro de la base que no desatasca acercando al enemigo (`:3843`). El default sale de
+un número de la base y no de un gusto: es el **doble** del umbral de `:3676`, así que un destino no
+puede nacer cumplido ni quedar cumplido por el primer paso.
+
+**Es la intervención mínima:** no se copia el handler vía `DoCustomTasks`, no se envuelve
+`terminator_Extras.TeleportTermTo` (que es un global de todos los terminators del servidor) ni
+`SetPosNoTeleport` (que tiene otros seis call sites). Se corrige un campo de `data`, que es el mismo
+que ya leíamos para medir.
+
+**Y corre en `AdditionalThink`, no en el poll de 4 Hz, y el lugar no es intercambiable:** la corrutina
+de prioridad llama `AdditionalThink` en `behaviouroverrides.lua:676` y `RunTask("BehaveUpdatePriority")`
+en `:694`, así que desde ahí llegamos **siempre** antes del bloque que declara la llegada, en el mismo
+pase. Desde el poll podrían pasar hasta 0,25 s y en ese hueco `:3674` ya lo dio por cumplido — *un
+arreglo que llega tarde a veces es un arreglo intermitente, que es peor que ninguno porque no se puede
+medir.*
+
+> **El teleport NO se corrigió, a propósito.** Tiene el mismo defecto (83, 8 y 46 u) y la apuesta es
+> que arreglando la caminata el bot se despega y nunca se llega a esa rama, porque a ella sólo se
+> entra con `not canGotoEscape` y **ese reloj lo pone la caminata al fallar** (`:3911`). **Es una
+> predicción, no una medición** — y el instrumento sigue contando los teleports con su distancia, así
+> que si siguen apareciendo cortos se va a ver.
+
+### El arreglo de método: el botón se niega
+
+Tres filas de la r9 se corrieron fuera de su precondición y se marcaron verdes, **y el botón imprimía
+los dos valores en la primera línea de su salida**. Ahora `force` toma `primero` / `segundo` / `veto`,
+comprueba el estado y **no gasta el disparo** si no corresponde — con el motivo, el valor actual y qué
+hacer para llegar al lado que falta. Es lo mismo que la ronda 6 dejó escrito con `testdoor`, que
+gritaba `ESCUCHA AHORA` sobre una apertura que el veto se iba a comer: allí el dato también estaba
+impreso al lado. *Imprimir la precondición junto al veredicto no alcanza: hay que negarse.*
 
 ### Dos defectos de instrumento, los dos míos
 

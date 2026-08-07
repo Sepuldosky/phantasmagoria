@@ -70,6 +70,38 @@ puso, y no hubo flag al que ganarle.
 cerebro heredado **corriendo**», y es falso: `movement_watch`, `movement_stalkenemy`, `movement_camp`
 y `movement_followsound` —las que el diseño da por gratis— están registradas y **no corren**.
 
+### El arreglo, escrito y sin correr
+
+**`phantasmagoria_ghost_escapedist`, default 300, `0` = control.** Cuando la base pone un destino a
+menos de esa distancia, lo reemplazamos por el más cercano que esté más lejos, conservando el filtro
+que no desatasca acercando al enemigo (`:3843`). El default es el **doble** del umbral de `:3676`, así
+que un destino no puede nacer cumplido.
+
+**Intervención mínima:** no se copia el handler vía `DoCustomTasks`, no se envuelve
+`terminator_Extras.TeleportTermTo` (global de todos los terminators) ni `SetPosNoTeleport` (otros seis
+call sites). Se corrige un campo de `data`, el mismo que ya leíamos.
+
+**Corre en `AdditionalThink` y no en el poll, y el lugar no es intercambiable:** la corrutina llama
+`AdditionalThink` en `behaviouroverrides.lua:676` y las tareas en `:694`, así que desde ahí llegamos
+siempre antes del bloque que declara la llegada, en el mismo pase. Desde un poll de 4 Hz podrían pasar
+0,25 s y `:3674` ya lo dio por cumplido. *Un arreglo que llega tarde a veces es un arreglo
+intermitente, que es peor que ninguno porque no se puede medir.*
+
+**El teleport no se corrigió a propósito:** tiene el mismo defecto y la apuesta es que arreglando la
+caminata nunca se llega a esa rama, porque a ella sólo se entra con `not canGotoEscape` y ese reloj lo
+pone la caminata al fallar. **Es una predicción, no una medición**, y el instrumento sigue contando
+los teleports con su distancia.
+
+Tres contadores separados —`cortos vistos`, `corregidos`, `sin reemplazo`— porque *un solo contador
+leería igual un arreglo que no corrió y uno que no hacía falta*.
+
+### El botón ahora se niega
+
+Tres filas de la r9 se corrieron fuera de su precondición **con los valores impresos a la vista**.
+`force` toma ahora `primero` / `segundo` / `veto`, comprueba el estado y **no gasta el disparo** si no
+corresponde. Es la lección de `testdoor` en la ronda 6, otra vez: *imprimir la precondición junto al
+veredicto no alcanza, hay que negarse.* Planilla `dev/checks/phantasmagoria-encaje-r10.html`, 8 filas.
+
 ### Y un pedido del autor, implementado
 
 *«El ruido metálico al saltar es un remanente del terminator que es un androide robótico.»**
