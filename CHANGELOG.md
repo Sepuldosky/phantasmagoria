@@ -7,6 +7,448 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-06 (11) — Ronda 5 CORRIDA (5 pasa / 2 falla): **el sonido de una puerta no se intercepta, se le borra a la puerta**
+
+`dev/checks/phantasmagoria-silencio-r5.html`. El campo pisado quedó arreglado (`campo = false` en el
+reporte) y el instrumento por fin dice **quién** decidió la marcha.
+
+### El silencio falló por cuarta vez, y esta vez con veredicto
+
+**La bitácora que puse justamente para diagnosticarlo salió VACÍA** — con la ventana abierta, la
+puerta abriéndose (`a los 0.9 s: m_toggle_state = 0 ABIERTA`), `silencio 3 aperturas silenciadas`, y
+el sonido oyéndose. No registró **nada**: ni sonidos bloqueados ni sonidos sin bloquear cerca de la
+puerta.
+
+> **Un log vacío donde tenía que haber algo vale más que uno lleno: descarta la familia entera de
+> hipótesis, no una.** Había tres candidatas —ventana corta, sonido de otro emisor, hook ciego— y la
+> lista vacía mató las dos primeras de un golpe. `GM:EntityEmitSound` **server-side no ve** esos
+> sonidos, porque no nacen en Lua del servidor.
+
+### El camino bueno lo señaló el autor, y su aporte no es código: son siete nombres
+
+*«Tengo un mod instalado para abrir las puertas silenciosamente, te recomiendo extraerlo y ver cómo
+lo hace.»* — **Immersive Door Openable** (WSID `3717549037`), desempacado a
+`dev/other/immersive door openable/` y dado de alta en `dev/mods_workshop_mapa.md` §2.
+
+**No engancha nada.** Le pisa a la puerta sus **propias keyvalues** de sonido con `""` antes de
+moverla y se las devuelve después (`sv_door.lua:61-67` / `:90-96`). Así el sonido no se bloquea: **no
+llega a existir**, y por eso ningún hook hacía falta. Son **siete** campos y **dos familias**:
+
+| Familia | Clases | Campos |
+|---|---|---|
+| `CBaseDoor` | `func_door`, `func_door_rotating` | `noise1` (mientras se mueve), `noise2` (**el golpe de llegada**) |
+| `CBasePropDoor` | `prop_door_rotating` | `soundopenoverride`, `soundcloseoverride`, `soundmoveoverride`, `soundlockedoverride`, `soundunlockedoverride` |
+
+`noise2` es exactamente el sonido que el autor venía reportando desde la ronda 3 (*«es el sonido de
+GOLPE de la puerta»*). Se copia **la técnica, no el código**: el propio archivo acredita el original
+al z-team y su licencia está sin verificar.
+
+**Y el mecanismo trae un riesgo que el hook no tenía:** ya no bloquea un sonido, **le borra un dato a
+una entidad del mapa**. Si el que devuelve falla, esa puerta queda muda para todos, para siempre.
+Por eso el reporte cuenta *puertas mudas AHORA MISMO*, la bitácora pasó a anotar **operaciones** (un
+`devuelto` por cada `silenciado`) y hay `phantasmagoria_ghost_doors restore`. La fila 03 de la ronda
+6 es esa vigilancia, y es la más importante aunque parezca la más aburrida.
+
+### Dos observaciones del autor que eran diseño, no defecto
+
+- **«Sí camina, pero mientras te caza y no te ve, empieza a correr hasta verte.»** Con el flag puesto
+  yo devolvía `nil` y dejaba decidir a la base — y la base sólo se niega a correr **cuando te ve**
+  (`canDoRun`). Ahora cazando decidimos **las dos ramas**. `false` ahí es seguro *porque es un
+  método*: en un callback de `RunTask` la misma palabra significaría además robarle el evento a otra
+  tarea. La misma palabra con dos significados según dónde se escriba.
+- **La hoja que se abre encima.** `trabado 15,2 s · delante func_door_rotating · ABIERTA · a 0 u`,
+  con `peor 17,6 s`. Su propuesta, literal: *phase momentáneo **con la condición de que la puerta
+  marque como ABIERTA**; si está cerrada no tiene por qué pasar, así evitamos que las puertas que
+  abren en reversa dejen pillado al npc.* Es mejor que lo que yo tenía por dos motivos: una puerta
+  **cerrada** ya la cubre la regla de cercanía —taparla ahí escondería otro problema— y limitarlo a
+  la hoja abierta ataca justo el caso que no tiene ninguna otra salida. La rama vieja disparaba con
+  cualquier puerta lejana y salió **0 en todos los reportes de tres rondas**: la fila que iba a
+  borrarla terminó encontrando para qué servía.
+
+Planilla: [`dev/checks/phantasmagoria-keyvalues-r6.html`](../dev/checks/phantasmagoria-keyvalues-r6.html),
+**6 filas, ninguna corrida**.
+
+---
+
+## 2026-08-06 (10) — Ronda 4 CORRIDA (9 pasa / 2 falla): el veto anduvo, y un campo estaba pisado por un método
+
+`dev/checks/phantasmagoria-veto-r4.html`. **Los cinco arreglos de la ronda 3 quedaron confirmados en
+juego:** con `opendoors 0` las puertas ya no se abren y `VETADAS` sube (161 en una corrida); `vistas`
+distingue *«no vio»* de *«vio y se abstuvo»*; los flags por comando **sobreviven al respawn** y el
+reporte nombra la capa que ganó (override / campo / convar); `ABRIO` dejó de mentir —`ABRIO 5 fallo
+0` con cinco huellas— y cazando corre.
+
+### El defecto que estaba a la vista en cada línea del reporte
+
+```
+camina  NO   campo = function: 0x8088...   porque el flag ... es nil
+```
+
+`ENT.phantom_WalksWhenHunting` era un **campo** y en `server_speed.lua` había un **método homónimo**.
+Como los `include` corren después de la declaración, la función pisaba al campo: el resolvedor leía
+una función —que no es `true` ni `false`— y caía a la rama *«el flag es nil»*.
+
+> **Y el check que lo ejercía PASÓ igual, porque el default de esa rama coincidía con lo esperado.**
+> *Un default que coincide con lo esperado convierte un campo roto en un check verde*, y eso no lo
+> agarra ninguna corrida: lo agarra una guarda o nadie. Hay guarda, corre **después** de los includes
+> (antes el pisado todavía no ocurrió: una guarda que mira demasiado temprano siempre pasa) y su
+> lista sale de la misma tabla `FLAGS` que usa el comando, así que un flag nuevo queda cubierto solo.
+
+### `ShouldRun` dejó de ser un callback de tarea: era una carrera
+
+La fila del `walkhunt` no se pudo juzgar. La lectura: cazando **a 0 u** del jugador, `deseada 66`
+(caminando). Causa leída: `RunTask` corta en el primer callback no-nil, y el `ShouldRun` de
+`movement_followenemy` hace `return length > targetFollowDist and self:canDoRun()` — que con el path
+corto (o sea cuando ya te alcanzó) devuelve **`false`**, no `nil`. Eso corta el recorrido y el nuestro
+no llega a correr. Ganar dependía del **orden** de las tareas, que además no es estable (`SetupTasks`
+las arranca iterando con `pairs`).
+
+> **Un punto de extensión que depende del orden de ejecución no es un punto de extensión: es una
+> carrera.** `ENT:ShouldRun` de la base es un método común, así que ahora se overridea y se encadena
+> —determinista, como ya hacían `ShouldBeEnemy` y `BehaveUpdate`—.
+
+**Y el check tampoco podía discriminar:** a 0 u la base camina *por su cuenta*, así que «camina» no
+separaba nuestro flag de su comportamiento normal. El instrumento ahora imprime **quién decidió la
+marcha** (`override propio` / `la base`).
+
+### El silencio: tres rondas sin poder medirse, y no era una falla
+
+Las tres veces la lectura salió con *«todavía no vio ninguna puerta cerrada»* y la bitácora vacía —
+la precondición pedía que un fantasma silenciado abriera una puerta **justo** mientras el autor
+escuchaba, y eso no se provoca deambulando. El autor lo dijo exacto: *«de que suena, suena, pero con
+el check 06 no puedo decir si la convar hace algo o no.»*
+
+> **Un check cuya precondición no se puede provocar no es un check** — y marcado como FALLA cuando en
+> realidad está SIN CORRER, se lee como un mecanismo roto. Hay botón:
+> `phantasmagoria_ghost_testdoor` abre la puerta más cercana *ahora*, con el silencio que
+> corresponda, y avisa **ESCUCHA AHORA**. Es utilería de medición, no una mecánica.
+
+### Una etiqueta mía que mentía
+
+`vistas 191 puertas cerradas DISTINTAS` en un mapa que no tiene 191 puertas. El contador sube cuando
+una puerta cerrada **entra al sondeo**, y la misma puerta entra y sale muchas veces mientras el
+fantasma se mueve delante de ella. *El número estaba bien; la palabra «distintas» era mía y mentía.*
+
+### Anotado y no arreglado
+
+`Interpenetrating entities! (terminator_nextbot_phantom and func_door)` en la consola: es el engine
+quejándose de que el bot está **adentro** de la hoja, que es exactamente lo que el atravesado hace.
+Ruidoso, no fatal. Y `atraveso N · **0** por ATASCO` en **todos** los reportes de las rondas 3 y 4,
+sin excepción: la fila 06 de la ronda 5 lo cierra a propósito antes de borrar la rama.
+
+Planilla: [`dev/checks/phantasmagoria-silencio-r5.html`](../dev/checks/phantasmagoria-silencio-r5.html),
+**7 filas, ninguna corrida**.
+
+---
+
+## 2026-08-06 (9) — Ronda 3 CORRIDA (3 pasa / 5 falla): **apagar lo nuestro no apagaba el comportamiento**
+
+`dev/checks/phantasmagoria-flags-r3.html`. Cinco fallas y **ninguna era del mecanismo que el check
+decía medir**: cuatro eran instrumento y una era un hueco de diseño. Lo que sí cerró: el comando de
+puertas por fin existe (fila 01) y la huella se puede ver (fila 06).
+
+### La falla que ordena las demás: el veto no cubría a la base
+
+Con `phantasmagoria_ghost_opendoors 0` el reporte decía `abre NO` — correcto, nuestra escalera no
+corría — y el autor reportó *«sigue abriendo las puertas aunque esté desactivado»*. **Las dos cosas
+eran ciertas.** `tryToOpen` (`shared.lua:1249`) termina en `Use2` y lo dispara `ShootblockerThink`
+cada 0,1 s, por su cuenta. Apagar *nuestra* implementación nunca iba a apagar la de la base.
+
+> **La regla: apagar NUESTRA implementación no es apagar EL COMPORTAMIENTO cuando el comportamiento
+> también vive en el tercero.** Un flag que dice «no abre» tiene que vetar **todos** los caminos, no
+> sólo el que escribimos. Y el modo de falla es el más caro que hay: **el instrumento decía la verdad
+> sobre lo nuestro mientras el juego mostraba otra cosa.** Pariente de *«saltear no es apagar»*.
+
+El arreglo no duplica `Use2`: el veto va en `TerminatorBlockUse`, el hook que la propia base declara
+**adentro** de `Use2` (`:1221`). Y el contador `VETADAS` cuenta las aperturas bloqueadas *incluidas
+las que iba a hacer la base*, que son las que antes se escapaban.
+
+### Tres defectos del instrumento, los tres del mismo tipo: medir bien y clasificar mal
+
+- **`ABRIO 0 fallo 3` con las puertas abriéndose a la vista.** La relectura a los 0,9 s agarraba la
+  hoja *en movimiento* y lo anotaba como fallo — **y el propio reporte lo dejó escrito al lado**:
+  `peor 0,9 s contra un func_door_rotating EN MOVIMIENTO`. *Leer un estado transitorio como si fuera
+  el final.* Ahora `abriendo` cuenta como abrió, y no es aflojar el criterio: **abriendo y cerrando
+  son estados distintos** en los dos enums.
+- **«Todavía no vio ninguna puerta cerrada»** con puertas cerradas delante todo el tiempo: el `return`
+  temprano de la capacidad se llevaba puesto al instrumento junto con la función. *«No vio ninguna» y
+  «vio y se abstuvo» son dos cosas distintas y el reporte las mostraba iguales* — así que con el veto
+  puesto, todos los ceros habrían sido falsos negativos. Los contadores nacen antes de la puerta.
+- **La ventana de silencio de 1,5 s se cerraba justo antes del ruido que quería tapar.** El autor
+  precisó *«es el sonido de GOLPE de la puerta»*, y el golpe es el de **llegada**, no el de arranque
+  — una hoja tarda más de 1,5 s en llegar al tope, cosa que el propio reporte ya había medido. Son
+  3 s. Y como *«sigue sonando»* no dice **quién** suena, hay bitácora: mientras haya una ventana
+  abierta se anota todo sonido cercano con su emisor, su archivo y si se bloqueó. **Coste cero
+  cuando no hay ventanas abiertas**, que es la única forma honesta de dejar un log así puesto.
+
+### El andamio que faltaba, y la conclusión del autor era la correcta
+
+*«No puedo probar los flags; maybe lo mejor es tener una toolgun dev.»* Tenía razón sobre el
+problema: el `lua_run` que le di escribe el campo en **la entidad**, y todo fantasma spawneado
+después nace con el default de su clase — **el override se perdía al respawnear y nada lo decía**, lo
+que se lee como «el flag no funciona». Ahora hay
+`phantasmagoria_ghost_flag <abrir|atravesar|silencio|caminar> <0|1|auto>`, que alcanza a los vivos
+**y a los futuros**, y `auto` lo saca sin haber pisado ningún campo.
+
+> **La regla: un andamio de prueba tiene que sobrevivir al ciclo de vida de lo que prueba.** Si para
+> volver a medir hay que re-aplicarlo a mano, la medición depende de que nadie se olvide.
+
+### Y lo de la fila 09: cazando ahora corre
+
+*«Suele caminar al hacer hunting y correr cuando no me ve. Podría correr igualmente directo a mí.»*
+**La causa está medida en el código y es una línea** — `canDoRun` se niega si el bot *no está
+enojado*, **te ve**, y tiene la **vida entera**; las tres se cumplen siempre en un hunt normal,
+porque nadie le pega. (`shouldDoWalk`, la de al lado, devuelve `true` por los dos caminos: no es la
+que decide.) Se resuelve con el callback de tarea `ShouldRun`, más el flag
+`phantom_WalksWhenHunting`, que arranca en `false` y existe para los tipos que acechan caminando.
+
+**Trampa anotada, de la misma familia que la del `Think` y peor:** `RunTask` corta en el primer
+callback que devuelve algo **no nil**, y en Lua `false` no es nil — devolver `false` ahí no significa
+«que decida otro», significa «NO corras» *y* le roba el evento a las tareas de movimiento de la base.
+
+### Lo que las otras filas midieron sin proponérselo
+
+`atraveso N · 0 por ATASCO` apareció en **cuatro** reportes de filas distintas (`8/0`, `1/0`, `4/0`,
+`4/0`). La fila que la juzgaba quedó sin correr, pero cuatro lecturas incidentales apuntan a que esa
+rama es código muerto. La fila 10 de la ronda 4 la cierra a propósito, en vez de darla por muerta.
+
+Planilla: [`dev/checks/phantasmagoria-veto-r4.html`](../dev/checks/phantasmagoria-veto-r4.html),
+**11 filas, ninguna corrida**.
+
+---
+
+## 2026-08-06 (8) — Ronda 2 CORRIDA (7 pasa / 2 falla): **atraviesa**, y las dos fallas eran un defecto mío
+
+`dev/checks/phantasmagoria-atraviesa-r2.html`, 9 filas, ninguna sin correr.
+
+**El atravesado anduvo a la primera y en las dos direcciones.** Del reporte del autor: *«lo acabo de
+ver pasar a través de una puerta, y la abrió como yo quería»*; el `peor` bajó de **3,6 s a 0,7 s**; el
+control negativo (`phasedoors 0`) volvió a trabarlo (`peor 3,3 s`); no se lo vio caer del mundo ni
+cruzar nada que no fuera una puerta; y el `ghost_where` capturó el instante en vivo:
+`puerta func_door_rotating   trabado 0.0 s   ATRAVESANDO`.
+
+**Y la constante quedó medida por su efecto**, que era la fila que más valía: con la máscara del
+wraith puesta a propósito, *«sí se queda pillado en la puerta del brush»*. La predicción asimétrica
+entre las dos clases de puerta se cumplió, así que `CONTENTS_MOVEABLE` es el bit que decide y
+`MASK_NPCWORLDSTATIC` es la máscara correcta — **por medición, no por citar la constante**.
+
+### Las dos fallas tenían UNA causa, y es la peor clase de defecto: el instrumento
+
+**La convar `phantasmagoria_ghost_doors` y el comando `phantasmagoria_ghost_doors` se llamaban
+igual.** Cuando eso pasa la consola resuelve el nombre contra las convars primero y el comando queda
+**mudo** — y `concommand.Add` no devuelve error ni avisa. Consecuencias, las dos medidas en la
+corrida:
+
+- **El instrumento de puertas fue inalcanzable toda la ronda.** El autor lo reportó como pregunta
+  —*«¿dónde veo el dato de la evidencia?»*— y la respuesta era que no había forma. Las filas 05 y 08
+  no fallaron por el mecanismo: fallaron porque **el comando que las verificaba no existía**.
+- **Peor: la planilla mandaba correr `phantasmagoria_ghost_doors reset` antes de medir**, y eso le
+  asignaba `"reset"` → `0` a la convar. O sea que la instrucción escrita para *limpiar el
+  instrumento* **apagaba la función justo antes de medirla**. Por eso los `peor 10,7` y `12,3` del
+  final no son atribuibles a nada.
+
+**La regla, que vale para todo el taller de GMod:** *una ConVar y un ConCommand no pueden compartir
+nombre, y el que pierde es el comando, en silencio.* El arreglo no es renombrar y seguir: todo
+comando del addon pasa ahora por `PHANTASMAGORIA.AddCommand`, que **se niega y grita** si
+`ConVarExists( name )`. Y el censo se hizo sobre **las siete convars y los seis comandos**, no sobre
+tres: la colisión era exactamente una.
+
+> Emparenta con *«una guarda defensiva que falla hacia un valor creíble es peor que no tenerla»*,
+> pero es su versión de más arriba: **acá lo que falló hacia un valor creíble fue el canal por el que
+> se mide**. Un comando que imprime la ficha de una convar se lee como *«no hay datos»*, no como
+> *«este comando no existe»*.
+
+### Los dos flags que pidió el autor
+
+`ENT.phantom_OpensDoors` y `ENT.phantom_SilentDoors`, con la **misma convención** que
+`phantom_PhasesDoors` (`0` nadie · `1` el flag del NPC · `2` todos) — tres perillas con tres
+significados distintos para el mismo número serían tres formas de equivocarse en juego con la
+planilla en la mano. Los tres resolvedores son **una sola función**, por el mismo motivo.
+
+**El silencio son DOS sonidos y se tapan distinto**, y confundirlos sería callar la mitad y creer que
+anda: el click del bot lo emite `Use2` (`shared.lua:1238`) detrás de un debounce propio de la base
+—`nextUseSound`—, así que adelantar ese reloj lo apaga **sin overridear nada**; el chirrido de la
+hoja lo emite el **engine**, y el único punto de intercepción es `EntityEmitSound`. Que ese hook
+alcance a un sonido nacido en el engine es **lectura, no medición**: el check 04 de la ronda 3 se
+juzga de oído, que acá es el instrumento correcto, y pide anotar **cuál** de los dos sonó.
+
+**El default deja el ruido PRENDIDO**, y no por inercia: el autor dijo que oír las puertas fue lo que
+le dejó *ver* el comportamiento del fantasma adentro de la casa. El ruido es un instrumento de
+observación antes que un efecto, y el flag existe para el Myling (§5), que caza en silencio.
+
+### Lo que NO se arregló, a propósito
+
+*«Intenta casi siempre abrir puertas»* es una observación del autor y quedó **sin tocar**: el flag
+prende y apaga la **capacidad**, no la **frecuencia**. En Phasmophobia abrir una puerta es un
+*evento*. La fila 08 de la ronda 3 existe para convertir «casi siempre» en un número **antes** de
+decidir si hace falta un intervalo o una probabilidad por tipo — y está escrita para que marcar PASA
+signifique *haber medido*, no que el número sea bajo.
+
+Se agregó además una segunda puerta de entrada al atravesado (estar **trabado** contra una puerta
+aunque esté a más de 45 u), a partir de una lectura de la ronda 2 que **la sugiere y no la prueba**.
+Va con contador propio (`fasesPorAtasco`) y una fila que la juzga: si queda en 0, es código muerto y
+sale.
+
+Planilla: [`dev/checks/phantasmagoria-flags-r3.html`](../dev/checks/phantasmagoria-flags-r3.html),
+**9 filas, ninguna corrida**.
+
+### Cambio menor: el modelo de pruebas pasa al cadáver de HL2
+
+`models/player/corpse1.mdl`, pedido del autor. **Es el mismo que usa HIM sobre esta misma base**
+(`him/…/terminator_nextbot_homeless/shared.lua:12`), que es la mejor evidencia disponible de que
+sirve: no es un modelo parecido, es el mismo modelo corriendo en el mismo cerebro, en producción.
+
+**Y la carpeta importa** — existen `models/humans/corpse1.mdl` (el cadáver NPC/prop de HL2) y
+`models/player/corpse1.mdl` (el playermodel de GMod, con `m_anm`), y hace falta el segundo porque el
+criterio de la base no es el esqueleto sino el `$includemodel`. No hubo que deducirlo: **HIM trae una
+tabla de traducción que hace exactamente ese mapeo** (`sv_zhomeless_shelter.lua:52`), o sea que el
+tercero ya tropezó y dejó escrito el arreglo. El quemado es `charple`, que la misma tabla mapea
+aparte — `corpse1` es el otro.
+
+De paso, **el skin pasó a viajar con el modelo** en vez de ser un campo suelto: el `1` se eligió por
+lo que significa *en* `scaryblackman` (ojos blancos) y no quiere decir nada en un cadáver.
+`shared.lua:2989` lo aplica *si es número*, sin preguntar si ese `.mdl` tiene tantos skins — así que
+cambiar de modelo se lo habría llevado puesto en silencio. `scaryblackman` sigue en la lista, con su
+skin, y vuelve a ser el primero cuando esta entidad deje de ser un instrumento.
+
+---
+
+## 2026-08-06 (7) — La velocidad quedó bien en juego; abrir no alcanzó, y ahora **atraviesa**
+
+### Lo que la corrida dejó, **fuera de la planilla**
+
+El autor probó por consola, no llenando `veldoors-r1`. Vale como medición porque son líneas del
+instrumento, no impresiones — pero **no cierra el bloque**, y las filas siguen sin marcar:
+
+| Qué | Lectura | Fila que le corresponde |
+|---|---|---|
+| Velocidad | `objetivo 280` · `deseada 66` caminando · `deseada 280` corriendo, y `real` acompañando | 02 y 04 quedarían verdes |
+| Destrabado | *«las puertas las destraban»* | 10, **en prosa**: sin el contador de `destrabadas` no es la fila |
+| Puertas | **`peor 3,6 s`** contra un **`func_door_rotating`** | **11 en ROJO**: el criterio pedía < 2 s |
+
+**La fila 11 hizo exactamente lo que estaba escrita para hacer:** el cronómetro convirtió *«suele
+quedarse pegado»* en 3,6 s, y el texto de al lado nombró la clase — y la clase es la que cambia el
+diagnóstico.
+
+### El defecto que destapó la clase: el peldaño 2 era pólvora mojada
+
+`OpenAwayFrom` es una entrada de `CBasePropDoor`, o sea **sólo `prop_door_rotating`**. Sobre un
+`func_door_rotating` el `Fire` no hace nada **y no avisa**: el peldaño 2 se consumía entero sin tocar
+la puerta y el 3 recién llegaba 1,5 s después. La escalera tenía un escalón que no existía para la
+mitad de las puertas del mapa, y sólo se vio porque el instrumento imprime la **clase**. Corregido:
+el peldaño 2 se saltea si no es un `prop_door_rotating`.
+
+### Atravesar — un flag por NPC, no una convar
+
+Pedido del autor: que atraviese, y **por NPC**, porque el Alternate (`docs/ALTERNATE.md`) no puede.
+Así que es `ENT.phantom_PhasesDoors` (heredable por el árbol de bases: los 30 tipos lo reciben en
+`true` sin escribir nada) con `phantasmagoria_ghost_phasedoors` de tres estados para pisarlo en las
+dos direcciones — `0` nadie, `1` según el flag, `2` todos.
+
+**El mecanismo no se inventó: hay dos precedentes en el árbol y los dos usan `SetSolidMask`** — el
+módulo wraith de la base (`wraithcloaking.lua:133`) y HIM (`server.lua:630`). Lo que decidió cuál
+copiar es que **usan máscaras distintas**:
+
+| Máscara | Quién | Pasa props | Pasa brush entities (`func_door_*`) |
+|---|---|:---:|:---:|
+| `MASK_NPCSOLID_BRUSHONLY` | wraith de la base | sí | **no** |
+| `MASK_NPCWORLDSTATIC` | HIM | sí | **sí** |
+
+Difieren en `CONTENTS_MOVEABLE`, que es el bit de los brush entities — o sea de la puerta que
+**efectivamente** lo trabó. Va la de HIM. **Y eso es lectura de una constante del engine**, que es
+justo la clase de cosa que este proyecto ya pagó dos veces: por eso hay convar para el A/B, el
+instrumento imprime el `bit.band` contra `CONTENTS_MOVEABLE` (check 01) **y** hay un check que la
+mide por su efecto con la máscara equivocada puesta a propósito (check 04) — la predicción es
+asimétrica entre las dos clases de puerta, que es lo que la vuelve discriminante.
+
+**Atravesar y abrir quedan independientes y los dos prendidos**, que es lo que piden los dos mensajes
+del autor: atravesar garantiza que **pase**, abrir es lo que deja la **huella**. El check 08 vigila
+justo el riesgo de que ahora que nunca se traba, la escalera de apertura no llegue a dispararse.
+
+### El riesgo del mecanismo, y las tres defensas
+
+`MASK_NPCWORLDSTATIC` ignora **todos** los brush entities mientras dura, no sólo las puertas: en un
+mapa cuyo piso sea un `func_brush`, el fantasma se cae del mundo. Mitigaciones: se vuelve no-sólido
+sólo a **45 u** de una puerta (no a los 200 del sondeo), y se sale por una puerta de emergencia con
+**tres** condiciones — que no haya una hoja encima, medio segundo de gracia, y un techo duro de 5 s
+con enfriamiento. La gracia existe por algo que **no se pudo medir sin el juego**: qué devuelve un
+`TraceHull` que arranca dentro de un sólido. *La defensa que no depende de esa respuesta está ahí
+justamente porque la otra sí.*
+
+Planilla: [`dev/checks/phantasmagoria-atraviesa-r2.html`](../dev/checks/phantasmagoria-atraviesa-r2.html),
+**9 filas, ninguna corrida**.
+
+---
+
+## 2026-08-06 (6) — ESCRITO, sin correr: la velocidad se deriva del jugador y el fantasma abre las puertas
+
+**Nada de esto se corrió en GMod.** La planilla es
+[`dev/checks/phantasmagoria-veldoors-r1.html`](../dev/checks/phantasmagoria-veldoors-r1.html), 14
+filas, criterios escritos **antes**.
+
+### La velocidad — un callback declarado, no un override
+
+El fantasma corría a **550 u/s** (la `RunSpeed` de la base, que no pisaba) contra los **280** de
+Better Movement: **1,96×**, y al revés de lo que manda §1.1. Ahora sale de `sv_bm_speed_run` —
+**no** de `ply:GetRunSpeed()`, que Better Movement multiplica por un factor dinámico clampeado 1..2
+y devuelve entre 280 y 560 según el instante.
+
+Se engancha en `ModifyMovementSpeed` (`motionoverrides.lua:3803`), que **es un callback de tarea y no
+un método**: `RunTask` sólo llama a las tareas activas, así que un `ENT:ModifyMovementSpeed` no lo
+llamaría nadie. Vive en `ENT.MyClassTask`, el punto de extensión que la base declara para esto
+(`taskoverride.lua:328`). Efecto lateral útil: la tarea aparece **por nombre**
+(`terminator_nextbot_phantom_handler`) en la lista de `phantasmagoria_ghost_where`, o sea que «se
+enganchó» es una línea de la salida y no una suposición.
+
+**Devuelve un factor y no un absoluto**, para no borrar la elección de marcha de la base (walk 130 /
+move 300 / run 550 siguen existiendo, escalados). Y el divisor se **congela al spawnear**: leído en
+vivo, `overcharging.lua:22` (`RunSpeed = max( RunSpeed * 1.40, 550 )`) se cancelaría solo y el
+fantasma volvería a su velocidad normal justo cuando el mecanismo dice que tiene que acelerar.
+
+### Las puertas — la tercera opción, que es mejor que las dos que estaban escritas
+
+ESTADO.md dejaba abierto «atravesar o arreglar el bashing». El autor eligió **abrir**: atravesar es
+gratis de programar y **regala la huella**, que es una de las 7 evidencias y el motivo que él nombró.
+
+Lo que la base hace y por qué no alcanza, leído: `tryToOpen` (`shared.lua:1249`) sí abre puertas,
+pero tiene **un solo call site** — `ShootblockerThink` (`:1109`), que traza a lo largo del **aim
+vector**. Este fantasma es justamente el que no apunta a donde camina. Y las dos ramas que lo sacan
+de una puerta trabada piden `isFists` (`:1336`, `:1340`): **muertas** sin puños.
+
+Lo escrito: un sondeo propio con `TraceHull` a lo largo del **path** (con la marcha y el cuerpo como
+respaldo, y la fuente usada impresa), alcance proporcional a la velocidad — media hoja de puerta
+tarda ~1 s en abrirse y a 280 u/s eso son 280 u, así que un alcance fijo corto la abre cuando ya la
+chocó. Después una escalera de tres peldaños **contados por separado**: `Use2` (el camino de la
+base) → `OpenAwayFrom` → `Fire Open`, más el destrabado, que va primero porque un `Use` sobre una
+puerta con llave no hace nada. Si el peldaño 1 alcanza siempre, los otros dos son código muerto y la
+corrida lo va a decir.
+
+**El síntoma sigue sin medir, y por eso hay cronómetro.** *«Suele quedarse pegado abriéndolas»* es una
+frase del autor. `phantom_doorBlocked` corre **aunque la convar esté apagada** y anota contra qué se
+trabó: una puerta **cerrada** es lo que este bloque arregla; una **abierta encima suyo** no, y ahí el
+arreglo no sería el arreglo. Los checks 11 y 12 son esa medición y su control.
+
+**La huella se guarda como dato** con la forma de §8.5 (`pos`, `normal`, `hand`, `expire`) más la
+puerta y el punto **relativo a ella**: una `prop_door_rotating` gira, y una huella guardada como
+punto de mundo queda flotando en el aire apenas la puerta se mueve. No se dibuja nada — eso es el
+bloque de la UV — y queda `hook.Run( "PhantasmagoriaGhostUsedDoor", ghost, door )` para engancharlo.
+
+### Límite declarado antes de correr
+
+Una `prop_door_rotating` **con llave** marca como bloqueado el navarea de abajo (lo dice la base en
+`shared.lua:657`), así que el camino puede evitarla y el fantasma no llegar nunca a tocarla — y el
+destrabado, que es por contacto, no se dispara. El check 10 está escrito para distinguir ese caso
+(«nunca la tuvo delante») de uno nuestro («la tuvo delante y no destrabó»).
+
+### Instrumentos nuevos
+
+`phantasmagoria_ghost_speed` (la cadena entera: convar → base → multiplicador → factor → las tres
+marchas → lo que el locomotion tiene puesto) y `phantasmagoria_ghost_doors` (+ `reset`, para que el
+A/B no arrastre contadores). Los dos números que más dicen —velocidad y segundos trabado— van también
+en una línea de `phantasmagoria_ghost_where`, que es el comando que se tipea todo el tiempo.
+
+---
+
 ## 2026-08-06 (5) — CERRADO en juego: el fantasma mira hacia donde camina, y una columna se invalidó al arreglarlo
 
 Criterio escrito **antes** de correr, cumplido en las dos mitades:

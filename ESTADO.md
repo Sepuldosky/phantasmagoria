@@ -40,16 +40,30 @@ Lo que existe:
 | Detector de addons duplicados | **ESCRITO** — `lua/autorun/phantasmagoria_assetcheck.lua` |
 | Entidad `terminator_nextbot_phantom` | **CORRIENDO EN JUEGO** — `lua/entities/terminator_nextbot_phantom/`, 3 archivos. Check de 5 filas **cerrado en verde** |
 | Interruptor fantasma / cazador | **CERRADO EN JUEGO** — el primer comportamiento propio. Tabla de 10 filas (6 verdes) + planilla de 8 (7 pasa, 1 falla), y la falla **cerrada en la corrida 8**. §3.1 **refutado en juego** |
+| Velocidad derivada del jugador (§1.1) | **ANDA EN JUEGO, sin planilla** — `objetivo 280`, `deseada 66/280`. Medido por consola, no llenando `veldoors-r1`: las filas siguen sin marcar |
+| Las puertas: abrir y destrabar | **ABRE Y DESTRABA, pero NO ALCANZÓ** — `peor 3,6 s` contra un `func_door_rotating` (fila 11 de `veldoors-r1` en **rojo**, que es lo que estaba escrita para hacer) |
+| Las puertas: **atravesar** | **CERRADO EN JUEGO** — `atraviesa-r2`: **7 pasa / 2 falla**, `peor` 3,6 s → **0,7 s**, control negativo y máscara confirmados. Las 2 fallas eran **un defecto del instrumento**, no del mecanismo |
+| Los flags de puerta (abrir / silencio) | **CORRIDOS Y ROJOS** — `flags-r3`: 3 pasa / 5 falla. Ninguna falla era del mecanismo: 4 instrumento + 1 hueco de diseño. Todas arregladas, sin correr |
+| ⚠ Colisión ConVar/ConCommand | **ARREGLADA Y BLINDADA** — `PHANTASMAGORIA.AddCommand` se niega y grita si el nombre ya es convar. Costó **dos filas** de la ronda 2 |
+| ⚠ El veto de apertura no cubría a la base | **ARREGLADO** — `TerminatorBlockUse`. *Apagar lo nuestro no apagaba el comportamiento*: la base abre puertas por su cuenta |
+| Andamio para mover flags en juego | **CERRADO EN JUEGO** — `phantasmagoria_ghost_flag`; el reporte nombra la capa que ganó (override / campo / convar) |
+| El veto de apertura | **CERRADO EN JUEGO** — `veto-r4`: con `opendoors 0` las puertas no se abren y `VETADAS` sube (161 en una corrida) |
+| Correr cazando | **CERRADO EN JUEGO** (`silencio-r5`) — el flag ya es legible y el reporte dice quién decidió la marcha. Falta que el que camina camine **también sin verte**: arreglado, sin correr |
+| El silencio de las puertas | **MECANISMO CAMBIADO ENTERO** — el hook `EntityEmitSound` está **ciego** server-side (bitácora vacía). Ahora se le borran a la puerta sus 7 keyvalues, como hace `Immersive Door Openable`. Planilla `phantasmagoria-keyvalues-r6`, 6 filas |
+| ⚠ Riesgo nuevo: puertas mudas | El silencio **borra un dato del mapa**, no bloquea un sonido. Hay contador de *puertas mudas ahora mismo*, un `devuelto` por cada `silenciado`, y `phantasmagoria_ghost_doors restore` |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
 | Corridas en GMod | **8** (2026-08-05 ×3; 2026-08-06 ×5) — refutaron **dos** predicciones del documento y **una lectura mía sobre la causa del giro**; destaparon **13** defectos: **12 del instrumento y 1 del fantasma**, y el del fantasma ya está **cerrado en juego** |
 
 ---
 
-## 🔜 Traspaso al próximo bloque: **velocidad** y **puertas**
+## **Velocidad** y **puertas** — ESCRITO, sin correr
 
-Dos temas que el autor eligió para seguir, con lo que ya está leído y medido. **Nada de esto se
-escribió**; es el punto de partida para no volver a leerlo.
+**El bloque ya está escrito** (2026-08-06): `server_speed.lua` y `server_doors.lua`, colgados de
+`ENT.MyClassTask`. La planilla es [`dev/checks/phantasmagoria-veldoors-r1.html`](../dev/checks/phantasmagoria-veldoors-r1.html)
+— **14 filas, ninguna corrida**. Lo que sigue es la lectura de la que salió, que se conserva porque
+es lo que hay que releer si algún check sale rojo; **la decisión de las puertas cambió** y está al
+final de esta sección.
 
 ### A. La velocidad — hay un hook declarado, no hace falta overridear nada
 
@@ -108,23 +122,160 @@ mi `ShouldBeEnemy` hace tomar siempre (`shared.lua:1387`) está **después** de 
 `prop_door_rotating` (`:1334`), que es la puerta común de GMod y gana antes. Sólo afecta a otros
 bloqueadores.
 
-**Y ojo con el marco del diseño:** un fantasma de Phasmophobia **atraviesa** las puertas, así que
-«arreglar el bashing» y «dejarlo pasar» son dos diseños distintos y hay que elegir cuál. Lo que ya
-está en el árbol para el primero: `terminator_doorbash.lua` (`terminator_Extras.CanBashDoor`,
-`:32`), `ENT:CanBashLockedDoor` (`shared.lua:2330`) y `ENT:BashLockedDoor` (`:2344`).
+### La elección que este documento dejaba abierta, ya tomada por el autor
+
+Decía: *un fantasma de Phasmophobia **atraviesa** las puertas, así que «arreglar el bashing» y
+«dejarlo pasar» son dos diseños distintos y hay que elegir cuál.* **La respuesta del autor fue una
+tercera, y es mejor que las dos:** ni atravesar ni romper — **abrir**. *«Lo único importante es que
+pase las puertas; cuando lo haga, que la active y la abra físicamente, eso deja la evidencia de la
+huella en la puerta.»*
+
+Atravesar habría sido lo más barato de programar y **regala la huella**, que es una de las 7
+evidencias y la tienen 13 de los 30 tipos. El bashing queda descartado con lo suyo sin usar
+(`terminator_doorbash.lua`, `ENT:CanBashLockedDoor` en `shared.lua:2330`, `ENT:BashLockedDoor` en
+`:2344`).
+
+**Y la hipótesis de arriba no se dio por buena.** *«Suele quedarse pegado abriéndolas»* sigue **sin
+medir**, así que el código trae un cronómetro (`phantom_doorBlocked`) que corre **aunque la convar
+esté apagada** y que anota **contra qué** se trabó: una puerta *cerrada* es lo que este bloque
+arregla; una *abierta encima suyo* no, y en ese caso el arreglo no sería el arreglo. Los checks 11 y
+12 de la planilla son esa medición y su control.
+
+**Límite declarado antes de correr:** una `prop_door_rotating` con llave marca como **bloqueado** el
+navarea de abajo (lo dice la base en `shared.lua:657`), así que el camino puede evitarla y el
+fantasma no llegar nunca a tocarla — y el destrabado, que es por contacto, no se dispara. El check 10
+está escrito para separar ese caso («nunca la tuvo delante») de uno nuestro («la tuvo delante y no
+destrabó»).
+
+---
+
+## Abrir no alcanzó: ahora **atraviesa**, y es un flag por NPC
+
+La corrida del autor (por consola, no con la planilla) dejó la velocidad andando —`objetivo 280`,
+`deseada 66` caminando y `280` corriendo— y **`peor 3,6 s` contra un `func_door_rotating`**. La fila
+11 hizo exactamente lo que estaba escrita para hacer: convirtió *«suele quedarse pegado»* en un
+número **y nombró la clase**, que es lo que cambia el diagnóstico.
+
+**Y la clase destapó un defecto propio:** `OpenAwayFrom` es entrada de `CBasePropDoor`, o sea **sólo
+`prop_door_rotating`**. Sobre un `func_door_rotating` el `Fire` no hace nada y no avisa — el peldaño 2
+de la escalera se consumía entero sin tocar la puerta. Corregido.
+
+Lo nuevo es `ENT.phantom_PhasesDoors` (no una convar: el Alternate no puede atravesar, y los 30 tipos
+lo heredan en `true` sin escribir nada), con `phantasmagoria_ghost_phasedoors` de tres estados para
+el A/B. **El mecanismo tiene dos precedentes en el árbol** —`wraithcloaking.lua:133` y HIM
+`server.lua:630`, los dos con `SetSolidMask`— **y usan máscaras distintas**: difieren en
+`CONTENTS_MOVEABLE`, el bit de los brush entities, o sea de la puerta que efectivamente lo trabó. Va
+`MASK_NPCWORLDSTATIC`, la de HIM.
+
+**Atravesar y abrir siguen siendo dos cosas y las dos están prendidas:** atravesar garantiza que
+*pase*, abrir es lo que deja la *huella*.
+
+---
+
+## Ronda 2 CERRADA: atraviesa. Y el defecto que costó las dos filas que fallaron
+
+`peor` bajó de **3,6 s a 0,7 s**, el control negativo volvió a trabarlo, y la máscara quedó medida
+**por su efecto** (con la del wraith puesta a propósito, *«sí se queda pillado en la puerta del
+brush»*) — así que `CONTENTS_MOVEABLE` es el bit que decide, por medición y no por citar la constante.
+
+**Las dos fallas tenían una sola causa y era mía: `phantasmagoria_ghost_doors` era a la vez convar y
+comando.** La consola resuelve convars primero, así que el comando quedó **mudo** — sin error, sin
+aviso. El instrumento de puertas fue inalcanzable toda la ronda (de ahí *«¿dónde veo el dato de la
+evidencia?»*), y la propia planilla mandaba correr `phantasmagoria_ghost_doors reset`, que en vez de
+limpiar contadores le ponía **0** a la convar y **apagaba la apertura justo antes de medirla**.
+
+*Una ConVar y un ConCommand no pueden compartir nombre, y el que pierde es el comando, en silencio.*
+Vale para todo el taller de GMod. Arreglado con `PHANTASMAGORIA.AddCommand`, que se niega y grita, y
+censadas **las siete convars y los seis comandos**.
+
+Entran además los dos flags pedidos —`phantom_OpensDoors` y `phantom_SilentDoors`— con la misma
+convención que `phantom_PhasesDoors`. **El silencio son dos sonidos distintos:** el click del bot
+(que se apaga adelantando el debounce que la propia base consulta) y el chirrido de la hoja (que lo
+emite el **engine**, y sólo se puede interceptar con `EntityEmitSound` — eso es lectura, no medición).
+
+---
+
+## Ronda 3: 5 rojos, y ninguno era del mecanismo que el check decía medir
+
+**El que ordena a los demás:** con `opendoors 0` el instrumento decía `abre NO` y el fantasma seguía
+abriendo — y las dos cosas eran ciertas, porque **la base abre puertas por su cuenta**
+(`tryToOpen` → `Use2`, disparado por `ShootblockerThink` cada 0,1 s). *Apagar nuestra implementación
+no es apagar el comportamiento cuando el comportamiento también vive en el tercero*, y el modo de
+falla es el más caro: **el instrumento decía la verdad sobre lo nuestro mientras el juego mostraba
+otra cosa.** El veto va ahora en `TerminatorBlockUse`, el hook que la base declara adentro de `Use2`.
+
+Los otros cuatro, en una línea cada uno:
+
+- **`ABRIO 0 fallo 3`** con las puertas abriéndose a la vista: leí un estado **transitorio** como
+  final, y el propio reporte lo tenía escrito al lado (*«en movimiento»*).
+- **«Todavía no vio ninguna puerta»** viéndolas: el `return` temprano se llevaba el instrumento junto
+  con la función, así que *«no vio»* y *«vio y se abstuvo»* daban el mismo cero.
+- **El silencio seguía sonando**: la ventana de 1,5 s se cerraba **antes del golpe de llegada**. Son
+  3 s, y hay bitácora porque *«sigue sonando»* no dice **quién** suena.
+- **Los flags no se podían probar**: el `lua_run` escribe en la entidad y **se pierde al respawnear**,
+  sin que nada lo diga. *Un andamio de prueba tiene que sobrevivir al ciclo de vida de lo que prueba.*
+
+Y entró lo de la fila 09: **cazando corre**. La causa estaba medida en la base — `canDoRun` se niega
+si el bot no está enojado, te ve, y tiene la vida entera; las tres se cumplen siempre en un hunt
+normal. Va con `phantom_WalksWhenHunting` para los tipos que acechan caminando.
+
+---
+
+## Ronda 4: 9 verdes. Las dos fallas no eran del mecanismo
+
+Quedaron confirmados en juego los cinco arreglos de la ronda 3. Las dos que fallaron:
+
+- **Un campo pisado por un método del mismo nombre.** `ENT.phantom_WalksWhenHunting` era campo y
+  método a la vez; como los `include` corren después, la función ganaba y el resolvedor leía una
+  función creyendo que el flag no estaba declarado. Se veía en **cada línea** del reporte
+  (`campo = function: 0x8088…`) **y el check pasó igual**, porque el default de esa rama coincidía
+  con lo esperado. *Un default que coincide con lo esperado convierte un campo roto en un check
+  verde.* Hay guarda, y corre **después** de los includes: antes, el pisado todavía no ocurrió.
+- **El silencio sigue sin medirse, tres rondas.** No es que falle: **no se corre**. La precondición
+  pedía que un fantasma silenciado abriera una puerta justo mientras el autor escuchaba. *Un check
+  cuya precondición no se puede provocar no es un check* — y marcado como FALLA se lee como un
+  mecanismo roto. Hay botón: `phantasmagoria_ghost_testdoor`.
+
+Y una corrección de método: **`ShouldRun` dejó de ser un callback de tarea porque era una carrera.**
+`RunTask` corta en el primer callback no-nil y el de `movement_followenemy` devuelve **`false`**
+(no `nil`) cuando el path es corto — o sea cuando ya te alcanzó. Ganar dependía del orden de las
+tareas, que ni siquiera es estable. *Un punto de extensión que depende del orden de ejecución no es
+un punto de extensión.* Ahora se overridea el método y se encadena.
+
+---
+
+## Ronda 5: el silencio falló por cuarta vez, y por fin con veredicto
+
+**La bitácora salió VACÍA** con la ventana abierta, la puerta abriéndose y el sonido oyéndose — no
+registró ni un sonido bloqueado ni uno sin bloquear. *Un log vacío donde tenía que haber algo vale
+más que uno lleno: descarta la familia entera de hipótesis, no una.* `GM:EntityEmitSound`
+**server-side no ve** esos sonidos, porque no nacen en Lua del servidor.
+
+**El camino bueno lo señaló el autor** y su aporte no es código: son **siete nombres de keyvalue**.
+`Immersive Door Openable` (WSID `3717549037`, desempacado en `dev/other/`) no engancha nada — le pisa
+a la puerta sus propios campos de sonido con `""` antes de moverla y se los devuelve después. Así el
+sonido **no llega a existir**. `noise1`/`noise2` para `CBaseDoor` y los cinco `sound*override` para
+`CBasePropDoor`, y `noise2` es el **golpe de llegada**: justo el que se venía oyendo desde la ronda 3.
+
+**Riesgo nuevo, y es de otra clase:** ya no bloqueamos un sonido, **borramos un dato del mapa**. Una
+puerta que no recupere sus valores queda muda para todos, para siempre.
+
+Y dos observaciones del autor que eran diseño: que el que camina cazando **corría al perderte de
+vista** (yo dejaba decidir a la base, que sólo se niega a correr cuando te ve), y el rescate de la
+**hoja que se abre encima** —17,6 s clavado— con su condición: sólo si la puerta está **ABIERTA**.
 
 ---
 
 ## El próximo paso concreto
 
-**El interruptor está cerrado.** Lo que sigue son dos cosas, en el orden que decida el autor:
-**la velocidad** (el fantasma va a 1,96× la carrera del jugador, contra lo que pide §1.1) y
-**la cordura** (§19), que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`.
+**Correr `phantasmagoria-keyvalues-r6`** (6 filas). La **03** es la más importante aunque parezca la
+más aburrida: que las puertas recuperen su sonido **solas**. Las otras dos que valen: la **01** y la
+**02**, el silencio y su control, pendientes desde hace cuatro rondas.
 
-El giro en calma **ya está cerrado en juego** (corrida 8: `mirada vs marcha` 74,4° → **1,9°**, y
-`mirada vs jugador` siguió grande). Queda **la velocidad**: el fantasma corre a `550 u/s`, que es
-**1,96×** la carrera del jugador, contra lo que pide §1.1 — la conversión ya está diseñada y no
-escrita. Y después **la cordura** (§19), que es la que tiene que reemplazar al andamio
+Queda pendiente cerrar `veldoors-r1` como planilla, sobre todo el A/B de la fila **12**, que nunca se
+corrió.
+
+Después de eso, **la cordura** (§19), que es la que tiene que reemplazar al andamio
 `phantasmagoria_hunt`.
 
 ---

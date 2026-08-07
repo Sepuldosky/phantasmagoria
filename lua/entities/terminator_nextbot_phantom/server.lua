@@ -14,6 +14,27 @@ local function ghostPrint( ... )
 
 end
 
+-- La mesa compartida del addon. Existe desde antes ( lua/phantasmagoria/ y el
+-- espejo del cliente la usan ) y aca se crea a la defensiva porque este archivo
+-- puede cargar primero. Sirve para que los archivos de al lado -- server_speed
+-- y server_doors -- alcancen los helpers de este sin duplicarlos: include()
+-- corre otro chunk, y un local no cruza.
+PHANTASMAGORIA = PHANTASMAGORIA or {}
+PHANTASMAGORIA.Print = ghostPrint
+
+-- ANDAMIO. Overrides de flags puestos por consola, que GANAN sobre el campo de
+-- la clase y valen tambien para los fantasmas que todavia no existen.
+--
+-- Nace de un problema real de la ronda 3: el autor no pudo probar los flags. El
+-- lua_run que le di escribe en la ENTIDAD, y cada fantasma nuevo nace con el
+-- default de su clase -- asi que el cambio se perdia al respawnear, sin que
+-- nada lo dijera. Su propia conclusion fue "lo mejor es tener una toolgun dev
+-- para agregar flags"; esto es la version barata de eso, y la toolgun sigue
+-- siendo la buena cuando existan los 30 tipos.
+--
+-- Se borra con phantasmagoria_ghost_flag <nombre> auto.
+PHANTASMAGORIA.FlagOverrides = PHANTASMAGORIA.FlagOverrides or {}
+
 -- Segundos entre "spawneo con 0 navareas" y volver a medir. El parcheador de la
 -- base trabaja de a poco, asi que medir en el mismo frame no dice nada.
 local NAVCHECK_DELAY = 10
@@ -29,39 +50,69 @@ local NAVCHECK_DELAY = 10
 -- El criterio de que un modelo sirva NO es el esqueleto: es que declare
 -- $includemodel models/m_anm.mdl, porque la base mueve el cuerpo con
 -- activities ACT_MP_* del set de player de HL2MP (Referencia 10).
+-- EL SKIN VIAJA CON EL MODELO Y NO SUELTO, y no es prolijidad: el 1 se eligio
+-- por lo que significa EN scaryblackman ( ojos blancos, Referencia 10 ) y no
+-- quiere decir nada en otro modelo. Con el skin como campo aparte, cambiar de
+-- modelo se lo lleva puesto en silencio -- shared.lua:2989 lo aplica si es
+-- numero, sin preguntar si ese modelo tiene tantos skins.
 local MODEL_CANDIDATES = {
-    -- El elegido: m_anm, hull identico al de Arnold, 54 flexcontrollers.
-    -- Viene de otro addon del Workshop, NO esta en este repo.
-    "models/dejtriyev/scaryblackman.mdl",
+    -- EL DE PRUEBAS, por pedido del autor ( 2026-08-06 ): el cadaver de HL2.
+    -- Es el mismo que usa HIM sobre ESTA MISMA BASE ( him/.../homeless/shared.lua:12 ),
+    -- que es la mejor evidencia posible de que sirve: no es un modelo parecido,
+    -- es el mismo modelo corriendo en el mismo cerebro, en produccion.
+    --
+    -- OJO CON LA CARPETA, y esto ya costo caro una vez en este taller ( la
+    -- lesson de hatman: dos archivos con el mismo nombre en carpetas distintas
+    -- son binarios distintos ). Existen los dos:
+    --
+    --   models/humans/corpse1.mdl    el cadaver NPC/prop de HL2
+    --   models/player/corpse1.mdl    el playermodel de GMod, con m_anm
+    --
+    -- y hace falta EL SEGUNDO, porque el criterio de la base no es el
+    -- esqueleto sino el $includemodel models/m_anm.mdl. No hay que deducirlo:
+    -- HIM trae una tabla de traduccion que hace exactamente ese mapeo
+    -- ( sv_zhomeless_shelter.lua:52 ), o sea que el tercero ya tropezo y dejo
+    -- escrito el arreglo.
+    --
+    -- Y no es el quemado: el quemado es "charple" ( humans/charple01 ->
+    -- player/charple en la misma tabla ). corpse1 es el otro.
+    { mdl = "models/player/corpse1.mdl" },
+
+    -- El del DISENO, que vuelve cuando esta entidad deje de ser un instrumento.
+    -- m_anm, hull identico al de Arnold, 54 flexcontrollers. Viene de otro addon
+    -- del Workshop y NO esta en este repo.
+    { mdl = "models/dejtriyev/scaryblackman.mdl", skin = 1 }, -- Referencia 10: skin 1 = ojos blancos
+
     -- Del que deriva el anterior. Viene con GMod.
-    "models/player/group01/male_04.mdl",
+    { mdl = "models/player/group01/male_04.mdl" },
 }
 
 local function pickModel()
-    for _, mdl in ipairs( MODEL_CANDIDATES ) do
-        if util.IsValidModel( mdl ) then return mdl end
+    for _, cand in ipairs( MODEL_CANDIDATES ) do
+        if util.IsValidModel( cand.mdl ) then return cand end
 
     end
 
     -- Ultimo recurso: la cadena literal "terminator", que shared.lua:2983
     -- traduce al modelo de la convar termhunter_modeloverride (Arnold por
     -- default). Feo a proposito: si sale Arnold, el modelo no esta montado.
-    return "terminator"
+    return { mdl = "terminator" }
 
 end
 
-local chosenModel = pickModel()
+local chosen = pickModel()
 
-if chosenModel ~= MODEL_CANDIDATES[ 1 ] then
-    ghostPrint( "el modelo ", MODEL_CANDIDATES[ 1 ], " no esta montado. Uso ", chosenModel, " en su lugar.\n" )
+if chosen ~= MODEL_CANDIDATES[ 1 ] then
+    ghostPrint( "el modelo ", MODEL_CANDIDATES[ 1 ].mdl, " no esta montado. Uso ", chosen.mdl, " en su lugar.\n" )
 
 end
 
-ENT.Models = { chosenModel }
+ENT.Models = { chosen.mdl }
 
--- Referencia 10: skin 0 = silueta negra sin ojos, skin 1 = ojos blancos.
--- Se aplica en shared.lua:2989 solo si es numero. Alternable con SetSkin.
-ENT.ModelSkin = 1
+-- Nil cuando el modelo no declara skin propio: shared.lua:2989 solo lo aplica
+-- "if isnumber( myTbl.ModelSkin )", asi que nil deja el 0 del modelo y no
+-- inventa un indice que ese .mdl puede no tener.
+ENT.ModelSkin = chosen.skin
 
 ---------------------------------------------------------------------------
 -- Desarmado
@@ -73,6 +124,56 @@ ENT.ModelSkin = 1
 -- Las dos son correctas para un fantasma, pero explican comportamiento raro.
 ENT.DefaultWeapon = false
 ENT.TERM_FISTS    = false
+
+---------------------------------------------------------------------------
+-- ATRAVIESA LAS PUERTAS
+---------------------------------------------------------------------------
+-- Un fantasma de Phasmophobia atraviesa las puertas; el Alternate de Mandela
+-- Catalogue ( docs/ALTERNATE.md ) NO. Por eso esto es un FLAG DE CLASE y no una
+-- convar: cada NPC del addon decide, y la convar
+-- phantasmagoria_ghost_phasedoors solo existe para pisarlo en las dos
+-- direcciones durante una corrida.
+--
+-- Heredable por el arbol de bases: los 30 tipos de Diseno 12.2 van a colgar de
+-- esta clase y lo reciben en true sin escribir nada; el Alternate, cuando
+-- exista, pone false y con eso alcanza.
+--
+-- ATRAVESAR Y ABRIR SON DOS COSAS Y LAS DOS SIGUEN PRENDIDAS, que es lo que
+-- pidio el autor en los dos mensajes: atravesar es lo que garantiza que PASE
+-- ( antes se trababa 3,6 s contra un func_door_rotating ), y abrir es lo que
+-- deja la HUELLA, que fue el motivo por el que se eligio abrir en vez de
+-- atravesar en el bloque anterior. Se apagan por separado
+-- ( phantasmagoria_ghost_opendoors 0 deja el atravesado sin la apertura ).
+ENT.phantom_PhasesDoors = true
+
+-- Abrir puertas cerradas, tambien por NPC. Pedido del autor en la ronda 2, y
+-- sale de una observacion suya: "intenta casi siempre abrir puertas". El flag
+-- es lo que deja que eso sea una caracteristica de ALGUNOS tipos y no del motor
+-- -- en Phasmophobia abrir una puerta es un EVENTO, no una constante.
+--
+-- OJO CON LO QUE ESTO NO ES: el flag prende y apaga la capacidad, no su
+-- frecuencia. Que "casi siempre" intente abrir sigue siendo cierto con el flag
+-- en true, y si lo que molesta es la frecuencia hace falta otra cosa
+-- ( un intervalo o una probabilidad por tipo, que es Diseno 5 ). Se deja dicho
+-- para que no se lea como resuelto.
+ENT.phantom_OpensDoors = true
+
+-- Y el silencio, que arranca APAGADO a proposito. El ruido de las puertas es lo
+-- que le dejo al autor ver el comportamiento del fantasma adentro de la casa,
+-- asi que sacarlo por default seria sacarle un instrumento. El flag existe para
+-- los tipos que tienen que ser sigilosos -- el Myling de Diseno 5 camina en
+-- silencio cazando, y es exactamente esto.
+ENT.phantom_SilentDoors = false
+
+-- Caminar cazando, tambien por NPC. Sale de una observacion del autor en la
+-- ronda 3 -- "suele caminar al hacer hunting y correr cuando no me ve; podria
+-- correr igualmente directo a mi" -- y la causa esta medida en la base:
+-- canDoRun se niega si el bot no esta enojado, TE VE y tiene la vida entera.
+-- El detalle en server_speed.lua.
+--
+-- Arranca en false: cazando CORRE. El flag existe para los tipos que acechan
+-- caminando ( el Deogen de Diseno 5, que se arrastra cuando esta cerca ).
+ENT.phantom_WalksWhenHunting = false
 
 ---------------------------------------------------------------------------
 -- EL INTERRUPTOR FANTASMA / CAZADOR
@@ -280,6 +381,14 @@ function ENT:AdditionalInitialize()
     self.Term_FOV      = 180
     self.AutoUpdateFOV = false -- HIM pone nil aca ( server.lua:852 ); las dos son falsy
 
+    -- La RunSpeed DECLARADA por la base, congelada en el unico momento en que
+    -- se sabe limpia. Es el divisor de la conversion de velocidad
+    -- ( server_speed.lua ) y NO se lee en vivo a proposito: overcharging.lua:22
+    -- hace "self.RunSpeed = math.max( self.RunSpeed * 1.40, 550 )", y un divisor
+    -- en vivo cancelaria el overcharge en silencio -- el fantasma volveria a su
+    -- velocidad normal justo cuando el mecanismo dice que tiene que acelerar.
+    self.phantom_BaseRunSpeed = self.RunSpeed
+
     -- Sincroniza el NW var con el campo. Va ANTES del return temprano de abajo:
     -- si queda del otro lado, el marcador del cliente miente en todo mapa que
     -- tenga navmesh, que son casi todos.
@@ -375,6 +484,43 @@ local function makeSay( ply )
 
         end
     end
+end
+
+-- Compartido a proposito: todo comando nuevo que imprima por su cuenta vuelve a
+-- caer en el pozo de 255 bytes, y el aviso del engine no dice cual linea perdio.
+PHANTASMAGORIA.MakeSay = makeSay
+
+---------------------------------------------------------------------------
+-- Registrar un comando, con la guarda que costo una ronda entera
+---------------------------------------------------------------------------
+-- UNA CONVAR Y UN CONCOMMAND NO PUEDEN LLAMARSE IGUAL, Y EL QUE PIERDE ES EL
+-- COMANDO, EN SILENCIO. concommand.Add lo registra igual -- no devuelve error,
+-- no avisa -- pero la consola resuelve el nombre contra las convars primero,
+-- asi que tipearlo imprime la ficha de la convar y el comando no corre nunca.
+--
+-- Medido en la ronda 2 (2026-08-06) y costo DOS filas de la planilla: yo habia
+-- creado la convar phantasmagoria_ghost_doors y el comando
+-- phantasmagoria_ghost_doors. El instrumento de puertas fue INALCANZABLE toda
+-- la ronda -- el autor lo reporto como "donde veo el dato de la evidencia (?)"
+-- y la respuesta era que no habia forma de verlo. Y lo peor no fue eso: la
+-- planilla mandaba correr "phantasmagoria_ghost_doors reset", que en vez de
+-- resetear contadores le asignaba "reset" a la convar, o sea 0, o sea APAGABA
+-- la apertura de puertas justo antes de medirla.
+--
+-- Por eso el registro pasa por aca y no por concommand.Add directo: la
+-- colision se vuelve un error ruidoso al cargar en vez de un comando mudo.
+function PHANTASMAGORIA.AddCommand( name, fn, help )
+    if ConVarExists( name ) then
+        ErrorNoHalt( "[Phantasmagoria] COLISION DE NOMBRE: '" .. name .. "' ya existe como CONVAR, " ..
+            "asi que el comando homonimo queda inalcanzable ( la consola resuelve convars primero ). " ..
+            "Renombrar uno de los dos.\n" )
+        return false
+
+    end
+
+    concommand.Add( name, fn, nil, help )
+    return true
+
 end
 
 ---------------------------------------------------------------------------
@@ -519,7 +665,9 @@ local function eachGhost( fn )
 
 end
 
-concommand.Add( "phantasmagoria_ghost_where", function( ply )
+PHANTASMAGORIA.EachGhost = eachGhost
+
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_where", function( ply )
     local say = makeSay( ply )
 
     local found = eachGhost( function( ghost )
@@ -547,6 +695,24 @@ concommand.Add( "phantasmagoria_ghost_where", function( ply )
 
         lookLines( ghost, say )
 
+        -- UNA linea de cada bloque nuevo, no su reporte entero: para eso estan
+        -- phantasmagoria_ghost_speed y phantasmagoria_ghost_doors. Van aca
+        -- porque durante una corrida el comando que se tipea todo el tiempo es
+        -- este, y las dos cosas que cambiaron son justamente las que no se ven
+        -- desde adentro del juego.
+        local loco = ghost.loco
+
+        say( "    veloc   deseada " .. math.Round( loco and loco:GetDesiredSpeed() or -1 ) .. " u/s" ..
+            "   real " .. math.Round( ghost:GetCurrentSpeed() ) .. " u/s" ..
+            ( ghost.phantom_speedDbg and ( "   objetivo " .. math.Round( ghost.phantom_speedDbg.target ) .. " u/s" ) or "   ( sin convertir todavia )" ) )
+
+        local door = ghost.phantom_doorLast
+
+        say( "    puerta  " .. ( IsValid( door ) and door:GetClass() or "ninguna delante" ) ..
+            "   trabado " .. string.format( "%.1f", ghost.phantom_doorBlocked or 0 ) .. " s" ..
+            "   peor " .. string.format( "%.1f", ghost.phantom_doorWorst or 0 ) .. " s" ..
+            "   " .. ( ghost.phantom_Phasing and "ATRAVESANDO" or "solido" ) )
+
         -- una por linea: son el dato que mas dice y el que mas largo se pone
         if #tasks <= 0 then
             say( "    tareas  ninguna" )
@@ -568,7 +734,7 @@ concommand.Add( "phantasmagoria_ghost_where", function( ply )
 
     say( "[Phantasmagoria] " .. found .. " fantasma(s). Navareas en el mapa: " .. navmesh.GetNavAreaCount() .. "." )
 
-end, nil, "Imprime donde esta cada fantasma de Phantasmagoria, y si el mapa tiene navmesh." )
+end, "Imprime donde esta cada fantasma de Phantasmagoria, y si el mapa tiene navmesh." )
 
 ---------------------------------------------------------------------------
 -- Instrumento: a quien odia, y por que
@@ -594,7 +760,7 @@ local function dispName( d )
 
 end
 
-concommand.Add( "phantasmagoria_ghost_rel", function( ply )
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_rel", function( ply )
     local say = makeSay( ply )
 
     local found = eachGhost( function( ghost )
@@ -654,7 +820,7 @@ concommand.Add( "phantasmagoria_ghost_rel", function( ply )
         say( "[Phantasmagoria] no hay ningun fantasma vivo." )
 
     end
-end, nil, "Imprime, por fantasma y por jugador, la relacion cacheada y el resultado en vivo de ShouldBeEnemy." )
+end, "Imprime, por fantasma y por jugador, la relacion cacheada y el resultado en vivo de ShouldBeEnemy." )
 
 ---------------------------------------------------------------------------
 -- ANDAMIO: el gatillo manual del hunt
@@ -677,7 +843,7 @@ local function adminOnly( ply )
 
 end
 
-concommand.Add( "phantasmagoria_hunt", function( ply, _, args )
+PHANTASMAGORIA.AddCommand( "phantasmagoria_hunt", function( ply, _, args )
     if not adminOnly( ply ) then return end
 
     local say = makeSay( ply )
@@ -718,7 +884,7 @@ concommand.Add( "phantasmagoria_hunt", function( ply, _, args )
     say( "[Phantasmagoria] " .. found .. " fantasma(s) en " .. ( hunting and "HUNT" or "calma" ) ..
         ". Solo se movio el flag: ni la relacion ni la memoria se tocaron." )
 
-end, nil, "ANDAMIO. Prende ( 1 ) o apaga ( 0 ) el hunt de todos los fantasmas. Lo va a reemplazar la cordura." )
+end, "ANDAMIO. Prende ( 1 ) o apaga ( 0 ) el hunt de todos los fantasmas. Lo va a reemplazar la cordura." )
 
 -- CONTROL del contador de arriba, no mecanismo.
 --
@@ -740,7 +906,7 @@ end, nil, "ANDAMIO. Prende ( 1 ) o apaga ( 0 ) el hunt de todos los fantasmas. L
 -- porque no declaramos ExtraSpawnHealthPerPlayer. El dia que se declare, este
 -- comando INFLA la vida del fantasma cada vez que se lo llama -- que es
 -- precisamente por que es un control de desarrollo y no una mecanica.
-concommand.Add( "phantasmagoria_hunt_reeval", function( ply )
+PHANTASMAGORIA.AddCommand( "phantasmagoria_hunt_reeval", function( ply )
     if not adminOnly( ply ) then return end
 
     local say = makeSay( ply )
@@ -763,4 +929,130 @@ concommand.Add( "phantasmagoria_hunt_reeval", function( ply )
         say( "[Phantasmagoria] no hay ningun fantasma vivo." )
 
     end
-end, nil, "CONTROL. Re-dispara SetupEntityRelationship por jugador, para probar que el contador de re-evaluaciones esta vivo." )
+end, "CONTROL. Re-dispara SetupEntityRelationship por jugador, para probar que el contador de re-evaluaciones esta vivo." )
+
+---------------------------------------------------------------------------
+-- ANDAMIO: mover los flags sin lua_run
+---------------------------------------------------------------------------
+-- La ronda 3 no pudo medir DOS filas por esto, y la causa no era el mecanismo:
+-- el lua_run que le di al autor escribe el campo en la ENTIDAD, y todo fantasma
+-- spawneado despues nace con el default de la clase. El override se perdia al
+-- respawnear y nada lo decia -- se lee como "el flag no funciona".
+--
+-- La regla que deja: un ANDAMIO de prueba tiene que sobrevivir al ciclo de vida
+-- de lo que prueba. Si para volver a medir hay que re-aplicarlo a mano, la
+-- medicion depende de que nadie se olvide, y alguien se olvida.
+--
+-- Los nombres cortos son a proposito: se tipean en juego, con el fantasma
+-- encima. "auto" borra el override y devuelve el mando al campo de la clase.
+local FLAGS = {
+    [ "abrir" ]     = { campo = "phantom_OpensDoors",       que = "abre puertas cerradas" },
+    [ "atravesar" ] = { campo = "phantom_PhasesDoors",      que = "atraviesa las puertas" },
+    [ "silencio" ]  = { campo = "phantom_SilentDoors",      que = "abre sin hacer ruido" },
+    [ "caminar" ]   = { campo = "phantom_WalksWhenHunting", que = "camina en vez de correr cazando" },
+}
+
+local FLAG_ORDER = { "abrir", "atravesar", "silencio", "caminar" }
+
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_flag", function( ply, _, args )
+    if not adminOnly( ply ) then return end
+
+    local say  = makeSay( ply )
+    local name = args and args[ 1 ]
+    local val  = args and args[ 2 ]
+    local flag = name and FLAGS[ string.lower( name ) ]
+
+    if not flag or ( val ~= "0" and val ~= "1" and val ~= "auto" ) then
+        say( "[Phantasmagoria] uso: phantasmagoria_ghost_flag <nombre> <0|1|auto>" )
+        say( "    auto = sin override, manda el campo de cada clase de fantasma." )
+
+        for _, key in ipairs( FLAG_ORDER ) do
+            local f   = FLAGS[ key ]
+            local ov  = PHANTASMAGORIA.FlagOverrides[ f.campo ]
+
+            say( "    " .. key .. string.rep( " ", 11 - #key ) ..
+                ( ov == nil and "auto" or ( ov and "1   " or "0   " ) ) ..
+                "  " .. f.campo .. "   ( " .. f.que .. " )" )
+
+        end
+
+        return
+
+    end
+
+    if val == "auto" then
+        PHANTASMAGORIA.FlagOverrides[ flag.campo ] = nil
+
+    else
+        PHANTASMAGORIA.FlagOverrides[ flag.campo ] = val == "1"
+
+    end
+
+    -- El override NO toca los campos de las entidades: lo consulta el
+    -- resolvedor, antes del campo. Asi se puede volver a "auto" sin haber
+    -- pisado nada, que es lo que un lua_run no permite deshacer.
+    local vivos = eachGhost( function() end )
+
+    say( "[Phantasmagoria] " .. name .. " -> " .. val ..
+        "   ( " .. flag.campo .. ", " .. flag.que .. " )" )
+    say( "    alcanza a los " .. vivos .. " fantasma(s) vivos Y a los que spawneen despues." )
+    say( "    verificar con phantasmagoria_ghost_doors: la linea dice el motivo que gano." )
+
+end, "ANDAMIO. Pisa un flag de comportamiento en todos los fantasmas, vivos y futuros. Sin argumentos lista los cuatro." )
+
+---------------------------------------------------------------------------
+-- LA TAREA DE CLASE, y los dos bloques que cuelgan de ella
+---------------------------------------------------------------------------
+-- ENT.MyClassTask es el punto de extension que la base declara para agregar
+-- comportamiento propio sin reescribir el cerebro ( taskoverride.lua:328-332,
+-- "Simple way to add class-specific behaviour to a bot" ). DoClassTasks recorre
+-- el arbol de bases, levanta el MyClassTask de cada clase y lo registra como
+-- "<clase>_handler" con StartsOnInitialize forzado ( :344-358 ), o sea que la
+-- nuestra se va a llamar terminator_nextbot_phantom_handler y va a APARECER POR
+-- NOMBRE en la lista de tareas de phantasmagoria_ghost_where. "Se engancho" deja
+-- de ser una suposicion y pasa a ser una linea de la salida.
+--
+-- Se declara VACIA aca y la llenan los dos archivos de abajo, cada uno con su
+-- callback. Si alguno la declarara por su cuenta, el segundo pisaria al primero
+-- y el sintoma seria un bloque entero que no corre, sin un solo error.
+--
+-- La lee scripted_ents.GetStored( clase ).t ( terminator_nextbot_base/shared.lua:169 ),
+-- que es la tabla REGISTRADA -- y GMod registra la entidad recien despues de
+-- correr shared.lua entero, includes adentro. Por eso alcanza con definirla
+-- aca abajo y no hace falta adelantarla.
+ENT.MyClassTask = {}
+
+-- Diseno 1.1: la velocidad se deriva de la carrera real del jugador.
+include( "server_speed.lua" )
+
+-- Pedido del autor: que PASE las puertas, abriendolas fisicamente.
+include( "server_doors.lua" )
+
+---------------------------------------------------------------------------
+-- GUARDA: un campo pisado por un metodo del mismo nombre
+---------------------------------------------------------------------------
+-- DEFECTO MEDIDO EN LA RONDA 4. ENT.phantom_WalksWhenHunting era un CAMPO
+-- ( false ) y en server_speed.lua habia un METODO homonimo. Como los includes
+-- corren despues, la funcion pisaba al campo: el resolvedor leia una funcion
+-- -- que no es true ni false -- y caia a la rama "el flag es nil".
+--
+-- Se veia en cada linea del reporte ( "campo = function: 0x8088..." ) y aun asi
+-- el check que lo ejercia PASO, porque el default de la rama nil coincidia con
+-- lo que se esperaba. *Un default que coincide con lo esperado convierte un
+-- campo roto en un check verde*, y eso no lo agarra ninguna corrida: lo agarra
+-- una guarda o nadie.
+--
+-- Corre DESPUES de los dos includes a proposito: antes de ellos el pisado
+-- todavia no ocurrio, y una guarda que mira demasiado temprano es una guarda
+-- que siempre pasa. Y la lista sale de FLAGS, o sea de la misma tabla que usa
+-- el comando: si aparece un flag nuevo, queda cubierto sin tocar esto.
+for _, key in ipairs( FLAG_ORDER ) do
+    local campo = FLAGS[ key ].campo
+
+    if isfunction( ENT[ campo ] ) then
+        ErrorNoHalt( "[Phantasmagoria] EL CAMPO '" .. campo .. "' esta PISADO por un metodo del mismo " ..
+            "nombre. El resolvedor va a leer una funcion y va a creer que el flag no esta declarado, " ..
+            "sin tirar error. Renombrar el metodo.\n" )
+
+    end
+end
