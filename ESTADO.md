@@ -42,12 +42,28 @@ en «Ronda 7 corrida».
 > que **el rescate existe y no rescató**, y no hay ningún instrumento que diga por qué.
 
 **Lo pendiente ahora, en orden** (prompt del chat siguiente en
-[`dev/PROMPT_phantasmagoria_encaje_y_pisadas.txt`](../dev/PROMPT_phantasmagoria_encaje_y_pisadas.txt)):
+[`dev/PROMPT_phantasmagoria_encaje.txt`](../dev/PROMPT_phantasmagoria_encaje.txt) — el punto 2 de
+abajo **ya se hizo**, y el prompt viejo `…_encaje_y_pisadas.txt` queda sólo como registro):
 
 1. **El encaje contra el techo.** Primero el instrumento —que `reallystuck_handler` diga cuándo
    arranca y qué hace— y recién después tocar el salto. La hipótesis del autor (*«tal vez se
    soluciona evitando que salte tanto»*) es razonable y **no está medida**; darla por buena antes de
    instrumentar es exactamente lo que costó las rondas 5 y 6.
+
+   > **Hay tres mecanismos candidatos leídos en la base, y ninguno medido.** El más fuerte:
+   > **el teletransporte está vetado mientras el bot te ve** — `shared.lua:3868` es
+   > `if not myTbl.IsSeeEnemy and extremeUnstucking:GetBool() and ( extremeStuck or not canGotoEscape )`.
+   > Si se encaja saltando hacia vos, sigue viéndote, cae siempre al `elseif` de `:3899` y lo único
+   > que hace es volver a intentar **caminar** a un costado, cada 10 s, para siempre. Los otros dos:
+   > **detectarlo tarda ~80 s si no está en el piso** (`noNav`, `:3714`, exige `IsOnGround`, y sin él
+   > `size` queda en 80 en vez de 10 con una inserción por segundo), y **la primera pasada nunca es
+   > la del teletransporte** (`IsUnderDisplacement` mide terreno, no props, así que `extremeStuck` da
+   > false). Detalle y anclas en el prompt.
+   >
+   > **Y la base regala el botón:** `myTbl.overrideVeryStuck` (`:3747`, usado en el `if` de `:3816`)
+   > fuerza la rama de rescate en ~1 s, sin esperar los 80. Permite el A/B de `IsSeeEnemy` **sin
+   > encajar al bot de verdad** — pero eso mide *qué rama toma el rescate*, no *que un bot encajado
+   > llegue a ella*. Las dos mediciones hacen falta y son fáciles de confundir.
 2. **El silencio de las PISADAS, por flag** — **CORRIDO, 4 de 8 cerradas** (2026-08-07). Es
    `server_steps.lua`. **La restricción del autor quedó CERRADA en juego** —39 pisadas calladas y
    publicadas al consumidor— y las otras cuatro filas se marcaron verdes sin la medición que pedían.
