@@ -41,13 +41,37 @@ en «Ronda 7 corrida».
 > (`reallystuck_handler`, que teletransporta o borra) y está registrado en nuestro fantasma — o sea
 > que **el rescate existe y no rescató**, y no hay ningún instrumento que diga por qué.
 
-**Lo pendiente ahora, en orden:**
+**Lo pendiente ahora, en orden** (prompt del chat siguiente en
+[`dev/PROMPT_phantasmagoria_encaje_y_pisadas.txt`](../dev/PROMPT_phantasmagoria_encaje_y_pisadas.txt)):
 
 1. **El encaje contra el techo.** Primero el instrumento —que `reallystuck_handler` diga cuándo
    arranca y qué hace— y recién después tocar el salto. La hipótesis del autor (*«tal vez se
    soluciona evitando que salte tanto»*) es razonable y **no está medida**; darla por buena antes de
    instrumentar es exactamente lo que costó las rondas 5 y 6.
-2. **La cordura (§19)**, que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`.
+2. **El silencio de las PISADAS, por flag** — pedido del autor (2026-08-07). En Phasmophobia el
+   fantasma suena al caminar **en hunt y en eventos**, no siempre, así que esto depende del estado
+   igual que `phantom_Hunting`. El Myling (§5) es el tipo que camina callado: es exactamente este
+   flag, como `phantom_SilentDoors` lo fue para las puertas.
+
+   > **Y la restricción es la INVERSA de la de las puertas, y la puso el autor antes de que se
+   > escribiera una línea: el Paramic tiene que poder oírlas después.** Con las puertas el silencio
+   > se hizo **borrando un dato** —las siete keyvalues— y ahí está bien. Acá no: la pisada tiene que
+   > **seguir ocurriendo** como evento, con su posición y su intensidad, y lo único que se apaga es
+   > que el jugador la escuche. *Silenciar no puede significar «que no pase»; tiene que significar
+   > «que no se oiga», con el hecho intacto para el que después lo vaya a medir.* Si se implementa
+   > borrando la pisada, el bloque del Paramic va a tener que volver a tocar este archivo y el
+   > síntoma va a ser un Paramic que no detecta nada, sin un solo error.
+
+   Los dos puntos de extensión, leídos: **`ENT:AdditionalFootstep( footPos, foot, stepSound, volume,
+   filter )`** (`footsteps.lua:203`) es un stub declarado por la base para esto —*«if it returns
+   true, blocks default sound playing»*— y **recibe `footPos`**, o sea que es el lugar donde se sabe
+   que hubo una pisada y dónde. Y **`ENT:IsSilentStepping()`** (`sharedextras.lua:7`) es el
+   interruptor propio de la base, pero lo consulta en ~11 lugares —aterrizajes, caídas,
+   `MetallicMoveSounds`, y el click de `Use2`—: apagarlo apaga toda esa familia, no sólo las
+   pisadas. Y el gancho para el consumidor va como el de las puertas
+   (`hook.Run( "PhantasmagoriaGhostUsedDoor", … )`), por el mismo motivo: el productor es este
+   bloque y el consumidor es otro.
+3. **La cordura (§19)**, que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`.
 
 ### Revisión con ojos frescos, ANTES de correr — dos arreglos entraron encima
 
