@@ -175,6 +175,23 @@ ENT.phantom_SilentDoors = false
 -- caminando ( el Deogen de Diseno 5, que se arrastra cuando esta cerca ).
 ENT.phantom_WalksWhenHunting = false
 
+-- Y las PISADAS, pedido del autor del 2026-08-07. Mismo molde que el silencio
+-- de las puertas: arranca en false ( suenan ) y el flag existe para el tipo que
+-- camina callado, que es el Myling de Diseno 5.
+--
+-- OJO CON LEER ESTE false COMO "el fantasma hace ruido siempre": el flag es UNA
+-- de las dos causas de silencio. La otra es la regla de estado
+-- ( phantasmagoria_ghost_stepsonlyhunt, default 1 ), que calla a CUALQUIER
+-- fantasma fuera del hunt porque en Phasmophobia el fantasma suena al caminar
+-- en hunt y en eventos, no siempre. Las dos viven en server_steps.lua y el
+-- reporte dice cual gano.
+--
+-- Y la restriccion que lo separa del silencio de puertas, que es la inversa:
+-- aca la pisada TIENE QUE SEGUIR OCURRIENDO como evento, porque el Paramic
+-- ( Diseno 7 ) la va a tener que oir. Silenciar es "que no se oiga", no "que no
+-- pase". El detalle esta en el encabezado de server_steps.lua.
+ENT.phantom_SilentSteps = false
+
 ---------------------------------------------------------------------------
 -- EL INTERRUPTOR FANTASMA / CAZADOR
 ---------------------------------------------------------------------------
@@ -950,9 +967,10 @@ local FLAGS = {
     [ "atravesar" ] = { campo = "phantom_PhasesDoors",      que = "atraviesa las puertas" },
     [ "silencio" ]  = { campo = "phantom_SilentDoors",      que = "abre sin hacer ruido" },
     [ "caminar" ]   = { campo = "phantom_WalksWhenHunting", que = "camina en vez de correr cazando" },
+    [ "pasos" ]     = { campo = "phantom_SilentSteps",      que = "camina sin hacer ruido ( el Myling )" },
 }
 
-local FLAG_ORDER = { "abrir", "atravesar", "silencio", "caminar" }
+local FLAG_ORDER = { "abrir", "atravesar", "silencio", "caminar", "pasos" }
 
 PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_flag", function( ply, _, args )
     if not adminOnly( ply ) then return end
@@ -1027,6 +1045,18 @@ include( "server_speed.lua" )
 
 -- Pedido del autor: que PASE las puertas, abriendolas fisicamente.
 include( "server_doors.lua" )
+
+-- Pedido del autor: que se le pueda quitar el sonido a las PISADAS, con la
+-- restriccion de que el Paramic tenga que poder oirlas despues.
+--
+-- VA DESPUES DE server_doors.lua Y NO ES INDISTINTO: PHANTASMAGORIA.ResolveFlag
+-- se define alli, y este archivo lo consume. server_speed.lua tiene el problema
+-- al reves -- se incluye ANTES y lo resuelve en tiempo de ejecucion, con una
+-- guarda -- y ese desorden ya esta anotado en ESTADO.md como pendiente. No se
+-- arregla en esta ronda a proposito: mover ResolveFlag es un cambio de cero
+-- comportamiento, y meterlo en la misma ronda que un mecanismo nuevo convierte
+-- un rojo en un misterio.
+include( "server_steps.lua" )
 
 ---------------------------------------------------------------------------
 -- GUARDA: un campo pisado por un metodo del mismo nombre

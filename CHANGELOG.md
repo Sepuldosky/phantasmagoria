@@ -7,6 +7,83 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-07 (14) — El silencio de las PISADAS, y **silenciar no puede significar «que no pase»**
+
+`server_steps.lua`. Planillas `dev/checks/phantasmagoria-pisadas-r8.html` (8 filas) y `-r8b.html`
+(4 filas), las dos **corridas**.
+
+### La restricción del autor es la inversa de la de las puertas, y es lo que le da forma al archivo
+
+*«El quitarle el sonido de los pasos debe ser coherente con que después el Paramic los va a poder
+escuchar.»* Con las puertas el silencio se hizo **borrando un dato** —las siete keyvalues— y ahí está
+bien. Acá no: la pisada tiene que **seguir ocurriendo**, con su posición y su intensidad, y lo único
+que se apaga es que el jugador la escuche. Por eso el `hook.Run( "PhantasmagoriaGhostFootstep", … )`
+corre **antes** del `return true` que silencia, y `callada` viaja **como dato** en vez de decidir si
+el evento existe.
+
+**Cerrado en juego:** el consumidor de prueba recibió **39 pisadas en 15 s, las 39 calladas**, cada
+una con posición, pie, volumen y superficie, mientras el jugador no oía ninguna.
+
+### ESTADO.md nombraba el punto de extensión equivocado, y era el mismo error de siempre
+
+Decía que `IsSilentStepping()` *«apaga toda esa familia, no sólo las pisadas»*. Se censaron los
+**seis** call sites de `MakeFootstepSound` y es al revés: **no tapa ninguna pisada.** Ni la de
+caminar (`ProcessFootsteps`, `behaviouroverrides.lua:141`, no lo consulta), ni la del salto
+(`motionoverrides.lua:2997`, con el chequeo en **:2999**, o sea *después*), ni las tres del
+aterrizaje. Sólo la de la caída letal, y de rebote.
+
+*No es una palanca gruesa: son dos palancas para dos familias y hacen falta las dos.* Sin
+`IsSilentStepping` un fantasma «callado» sigue sonando al aterrizar, porque la base trae
+`MetallicMoveSounds = true` (`shared.lua:161`) y este fantasma no lo pisa.
+
+### Y ese override abría una fuga que no es un sonido
+
+`LethalFallDamage` (`motionoverrides.lua:3577`) empieza con `if self:IsSilentStepping() then return
+end` y el `TakeDamage( math.huge )` está **adentro**, en `:3596`. Ese `return` no se lleva sólo tres
+`EmitSound`: se lleva la muerte. **Un flag de sonido habría regalado inmunidad a la caída letal.** Hay
+override propio que repone el daño, y quedó medido: `silencio SI` → `vida 900 → -2147482748`.
+
+### El agujero de la base, convertido en número
+
+`footsteps.lua:330` hace `if not stepSound then return end` **antes** de llamarnos, así que una
+superficie sin sonido de pisada tira el evento y el Paramic no lo vería. No se puede tapar sin
+reescribir `MakeFootstepSound` (la base pide que no), pero sí medirlo: un envoltorio que sólo cuenta
+da `PERDIDAS = pasos − vistas`. **`PERDIDAS 0` en las nueve lecturas, sobre cuatro fantasmas** —
+hasta las superficies sin datos propios devuelven `default.stepleft`.
+
+De paso salió el dato que el Paramic va a necesitar: el volumen viaja por superficie —`concrete 0,8`,
+`dirt 0,4`, `cardboard 0,4`, **`wood 1`**—, y la madera es la más fuerte porque **no está en la tabla
+de materiales de la base** (`footsteps.lua:265-286`) y cae al default.
+
+### Tres defectos de instrumento, los tres míos
+
+- **La fila del salto no se podía provocar.** De las tres filas que necesitaban forzar algo, dos
+  tenían botón (`listen`, `falltest`) y la del salto dependía de que el bot decidiera saltar solo. La
+  nota que la cerró —*«no escuche nada ni saltos ni nada»*— no distingue **«saltó y no sonó»** de
+  **«nunca saltó»**, que es la única diferencia que esa fila existía para medir. *La regla estaba
+  escrita en la planilla y la incumplí escribiendo la planilla.* Ahora hay `… steps jump`.
+- **La bitácora identificaba al fantasma por `EntIndex`, y GMod lo reusa.** Seis líneas decían todas
+  `#1340` con los pasos yendo 1 → 38 → 182 → 215 → **1**: no era un contador retrocediendo, era el
+  fantasma que murió en el `falltest` y el que se spawneó después compartiendo etiqueta. *Una
+  etiqueta que se repite entre dos objetos distintos no identifica: agrupa.* Ahora `#1340/c37`.
+- **La ayuda de `_stepsilent` prometía un control que no da.** Decía *«0 = ninguno camina en
+  silencio ( control )»*, copiada de las tres convars de puertas, donde hay **una** sola causa de
+  silencio; acá hay dos y esta perilla gobierna una. La fila del control negativo se corrió mal **dos
+  rondas seguidas** con el mismo síntoma: poner la perilla en 0, seguir sin oír nada, y que el
+  reporte nombrara sólo la otra causa. **La perilla que acababas de mover no aparecía en la
+  respuesta.** Arreglado en los dos lados: la ayuda ya no promete un control global, y `la decidio`
+  imprime la capa tapada.
+
+### Y la plantilla de checks eran cuatro cosas a reemplazar, no cuatro
+
+Al reciclar la r7 la planilla salió con el `<title>` de la ronda anterior —el nombre de la pestaña, o
+sea justo lo que se ve **antes** de abrir el archivo—, y la r7 arrastraba **dos** `</footer>` con un
+párrafo huérfano de la r6 entre medio. No lo agarró la lista de cosas a cambiar: lo agarró un chequeo
+que buscaba **arrastre del bloque anterior**. *Una lista de N ítems sólo encuentra los N que alguien
+ya sabía.* `dev/PLANTILLA_CHECKS.md` corregido.
+
+---
+
 ## 2026-08-06 (11) — Ronda 5 CORRIDA (5 pasa / 2 falla): **el sonido de una puerta no se intercepta, se le borra a la puerta**
 
 `dev/checks/phantasmagoria-silencio-r5.html`. El campo pisado quedó arreglado (`campo = false` en el

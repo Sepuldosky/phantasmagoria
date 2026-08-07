@@ -48,7 +48,13 @@ en «Ronda 7 corrida».
    arranca y qué hace— y recién después tocar el salto. La hipótesis del autor (*«tal vez se
    soluciona evitando que salte tanto»*) es razonable y **no está medida**; darla por buena antes de
    instrumentar es exactamente lo que costó las rondas 5 y 6.
-2. **El silencio de las PISADAS, por flag** — pedido del autor (2026-08-07). En Phasmophobia el
+2. **El silencio de las PISADAS, por flag** — **CORRIDO, 4 de 8 cerradas** (2026-08-07). Es
+   `server_steps.lua`. **La restricción del autor quedó CERRADA en juego** —39 pisadas calladas y
+   publicadas al consumidor— y las otras cuatro filas se marcaron verdes sin la medición que pedían.
+   Re-corrida en
+   [`dev/checks/phantasmagoria-pisadas-r8b.html`](../dev/checks/phantasmagoria-pisadas-r8b.html),
+   **4 filas**. Ver «Ronda 8 CORRIDA» más abajo. Pedido del
+   autor (2026-08-07). En Phasmophobia el
    fantasma suena al caminar **en hunt y en eventos**, no siempre, así que esto depende del estado
    igual que `phantom_Hunting`. El Myling (§5) es el tipo que camina callado: es exactamente este
    flag, como `phantom_SilentDoors` lo fue para las puertas.
@@ -65,12 +71,25 @@ en «Ronda 7 corrida».
    Los dos puntos de extensión, leídos: **`ENT:AdditionalFootstep( footPos, foot, stepSound, volume,
    filter )`** (`footsteps.lua:203`) es un stub declarado por la base para esto —*«if it returns
    true, blocks default sound playing»*— y **recibe `footPos`**, o sea que es el lugar donde se sabe
-   que hubo una pisada y dónde. Y **`ENT:IsSilentStepping()`** (`sharedextras.lua:7`) es el
-   interruptor propio de la base, pero lo consulta en ~11 lugares —aterrizajes, caídas,
-   `MetallicMoveSounds`, y el click de `Use2`—: apagarlo apaga toda esa familia, no sólo las
-   pisadas. Y el gancho para el consumidor va como el de las puertas
+   que hubo una pisada y dónde. Y el gancho para el consumidor va como el de las puertas
    (`hook.Run( "PhantasmagoriaGhostUsedDoor", … )`), por el mismo motivo: el productor es este
    bloque y el consumidor es otro.
+
+   > ⚠ **Este párrafo decía sobre `IsSilentStepping()` algo que es falso, y se corrige acá porque es
+   > el documento de traspaso.** Decía que *«lo consulta en ~11 lugares […]: apagarlo apaga toda esa
+   > familia, no sólo las pisadas»*. Se censaron los **seis** call sites de `MakeFootstepSound` y es
+   > al revés: **no tapa ninguna pisada.** Ni la de caminar —`ProcessFootsteps`
+   > (`behaviouroverrides.lua:141`) no lo consulta en ningún lado—, ni la del salto
+   > (`motionoverrides.lua:2997`, con el chequeo en **:2999**, o sea *después*), ni las tres del
+   > aterrizaje (`:3459`, `:3474`, `:3485`, con sus chequeos en la línea siguiente). El único que sí
+   > tapa es el de la caída letal (`:3599`), y de rebote, por el `return` de `:3578`.
+   >
+   > O sea que **no es una palanca gruesa: son dos palancas para dos familias, y hacen falta las
+   > dos.** `AdditionalFootstep` para la pisada; `IsSilentStepping` para todo lo que la rodea —sin
+   > eso, un fantasma «callado» sigue sonando al aterrizar, porque la base trae
+   > `ENT.MetallicMoveSounds = true` (`shared.lua:161`) y este fantasma no lo pisa. Es la regla 2 en
+   > miniatura. *El error no era de matiz: apuntaba al candado equivocado, que es lo que este
+   > proyecto ya pagó dos veces.*
 3. **La cordura (§19)**, que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`.
 
 ### Revisión con ojos frescos, ANTES de correr — dos arreglos entraron encima
@@ -100,6 +119,141 @@ referencia:
 llevan `<code>`/`<strong>`, así que los siete títulos se leían literales. La corrección anterior
 había arreglado el criterio y se olvidó del encabezado. Arreglado, con `plain()` para que el
 reporte que se pega en el chat no salga con tags.
+
+---
+
+## Ronda 8 CORRIDA (2026-08-07) — la planilla marcó 8 de 8, y **cuatro lo están**
+
+**Lo que cerró es lo que más importaba: la restricción del autor.** Con las pisadas silenciadas, el
+consumidor de prueba recibió **39 pisadas en 15 s, las 39 calladas**, cada una con posición, pie,
+volumen y superficie, mientras el jugador no oía ninguna. *Silenciar significó «que no se oiga» y no
+«que no pase»*, medido con un tercero enganchado al hook público y no con nuestros contadores.
+
+| Fila | Qué quedó medido |
+|---|---|
+| **01** | `pasos 45 · el gancho vio 45 · PERDIDAS 0`. **El agujero de `footsteps.lua:330` no mordió**: incluso las superficies sin datos propios devuelven `default.stepleft`. Es la primera buena noticia concreta para el bloque del Paramic |
+| **02** | **39 de 39 calladas y publicadas.** La fila entera del bloque |
+| **04** | El flag por NPC calla (8 de 8 con el override en 1) |
+| **05** | Las dos primeras lecturas de la regla de estado, con motivos **distintos**: `no esta cazando…` → `CALLADA`, y `esta cazando, y el flag … dice NO` → `SUENA` |
+
+**Y de paso salió un dato que nadie pidió y que el Paramic va a necesitar:** el volumen viaja por
+superficie — `concrete 0,8`, `dirt 0,4`, `cardboard 0,4`, **`wood 1`**. La madera es la más fuerte
+justamente porque **no está en la tabla de materiales de la base** (`footsteps.lua:265-286` sólo
+nombra CONCRETE, METAL, DIRT, VENT, GRATE, TILE, SLOSH) y cae al default `volume = 1`.
+
+### Las cuatro que no midieron lo que decían
+
+- **La 03 tiene su rojo escrito en su propia nota.** Con `stepsilent 0` el oyente recibió **11
+  pisadas y las 11 calladas** — que es *textualmente* su criterio de FALLA. Se puso verde después de
+  mover **otra** convar (`stepsonlyhunt 0`), o sea midiendo el mecanismo de la fila 05 en el lugar de
+  la 03. La precondición pedía `phantasmagoria_hunt 1` y no estaba puesto, y la propia fila decía qué
+  hacer con eso: **Sin correr**. *Sigue sin medirse que el estado `0` le gane a un flag que dice SÍ,
+  que es lo único que lo hace un control.*
+- **La 06 no se puede leer.** La nota fue *«no escuche nada ni saltos ni nada»*, y esa frase **no
+  distingue «saltó y no sonó» de «nunca saltó»** — que es exactamente la diferencia que esa fila
+  existía para medir, porque los metálicos sólo viven en el salto y el aterrizaje. **El defecto es
+  del instrumento y es mío:** de las tres filas que necesitaban provocar algo, dos tenían botón
+  (`listen`, `falltest`) y ésta dependía de que el bot decidiera saltar solo. *La regla estaba escrita
+  en la planilla y la incumplí escribiendo la planilla.* Ahora hay `phantasmagoria_ghost_steps jump`.
+- **La 07 no tiene un solo número.** Ninguna salida de `falltest`, ninguna línea `vida N → 0`, y sin
+  decir con qué `stepsilent` se corrió — y la mitad que importa es la de `2`, porque con `0` el
+  override delega en la base y no prueba nada. Que el fantasma se haya muerto en pantalla no es la
+  medición: la medición era el número de los dos lados.
+- **La 08 se cerró con la nota vacía.**
+
+### El defecto de instrumento que destapó la corrida
+
+**La bitácora identificaba al fantasma por `EntIndex`, y GMod lo reusa.** Sus seis líneas decían
+todas `#1340` y los pasos iban 1 → 38 → 182 → 215 → **1**: no era un contador retrocediendo, era el
+fantasma que murió en el `falltest` y el que se spawneó después compartiendo etiqueta. *Una etiqueta
+que se repite entre dos objetos distintos no identifica: agrupa.* Ahora imprime `#1340/c37`.
+
+## Ronda 8b CORRIDA — la fuga CERRADA, y la fila del control se corrió mal **por segunda vez**
+
+**Lo que cierra, y es lo que la r8 no había medido:**
+
+- **La fuga de la caída letal está TAPADA, con número.** `silencio SI` → `vida 900 → -2147482748`.
+  Con el silencio puesto el fantasma **muere igual**: el override repone el `TakeDamage` que el
+  `return` de `motionoverrides.lua:3578` se llevaba. Era el riesgo de comportamiento del bloque y
+  queda medido del lado que importa.
+- **El botón `jump` funciona y la fila 06 dejó de ser inprovocable.** Cuatro saltos forzados,
+  `pasos 47 → 48`, `49 → 50`, `51 → 52`, `54 → 55`, y el de calma contado como `callada` (8 → 13 sin
+  mover `sonadas`). El arreglo de método aterrizó.
+- **La bitácora ya distingue fantasmas:** `#1323/c6335` y `#1317/c6519` conviven en el mismo log.
+- **La línea cruzada del reporte de puertas anda:** `pisadas: stepsilent 0 · stepsonlyhunt 1`.
+- **Y `pasos = el gancho vio` en las nueve lecturas, con `PERDIDAS 0` en las nueve**, sobre cuatro
+  fantasmas distintos. El agujero de `footsteps.lua:330` está medido y no muerde.
+
+### La fila del control negativo se corrió mal otra vez, y la culpa es de una etiqueta que miente
+
+La fila pedía `stepsilent 0`. **Las cinco líneas `convars:` de esa nota dicen `stepsilent 1`**, y la
+lectura ③ —la que la r8 tampoco hizo, y que es la única que prueba que el `0` le gana a un flag que
+dice SÍ— sigue sin correrse. Lo que se midió es, otra vez, la regla de estado.
+
+**Pero el defecto de fondo apareció en la fila 04 y es real:** con `stepsilent 0` y el fantasma fuera
+del hunt, el reporte dice `CALLADA`. Es correcto —son dos causas independientes— pero la ayuda de la
+convar decía *«0 = ninguno camina en silencio ( control )»*, copiada de las tres de puertas, donde hay
+**una** sola causa. *La etiqueta prometía un control global que el mecanismo no da*, y el síntoma fue
+el mismo las dos rondas: poner la perilla en 0, seguir sin oír nada, y que el reporte nombrara sólo
+la otra causa. **La perilla que acababas de mover no aparecía en la respuesta.** Arreglado en los dos
+lados: la ayuda ya no promete un control global, y `la decidio` imprime ahora la capa tapada
+(`[ la otra capa, tapada por esta: … ]`).
+
+### Lo que queda sin medir, y es chico
+
+- El **③** de la fila 01: `stepsilent 0` contra un flag en 1.
+- La **mitad audible del salto**: los tres primeros saltos ocurrieron con el fantasma en `SUENA` y no
+  hay veredicto de oído sobre ellos; la nota *«no sonó nada cuando saltó»* está escrita después del
+  salto silenciado. Sin esa mitad, «no se oyó» no distingue el silencio de que no hubiera nada que
+  tapar.
+- Los pasos **②③④** de la fila 04: que `stepsilent 2` mate el click de la puerta (el acople que
+  documenté), el listado de **cinco** flags, y `doorsilent 2`.
+
+Nada de eso bloquea el bloque: son coberturas, no defectos abiertos. Van a la próxima ronda.
+
+---
+
+> **Y una observación que no es de este bloque y conviene no perder:** el `_where` de la fila 01
+> muestra `hunt NO` con `veloc deseada 252 u/s`. En calma la conversión daba **60** (ronda 6:
+> `130 × 252/550 = 59,6`). No lo toca nada de `server_steps.lua`, y esta ronda no lo midió — pero
+> está en la salida que pegó el autor y merece una lectura antes de la próxima de velocidad.
+
+---
+
+## Las pisadas — el bloque escrito (2026-08-07)
+
+`server_steps.lua`, colgado de `server.lua` **después** de `server_doors.lua` (consume
+`PHANTASMAGORIA.ResolveFlag`). Planilla
+[`phantasmagoria-pisadas-r8.html`](../dev/checks/phantasmagoria-pisadas-r8.html), **8 filas**.
+
+**La restricción del autor es lo que da forma al archivo, y es la inversa de la de las puertas:** el
+Paramic tiene que poder oír las pisadas después. Por eso el `hook.Run( "PhantasmagoriaGhostFootstep",
+ghost, paso )` corre **antes** del `return true` que silencia, y `callada` viaja **como dato** en vez
+de decidir si el evento existe. Si alguien invierte esas dos líneas, el síntoma es un Paramic que no
+detecta nada sin un solo error.
+
+| Qué entró | Por qué |
+|---|---|
+| Override de **`AdditionalFootstep`** (`footsteps.lua:203`) | Es el stub declarado para esto, y cubre los **seis** call sites de `MakeFootstepSound`, salto y aterrizaje incluidos |
+| Override de **`IsSilentStepping`** | La otra mitad: sin él el fantasma «callado» sigue sonando al aterrizar. Ver la corrección de arriba |
+| Campo `ENT.phantom_SilentSteps` + convar `_stepsilent` (0/1/2) | El flag del **Myling**, con la convención de la casa. Entra a `FLAGS`, así que lo cubren el comando **y** la guarda del campo pisado |
+| Convar `_stepsonlyhunt` (0/1, **default 1**) | La regla de estado: en Phasmophobia suena en hunt y en eventos, no siempre. **Cambia lo de hoy** — deambulando pasa a ser mudo; `0` devuelve el comportamiento anterior y es el control |
+| Envoltorio contador de `MakeFootstepSound` | Mide el agujero de `footsteps.lua:330` (`if not stepSound then return end`, *antes* de llamarnos): `pasos - vistas` = pisadas que el Paramic no va a ver nunca |
+| `phantasmagoria_ghost_steps listen [seg]` | **El botón.** Engancha un consumidor de verdad al hook público. Sin él, «la pisada se sigue publicando» no se puede provocar — y un check cuya precondición no se puede provocar no es un check |
+| `phantasmagoria_ghost_steps falltest` | El botón de la fila 07, porque la rama pide una caída de **2000 u** |
+| Una línea nueva en el reporte de **puertas** | Silenciar pisadas también calla el click de `Use2` (`shared.lua:1234`, mismo `if`). Sin esto, las dos mitades de un A/B quedan en dos pantallas — el defecto de la fila 02 de la ronda 7 |
+
+**Y el override de `IsSilentStepping` abría una fuga que no es un sonido.** `LethalFallDamage`
+(`motionoverrides.lua:3577`) empieza con `if self:IsSilentStepping() then return end` y el
+`TakeDamage( math.huge )` está **adentro**, en `:3596`: ese `return` no se lleva sólo tres
+`EmitSound`, se lleva la muerte. Con `ENT.TakesFallDamage = true` en la base y sin pisarlo nosotros,
+el flag de sonido **habría regalado inmunidad a la caída letal**. Hay override propio que repone el
+daño, y la fila 07 lo mide con su botón. *Se censaron los cinco call sites de `IsSilentStepping` que
+no son un `EmitSound` directo buscando exactamente esto; los otros cuatro son efectos, y el del
+click arrastra además el `ApplyForceCenter` del mismo `if`.*
+
+**Lo que se decidió y no se midió, para que se lea como lo que es:** que el default de
+`_stepsonlyhunt` sea `1`. Sale de lo que el autor describió como objetivo, no de una corrida.
 
 ---
 
@@ -413,6 +567,7 @@ Lo que existe:
 | Corridas en GMod | **10** (2026-08-05 ×3; 2026-08-06 ×5; 2026-08-07 ×2) — refutaron **dos** predicciones del documento y **una lectura mía sobre la causa del giro**; destaparon **16** defectos: **15 del instrumento y 1 del fantasma**. Los dos últimos son de la ronda 7 y los dos míos: `peor` se imprimía sin decir de qué lado del A/B estaba, y el reporte de la planilla r7 se llamaba a sí mismo «ronda 6» |
 | La marcha cazando (`canRunOnPath`) | **CERRADA EN JUEGO por criterio del autor** — el veto se ve (`deseada` 252 → 60) y el A/B observacional es limpio: con 1 camina en escaleras y cerca de objetos, con 0 corre para todo. **Nadie midió que prevenga un atasco**, y así hay que leerlo |
 | ⚠ Salta y queda encajado contra el techo | **DEFECTO ABIERTO, el primero que necesita physgun.** Sin instrumento y sin check. `reallystuck_handler` existe, está registrado y no rescató |
+| **El silencio de las PISADAS** | **CORRIDO — 4 de 8 cerradas.** La restricción del autor **CERRADA en juego**: 39 pisadas calladas y publicadas al consumidor. `PERDIDAS 0`. Las otras cuatro se marcaron verdes sin la medición que pedían (una con su rojo escrito en la nota); re-corrida en `pisadas-r8b` |
 | La hoja hermana de una puerta doble | **CERRADA EN JUEGO** — `gm_prison`, ronda 7: `silenciado ( hermana )` y su `devuelto`, 5 campos cada uno |
 | El silencio de las puertas | **CERRADO EN JUEGO** — ronda 6, al quinto intento y con el tercer mecanismo. Ver «Ronda 6 corrida» |
 

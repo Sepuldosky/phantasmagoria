@@ -1506,6 +1506,23 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
         "   ( 0 nadie · 1 el flag del NPC · 2 todos )" ..
         "   destrabar " .. ( cvUnlock:GetBool() and "SI" or "NO" ) )
 
+    -- LA MITAD DE ENFRENTE, Y NO ES DECORACION: server_steps.lua overridea
+    -- IsSilentStepping, que es el mismo if del que cuelga el CLICK de Use2
+    -- ( shared.lua:1234 ). O sea que un fantasma con las pisadas calladas abre
+    -- puertas sin click aunque `silencio` este en 0 -- y el chirrido de la hoja
+    -- sigue sonando, asi que desde afuera se lee como "el silencio anda a
+    -- medias" en vez de como "otro bloque me lo apago".
+    --
+    -- Es exactamente el defecto que costo la fila 02 de la ronda 7: las dos
+    -- mitades de una misma comparacion en dos pantallas distintas. *El numero de
+    -- un A/B tiene que decir de que lado del A/B esta.*
+    local cvSteps = GetConVar( "phantasmagoria_ghost_stepsilent" )
+    local cvStepsHunt = GetConVar( "phantasmagoria_ghost_stepsonlyhunt" )
+
+    say( "    pisadas: stepsilent " .. ( cvSteps and cvSteps:GetInt() or "??" ) ..
+        " · stepsonlyhunt " .. ( cvStepsHunt and cvStepsHunt:GetInt() or "??" ) ..
+        "   <- si alguna calla las pisadas, TAMBIEN calla el click de esta puerta" )
+
     -- LA CONSTANTE, MEDIDA Y NO CITADA. Toda la eleccion de mascara se apoya en
     -- una afirmacion sobre que bits trae MASK_NPCWORLDSTATIC, y este proyecto ya
     -- pago dos veces por afirmar el contenido de una constante sin mirar el
