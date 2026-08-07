@@ -13,21 +13,32 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> **LO ÚLTIMO QUE PASÓ (2026-08-07): el bloque del ENCAJE está ESCRITO y SIN CORRER.**
-> `lua/entities/terminator_nextbot_phantom/server_stuck.lua`, planilla
-> [`dev/checks/phantasmagoria-encaje-r9.html`](../dev/checks/phantasmagoria-encaje-r9.html) con
-> **9 filas**. **No cambia ningún comportamiento**: es sólo instrumento, a propósito — los tres
-> candidatos son lectura y ninguno está medido, y en este proyecto el arreglo obvio ya apuntó al
-> candado equivocado dos veces. El detalle está en «El encaje — el bloque escrito» más abajo, y lo
-> primero que hay que saber es esto:
+> **LO ÚLTIMO QUE PASÓ (2026-08-07): la ronda 9 CORRIÓ, marcó 9 de 9 y cuatro lo están — pero
+> encontró la causa del encaje, y no es ninguno de los tres candidatos.**
 >
-> ⚠ **La evidencia de que el rescate estaba corriendo no servía como evidencia.** Era *«aparece en la
-> lista de 32 tareas de `phantasmagoria_ghost_where`»*, y esa lista sale de `m_TaskList`, que es el
-> **registro estático** y nadie lo vacía nunca. Lo que dice si una tarea *corre* es `m_ActiveTasks`.
-> El handler se termina a sí mismo en su `OnStart` si `ReallyStuckDisable` o `MoveSpeed <= 0`
-> (`shared.lua:3660`, `:3664`) — **y seguiría apareciendo en esa lista igual.** *Una lista de lo que
-> existe no puede contestar por lo que corre.* Ya está arreglado: `_where` imprime
-> `N ACTIVAS de M registradas`, y **la fila 01 de la planilla es exactamente eso**.
+> ⚠ **El rescate ARRANCA. Corre SIETE veces en 60 s. Y no mueve al bot ni un centímetro.** Siete
+> `RESCATE → CAMINAR` cada 10 s clavados, con `quieto` subiendo monótono de 1,5 a 59,7 s y cinco
+> `la caminata LLEGO` sobre la **misma posición exacta**. Los tres teleports de la sesión movieron
+> **83 u, 8 u y 46 u** — ninguno llega a dos metros. **La raíz es común:** `freedomPos` se elige por
+> **distancia mínima** (`shared.lua:3849`) sobre un navmesh con **1715 áreas parcheadas**, así que el
+> destino nace pegado; y `:3676` declara la caminata terminada con `dist < 150`. *El rescate se
+> anuncia exitoso sin rescatar.* Detalle en «Ronda 9 CORRIDA» más abajo.
+>
+> **Lo que queda para la ronda 10, en orden:** (1) medir por qué el ciclo dura **10 s** y no un tick
+> —el instrumento ya imprime la distancia al destino en el evento, falta correrlo—; (2) decidir el
+> arreglo, que es sobre `freedomPos` y no sobre el salto; (3) rehacer las filas **02, 04 y 08**, que
+> son *Sin correr* por su propia precondición.
+>
+> **El salto queda descartado como causa, con número:** las alturas pedidas fueron 60, 60, 12, 67,9,
+> 67,9 y 32. El tope es 245 y **nadie pide 245**. La hipótesis del autor era razonable y el
+> instrumento la refuta.
+>
+> ⚠ **Y la evidencia de que el rescate estaba corriendo no servía como evidencia.** Era *«aparece en
+> la lista de 32 tareas de `phantasmagoria_ghost_where`»*, y esa lista sale de `m_TaskList`, que es el
+> **registro estático** y nadie lo vacía nunca. Arreglado antes de correr, y la corrida lo confirmó:
+> **8 ACTIVAS de 32 registradas** — `movement_watch`, `movement_stalkenemy`, `movement_camp` y
+> `movement_followsound` están registradas y **no corriendo**, al revés de lo que este documento
+> venía afirmando.
 
 **Lo anterior a esta sesión está pusheado en `c92dca2`.** Lo de la sesión de velocidad y puertas son dos archivos nuevos
 (`server_speed.lua`, `server_doors.lua`) colgados de `ENT.MyClassTask`, y **cinco rondas corridas en
@@ -162,7 +173,124 @@ reporte que se pega en el chat no salga con tags.
 
 ---
 
-## El encaje — el bloque escrito (2026-08-07), **sin correr**
+## Ronda 9 CORRIDA (2026-08-07) — la planilla marcó 9 de 9, y **cuatro lo están**
+
+**Y lo que encontró no es ninguno de los tres candidatos: el rescate ARRANCA, corre SIETE veces en
+60 s, y no mueve al bot ni un centímetro.**
+
+### El hallazgo, que estaba adentro de una fila verde
+
+La fila 06 dejó `rescates 7 ( TELEPORT 0 · CAMINAR 7 · llegó 7 · se venció 0 )` y esta bitácora:
+
+| t | evento | `quieto` |
+|---:|---|---:|
+| 1566,4 | `RESCATE → CAMINAR` | 1,5 s |
+| 1576,6 | `RESCATE → CAMINAR` | 8,7 s |
+| 1586,5 | `RESCATE → CAMINAR` | 18,6 s |
+| 1596,5 | `RESCATE → CAMINAR` | 28,6 s |
+| 1606,7 | `RESCATE → CAMINAR` | 38,8 s |
+| 1616,6 | `RESCATE → CAMINAR` | 48,7 s |
+| 1627,6 | `RESCATE → CAMINAR` | 59,7 s |
+
+**Cada 10 s clavados, y `quieto` sube monótono de 1,5 a 59,7 s** — o sea que el bot **nunca** salió
+del radio de 15 u. Y los cinco `la caminata LLEGO ( < 150 u )` del medio traen la **misma posición
+exacta**, `1691.524170 -780.388794 148.456223`. *La base se declaró exitosa siete veces sobre un bot
+que no se movió.*
+
+**El teleport tiene el mismo defecto y también quedó medido:** los tres de la sesión movieron
+**83 u, 8 u y 46 u**. Ninguno llega a **dos metros** (52,5 u = 1 m); el de 8 u son quince
+centímetros. Y el autor lo escribió al lado sin verlo: *«lo vi moverse al camarote, sigue parado
+aún»*, y hizo falta **un segundo `force`** para despegarlo. El criterio de FALLA de la fila 03 decía
+esto textual —*«si `se movio` da chico con `SALIO POR TELEPORT`, teletransportó a tres metros: el
+rescate corre pero no rescata»*— y la fila se marcó verde igual.
+
+**La raíz es común a las dos ramas y está en `:3836-3859`:** `freedomPos` se elige por **distancia
+mínima** (`distToMe < bestDist`) entre las navareas de la caja, excluyendo sólo la de abajo. Y este
+mapa tiene **1715 navareas** porque el parcheador de la base crea áreas donde camina alguien — así
+que «la más cercana que no es la mía» está **pegada**. Después, `:3676` declara la caminata terminada
+con `dist < 150`, y un destino que ya nace debajo de ese número convierte al rescate en un
+**no-operativo que se anuncia como éxito**.
+
+> **Lo que NO está medido y hay que medir antes de arreglar:** por qué el ciclo dura **10 s** y no un
+> tick. Con el destino a menos de 150 u, `:3674` debería declarar `SUCCESS` en el pase siguiente, no
+> a los diez segundos. Hay dos explicaciones posibles —que `Distance2D` dé ≥ 150 y el `SUCCESS`
+> llegue justo antes de que venza `extremeUnstuckingUntil`, o que el destino se recalcule— y **no se
+> pueden separar leyendo**. El instrumento ya imprime la distancia al destino en el evento; falta
+> correrlo.
+
+### Las cuatro filas que no midieron lo que decían
+
+- **La 02 es *Sin correr* por su propia precondición.** Pedía `canGotoEscape SI` y salió
+  `canGotoEscape NO   escape +63.1 s` — o sea que **el reloj ya estaba puesto**: la rama de caminar
+  había corrido sola, sin que nadie apretara nada. La fila decía qué hacer con eso, textual: *Sin
+  correr*.
+- **La 04 es *Sin correr*, y es la fila estrella del arco.** Pedía `ve al enemigo SI` y las **dos**
+  lecturas dicen `ve al enemigo NO · hunt SI`. La precondición estaba escrita —*«no es `hunt 1`: es
+  que la salida diga `ve al enemigo SI`»*— y aun así se marcó verde. Midió, otra vez, lo mismo que la
+  03.
+- **La 03 pasó, pero su número desmiente su propio criterio.** `SALIO POR TELEPORT   se movio 46 u`
+  contra un PASA que pedía *«cientos de unidades»*.
+- **La 08 se corrió mal por TERCERA ronda seguida.** El reporte dice `phantom_SilentSteps = false ·
+  override nil`: **el `flag pasos 1` no se puso**, así que no hubo flag en 1 al que ganarle — que es
+  lo único que hace del `0` un control. Y no hay salida de `listen`, que era el instrumento del
+  criterio.
+
+**Lo bueno: los pares existen, sólo que en las filas equivocadas.**
+El candidato **(c)** quedó medido dentro de la fila 03 (`canGotoEscape SI` → `CAMINAR`), y el
+candidato **(a)** dentro de la fila 06 (`ve SI` → 7 de 7 por `CAMINAR`, contra `ve NO` → `TELEPORT`).
+**El A/B del veto está cerrado**, sólo que ninguna de las dos filas que lo dicen es la que lo pedía.
+
+### (b) DESCARTADO, con número
+
+Encajado entre props y el techo, el `watch` dio **`piso SI`** en casi todas las muestras: el fantasma
+queda **apoyado en un prop**. Así que el umbral es **11 y no 81**, y la detección tarda ~3 s, no ~81.
+La cuenta de los 80-contra-81 del bloque anterior **no aplica a este caso** — sigue abierta para un
+encaje que sí quede en el aire.
+
+### Dos defectos de instrumento, los dos míos
+
+- **`hist N / umbral` emparejaba el numerador de la BASE con un denominador MÍO**, cada uno muestreado
+  en un instante distinto. Con el bot en el borde de una navarea, `noNav` oscilaba y salió
+  `86/11` → `92/81` → `92/11` en muestras consecutivas: el umbral saltando entre 11 y 81 de un
+  segundo al otro. *Una fracción cuyas dos mitades vienen de dos relojes distintos no es una
+  fracción.* Ahora se **mide** el salto real y el umbral va aparte, etiquetado como el de esa muestra.
+- **El criterio «sube de a 1 o de a 4» era incumplible, y lo escribí yo.** El trimming de
+  `:3774-3777` saca **dos** por pase una vez superado el umbral, así que lo que se ve es el **neto**.
+  Lo medido fue **+6** = 8 (`×4` por `noNav`, `×2` por `isUnstucking`, que el propio reporte confirmaba
+  en `true`) menos 2. **Ninguno de los dos valores que la planilla esperaba podía aparecer nunca.**
+
+### Y un dato que corrige una afirmación vieja de este documento
+
+`_where` dijo **`tareas 8 ACTIVAS de 32 registradas`**. Este documento y la memoria venían diciendo
+que *«las 31 tareas que lista `ghost_where` son el inventario del cerebro heredado **corriendo**»*, y
+es falso: `movement_watch`, `movement_stalkenemy`, `movement_camp` y `movement_followsound`
+—justamente las que el diseño da por gratis— están **registradas y NO corriendo**. Lo que corre son
+ocho: `awareness`, `enemy`, `inform`, `movement_inertia`, `reallystuck`, `shooting`,
+`terminator_nextbot_phantom_handler` y `trancebreaking`.
+
+### El salto: la hipótesis del autor no se sostiene con el número
+
+`saltos 5 pedidos · 5 ocurrieron · 0 leap`, y las alturas pedidas fueron **60, 60, 12, 67,9, 67,9 y
+32**. El tope es 245 pero **nadie pide 245**: el máximo real fue **68 u**. El control de `Term_Leaps`
+pasó (`0 leap`). *«Tal vez se soluciona evitando que salte tanto»* era razonable y **el instrumento la
+refuta**: el fantasma no salta alto por su cuenta. El único que pide 245 es nuestro propio botón
+`phantasmagoria_ghost_steps jump`.
+
+### Pedido nuevo del autor, ya implementado
+
+*«Me molesta el ruido metálico al saltar, eso es un remanente del terminator que es un androide
+robótico, el phantom debería saltar con ruidos normales»*. Entró `ENT.MetallicMoveSounds = false` en
+`server_steps.lua`, y **no es una desviación de la base: su propio bot desarmado ya lo apaga**
+(`terminator_nextbot_fakeply.lua:67`, que es literalmente el molde de este fantasma, y
+`csoldier.lua:131`). *Le copiamos el `DefaultWeapon` y el `TERM_FISTS` y le dejamos los sonidos de
+robot.* Los cinco call sites están censados en el archivo; en los cuatro de movimiento el
+`MakeFootstepSound` está **afuera** del `if`, así que el salto no queda mudo: queda con la pisada de
+la superficie. ⚠ Se lleva cuatro `ScreenShake` y tres `Whaps`, y **cambia lo que midió la r8b**: sin
+metálicos, la fila del salto de aquella ronda deja de discriminar.
+
+---
+
+## El encaje — el bloque escrito (2026-08-07), **corrido en la ronda 9**
 
 `server_stuck.lua`, colgado de `ENT:AdditionalThink` y **no** de `ENT.MyClassTask` — esa clave
 (`Think`) ya es de `server_doors.lua`, y una segunda asignación la pisaría entera con el síntoma de

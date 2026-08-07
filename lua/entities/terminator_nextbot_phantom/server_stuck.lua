@@ -527,9 +527,79 @@ local function poll( self, myTbl )
     end
 
     ---------------------------------------------------------------------------
+    -- La muestra anterior, para poder decir CUANTO SE MOVIO en un evento
+    ---------------------------------------------------------------------------
+    -- Sin esto, "SALIO POR TELEPORT" no distingue un rescate de un manotazo: la
+    -- ronda 9 midio teleports de 8, 46 y 83 u -- menos de dos metros -- y el
+    -- unico motivo por el que se vio fue que el muestreador del boton `force`
+    -- comparaba contra una posicion guardada. La bitacora no lo hacia.
+    local antesPos = myTbl.phantom_stuckPollPos
+    local antesT   = myTbl.phantom_stuckPollTime
+
+    myTbl.phantom_stuckPollPos  = pos
+    myTbl.phantom_stuckPollTime = CurTime()
+
+    myTbl.phantom_stuckPrevPos  = antesPos or pos
+    myTbl.phantom_stuckPrevTime = antesT or CurTime()
+
+    ---------------------------------------------------------------------------
     -- La rama de CAMINAR, por el reloj que no baja nunca
     ---------------------------------------------------------------------------
     if not data then return end
+
+    ---------------------------------------------------------------------------
+    -- EL DELTA DE `hist`, MEDIDO -- y esto reemplaza a un numero que YO predecia
+    ---------------------------------------------------------------------------
+    -- ⚠ DEFECTO DE INSTRUMENTO QUE DESTAPO LA RONDA 9, Y ERA MIO. El reporte
+    -- imprimia `hist N / umbral` con el numerador de la BASE y el denominador
+    -- calculado por MI, cada uno muestreado en un instante distinto. Con el bot
+    -- encajado en el borde de una navarea, `noNav` oscilaba entre muestras y la
+    -- salida quedo asi:
+    --
+    --     10 s  hist 86/11      11 s  hist 92/81      39 s  hist 92/11
+    --
+    -- El umbral saltando entre 11 y 81 de un segundo al otro. *Una fraccion
+    -- cuyo numerador y denominador vienen de dos relojes distintos no es una
+    -- fraccion.*
+    --
+    -- Y el criterio de la planilla ("sube de a 1 o de a 4") era INCUMPLIBLE por
+    -- otro motivo mio: doAddCount inserta ( 1, 2, 4 u 8 ) pero el trimming de
+    -- :3774-3777 saca DOS por pase una vez superado el umbral, asi que lo que se
+    -- ve es el NETO. Lo medido fue +6, que es 8 - 2 -- o sea noNav ( x4 ) con
+    -- isUnstucking ( x2 ), y el reporte confirmaba `isUnstucking true` al lado.
+    -- Ninguno de los dos valores que yo habia escrito podia aparecer nunca.
+    --
+    -- El arreglo es dejar de predecirlo: se mide el salto real entre muestras.
+    local hist = istable( data.historicPositions ) and #data.historicPositions or 0
+    local histAntes = myTbl.phantom_stuckHistPrev
+
+    if histAntes and hist ~= histAntes then
+        myTbl.phantom_stuckHistJump   = hist - histAntes
+        myTbl.phantom_stuckHistJumpAt = CurTime()
+
+    end
+
+    myTbl.phantom_stuckHistPrev = hist
+
+    ---------------------------------------------------------------------------
+    -- Adonde dijo la base que iba a caminar, y desde donde
+    ---------------------------------------------------------------------------
+    -- La base BORRA data.freedomGotoPosSimple antes de anunciar el SUCCESS
+    -- ( :3677, y el StartTask recien en :3679 ), asi que en el evento ya no
+    -- esta. Se guarda al verlo para poder contestar la pregunta que la ronda 9
+    -- dejo abierta: *cuando la caminata "LLEGO", cuanto se habia movido.*
+    local destino = data.freedomGotoPosSimple
+
+    if destino then
+        if not myTbl.phantom_stuckWalkTo then
+            myTbl.phantom_stuckWalkFrom = pos
+            myTbl.phantom_stuckWalkAt   = CurTime()
+
+        end
+
+        myTbl.phantom_stuckWalkTo = destino
+
+    end
 
     local escape = data.nextUnstuckGotoEscape or 0
     local visto  = myTbl.phantom_stuckLastEscape
@@ -552,16 +622,35 @@ local function poll( self, myTbl )
 
     local s = self:phantom_StuckState()
 
+    -- Arranca una caminata nueva: se reinicia el par ORIGEN/DESTINO para que el
+    -- SUCCESS de mas abajo mida ESTA caminata y no la anterior.
+    myTbl.phantom_stuckWalkFrom = pos
+    myTbl.phantom_stuckWalkAt   = CurTime()
+    myTbl.phantom_stuckWalkTo   = data.freedomGotoPosSimple
+
+    -- LA DISTANCIA AL DESTINO, QUE ES LO QUE LA RONDA 9 NO PUDO CONTESTAR.
+    -- La base declara la caminata terminada con dist < 150 ( :3676 ), asi que un
+    -- destino que ya nace debajo de ese numero convierte al rescate en un
+    -- no-operativo que se anuncia como exito. Sin esta columna, siete
+    -- `la caminata LLEGO` sobre la misma posicion se leen como siete rescates.
+    local aDestino = "sin destino"
+
+    if data.freedomGotoPosSimple then
+        aDestino = math.Round( pos:Distance2D( data.freedomGotoPosSimple ) ) .. " u ( llega con < " .. B.ARRIVED_DIST .. " )"
+
+    end
+
     -- EL CONTEXTO VIAJA CON EL EVENTO. Un "rescate 3" suelto no dice nada; lo
     -- que separa las hipotesis es con que valores arranco -- y esos valores
     -- cambian en el segundo siguiente. Es la regla 5 de la plantilla: la
     -- precondicion incluye el instante en que se lee.
     anotar( self, "RESCATE -> CAMINAR   ve " .. ( s.veEnemigo and "SI" or "NO" ) ..
         " · piso " .. ( s.enPiso and "SI" or "NO" ) ..
-        " · hist " .. tostring( s.hist ) .. "/" .. tostring( s.umbral ) ..
+        " · hist " .. tostring( s.hist ) .. " ( umbral " .. tostring( s.umbral ) .. " en ESTA muestra )" ..
         " · canEscape " .. ( s.canEscape and "SI" or "NO" ) ..
         " · under " .. tostring( s.maybeUnder ) .. "/" .. tostring( s.underThresh ) ..
-        " · quieto " .. string.format( "%.1f", CurTime() - ( myTbl.phantom_stuckSince or CurTime() ) ) .. " s" )
+        " · quieto " .. string.format( "%.1f", CurTime() - ( myTbl.phantom_stuckSince or CurTime() ) ) .. " s" ..
+        " · destino a " .. aDestino )
 
 end
 
@@ -616,15 +705,51 @@ function ENT:StartTask( task, data, reason )
         local hit = MOTIVOS[ motivo ]
 
         if hit then
-            local st = stuckStats( self )
+            local myTbl = self:GetTable()
+            local st    = stuckStats( self )
+
             st[ hit.campo ] = st[ hit.campo ] + 1
 
             if hit.campo == "teleport" then st.rescates = st.rescates + 1 end
 
             local s = self:phantom_StuckState()
 
+            -- ⚠ CUANTO SE MOVIO, Y ES LA COLUMNA QUE FALTABA EN LA RONDA 9.
+            -- Salieron siete `la caminata LLEGO` con la MISMA posicion
+            -- ( 1691.52 -780.39 148.46 ) y `quieto` subiendo 1,5 -> 59,7 s: la
+            -- base se declaro exitosa siete veces sobre un bot que no se movio
+            -- un centimetro. La bitacora lo mostraba y habia que cruzarlo a
+            -- mano contra otra linea. Ahora lo dice el evento.
+            --
+            -- Para el TELEPORT la referencia es la muestra anterior del poll
+            -- ( <= 0,25 s antes, y se imprime el intervalo: un numero de
+            -- desplazamiento sin su ventana no se puede leer ). Para la
+            -- caminata es el punto donde arranco ESA caminata.
+            local movio, desde
+
+            if hit.campo == "teleport" then
+                desde = myTbl.phantom_stuckPrevPos
+                movio = desde and ( math.Round( s.pos:Distance( desde ) ) .. " u en <= " ..
+                    string.format( "%.2f", CurTime() - ( myTbl.phantom_stuckPrevTime or CurTime() ) ) .. " s" )
+
+            else
+                desde = myTbl.phantom_stuckWalkFrom
+                movio = desde and ( math.Round( s.pos:Distance( desde ) ) .. " u en " ..
+                    string.format( "%.1f", CurTime() - ( myTbl.phantom_stuckWalkAt or CurTime() ) ) .. " s de caminata" )
+
+                if myTbl.phantom_stuckWalkTo then
+                    movio = movio .. " · el destino estaba a " ..
+                        math.Round( ( myTbl.phantom_stuckWalkFrom or s.pos ):Distance2D( myTbl.phantom_stuckWalkTo ) ) .. " u"
+
+                end
+
+                myTbl.phantom_stuckWalkTo = nil
+
+            end
+
             anotar( self, hit.texto .. "   ve " .. ( s.veEnemigo and "SI" or "NO" ) ..
                 " · piso " .. ( s.enPiso and "SI" or "NO" ) ..
+                " · SE MOVIO " .. ( movio or "?? ( sin muestra previa )" ) ..
                 " · pos " .. tostring( s.pos ) )
 
         end
@@ -738,9 +863,32 @@ local function lineas( ghost, say )
 
     end
 
-    say( "    hist          " .. s.hist .. " / " .. s.umbral ..
-        "   ( +" .. s.porPase .. " por segundo )   " ..
-        ( s.evalua and "YA EVALUA" or ( "faltan ~" .. math.Round( s.faltan ) .. " s para que PUEDA evaluar" ) ) )
+    -- ⚠ ESTA LINEA DECIA `hist N / umbral` Y LA RONDA 9 LA REFUTO. El numerador
+    -- lo escribe la BASE en su pase y el denominador lo calculaba YO en el mio,
+    -- asi que con `noNav` oscilando el umbral saltaba entre 11 y 81 de una
+    -- muestra a la otra ( `86/11`, `92/81`, `92/11` en muestras consecutivas ).
+    -- *Una fraccion cuyas dos mitades vienen de dos relojes distintos no es una
+    -- fraccion.* Ahora el salto REAL se mide y el umbral se imprime al lado
+    -- diciendo que es el de esta muestra.
+    local salto = ghost.phantom_stuckHistJump
+    local saltoAt = ghost.phantom_stuckHistJumpAt
+
+    say( "    hist          " .. s.hist ..
+        ( salto and ( "   ultimo salto MEDIDO " .. ( salto > 0 and "+" or "" ) .. salto ..
+            " hace " .. string.format( "%.1f", CurTime() - ( saltoAt or CurTime() ) ) .. " s" ) or "   ( todavia sin dos muestras )" ) )
+
+    -- El umbral y la prediccion van SEPARADOS y etiquetados como tales. Y el
+    -- neto no es doAddCount: el trimming de :3774-3777 saca DOS por pase una vez
+    -- superado el umbral, asi que lo esperable es `doAddCount - 2` -- que es de
+    -- donde salio el +6 de la ronda 9 ( 4 por noNav x 2 por isUnstucking, menos
+    -- 2 ). El criterio de aquella planilla decia "de a 1 o de a 4" y ninguno de
+    -- los dos podia aparecer nunca.
+    say( "    umbral        " .. s.umbral .. " EN ESTA MUESTRA" ..
+        "   ( 11 con noNav · 81 sin el, y la base usa el de SU pase, no el de esta linea )" )
+
+    say( "    esperado      +" .. s.porPase .. " por pase de la base, menos 2 del trimming = " ..
+        ( s.porPase - 2 ) .. " neto" ..
+        "   -> " .. ( s.evalua and "YA EVALUA" or ( "faltan ~" .. math.Round( s.faltan ) .. " s para que PUEDA evaluar" ) ) )
 
     say( "    noNav         " .. ( s.noNav and "SI" or "NO" ) ..
         "   navarea " .. ( s.nav and ( "#" .. s.nav:GetID() .. " con " .. s.navVecin .. " vecinas" ) or "NINGUNA a " .. B.NAV_RADIUS .. " u" ) ..
@@ -970,11 +1118,18 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_stuck", function( ply, _, args 
 
                 local quieto = CurTime() - ( ghost.phantom_stuckSince or CurTime() )
 
-                fin( string.format( "%3d s  #%s/c%s  piso %s · ve %s · hist %s/%s · stuck %s · sorta %s · esc %s · quieto %.0f s%s",
+                -- `hist` va SOLO, con el umbral de esta muestra entre parentesis
+                -- y marcado. En la ronda 9 iban pegados como fraccion y el
+                -- denominador saltaba entre 11 y 81 entre muestras consecutivas,
+                -- porque lo calculaba yo con MI `noNav` y el numerador venia del
+                -- pase de la base. Se leia como si el array se hubiera
+                -- desbordado. `nav` es la columna que explica el salto.
+                fin( string.format( "%3d s  #%s/c%s  piso %s · ve %s · hist %s (umb %s) · nav %s · stuck %s · sorta %s · esc %s · quieto %.0f s%s",
                     n, ghost:EntIndex(), key,
                     s.enPiso and "SI" or "NO",
                     s.veEnemigo and "SI" or "NO",
                     tostring( s.hist or "-" ), tostring( s.umbral ),
+                    s.noNav and "NO" or "SI",
                     s.stuck and "SI" or "NO",
                     s.sortaStuck and "SI" or "NO",
                     s.canEscape and "SI" or "NO",

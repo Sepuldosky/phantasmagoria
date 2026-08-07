@@ -60,13 +60,18 @@
     Asi que no es "una palanca gruesa": son DOS palancas para DOS familias, y
     hacen falta LAS DOS. Solo con AdditionalFootstep el fantasma "callado"
     seguiria sonando al saltar y al aterrizar, porque la base trae
-    ENT.MetallicMoveSounds = true ( shared.lua:161 ) y este fantasma no lo pisa.
-    Eso es la regla 2 del proyecto en miniatura: *apagar NUESTRA implementacion
-    no es apagar EL COMPORTAMIENTO cuando el tercero tambien lo hace.*
+    ENT.MetallicMoveSounds = true ( shared.lua:161 ). Eso es la regla 2 del
+    proyecto en miniatura: *apagar NUESTRA implementacion no es apagar EL
+    COMPORTAMIENTO cuando el tercero tambien lo hace.*
+
+    ( ⚠ Este parrafo decia "y este fantasma no lo pisa", y desde la ronda 9 SI lo
+      pisa: el autor pidio que el salto no suene a robot y el campo pasa a false
+      unas lineas mas abajo. El override de IsSilentStepping sigue haciendo
+      falta igual -- tapa el sonido de caida, el vacio, el overcharge y el click
+      de Use2, que no cuelgan de MetallicMoveSounds. )
 
     Lo que la base trae prendido y nosotros NO pisamos ( verificado, no supuesto ):
       ENT.ReallyHeavy        = true   shared.lua:160
-      ENT.MetallicMoveSounds = true   shared.lua:161
       ENT.FootstepClomping   = true   shared.lua:171
       ENT.Term_FootstepMode  = "human"  :164   ( el sonido sale de la superficie )
       ENT.Term_FootstepTiming = "timed" :163
@@ -132,6 +137,52 @@
 
     Por eso el gancho de este archivo es un hook.Run y no una tarea.
 ---------------------------------------------------------------------------]]
+
+---------------------------------------------------------------------------
+-- EL FANTASMA NO ES UN ANDROIDE ( pedido del autor, ronda 9 )
+---------------------------------------------------------------------------
+-- Literal, despues de correr la fila 09: "me molesta el ruido metalico al
+-- saltar, eso es un remanente del terminator que es un androide robotico, el
+-- phantom deberia saltar con ruidos normales".
+--
+-- Tiene razon y no es cosmetico: la base trae ENT.MetallicMoveSounds = true
+-- ( shared.lua:161 ) porque su terminator ES una maquina, y este fantasma lo
+-- heredaba sin que nadie lo hubiera decidido. Es la regla de "heredado y gratis
+-- no es lo mismo que correcto" en una linea.
+--
+-- LA EVIDENCIA DE QUE ES EL CAMPO CORRECTO Y NO UN PARCHE, censados los CINCO
+-- call sites ( grep sobre la base: cinco, no cuatro -- el quinto es la caida
+-- letal ):
+--
+--   motionoverrides.lua:2999  saltar          2 EmitSound + ScreenShake
+--   motionoverrides.lua:3460  aterrizar >500  2 EmitSound + 3 Whaps + ScreenShake
+--   motionoverrides.lua:3475  aterrizar >250  2 EmitSound + ScreenShake
+--   motionoverrides.lua:3486  aterrizar >50   2 EmitSound + ScreenShake
+--   motionoverrides.lua:3579  caida letal     2 EmitSound
+--
+-- En los cuatro primeros el MakeFootstepSound esta AFUERA del if ( :2997,
+-- :3459, :3474, :3485 ), asi que apagar los metalicos NO deja al salto mudo:
+-- deja la pisada de la superficie, que es exactamente "ruidos normales". Y en
+-- el quinto el TakeDamage esta afuera tambien ( :3596 ), asi que esto no toca
+-- la caida letal ni el override que la repone.
+--
+-- Y NO ES UNA DESVIACION DE LA BASE: su propio bot desarmado ya lo apaga.
+-- terminator_nextbot_fakeply.lua:67 y terminator_nextbot_csoldier.lua:131 traen
+-- MetallicMoveSounds = false, y fakeply es literalmente el molde de este
+-- fantasma ( server.lua lo dice ). *Lo copiamos a medias: le tomamos el
+-- DefaultWeapon y el TERM_FISTS y le dejamos los sonidos de robot.*
+--
+-- ⚠ LO QUE ESTO SE LLEVA, dicho para que no se lea como gratis: los cuatro
+-- util.ScreenShake del salto y el aterrizaje ( 16 / 4 / 0,5 de amplitud ) y los
+-- tres Whaps de la caida de mas de 500 u. Son efecto, no dano: killScale y
+-- killBoxScale estan afuera del if, o sea que aplastar sigue aplastando igual.
+--
+-- ⚠ Y CAMBIA LO QUE MIDIO LA RONDA 8b: la fila del salto probaba que silenciar
+-- la pisada callaba TAMBIEN los metalicos. Con el campo en false ya no hay
+-- metalicos que callar, asi que esa fila deja de discriminar y hay que
+-- reescribirla contra la pisada de superficie. La linea `la base metalicos …`
+-- del reporte de este archivo lo va a decir sola.
+ENT.MetallicMoveSounds = false
 
 ---------------------------------------------------------------------------
 -- Las perillas

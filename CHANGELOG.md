@@ -7,6 +7,81 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-07 (16) — Ronda 9 CORRIDA: **el rescate se anuncia exitoso sin rescatar**
+
+Planilla `dev/checks/phantasmagoria-encaje-r9.html` corrida por el autor. **Marcó 9 de 9 y cuatro lo
+están** — pero encontró la causa del encaje, y **no es ninguno de los tres candidatos leídos**.
+
+### Lo que midió
+
+**Siete rescates en 60 s, cada 10 s clavados, con el bot inmóvil.** `rescates 7 ( TELEPORT 0 ·
+CAMINAR 7 · llegó 7 · se venció 0 )`, con `quieto` subiendo monótono **1,5 → 8,7 → 18,6 → 28,6 →
+38,8 → 48,7 → 59,7 s** y cinco `la caminata LLEGO ( < 150 u )` sobre la **misma posición exacta**
+(`1691.524170 -780.388794 148.456223`). *La base se declaró exitosa siete veces sobre un bot que no
+se movió un centímetro.*
+
+**El teleport falla igual:** los tres de la sesión movieron **83 u, 8 u y 46 u**. Ninguno llega a dos
+metros (52,5 u = 1 m). El autor lo escribió al lado sin verlo —*«lo vi moverse al camarote, sigue
+parado aún»*— y necesitó un segundo `force` para despegarlo.
+
+**La raíz es común a las dos ramas:** `freedomPos` se elige por **distancia mínima**
+(`shared.lua:3849`, `distToMe < bestDist`) entre las navareas de una caja de ±3000 u, excluyendo sólo
+la de abajo. Este mapa tiene **1715 navareas** porque el parcheador de la base crea áreas donde
+camina alguien, así que «la más cercana que no es la mía» está pegada. Después `:3676` da la caminata
+por terminada con `dist < 150`, y un destino que nace debajo de ese número vuelve al rescate un
+no-operativo que se anuncia como éxito.
+
+**Falta medir por qué el ciclo dura 10 s y no un tick.** Con el destino a menos de 150 u, `:3674`
+debería declarar `SUCCESS` en el pase siguiente. Hay dos explicaciones y no se separan leyendo; el
+instrumento ya imprime la distancia al destino en el evento.
+
+### Los tres candidatos, resueltos
+
+- **(a) el veto de `IsSeeEnemy` — CONFIRMADO**, aunque en la fila equivocada: con `ve SI`, 7 de 7 por
+  `CAMINAR`; con `ve NO`, `TELEPORT`.
+- **(b) los ~80 s fuera del piso — DESCARTADO para este caso:** encajado entre props y el techo, el
+  `watch` dio **`piso SI`** casi siempre (queda apoyado en un prop), así que el umbral es **11** y la
+  detección tarda ~3 s.
+- **(c) la primera pasada nunca teletransporta — CONFIRMADO:** `canGotoEscape SI` → `CAMINAR`.
+- **La hipótesis del salto — REFUTADA con número:** alturas pedidas 60, 60, 12, 67,9, 67,9 y 32. El
+  tope es 245 y **nadie pide 245**.
+
+### Cuatro filas verdes que no midieron lo que decían
+
+Las **02** y **04** son *Sin correr* por su propia precondición escrita (`canGotoEscape NO` donde
+pedía `SI`; `ve al enemigo NO` donde pedía `SI` — y la 04 era la fila estrella del arco). La **03**
+pasó con `se movio 46 u` contra un criterio que pedía «cientos». La **08** se corrió mal por **tercera
+ronda seguida**: `phantom_SilentSteps = false · override nil`, o sea que el `flag pasos 1` no se
+puso, y no hubo flag al que ganarle.
+
+### Dos defectos de instrumento, los dos míos
+
+- **`hist N / umbral` emparejaba el numerador de la BASE con un denominador MÍO**, muestreados en
+  instantes distintos. Con `noNav` oscilando salió `86/11` → `92/81` → `92/11` en muestras
+  consecutivas. *Una fracción cuyas dos mitades vienen de dos relojes distintos no es una fracción.*
+  Ahora se **mide** el salto real y el umbral va aparte.
+- **El criterio «sube de a 1 o de a 4» era incumplible.** El trimming de `:3774-3777` saca **dos** por
+  pase, así que lo que se ve es el neto: lo medido fue **+6** = 8 (`×4` `noNav`, `×2` `isUnstucking`)
+  menos 2. Ninguno de los dos valores esperados podía aparecer nunca.
+
+### Un dato que corrige una afirmación vieja
+
+`tareas 8 ACTIVAS de 32 registradas`. `ESTADO.md` venía diciendo que las 31 tareas listadas eran «el
+cerebro heredado **corriendo**», y es falso: `movement_watch`, `movement_stalkenemy`, `movement_camp`
+y `movement_followsound` —las que el diseño da por gratis— están registradas y **no corren**.
+
+### Y un pedido del autor, implementado
+
+*«El ruido metálico al saltar es un remanente del terminator que es un androide robótico.»**
+`ENT.MetallicMoveSounds = false`. **No es una desviación de la base: su propio bot desarmado ya lo
+apaga** (`terminator_nextbot_fakeply.lua:67`, el molde de este fantasma, y `csoldier.lua:131`) — le
+copiamos el `DefaultWeapon` y el `TERM_FISTS` y le dejamos los sonidos de robot. Censados los **cinco**
+call sites: en los cuatro de movimiento el `MakeFootstepSound` está **afuera** del `if`, así que el
+salto queda con la pisada de la superficie en vez de mudo. ⚠ Se lleva cuatro `ScreenShake` y tres
+`Whaps`, y **cambia lo que midió la r8b**.
+
+---
+
 ## 2026-08-07 (15) — El encaje contra el techo: **el instrumento, no el arreglo**
 
 `server_stuck.lua` (nuevo, ~640 líneas de las que la mayoría son el porqué), más un arreglo en
