@@ -699,7 +699,7 @@ end
 ---------------------------------------------------------------------------
 -- EL INSTRUMENTO
 ---------------------------------------------------------------------------
-local function lineas( ghost, say, corto )
+local function lineas( ghost, say )
     local s = ghost:phantom_StuckState()
     local st = stuckStats( ghost )
 
@@ -767,20 +767,18 @@ local function lineas( ghost, say, corto )
     say( "    caminando a   " .. ( s.caminandoA and ( tostring( s.caminandoA ) ..
         "  a " .. math.Round( s.pos:Distance2D( s.caminandoA ) ) .. " u ( llega con < " .. B.ARRIVED_DIST .. " )" ) or "ninguna ( freedomGotoPosSimple nil )" ) )
 
-    if not corto then
-        -- La re-derivacion cuesta un FindInBox de +-3000 u, asi que no va en el
-        -- muestreador: un instrumento que lagea el servidor cambia lo que mide.
-        local hay, total = freedomPosExists( ghost )
-        local rama, porQue = predecirRama( s, hay )
+    -- La re-derivacion cuesta un FindInBox de +-3000 u, y por eso vive aca y no
+    -- en el muestreador de `watch`: un instrumento que lagea el servidor cambia
+    -- lo que mide. El comando se tipea a mano, una vez.
+    local hay, total = freedomPosExists( ghost )
+    local rama, porQue = predecirRama( s, hay )
 
-        say( "    freedomPos    " .. ( hay and "EXISTE" or "NO EXISTE" ) ..
-            "   ( " .. total .. " navareas en la caja de +-" .. B.FREEDOM_BOX .. " u )" ..
-            "   RE-DERIVADO de :3836 -- prediccion, no medicion" )
+    say( "    freedomPos    " .. ( hay and "EXISTE" or "NO EXISTE" ) ..
+        "   ( " .. total .. " navareas en la caja de +-" .. B.FREEDOM_BOX .. " u )" ..
+        "   RE-DERIVADO de :3836 -- prediccion, no medicion" )
 
-        say( "    PREDICCION    si el rescate arrancara AHORA iria por " .. rama )
-        say( "                  " .. porQue )
-
-    end
+    say( "    PREDICCION    si el rescate arrancara AHORA iria por " .. rama )
+    say( "                  " .. porQue )
 
     local jt = ghost.phantom_lastJumpTime
 
@@ -1005,7 +1003,7 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_stuck", function( ply, _, args 
 
     local vivos = PHANTASMAGORIA.EachGhost( function( ghost )
         say( "" )
-        lineas( ghost, say, false )
+        lineas( ghost, say )
 
     end )
 
