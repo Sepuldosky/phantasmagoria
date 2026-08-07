@@ -186,9 +186,10 @@ que se repite entre dos objetos distintos no identifica: agrupa.* Ahora imprime 
 
 ### La fila del control negativo se corrió mal otra vez, y la culpa es de una etiqueta que miente
 
-La fila pedía `stepsilent 0`. **Las cinco líneas `convars:` de esa nota dicen `stepsilent 1`**, y la
-lectura ③ —la que la r8 tampoco hizo, y que es la única que prueba que el `0` le gana a un flag que
-dice SÍ— sigue sin correrse. Lo que se midió es, otra vez, la regla de estado.
+La fila pedía `stepsilent 0`. Las líneas `convars:` de esa nota arrancan en **2** y siguen en **1**,
+**y nunca pasan por 0**; y la lectura ③ —la que la r8 tampoco hizo, y que es la única que prueba que
+el `0` le gana a un flag que dice SÍ— sigue sin correrse. Lo que se midió es, otra vez, la regla de
+estado.
 
 **Pero el defecto de fondo apareció en la fila 04 y es real:** con `stepsilent 0` y el fantasma fuera
 del hunt, el reporte dice `CALLADA`. Es correcto —son dos causas independientes— pero la ayuda de la
