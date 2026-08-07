@@ -11,6 +11,60 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ---
 
+## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-06 (velocidad y puertas)
+
+**Todo pusheado en `3694412`.** Lo de esta sesión son dos archivos nuevos
+(`server_speed.lua`, `server_doors.lua`) colgados de `ENT.MyClassTask`, y **cinco rondas corridas en
+juego**. Las planillas viven en `dev/checks/` y **no están versionadas** (`dev/` está fuera de todo
+repo), igual que `dev/other/`.
+
+**Lo único pendiente de correr: [`dev/checks/phantasmagoria-keyvalues-r6.html`](../dev/checks/phantasmagoria-keyvalues-r6.html)** — 6 filas.
+La **03** es la más importante y parece la más aburrida: que las puertas recuperen su sonido
+**solas**. Es el único riesgo del bloque que le cambia el mapa a todos de forma permanente.
+
+### Estado por pieza, en una línea cada una
+
+| Pieza | Estado |
+|---|---|
+| Velocidad derivada del jugador | **CERRADA en juego** — `objetivo` = `sv_bm_speed_run` × multiplicador |
+| Atravesar puertas | **CERRADO en juego** — `peor` 3,6 s → 0,7 s, control y máscara confirmados |
+| Abrir + huella + destrabar | **CERRADO en juego** — `ABRIO` acompaña a `intentos`, huellas con expiración |
+| El veto (`opendoors 0`) | **CERRADO en juego** — `VETADAS` sube; alcanza también a la base |
+| Flags por comando | **CERRADO en juego** — sobreviven al respawn, el reporte nombra la capa que ganó |
+| Correr cazando | **CORRE en juego**; falta confirmar que el que *camina* camine también sin verte |
+| **Silencio de puertas** | **MECANISMO NUEVO, SIN CORRER** — es lo que la ronda 6 mide |
+| Rescate de la hoja abierta | **SIN CORRER** — `fasesPorAtasco`, reescrito con la condición del autor |
+
+### Las cinco reglas que costaron una ronda cada una
+
+Están escritas en el código, en el archivo donde muerden. Se repiten acá porque son lo que hay que
+tener presente **antes** de tocar nada:
+
+1. **Una ConVar y un ConCommand no pueden compartir nombre**, y el que pierde es el comando, en
+   silencio. Todo comando pasa por `PHANTASMAGORIA.AddCommand`, que se niega y grita.
+2. **Apagar nuestra implementación no es apagar el comportamiento** cuando el tercero también lo
+   hace. La base abre puertas sola; el veto va en su hook público `TerminatorBlockUse`.
+3. **Un campo pisado por un método homónimo** con un default que coincide con lo esperado **da un
+   check verde**. Hay guarda al final de `server.lua`, y corre *después* de los includes.
+4. **`RunTask` corta en el primer valor no-`nil`, y `false` no es `nil`.** `MyClassTask` sirve para
+   eventos que nadie más consume; para los que la base ya implementa, va el override de método.
+5. **`GM:EntityEmitSound` server-side no ve los sonidos del engine.** El silencio de una puerta se
+   hace borrándole sus **siete** keyvalues, no interceptando.
+
+### Lo que sigue, en orden
+
+1. Correr la **ronda 6** y cerrar el silencio.
+2. **La cordura (§19)**, que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`. Es el
+   bloque grande que queda antes del motor de tipos.
+3. Pendiente menor: cerrar `veldoors-r1` como planilla (nunca se llenó; su A/B de la fila 12 quedó
+   sin correr).
+
+> ⚠ **Hay otro chat trabajando sobre este mismo repo.** En el árbol quedó
+> `lua/autorun/server/phantasmagoria_ghostmodel.lua` sin trackear, que **no es de esta sesión** y no
+> se commiteó. Stagear siempre rutas explícitas.
+
+---
+
 ## Dónde está parado esto
 
 **El proyecto dejó de ser papel el 2026-08-05: el fantasma camina en GMod.** Hay investigación
