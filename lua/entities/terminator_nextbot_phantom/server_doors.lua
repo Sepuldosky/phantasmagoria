@@ -192,11 +192,27 @@ local PHASE_COOLDOWN = 1
 -- margen y a 280 son 140, con una hoja que tiene 4 de espesor.
 local PHASE_GRACE = 0.5
 
--- Cuanto hay que estar trabado contra una hoja ABIERTA antes de atravesarla.
--- Es el rescate de la puerta que se abrio en reversa encima del bot ( ronda 5:
--- 17,6 s clavado ). No corre para puertas cerradas a proposito: esas ya las
--- cubre la cercania, y taparlas con un atravesado escondería otro problema.
-local STUCK_PHASE_AFTER = 2
+-- ⚠ ACA VIVIA STUCK_PHASE_AFTER, EL RESCATE DE LA HOJA QUE SE ABRE ENCIMA, Y LA
+-- RONDA 6 LO RETIRO. Se deja escrito para que nadie lo vuelva a escribir:
+--
+-- La rama pedia estar trabado > 2 s contra una puerta ABIERTA para prender el
+-- atravesado. Nunca subio: `fasesPorAtasco` marco 0 en toda la sesion, tambien
+-- en las lecturas con `atravesar 1`. Y el motivo es estructural, no de tuning:
+-- el contador solo sube `if not self.phantom_Phasing`, y para una hoja abierta
+-- A 0 u la regla de cercania ( distancia <= PHASE_RANGE ) ya prendio el
+-- atravesado en el primer tick. **La rama no podia dispararse justo en el caso
+-- para el que se escribio, porque la cercania llega antes.** Para que subiera
+-- haria falta estar trabado contra una puerta abierta a MAS de 45 u, que es un
+-- atasco contra otra cosa y donde atravesar la puerta no ayuda.
+--
+-- Lo que la ronda 6 SI midio, y por eso esto se puede sacar sin perder nada, es
+-- el A/B del atravesado contra la misma trampa:
+--
+--     phasedoors 1  ->  peor 0,7 - 0,9 s
+--     phasedoors 0  ->  peor 3,6 s -> 5,2 s, con velocidad 0 u/s
+--
+-- O sea: la hoja que se abre encima es una trampa real y **la cercania sola la
+-- resuelve**. El segundo disparador para el mismo phasing no agregaba nada.
 
 local DOOR_CLASSES = {
     [ "prop_door_rotating" ] = true,
@@ -247,7 +263,9 @@ local function readDoor( door )
     }
 end
 
-PHANTASMAGORIA.ReadDoor = readDoor
+-- readDoor NO se exporta, y se fue en la ronda 6: no lo consumia nadie, y un
+-- export sin consumidor se lee como API estable. Cuando el bloque de la linterna
+-- UV lo necesite, volver a ponerlo es una linea.
 
 ---------------------------------------------------------------------------
 -- Las huellas
@@ -426,15 +444,15 @@ end
 ---------------------------------------------------------------------------
 -- El cerebro de la cosa
 ---------------------------------------------------------------------------
--- reabrio va SEPARADO de away aunque los dos disparen la misma entrada del
--- engine: uno es "la puerta estaba cerrada y el peldano 1 no alcanzo" y el otro
--- es "la hoja se abrio encima del bot". Son dos fallas distintas y un contador
--- compartido las volveria indistinguibles justo en el reporte.
+-- `reabrio` y `fasesPorAtasco` estaban aca hasta la ronda 6 y se fueron con sus
+-- ramas: los dos marcaron 0 en las nueve lecturas, y no por falta de
+-- oportunidad sino porque el atravesado por cercania llega antes que los dos.
+-- El detalle esta donde vivian.
 local function stats( ghost )
     ghost.phantom_doorStats = ghost.phantom_doorStats or {
-        vistas = 0, intentos = 0, use = 0, unlock = 0, away = 0, open = 0, reabrio = 0,
+        vistas = 0, intentos = 0, use = 0, unlock = 0, away = 0, open = 0,
         abrio = 0, fallo = 0, huellas = 0, fases = 0, fasesLargas = 0,
-        silencios = 0, fasesPorAtasco = 0, vetadas = 0,
+        silencios = 0, silenciosBase = 0, silenciosHermanas = 0, vetadas = 0,
     }
 
     return ghost.phantom_doorStats
@@ -526,18 +544,53 @@ end
 -- los caminos, no solo el que escribimos -- y el instrumento decia la verdad
 -- sobre lo nuestro mientras el juego mostraba otra cosa, que es el modo de
 -- falla mas caro de todos. Pariente de "saltear no es apagar".
+--
+-- Y LA MISMA LECCION, SIN APLICAR, ERA EL AGUJERO DEL SILENCIO -- revisado con
+-- ojos frescos ANTES de correr la ronda 6, no despues:
+--
+--   El silencio colgaba SOLO de nuestra escalera, y la base abre puertas por su
+--   cuenta por este mismo camino. Peor: es antagonico. Cuando la base abre una
+--   prop_door_rotating se pone blockerTbl.term_NextUse = CurTime() + 3
+--   ( shared.lua:1345 ) y nuestro Think respeta ese reloj a proposito, asi que
+--   cuando la base gana la carrera NOS ABSTENEMOS justo los 3 s en los que la
+--   puerta suena.
+--
+--   Y el check no lo habria visto: la fila 01 dispara phantasmagoria_ghost_testdoor,
+--   que fuerza NUESTRO camino. Habria salido verde con el juego sonando -- el
+--   mismo modo de falla que costo la ronda 3.
+--
+-- Va aca porque este hook corre ADENTRO de Use2 ( shared.lua:1221 ), despues de
+-- handleDoubleDoors y ANTES del toUse:Use() y del click, o sea el unico punto
+-- que ven las dos aperturas. La llamada explicita de la escalera se conserva
+-- igual: los peldanos 2 y 3 usan Fire y no pasan por Use2.
 hook.Add( "TerminatorBlockUse", "phantasmagoria_veto_puertas", function( bot, used )
     if not IsValid( bot ) then return end
     if not bot.IsPhantasmagoriaGhost then return end
     if not IsValid( used ) then return end
     if not DOOR_CLASSES[ used:GetClass() ] then return end
 
-    if bot:phantom_CanOpenDoors() then return end
+    if not bot:phantom_CanOpenDoors() then
+        stats( bot ).vetadas = stats( bot ).vetadas + 1
 
-    stats( bot ).vetadas = stats( bot ).vetadas + 1
+        -- Vetada no se silencia a proposito: la hoja no se mueve, asi que no hay
+        -- sonido que tapar, y silenciarla seria pedirle prestados los keyvalues
+        -- a una puerta que nunca los iba a usar.
+        return true
 
-    return true
+    end
 
+    -- phantom_SilenceDoor devuelve true SOLO si abrio una ventana nueva. Nuestra
+    -- escalera silencia ANTES de llamar a Use2, asi que cuando el hook vuelve a
+    -- pasar por aca la ventana ya esta abierta y devuelve false. O sea que este
+    -- contador mide UNA cosa y bien: las aperturas que la base hace sola y que
+    -- hasta hoy sonaban.
+    if bot:phantom_WantsSilentDoors() and bot:phantom_SilenceDoor( used ) then
+        stats( bot ).silenciosBase = stats( bot ).silenciosBase + 1
+
+    end
+
+    -- Sin return: devolver el true de arriba bloquearia la apertura que se acaba
+    -- de silenciar.
 end )
 
 local function phaseMask()
@@ -550,7 +603,8 @@ local function phaseMask()
 
 end
 
-PHANTASMAGORIA.PhaseMask = phaseMask
+-- phaseMask tampoco se exporta, por lo mismo: su unico consumidor esta en este
+-- archivo.
 
 -- Se restaura a self.SolidMask, que es el campo DECLARADO por la base
 -- ( terminator_nextbot_base/init.lua:68, MASK_NPCSOLID ) y el mismo valor al
@@ -678,36 +732,16 @@ function ENT:phantom_DoorThink()
     -- encima, tr.Fraction es 0 y sigue atravesando hasta salir del otro lado.
     local distancia = tr.Fraction * reach
 
+    -- El motivo NO se guarda en un campo: el reporte vuelve a llamar al
+    -- resolvedor y lo imprime fresco. El campo phantom_PhaseWhy se escribia diez
+    -- veces por segundo y no lo leia nadie.
     local puede, motivo = self:phantom_CanPhaseDoors()
-    self.phantom_PhaseWhy = motivo
 
-    -- LA SEGUNDA PUERTA DE ENTRADA AL ATRAVESADO, REESCRITA CON LA CONDICION
-    -- QUE PIDIO EL AUTOR EN LA RONDA 5. La version anterior disparaba con
-    -- cualquier puerta que estuviera lejos, salio 0 en todos los reportes de
-    -- tres rondas, y la fila que iba a borrarla encontro para que servia:
-    --
-    --     trabado 15,2 s   ·   delante func_door_rotating   m_toggle_state = 0
-    --     ABIERTA   a 0 u
-    --
-    -- La hoja se abrio ENCIMA del bot y lo dejo clavado 17,6 s. Su propuesta,
-    -- literal: *"que quede trabado mucho tiempo -> phase momentaneo, con la
-    -- CONDICION de que la puerta marque como ABIERTA; si esta cerrada no tiene
-    -- por que pasar, asi evitamos que las puertas que abren en reversa dejen
-    -- pillado al npc"*.
-    --
-    -- Y es mejor que lo que yo tenia por dos motivos: una puerta CERRADA ya la
-    -- cubre la regla de cercania -- el atasco ahi seria otro problema y taparlo
-    -- con un atravesado lo escondería --, y limitarlo a la hoja abierta ataca
-    -- exactamente el caso que no tiene ninguna otra salida.
-    local trabadoContraEsta = ( self.phantom_doorBlocked or 0 ) > STUCK_PHASE_AFTER
-    local porAtasco         = puede and trabadoContraEsta and info.abierta
-
-    if porAtasco and not self.phantom_Phasing then
-        stats( self ).fasesPorAtasco = stats( self ).fasesPorAtasco + 1
-
-    end
-
-    if puede and ( distancia <= PHASE_RANGE or porAtasco ) then
+    -- UNA SOLA PUERTA DE ENTRADA AL ATRAVESADO: LA CERCANIA. La segunda -- el
+    -- rescate por atasco contra una hoja ABIERTA -- se retiro en la ronda 6
+    -- porque no podia dispararse; el porque esta arriba, donde estaba su
+    -- constante.
+    if puede and distancia <= PHASE_RANGE then
         self.phantom_doorSeenAt = now
         self:phantom_SetPhasing( true, motivo )
 
@@ -754,8 +788,8 @@ function ENT:phantom_DoorThink()
 
     end
 
-    local puedeAbrir, motivoAbrir = self:phantom_CanOpenDoors()
-    self.phantom_OpenWhy = motivoAbrir
+    -- Idem phantom_PhaseWhy: el motivo lo reimprime el reporte, no un campo.
+    local puedeAbrir = self:phantom_CanOpenDoors()
 
     if not puedeAbrir then return end
 
@@ -768,24 +802,22 @@ function ENT:phantom_DoorThink()
 
     local blocked = self.phantom_doorBlocked or 0
 
-    -- La hoja YA ESTA ABIERTA y aun asi el bot no pasa: se abrio encima suyo.
-    -- Usarla ahora la CERRARIA, asi que el unico movimiento valido es volver a
-    -- abrirla para el otro lado. Si ya estaba abierta hacia el lado correcto
-    -- esto es un no-op y el bot sigue trabado -- ahi manda el overrideMiniStuck
-    -- de la base ( shared.lua:1356 ), y el cronometro de arriba lo va a mostrar.
-    if info.abierta then
-        if blocked < FORCE_AFTER * 2 then return end
-        if door:GetClass() ~= "prop_door_rotating" then return end
-
-        door.phantom_nextTry = now + RETRY_EVERY
-        st.reabrio = st.reabrio + 1
-
-        self:phantom_DoorOpenAwayFrom( door )
-        return
-
-    end
-
-    if not info.cerrada then return end -- abriendo o cerrando: dejarla terminar
+    -- ⚠ ACA VIVIA LA RAMA `reabrio` -- volver a abrir con OpenAwayFrom la hoja
+    -- que ya estaba ABIERTA y le tapaba el paso -- Y LA RONDA 6 LA RETIRO. Se
+    -- deja escrito por el mismo motivo que la de arriba: para que no se
+    -- reescriba.
+    --
+    -- Pedia `blocked >= FORCE_AFTER * 2`, o sea 3 s, y el atravesado por
+    -- cercania destraba mucho antes: apenas el bot se mueve, la velocidad pasa
+    -- de 30 u/s y `phantom_doorBlocked` vuelve a 0. **Nunca llegaba a 3.** El
+    -- contador marco 0 en las nueve lecturas de la ronda 6, y estaba anotado en
+    -- la planilla como ESPERADO antes de correr, asi que el 0 no se leyo como
+    -- falla: se leyo como lo que era.
+    --
+    -- Si alguna vez el atravesado se apaga por diseno ( el Alternate de
+    -- ALTERNATE.md no atraviesa ), este es el caso que queda sin salida y hay
+    -- que volver a mirarlo -- pero entonces medido sobre ESE NPC, no sobre este.
+    if not info.cerrada then return end -- abierta, abriendo o cerrando: no es asunto nuestro
 
     st.intentos = st.intentos + 1
 
@@ -802,10 +834,11 @@ function ENT:phantom_DoorThink()
     door.phantom_nextTry = now + RETRY_EVERY
 
     -- EL SILENCIO, y va ANTES de tocar la puerta porque las dos mitades tienen
-    -- que estar puestas cuando el sonido se emita.
+    -- que estar puestas cuando el sonido se emita. El contador vive ADENTRO de
+    -- phantom_SilenceDoor desde que el hook tambien silencia: la misma apertura
+    -- pasa por los dos call sites y contarlo aca la contaba dos veces.
     if self:phantom_WantsSilentDoors() then
         self:phantom_SilenceDoor( door )
-        st.silencios = st.silencios + 1
 
     end
 
@@ -920,6 +953,14 @@ end
 --    nuevo: un comentario viejo junto a su propia refutacion es la trampa que
 --    este proyecto ya pago dos veces. )
 --
+-- Y HAY DOS CALL SITES, no uno, desde la revision previa a la ronda 6:
+--   la ESCALERA          silencia antes de abrir ( cubre los peldanos 2 y 3,
+--                        que usan Fire y no pasan por Use2 )
+--   TerminatorBlockUse   silencia adentro de Use2 ( cubre las aperturas que la
+--                        BASE hace por su cuenta, que es lo que sonaba )
+-- phantom_SilenceDoor es idempotente entre los dos y devuelve si abrio ventana
+-- nueva; el contador vive adentro por eso.
+--
 -- ERA 1,5 s Y ESO NO ALCANZA. El autor reporto en la ronda 3 que "si suenan, es
 -- el sonido de GOLPE de la puerta" -- y el golpe es el sonido de LLEGADA, el
 -- que la hoja emite al terminar el recorrido, no al empezarlo. Una puerta tarda
@@ -961,6 +1002,91 @@ local DOOR_SOUND_KEYS = {
     "soundunlockedoverride",
 }
 
+-- DE QUE FAMILIA ES CADA CAMPO, y no es documentacion: es lo unico que deja
+-- distinguir "esta puerta no tiene ese campo" de "esta puerta lo tiene y no me
+-- lo deja leer". Las dos daban un nil identico, y la segunda es la que puede
+-- dejar una puerta muda para siempre.
+--
+-- Se intentan las SIETE sobre las dos familias -- el mod de referencia hace lo
+-- mismo -- pero solo se ALARMA cuando el campo que no se pudo leer es de la
+-- familia propia de esa puerta. Un noise1 ausente en una prop_door_rotating es
+-- lo esperado; un soundopenoverride ausente en una prop_door_rotating, no.
+local DOOR_SOUND_OWNER = {
+    noise1                = "CBaseDoor",
+    noise2                = "CBaseDoor",
+    soundopenoverride     = "CBasePropDoor",
+    soundcloseoverride    = "CBasePropDoor",
+    soundmoveoverride     = "CBasePropDoor",
+    soundlockedoverride   = "CBasePropDoor",
+    soundunlockedoverride = "CBasePropDoor",
+}
+
+local function doorFamily( door )
+    if door:GetClass() == "prop_door_rotating" then return "CBasePropDoor" end
+
+    return "CBaseDoor"
+
+end
+
+-- LAS HOJAS HERMANAS DE UNA PUERTA DOBLE, y esto era el otro agujero del
+-- silencio. El engine abre la esclava junto con la maestra; nosotros
+-- silenciabamos UNA. La base ya sabe que las dobles son un caso aparte
+-- ( handleDoubleDoors, shared.lua:1150 ) y el mod de referencia propaga a
+-- slavename y m_hMaster ( sv_door.lua:152-162 ). Faltaba de nuestro lado.
+--
+-- OJO CON EL ALCANCE, porque la ronda 6 mostro que esto NO es lo mismo que "dos
+-- hojas al lado": gm_break_in_redux trae los vanos de a pares ( #763/#764,
+-- #949/#950 ) como entidades INDEPENDIENTES, sin slavename -- el bot usa cada
+-- una por su lado y las dos se silencian solas. Ahi este codigo no hace nada, y
+-- esta bien que no haga nada. El caso que cubre es la doble de VERDAD, con
+-- maestra y esclava, que ese mapa no tiene: por eso la ronda 6 no dio evidencia
+-- ni a favor ni en contra.
+--
+-- Se CACHEA en la puerta porque un slavename no cambia en runtime, y la rama de
+-- busqueda inversa -- "soy la esclava, quien es mi maestra" -- recorre todas las
+-- prop_door_rotating del mapa, igual que la base. Una vez por puerta y no una
+-- vez por apertura.
+local function doorSiblings( door )
+    local cached = door.phantom_DoorSiblings
+    if cached then return cached end
+
+    local out = {}
+    local keys = door:GetKeyValues()
+
+    -- 1. las esclavas que declara esta puerta
+    local slaveName = keys and keys[ "slavename" ]
+
+    if slaveName and slaveName ~= "" then
+        for _, sibling in ipairs( ents.FindByName( slaveName ) ) do
+            if IsValid( sibling ) and sibling ~= door and DOOR_CLASSES[ sibling:GetClass() ] then
+                out[ #out + 1 ] = sibling
+
+            end
+        end
+    end
+
+    -- 2. y al reves: la maestra que nos declara a nosotros. Sin esto, silenciar
+    --    la esclava deja sonando a la maestra, que es la mitad que el engine
+    --    mueve primero.
+    local ourName = door:GetName()
+
+    if ourName and ourName ~= "" then
+        for _, other in ipairs( ents.FindByClass( "prop_door_rotating" ) ) do
+            if IsValid( other ) and other ~= door then
+                local otherKeys = other:GetKeyValues()
+
+                if otherKeys and otherKeys[ "slavename" ] == ourName then out[ #out + 1 ] = other end
+
+            end
+        end
+    end
+
+    door.phantom_DoorSiblings = out
+
+    return out
+
+end
+
 -- La bitacora deja de anotar SONIDOS -- que no podemos ver -- y pasa a anotar
 -- las OPERACIONES, que si podemos: que puerta, que valores se guardaron, y si
 -- se restauraron. Es el instrumento que corresponde al mecanismo nuevo, y el
@@ -970,7 +1096,11 @@ local BITACORA_MAX = 10
 
 PHANTASMAGORIA.SilenceLog = PHANTASMAGORIA.SilenceLog or {}
 
-local silenced = {} -- [ puerta ] = hasta cuando
+-- ACA HABIA UNA TABLA `silenced`, escrita en dos lugares y leida en NINGUNO. Se
+-- fue en la ronda 6 y vale anotar por que era peor que ruido: parecia el
+-- registro autoritativo de puertas mudas, cuando el registro de verdad es el
+-- campo phantom_DoorSounds barrido sobre ents.GetAll(). El primero que fuera a
+-- arreglar la fila 03 la habria tocado a ella.
 
 local function anotar( texto )
     local log = PHANTASMAGORIA.SilenceLog
@@ -992,61 +1122,150 @@ function PHANTASMAGORIA.RestoreDoorSounds( door, force )
     -- nueva: el timer viejo se retira sin tocar nada.
     if not force and ( door.phantom_SilentUntil or 0 ) > CurTime() then return false end
 
-    for _, key in ipairs( DOOR_SOUND_KEYS ) do
-        door:SetSaveValue( key, saved[ key ] or "" )
+    -- SE DEVUELVE LO QUE SE GUARDO Y NADA MAS. La version anterior hacia
+    -- "saved[ key ] or """, o sea que para toda clave que no se hubiera podido
+    -- LEER escribia "" encima de un campo que nunca miramos. Y no era un borde
+    -- raro: son 2 de 7 en una prop_door_rotating y 5 de 7 en una func_door, o
+    -- sea que el camino peligroso estaba transitado en todas las puertas. Salia
+    -- bien de casualidad, porque esas claves no existen en esa familia -- el dia
+    -- que una exista y no se deje leer, ese "" es una puerta muda para siempre.
+    --
+    -- Este es el UNICO mecanismo del bloque que le cambia el mapa a todos de
+    -- forma permanente, y es lo que vigila el check 03.
+    local devueltos = 0
 
+    for _, key in ipairs( DOOR_SOUND_KEYS ) do
+        local val = saved[ key ]
+
+        if val ~= nil then
+            door:SetSaveValue( key, val )
+            devueltos = devueltos + 1
+
+        end
     end
 
     door.phantom_DoorSounds  = nil
     door.phantom_SilentUntil = nil
-    silenced[ door ] = nil
 
-    anotar( "devuelto  " .. door:GetClass() .. " #" .. door:EntIndex() )
+    anotar( "devuelto  " .. door:GetClass() .. " #" .. door:EntIndex() ..
+        "   " .. devueltos .. " campo(s), los mismos que se guardaron" )
 
     return true
 
 end
 
-function ENT:phantom_SilenceDoor( door )
-    -- ① el click del bot: se adelanta el debounce que la propia base consulta
-    self.nextUseSound = CurTime() + SILENCE_WINDOW
+-- Una hoja. Devuelve true si ABRIO UNA VENTANA NUEVA, false si ya habia una.
+-- Se llama una vez por la puerta usada y una por cada hermana, y cada una lleva
+-- su propio guardado, su propia ventana y su propio timer de devolucion: asi el
+-- arrastre a la doble no puede dejar a la hermana sin restaurar por culpa de la
+-- otra.
+local function silenceOne( door, esHermana )
+    if not IsValid( door ) then return false end
 
-    -- ② los sonidos de la puerta. Se guardan UNA vez: si se re-silencia con la
-    --    ventana abierta, lo guardado ya es "" y devolverlo dejaria la puerta
-    --    muda para siempre. El mod de referencia usa el mismo resguardo.
+    -- Los sonidos se guardan UNA vez: si se re-silencia con la ventana abierta,
+    -- lo guardado ya es "" y devolverlo dejaria la puerta muda para siempre. El
+    -- mod de referencia usa el mismo resguardo.
     local saved = door.phantom_DoorSounds
+    local nueva = false
+    local marca = esHermana and "silenciado ( hermana ) " or "silenciado "
 
     if not saved then
+        nueva = true
         saved = {}
-        local cuales = {}
+
+        local familia = doorFamily( door )
+        local conValor, vacios, ilegibles = {}, {}, {}
 
         for _, key in ipairs( DOOR_SOUND_KEYS ) do
             local val = door:GetInternalVariable( key )
-            saved[ key ] = val
 
-            if val and val ~= "" then cuales[ #cuales + 1 ] = key .. "=" .. tostring( val ) end
+            -- LO QUE NO SE PUDO LEER NO SE PISA. Es la unica linea que hace
+            -- falta para que este mecanismo no pueda dejar una puerta muda para
+            -- siempre: si un campo no se deja leer, la puerta SUENA -- falla
+            -- ruidosa, visible en el check y en la bitacora -- en vez de quedar
+            -- muda, que es la falla que nadie nota hasta mucho despues.
+            if val == nil then
+                if DOOR_SOUND_OWNER[ key ] == familia then ilegibles[ #ilegibles + 1 ] = key end
 
+            else
+                saved[ key ] = val
+
+                if val ~= "" then conValor[ #conValor + 1 ] = key .. "=" .. tostring( val )
+                else vacios[ #vacios + 1 ] = key end
+
+            end
         end
 
         door.phantom_DoorSounds = saved
 
-        anotar( "silenciado " .. door:GetClass() .. " #" .. door:EntIndex() ..
-            "   " .. ( #cuales > 0 and table.concat( cuales, "  " ) or "( no tenia ningun sonido declarado )" ) )
+        anotar( marca .. door:GetClass() .. " #" .. door:EntIndex() ..
+            "   " .. ( #conValor > 0 and table.concat( conValor, "  " ) or "( ningun campo con sonido )" ) ..
+            ( #vacios > 0 and ( "   declarados vacios: " .. table.concat( vacios, " " ) ) or "" ) )
 
+        -- LA LINEA QUE ANTES NO EXISTIA, y es la que separa las dos cosas que
+        -- la bitacora imprimia iguales. "No tenia sonido declarado" y "no lo
+        -- pude leer" daban el mismo nil, y la segunda es la unica que puede
+        -- terminar en una puerta muda. En la ronda 6 no aparecio ni una vez, y
+        -- eso ahora significa algo: la diferencia se veria.
+        if #ilegibles > 0 then
+            anotar( "  OJO  " .. door:GetClass() .. " #" .. door:EntIndex() ..
+                "   NO deja leer " .. table.concat( ilegibles, " " ) ..
+                " -- son campos de SU PROPIA familia ( " .. familia .. " ). Esos NO se silencian: " ..
+                "la puerta va a sonar, y eso es a proposito." )
+
+        end
     end
 
+    -- Solo las claves que se pudieron leer. Silenciar una que no se leyo seria
+    -- exactamente el caso que despues no se puede devolver.
     for _, key in ipairs( DOOR_SOUND_KEYS ) do
-        door:SetSaveValue( key, "" )
+        if saved[ key ] ~= nil then door:SetSaveValue( key, "" ) end
 
     end
 
     door.phantom_SilentUntil = CurTime() + SILENCE_WINDOW
-    silenced[ door ] = door.phantom_SilentUntil
 
     timer.Simple( SILENCE_WINDOW + 0.05, function()
         PHANTASMAGORIA.RestoreDoorSounds( door )
 
     end )
+
+    return nueva
+
+end
+
+-- DEVUELVE true SOLO SI ABRIO UNA VENTANA NUEVA sobre la puerta USADA, y eso no
+-- es cosmetico: es lo que deja contar aparte las aperturas de LA BASE sin contar
+-- dos veces las nuestras. La escalera silencia antes de llamar a Use2, asi que
+-- cuando el hook TerminatorBlockUse vuelve a pasar por aca la ventana ya esta
+-- abierta y esto devuelve false; una apertura de la base llega sin ventana
+-- previa.
+--
+-- El contador st.silencios vive ADENTRO por el mismo motivo: con dos call sites
+-- para la misma apertura, contarlo afuera lo contaba dos veces.
+function ENT:phantom_SilenceDoor( door )
+    if not IsValid( door ) then return false end
+
+    -- ① el click del bot: se adelanta el debounce que la propia base consulta.
+    --    Va siempre, aunque la ventana ya este abierta: el click lo emite Use2 y
+    --    la base puede llamarlo mas tarde que nosotros.
+    self.nextUseSound = CurTime() + SILENCE_WINDOW
+
+    -- ② los sonidos, de la puerta Y de sus hermanas. El engine mueve la esclava
+    --    junto con la maestra, asi que silenciar una sola deja sonando a la otra
+    --    mitad del vano.
+    local nueva = silenceOne( door, false )
+    local st    = stats( self )
+
+    for _, hermana in ipairs( doorSiblings( door ) ) do
+        if silenceOne( hermana, true ) then st.silenciosHermanas = st.silenciosHermanas + 1 end
+
+    end
+
+    if nueva then st.silencios = st.silencios + 1 end
+
+    return nueva
+
 end
 
 -- OpenAwayFrom pide el TARGETNAME del que se aparta, no la entidad
@@ -1112,6 +1331,28 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_testdoor", function( ply )
     local say = PHANTASMAGORIA.MakeSay( ply )
 
     local found = PHANTASMAGORIA.EachGhost( function( ghost )
+        -- LA GUARDA QUE FALTABA, Y LA RONDA 6 LA PAGO CON LAS DOS PRIMERAS
+        -- MEDICIONES DE LA FILA 01. Con opendoors en 0 este boton silenciaba la
+        -- puerta, gritaba "ESCUCHA AHORA" y despues el Use2 se lo comia el veto:
+        -- no se oyo nada porque LA PUERTA NO SE ABRIO. El reporte lo tenia
+        -- escrito al lado ( "a los 0.9 s: m_eDoorState = 0  no se movio" ) y aun
+        -- asi la fila se pudo marcar verde -- se salvo porque el autor volvio a
+        -- probar con opendoors 1.
+        --
+        -- *Un instrumento que invita a un verde sin medir nada es peor que no
+        -- tenerlo.* Y ademas le pedia prestados los keyvalues a una puerta que
+        -- nunca se iba a mover, o sea que exponia al riesgo de la fila 03 sin
+        -- contrapartida.
+        local puedeAbrir, motivoAbrir = ghost:phantom_CanOpenDoors()
+
+        if not puedeAbrir then
+            say( "#" .. ghost:EntIndex() .. "  NO SE DISPARA: este fantasma no puede abrir puertas." )
+            say( "    " .. motivoAbrir )
+            say( "    Sin apertura no hay sonido que tapar: el silencio NO se puede medir asi." )
+            return
+
+        end
+
         local mejor, mejorDist
 
         for _, ent in ipairs( ents.FindInSphere( ghost:GetPos(), 400 ) ) do
@@ -1136,8 +1377,9 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_testdoor", function( ply )
             "   " .. ( info.abierta and "ABIERTA" or ( info.cerrada and "cerrada" or "en movimiento" ) ) )
 
         if silencio then
+            -- El contador vive adentro de phantom_SilenceDoor. Contarlo aca
+            -- tambien seria contar dos veces la misma ventana.
             ghost:phantom_SilenceDoor( mejor )
-            stats( ghost ).silencios = stats( ghost ).silencios + 1
 
         end
 
@@ -1191,6 +1433,54 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
 
         say( "[Phantasmagoria] sonidos devueltos a " .. n .. " puerta(s). Si esto devuelve mas de 0 " ..
             "sin haber tocado nada recien, hubo un silenciado que no se restauro solo." )
+        return
+
+    end
+
+    -- "dobles" EXISTE PORQUE SIN EL, EL CHECK DE LA PUERTA DOBLE NO SE PUEDE
+    -- CORRER, y ya sabemos como termina eso: en la ronda 4 un check cuya
+    -- precondicion no se podia provocar se marco FALLA y se leyo como mecanismo
+    -- roto. Aca la precondicion es del MAPA -- que exista una doble de verdad,
+    -- con slavename -- y no hay forma de saberlo deambulando.
+    --
+    -- La ronda 6 mostro por que importa la distincion: gm_break_in_redux trae los
+    -- vanos de a pares ( #763/#764, #949/#950 ) pero como entidades
+    -- INDEPENDIENTES, sin slavename. El bot usa cada hoja por su lado y las dos
+    -- se silencian solas, asi que el arrastre no hace nada y esta bien que no
+    -- haga nada. "No aparecio" y "no anda" se ven igual sin esta lista.
+    if args and args[ 1 ] == "dobles" then
+        local n = 0
+
+        for _, ent in ipairs( ents.GetAll() ) do
+            if not DOOR_CLASSES[ ent:GetClass() ] then continue end
+
+            local keys  = ent:GetKeyValues()
+            local slave = keys and keys[ "slavename" ]
+
+            if slave and slave ~= "" then
+                n = n + 1
+
+                local cuantas = #ents.FindByName( slave )
+
+                say( "    " .. ent:GetClass() .. " #" .. ent:EntIndex() ..
+                    "   nombre '" .. tostring( ent:GetName() ) .. "'" ..
+                    "   slavename '" .. slave .. "'" ..
+                    "   -> " .. cuantas .. " entidad(es) responden a ese nombre" )
+
+            end
+        end
+
+        if n <= 0 then
+            say( "[Phantasmagoria] este mapa NO tiene ninguna puerta doble de verdad " ..
+                "( ninguna con slavename ). El arrastre a la hoja hermana no se puede medir aca, " ..
+                "y eso es un DATO: no es que falle, es que no se corre." )
+
+        else
+            say( "[Phantasmagoria] " .. n .. " puerta(s) maestra(s) con esclava. Abrir una de esas con el " ..
+                "fantasma y mirar que la bitacora traiga una linea 'silenciado ( hermana )'." )
+
+        end
+
         return
 
     end
@@ -1300,9 +1590,23 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
         -- abriendolas" es una frase; esto es un segundero. Y el estado va al
         -- lado porque cambia el veredicto: trabarse contra una puerta CERRADA
         -- es lo que este archivo arregla, contra una ABIERTA no.
+        -- LA POSICION DEL A/B, PEGADA AL NUMERO QUE EL A/B COMPARA. Lo destapo la
+        -- ronda 7: `peor` lo imprime ESTE comando y el interruptor runsafety solo
+        -- se veia en phantasmagoria_ghost_speed. Las dos mitades de una misma
+        -- comparacion en dos pantallas distintas es como se pierde un A/B: la
+        -- corrida quedo sin poder decir de que lado estaba cada lectura, y la
+        -- fila que existia justamente para dar ese numero se marco verde sin el.
+        --
+        -- La convar es de server_speed.lua, asi que se pide por nombre: un local
+        -- compartido entre los dos archivos seria la dependencia cruzada que ya
+        -- hay que desarmar en ResolveFlag.
+        local cvSafety = GetConVar( "phantasmagoria_ghost_runsafety" )
+
         say( "    peor      " .. string.format( "%.1f", ghost.phantom_doorWorst or 0 ) .. " s" ..
             ( ghost.phantom_doorWorstClass and ( "   contra un " .. ghost.phantom_doorWorstClass ..
-                " " .. tostring( ghost.phantom_doorWorstState ) ) or "" ) )
+                " " .. tostring( ghost.phantom_doorWorstState ) ) or "" ) ..
+            "   [ runsafety " .. ( cvSafety and cvSafety:GetInt() or "?" ) ..
+            ( cvSafety and cvSafety:GetBool() and ": cazando respeta canRunOnPath ]" or ": cazando corre SIEMPRE ]" ) )
 
         if not st then
             say( "    contadores  ( todavia no vio ninguna puerta cerrada )" )
@@ -1326,12 +1630,17 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
             "   ·  2 OpenAwayFrom " .. st.away ..
             "   ·  3 Fire Open " .. st.open ..
             "   ·  destrabadas " .. st.unlock )
-        say( "    reabrio   " .. st.reabrio .. " veces una hoja que ya estaba ABIERTA y le tapaba el paso" )
-        say( "    atraveso  " .. st.fases .. " veces" ..
-            "   ·  " .. st.fasesPorAtasco .. " de ellas por ATASCO y no por cercania" ..
+        say( "    atraveso  " .. st.fases .. " veces   ( todas por cercania: a " .. PHASE_RANGE .. " u o menos )" ..
             ( st.fasesLargas > 0 and ( "   ·  " .. st.fasesLargas .. " FORZADAS a solido por el techo de " ..
                 PHASE_MAX .. " s: eso no deberia pasar" ) or "" ) )
-        say( "    silencio  " .. st.silencios .. " aperturas silenciadas" ..
+        -- LOS DOS NUMEROS SEPARADOS, y el segundo es el que mide el agujero que
+        -- se cerro antes de la ronda 6: el silencio colgaba solo de NUESTRA
+        -- escalera y la base abre puertas por su cuenta. Si silenciosBase sube,
+        -- son aperturas que hasta ese arreglo sonaban -- y phantasmagoria_ghost_testdoor
+        -- no las podia ver, porque fuerza nuestro camino.
+        say( "    silencio  " .. st.silencios .. " ventanas de silencio abiertas" ..
+            "   ·  " .. st.silenciosBase .. " de ellas sobre aperturas de LA BASE, no de nuestra escalera" ..
+            "   ·  " .. st.silenciosHermanas .. " hojas HERMANAS silenciadas de arrastre ( puertas dobles )" ..
             "   ( tapa el click del bot Y el sonido de la hoja, " .. SILENCE_WINDOW .. " s )" )
         say( "    resultado ABRIO " .. st.abrio .. "   fallo " .. st.fallo ..
             "   ( releyendo el estado " .. VERIFY_AFTER .. " s despues; ABRIENDO cuenta como abrio )" )

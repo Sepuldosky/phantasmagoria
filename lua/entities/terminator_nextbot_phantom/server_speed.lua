@@ -247,6 +247,12 @@ end
 local cvWalkHunt = CreateConVar( "phantasmagoria_ghost_walkhunt", "1", FCVAR_ARCHIVE,
     "0 = ninguno camina cazando ( todos corren ) · 1 = respeta el flag phantom_WalksWhenHunting de cada NPC ( que arranca en false: corren ) · 2 = TODOS caminan cazando.", 0, 2 )
 
+-- EL A/B DE LA CORRECCION DE LA RONDA 7, y en 0 vuelve el defecto exacto de la
+-- ronda 5 para que la comparacion sea un comando y no una reversion. Ver el
+-- comentario largo de ENT:ShouldRun.
+local cvRunSafety = CreateConVar( "phantasmagoria_ghost_runsafety", "1", FCVAR_ARCHIVE,
+    "1 = cazando corre solo donde la base dice que se puede correr ( canRunOnPath: acantilados, vanos, curvas cerradas, pendientes ). 0 = corre siempre, ignorando esos vetos, que es el defecto de la ronda 5: sirve para el A/B.", 0, 1 )
+
 -- EL NOMBRE NO ES phantom_WalksWhenHunting Y ESA ES LA CORRECCION DE LA RONDA
 -- 4. Este metodo se llamaba igual que el CAMPO ( ENT.phantom_WalksWhenHunting ),
 -- y como este archivo se incluye DESPUES de la declaracion del campo, la
@@ -290,6 +296,17 @@ end
 function ENT:ShouldRun( myTbl )
     myTbl = myTbl or self:GetTable()
 
+    -- MANEJADO POR UN JUGADOR MANDA LA BASE SIEMPRE, y esto es correccion de la
+    -- ronda 7: la rama de abajo ignoraba la tecla de sprint del que lo maneja
+    -- ( drive.lua ), porque el BaseClass la consulta ANTES de llegar a las
+    -- tareas y nosotros nos metiamos delante.
+    if myTbl.IsControlledByPlayer( self, myTbl ) then
+        self.phantom_GaitWho = "la base ( lo maneja un jugador )"
+
+        return myTbl.BaseClass.ShouldRun( self, myTbl )
+
+    end
+
     -- Fuera del hunt manda la base: deambular alternando marcha se ve mejor que
     -- un fantasma corriendo por la casa todo el tiempo, y no es lo que se pidio.
     if myTbl.phantom_Hunting then
@@ -307,9 +324,44 @@ function ENT:ShouldRun( myTbl )
         -- por eso el comentario de arriba insiste con la diferencia.
         local camina = self:phantom_WalksHunting()
 
-        self.phantom_GaitWho = "override propio ( cazando, " .. ( camina and "camina" or "corre" ) .. " )"
+        if camina then
+            self.phantom_GaitWho = "override propio ( cazando, camina )"
 
-        return not camina
+            return false
+
+        end
+
+        -- ⚠ ESTO ES LA CORRECCION MAS CARA DE LA RONDA 7, Y LA CAUSA FUE CITAR
+        -- MEDIA FUNCION. El comentario de arriba cita la primera linea de
+        -- canDoRun y se detiene ahi. La segunda es:
+        --
+        --     if not myTbl.canRunOnPath( self, myTbl ) then return end
+        --
+        -- y canRunOnPath ( motionoverrides.lua:720-748 ) se niega a correr por
+        -- NUEVE motivos mas, ninguno de los cuales tiene que ver con verte:
+        -- forcedShouldWalk, estar en la mitad de un salto, un obstaculo cerca,
+        -- NAV_MESH_CLIFF, NAV_MESH_CROUCH, curvatura del camino > 0,45,
+        -- confinedSlope -- con el comentario del propio autor de la base,
+        -- *"running down slopes can get us stuck in the ceiling"* -- y el
+        -- navarea siguiente con lado menor a 25 u, QUE ES LA MEDIDA DE UN VANO
+        -- DE PUERTA.
+        --
+        -- Devolver true pelado cazando tiraba los diez vetos para anular UNO. Y
+        -- el sintoma que producia es la familia entera que este bloque existe
+        -- para arreglar: un fantasma a 250 u/s entrando de cabeza a los vanos.
+        --
+        -- *Un override que anula una regla tiene que anular ESA regla, no la
+        -- funcion que la contiene.*
+        if cvRunSafety:GetBool() and myTbl.canRunOnPath( self, myTbl ) ~= true then
+            self.phantom_GaitWho = "override propio ( cazando quiere correr, pero canRunOnPath de la base lo VETA )"
+
+            return false
+
+        end
+
+        self.phantom_GaitWho = "override propio ( cazando, corre )"
+
+        return true
 
     end
 
@@ -340,10 +392,23 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_speed", function( ply )
     say( "[Phantasmagoria] Better Movement: " ..
         ( bmOn and ( "MONTADO, sv_bm_enabled " .. ( bmOn:GetBool() and "1" or "0" ) ) or "NO MONTADO ( GetConVar dio nil )" ) )
 
-    if bmOn then
-        say( "    sv_bm_speed_run  " .. GetConVar( "sv_bm_speed_run" ):GetFloat() ..
-            "   walk " .. GetConVar( "sv_bm_speed_walk" ):GetFloat() ..
-            "   slowwalk " .. GetConVar( "sv_bm_speed_slowwalk" ):GetFloat() )
+    -- CON GUARDA, y no es paranoia: PlayerBaseRunSpeed ya la tenia sobre
+    -- sv_bm_speed_run y este reporte no, o sea que el INSTRUMENTO se caia con
+    -- una version del mod donde el MECANISMO seguia andando. Un instrumento mas
+    -- fragil que lo que mide se rompe justo cuando hace falta.
+    local cvRun = bmOn and GetConVar( "sv_bm_speed_run" )
+
+    if bmOn and cvRun then
+        local function num( name )
+            local cv = GetConVar( name )
+
+            return cv and cv:GetFloat() or "( no existe )"
+
+        end
+
+        say( "    sv_bm_speed_run  " .. cvRun:GetFloat() ..
+            "   walk " .. num( "sv_bm_speed_walk" ) ..
+            "   slowwalk " .. num( "sv_bm_speed_slowwalk" ) )
 
         -- La trampa de Diseno 1.1, a la vista y no de palabra: el getter contra
         -- la convar, en el mismo renglon. Con el jugador quieto los dos
@@ -353,8 +418,8 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_speed", function( ply )
         for _, target in ipairs( player.GetAll() ) do
             say( "    ply " .. target:Nick() ..
                 "   GetRunSpeed() " .. math.Round( target:GetRunSpeed() ) ..
-                "   contra la convar " .. math.Round( GetConVar( "sv_bm_speed_run" ):GetFloat() ) ..
-                "   ( x" .. string.format( "%.2f", target:GetRunSpeed() / math.max( GetConVar( "sv_bm_speed_run" ):GetFloat(), 1 ) ) .. " -- ese es _bmfraction )" )
+                "   contra la convar " .. math.Round( cvRun:GetFloat() ) ..
+                "   ( x" .. string.format( "%.2f", target:GetRunSpeed() / math.max( cvRun:GetFloat(), 1 ) ) .. " -- ese es _bmfraction )" )
 
         end
 
@@ -365,10 +430,15 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_speed", function( ply )
         local inside = GetConVar( "sv_bm_speed_inside_multiplier" )
         if inside then
             say( "    sv_bm_speed_inside_multiplier " .. inside:GetFloat() ..
-                "   ( adentro de un edificio el JUGADOR va a " .. math.Round( GetConVar( "sv_bm_speed_run" ):GetFloat() * inside:GetFloat() ) ..
+                "   ( adentro de un edificio el JUGADOR va a " .. math.Round( cvRun:GetFloat() * inside:GetFloat() ) ..
                 " u/s; el fantasma NO )" )
 
         end
+
+    elseif bmOn then
+        say( "    sv_bm_enabled EXISTE pero sv_bm_speed_run NO: otra version del mod. " ..
+            "El mecanismo cae a ply:GetRunSpeed() y lo dice en la linea 'base' de abajo." )
+
     end
 
     say( "[Phantasmagoria] conversion " .. ( cvDerive:GetBool() and "ENCENDIDA" or "APAGADA ( el fantasma usa los 550 de la base )" ) )
@@ -417,6 +487,13 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_speed", function( ply )
         say( "    marcha      " .. ( ghost.phantom_Hunting and "CAZANDO" or "en calma" ) ..
             "   la decidio: " .. tostring( ghost.phantom_GaitWho or "( todavia nadie )" ) ..
             "   camina cazando: " .. ( ghost:phantom_WalksHunting() and "SI" or "NO" ) )
+
+        -- La posicion del A/B, al lado de su efecto. Sin esto, "la decidio ...
+        -- canRunOnPath lo VETA" no se distingue de "la convar esta apagada y por
+        -- eso nunca aparece": el mismo silencio con dos causas.
+        say( "    vetos       " .. ( cvRunSafety:GetBool()
+            and "runsafety 1: cazando se respeta canRunOnPath ( acantilados, vanos < 25 u, curvas, pendientes )"
+            or  "runsafety 0: cazando corre SIEMPRE, ignorando los vetos ( el defecto de la ronda 5 )" ) )
 
     end )
 

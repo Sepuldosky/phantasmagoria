@@ -18,9 +18,288 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 juego**. Las planillas viven en `dev/checks/` y **no están versionadas** (`dev/` está fuera de todo
 repo), igual que `dev/other/`.
 
-**Lo único pendiente de correr: [`dev/checks/phantasmagoria-keyvalues-r6.html`](../dev/checks/phantasmagoria-keyvalues-r6.html)** — 6 filas.
-La **03** es la más importante y parece la más aburrida: que las puertas recuperen su sonido
-**solas**. Es el único riesgo del bloque que le cambia el mapa a todos de forma permanente.
+**La ronda 6 CORRIÓ: la planilla marcó 7 de 7 en verde. Cinco lo están; dos no, y las corrige el
+propio reporte.** El detalle está en «Ronda 6 corrida» más abajo, y el resumen es:
+
+- **El silencio quedó CERRADO en juego**, después de cuatro rondas. Con `doorsilent 2` no suena
+  nada; con `0` la misma familia de puerta suena. Y las dos mitades que se agregaron antes de
+  correr quedaron **medidas**, no supuestas.
+- **La 06 no midió su mecanismo**: `fasesPorAtasco` marcó **0 en toda la sesión**, que es su propio
+  criterio de FALLA escrito de antemano. Lo que se midió es el control negativo, y es bueno — pero
+  es otra cosa.
+- **La 05 pasó a ojo**, sin la medición que la propia fila pedía.
+
+**La ronda 7 CORRIÓ y quedó cerrada: 6 de 6.** El veto de geometría anda, la hoja hermana quedó
+cerrada en `gm_prison`, y `testdoor` ya no miente. La fila **02** se cerró **por criterio del autor y
+no por número** —su número no podía discriminar y el error era del check— con el A/B observacional:
+con `runsafety 1` camina al subir escaleras y al pegarse a objetos, con `0` corre para todo. Detalle
+en «Ronda 7 corrida».
+
+> ⚠ **El defecto abierto más grave del arco, y no salió de ninguna fila sino de preguntar por la
+> experiencia con el NPC: el fantasma salta, queda encajado entre props y el techo, y hay que sacarlo
+> con el physgun.** Es el primero que necesita intervención manual. La base tiene rescate
+> (`reallystuck_handler`, que teletransporta o borra) y está registrado en nuestro fantasma — o sea
+> que **el rescate existe y no rescató**, y no hay ningún instrumento que diga por qué.
+
+**Lo pendiente ahora, en orden:**
+
+1. **El encaje contra el techo.** Primero el instrumento —que `reallystuck_handler` diga cuándo
+   arranca y qué hace— y recién después tocar el salto. La hipótesis del autor (*«tal vez se
+   soluciona evitando que salte tanto»*) es razonable y **no está medida**; darla por buena antes de
+   instrumentar es exactamente lo que costó las rondas 5 y 6.
+2. **La cordura (§19)**, que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`.
+
+### Revisión con ojos frescos, ANTES de correr — dos arreglos entraron encima
+
+La planilla pasó de 6 a 7 filas porque una revisión del bloque destapó **dos defectos que la ronda
+6 no habría podido ver**, los dos contrastados contra el código de la base y contra el mod de
+referencia:
+
+- **(a) El silencio colgaba sólo de NUESTRA escalera**, y la base abre puertas por su cuenta
+  (`ShootblockerThink` → `tryToOpen` → `Use2`). Y es antagónico: cuando la base abre una
+  `prop_door_rotating` se pone `term_NextUse = CurTime() + 3` (`shared.lua:1345`) y nuestro Think
+  respeta ese reloj a propósito, así que **nos absteníamos justo los 3 s en los que la puerta
+  suena**. La fila 01 no lo veía: `phantasmagoria_ghost_testdoor` fuerza nuestro camino, o sea que
+  **habría salido verde con el juego sonando** — el modo de falla de la ronda 3, otra vez. Ahora el
+  silencio vive también en `TerminatorBlockUse`, el mismo hook que el veto, que es el único punto
+  que ven las dos aperturas. La fila **04** es nueva y mide exactamente eso, con su contador propio
+  (`silencio N · M de ellas sobre aperturas de LA BASE`).
+- **(b) El restore escribía `""` sobre los campos que nunca pudo LEER** (`saved[key] or ""`), sobre
+  el único mecanismo del bloque que le cambia el mapa a todos para siempre. No era un borde raro:
+  son 2 de 7 claves en una `prop_door_rotating` y 5 de 7 en una `func_door`, o sea que el camino
+  peligroso estaba transitado en cada puerta y salía bien **de casualidad**, porque esas claves no
+  existen en esa familia. Ahora lo que no se lee no se pisa —la puerta suena, que es la falla
+  ruidosa— y la bitácora separa *«no tenía sonido»* de *«no lo pude leer»*, que antes imprimían la
+  misma línea.
+
+**Y la planilla misma tenía el defecto de la familia:** `render()` escapaba `title` y `tag`, que
+llevan `<code>`/`<strong>`, así que los siete títulos se leían literales. La corrección anterior
+había arreglado el criterio y se olvidó del encabezado. Arreglado, con `plain()` para que el
+reporte que se pega en el chat no salga con tags.
+
+---
+
+## Ronda 6 corrida (2026-08-07) — el silencio CERRADO, y dos verdes que no lo son
+
+**Los dos arreglos escritos antes de correr quedaron medidos, y el que más importaba dio un
+número:**
+
+| Qué | Medido |
+|---|---|
+| **(a) El silencio sobre las aperturas de LA BASE** | **11 de 42** ventanas fueron aperturas que la base hizo sola. **Una de cada cuatro puertas sonaba** y ninguna fila anterior las podía ver |
+| **(b) El restore devuelve lo que guardó** | `puertas mudas AHORA MISMO` volvió a **0** en cada lectura, cada `devuelto` dice la misma cantidad de campos que su `silenciado` (5 en `prop_door_rotating`, 2 en `func_door*`), y el autor confirmó que **vuelven a sonar** |
+| La alarma nueva (`OJO … NO deja leer`) | **Nunca apareció** — `GetInternalVariable` leyó todos los campos de la familia propia en las dos familias. Es un silencio que significa algo, porque ahora la diferencia se vería |
+| Sin doble conteo | Dos `testdoor` seguidos sobre la misma puerta dentro de la ventana → **una** línea `silenciado` y **un** incremento |
+| El veto sigue vivo | `VETADAS 4` con `opendoors 0`, y es el control del hook: los dos cuelgan del mismo `TerminatorBlockUse` |
+| Destrabar | **`destrabadas 2`** — primera vez en el arco que la rama del `Unlock` se ejerce |
+
+### ⚠ La fila 06 se marcó verde y su propio criterio dice FALLA
+
+La corrida se hizo con **`phasedoors 0`**, o sea con el atravesado **apagado**. Y `porAtasco` empieza
+con `puede and …`: **con la convar en 0 la rama no puede evaluarse ni en principio.** El número lo
+dice sin ambigüedad: `atraveso 29 veces · **0 de ellas por ATASCO**`, y también 0 en las filas donde
+`atravesar` estaba en **1**.
+
+Y hay un motivo estructural, no de tuning: el contador sólo sube `if not self.phantom_Phasing`, y
+para una hoja abierta **a 0 u** la regla de cercanía (`distancia <= 45`) ya prendió el atravesado en
+el primer tick. *La rama por atasco no puede dispararse justo en el caso para el que se escribió,
+porque la cercanía llega antes.* Para que subiera haría falta estar trabado > 2 s contra una puerta
+abierta a **más de 45 u** — que es un atasco contra otra cosa, donde atravesar la puerta no ayuda.
+
+**Lo que la corrida sí midió, y es valioso:** el A/B del atravesado, limpio.
+
+| `phasedoors` | `peor` contra una hoja **ABIERTA** |
+|---|---:|
+| 1 | **0,7 – 0,9 s** |
+| 0 | **3,6 s → 5,2 s**, con `velocidad 0 u/s` |
+
+O sea: **la trampa de la hoja que se abre encima es real, y la cercanía sola la resuelve.** La rama
+por atasco es peso muerto. Se retira o se marca la fila como retirada — un check cuyo mecanismo no
+puede dispararse no es un check, que ya es la lección de la ronda 4.
+
+> **Y una predicción escrita antes de correr que se cumplió:** `reabrio` quedó en **0** toda la
+> sesión, por la misma competencia (`STUCK_PHASE_AFTER 2` dispara antes que `FORCE_AFTER*2 = 3`).
+> Estaba anotado en la planilla como *esperado*, así que esta vez el 0 no se leyó como falla.
+
+### ⚠ La fila 05 pasó a ojo
+
+*«Si solo camina, está perfecto»* es una observación, y la fila pedía `deseada` = la walk convertida
+en **tres lecturas viéndote y tres sin verte**, más la línea `la decidió: override propio ( cazando,
+camina )`. Nada de eso está en la nota. **No es que falle: no se midió**, y es la misma distinción
+que costó una ronda entera con el silencio. La conversión de velocidad sí quedó verificada de paso,
+por otro lado: `objetivo 252` con `deseada 60` en calma (`130 × 252/550 = 59,6`) y `deseada 252`
+cazando.
+
+### El defecto que destapó la corrida: `testdoor` no mira si la apertura está permitida
+
+Las **dos primeras** mediciones de la fila 01 son nulas y el reporte lo tiene escrito al lado:
+
+```
+[Phantasmagoria] convars: abrir 0 · ...        ← opendoors estaba en 0
+] phantasmagoria_ghost_testdoor
+#1324  prop_door_rotating #646 ... cerrada
+    silencio SI ( ventana de 3 s abierta )   -> ESCUCHA AHORA
+    a los 0.9 s: m_eDoorState = 0   no se movio
+```
+
+El botón silenció la puerta, gritó **ESCUCHA AHORA**, y el `Use2` se lo comió el veto (`VETADAS`
+subió). *No se oyó nada porque la puerta no se abrió.* Es el modo de falla más caro del proyecto en
+miniatura: **el instrumento invitó a un verde que no medía nada**, y la fila se salvó sólo porque el
+autor volvió a probar con `opendoors 1`. Además abre una ventana de silencio —y le pide prestados
+los keyvalues a una puerta— para una apertura que nunca iba a ocurrir, o sea que expone al riesgo de
+la fila 03 sin contrapartida.
+
+Arreglo: `testdoor` tiene que consultar `phantom_CanOpenDoors` y **negarse ruidosamente**, con el
+motivo que ya devuelve el resolvedor.
+
+### Dos observaciones que no son defectos de este bloque
+
+- **Cazando y a 92 u, el fantasma orbita en vez de cerrar:** `mirada vs jugador 0,9°` con
+  `mirada vs marcha 162,4°` a 252 u/s. Te mira y se mueve casi de espaldas. Es la base
+  (`movement_duelenemy_near` está en la lista de tareas), y es comportamiento de terminator armado:
+  un hunt de Phasmophobia quiere una recta. Va para el bloque de la cordura.
+- **La puerta doble no mordió en este mapa:** `gm_break_in_redux` trae las hojas de a pares
+  (`#763/#764`, `#949/#950`, `#928/#929`) pero como entidades **independientes** — el bot usa cada
+  una por su lado y la bitácora muestra `silenciado` para las dos. El agujero de `slavename` sigue
+  siendo real en el código; esta corrida **no da evidencia ni a favor ni en contra**.
+
+---
+
+## Ronda 7 CORRIDA (2026-08-07) — 6 de 6 en verde, y **la 02 no midió nada**
+
+**Lo que quedó cerrado en juego, con dato:**
+
+- **El veto de geometría existe y se ve.** Cinco lecturas de `_speed` cazando: tres con
+  `override propio ( cazando, corre )` y `deseada 252`, y **dos** con
+  `override propio ( cazando quiere correr, pero canRunOnPath de la base lo VETA )` y `deseada 60`.
+  El hallazgo grande de la revisión **corrió**.
+- **La hoja hermana quedó CERRADA**, y hacía falta otro mapa: en `gm_prison` apareció la doble de
+  verdad. La bitácora lo muestra completo — `silenciado prop_door_rotating #703` +
+  `silenciado ( hermana ) #704`, y después `devuelto #703` y `devuelto #704`, **5 campos cada uno** —
+  con el contador en `1 → 2 hojas HERMANAS` y el veredicto del autor: *«no hay sonidos al abrir
+  puertas dobles»*. El agujero que la ronda 6 no pudo medir por falta de mapa está tapado.
+- **Las dos ramas retiradas no dejaron hueco:** `peor` 0,1 → 0,6 → **1,2 s** contra una
+  `func_door_rotating` ABIERTA, y el reporte ya no nombra `reabrio` ni `por ATASCO`. Queda un pelo
+  arriba del ~1 s del criterio; el autor lo describe como *«atasca 1 segundo… pasa bien»*.
+- **De paso se contestó una pregunta abierta de la ronda 6:** el `objetivo 252` no era un misterio —
+  `sv_bm_speed_run 280` × `speedmul 0.900`, y ahora el instrumento imprime de dónde sale cada
+  factor.
+
+### La 02: el número no discriminó, y el criterio que la cierra es del autor
+
+El A/B se corrió entero — mismo circuito de `gm_prison`, `hunt 1`, `phasedoors 1`, cinco lecturas por
+lado — y `peor` dio **0,0 s en las dos mitades**. Con `intentos`, `Use2` y `ABRIO` idénticos (5/5/4).
+
+**Y el número no podía dar otra cosa.** Con `phasedoors 1` el fantasma **no se traba nunca**: las
+diez líneas `delante` dicen `velocidad 252 u/s, el umbral es 30`. `peor` sólo cuenta por debajo de
+30 u/s con una puerta delante, así que está en el piso de los dos lados por construcción. *Le pedí a
+un medidor de atascos-en-puertas que contestara sobre atascos-que-no-son-en-puertas.* El criterio
+numérico de esa fila estaba mal escrito, y el error es del check, no de la corrida.
+
+**El discriminante existía y era observacional.** Con `runsafety 1` el autor lo ve **caminar al subir
+escaleras y al pegarse a objetos y barandas**; con `0` lo ve **correr para todo, subiendo y bajando
+escaleras**. La diferencia es visible, consistente y se mueve con el interruptor.
+
+Y el veredicto es suyo, textual: *«se nota que no es un bot tonto, está midiendo su ambiente y lo
+encuentro bien»*, y **no rompe la persecución**. Con eso la fila queda **cerrada por criterio del
+autor, no por número** — y así hay que leerla: nadie midió que el veto prevenga un atasco.
+
+> **Y se descartó un arreglo que yo había propuesto.** Iba a mover la marcha vetada de la *walk*
+> (60 u/s) a la *move* (137), porque un terminator sin conversión vetado va a 130 y el nuestro cae a
+> menos de la mitad. El autor probó el frenado y le gusta. *Era la solución a un problema que él no
+> tiene*, y proponerla de nuevo requiere que alguien reporte el problema primero.
+
+### El hallazgo de verdad de esta ronda no salió de ninguna fila
+
+Preguntando por la experiencia con el NPC apareció **el primer defecto que necesita intervención
+manual**: *«he visto que salta y queda pegado entre objetos y el techo de un interior, ahí hay que
+sacarlo con el physgun»*.
+
+Es peor que cualquier atasco de puerta —de un atasco de puerta sale solo— y **no lo cubre ningún
+check**. Lo que se sabe hasta acá:
+
+- La base **tiene** rescate: `reallystuck_handler` (`shared.lua:3647`), que primero manda al bot a
+  caminar a un lado y, si eso falla, lo **teletransporta o lo borra**. Está registrado en nuestro
+  fantasma: aparece en la lista de tareas de cada `phantasmagoria_ghost_where`.
+- O sea que **el rescate existe y no rescató**. Las dos hipótesis, sin medir ninguna: que no llega a
+  dispararse, o que se dispara y no puede — su chequeo pide `navmesh.GetNearestNavArea( pos, false,
+  50, … )` con criterio estrecho, y un bot encajado contra un techo puede estar fuera de todo
+  navarea.
+- No hay instrumento: nada dice cuándo `reallystuck_handler` arranca ni qué hace.
+- La hipótesis del autor —*«tal vez se soluciona evitando que salte tanto»*— es razonable y **no está
+  medida**. `canRunOnPath` veta correr `isInTheMiddleOfJump`, así que `runsafety 1` toca el borde de
+  este caso, pero **no hay evidencia de que lo prevenga** y no hay que darlo por arreglado.
+
+### Dos cosas del autor que son diseño, no defectos
+
+- **`phasedoors 2` es la palanca de dificultad más grande medida hasta ahora**, e independiente de
+  todo lo demás: *«con `phasedoors 2` es más difícil de escapar definitivamente»*, mientras que entre
+  `runsafety 0` y `1` no notó diferencia de dificultad. Dato directo para los 30 tipos (§5, §12.2):
+  atravesar es lo que separa un fantasma fácil de uno que no tiene puerta que lo pare.
+- **El bucle central ya funciona sin nada de atmósfera.** Sin efectos, sin audio, sin cordura:
+  *«ya es tenso escapar… me escondo detrás de muros o props y el bot pasa de largo o trata de ver
+  cómo alcanzarme»*. Que esconderse funcione es §18 andando sin haberse escrito.
+
+### El defecto del instrumento, y es mío
+
+**`peor` lo imprime `phantasmagoria_ghost_doors`, y ese comando no decía en qué posición estaba
+`runsafety`** — el interruptor sólo se veía en `phantasmagoria_ghost_speed`. Las dos mitades de una
+misma comparación en dos pantallas distintas: así se pierde un A/B. Peor, deja sin saber si la fila
+03 corrió con el veto puesto o no, porque el autor nunca volvió a `runsafety 1` y nada en la salida
+de `_doors` lo dice.
+
+Arreglado: `peor` sale ahora con `[ runsafety N: … ]` pegado al lado.
+
+**Y uno más, chico y del mismo color:** el reporte que genera la planilla r7 se identificaba a sí
+mismo como *«ronda 6»* — el título del reporte se reemplaza junto con el array de checks y se me
+pasó. Dos rondas distintas archivadas con el mismo encabezado. Arreglado.
+
+**Falta:** re-correr **sólo la fila 02**, con las dos mitades y con `intentos > 0` en cada una. La
+planilla ya trae la receta exacta. Las filas **05** y **06** no se pudieron revisar acá: el reporte
+llegó cortado antes de sus notas.
+
+---
+
+## Lo que la ronda 7 midió — lo escrito antes de correr
+
+Salió entera de la revisión y de lo que la ronda 6 midió.
+
+| Qué entró | Dónde | Fila |
+|---|---|---|
+| **`ShouldRun` cazando respeta `canRunOnPath`** | `server_speed.lua` | **01 · 02** |
+| A/B del anterior: `phantasmagoria_ghost_runsafety 0` devuelve el defecto exacto de la ronda 5 | `server_speed.lua` | 02 |
+| **Se retiraron `fasesPorAtasco` y `reabrio`**, con el porqué escrito donde vivían | `server_doors.lua` | 03 |
+| **El silencio arrastra a la hoja hermana** de una puerta doble (`slavename` + la búsqueda inversa, cacheada por puerta) | `server_doors.lua` | 04 |
+| `phantasmagoria_ghost_doors dobles`, para que la fila 04 tenga una precondición **medible** | `server_doors.lua` | 04 |
+| `testdoor` se niega si el fantasma no puede abrir | `server_doors.lua` | 05 |
+| El bot manejado por un jugador vuelve a respetar la tecla de sprint | `server_speed.lua` | — |
+| Guarda en el reporte de velocidad sobre `sv_bm_speed_walk` / `_slowwalk` | `server_speed.lua` | 06 |
+| Se fueron `silenced`, `ReadDoor`, `PhaseMask`, `phantom_PhaseWhy`, `phantom_OpenWhy` | `server_doors.lua` | 06 |
+
+**El más caro es el primero, y la causa fue citar media función.** El comentario que justificaba el
+`return true` pelado cita la primera línea de `canDoRun` —la de *«te ve y camina»*— y se detiene ahí.
+La segunda es `if not myTbl.canRunOnPath( self, myTbl ) then return end`, y esa se niega a correr por
+**nueve motivos más**: acantilado, `NAV_MESH_CROUCH`, curvatura > 0,45, pendiente confinada (*«can
+get us stuck in the ceiling»*, dice la base), obstáculo cerca, mitad de un salto, y **el navarea
+siguiente con lado menor a 25 u, que es la medida de un vano de puerta**. *Un override que anula una
+regla tiene que anular esa regla, no la función que la contiene.*
+
+> **Y el arreglo se escribió por lectura, no por medición.** Por eso la fila 02 pide el número —`peor`
+> con `runsafety 0` contra `runsafety 1`— y su criterio de FALLA dice explícitamente que si no
+> mejora, el rojo es **de la justificación** y vale igual.
+
+**Sigue abierto y sin tocar:**
+
+- `doorAhead` traza con `MASK_SOLID` sin filtro, así que cualquier cosa delante de la puerta (un
+  prop, un jugador) se lleva el hit y el bloque entero deja de ver la puerta — incluido el
+  cronómetro.
+- El cronómetro se resetea al cambiar la puerta del sondeo: si el hull alterna entre dos hojas, nunca
+  llega a `FORCE_AFTER` y los peldaños 2 y 3 quedan inalcanzables sin un solo error.
+- `ResolveFlag` vive en `server_doors.lua` y lo consume `server_speed.lua`, que carga antes. **Se
+  difirió a propósito:** es un movimiento de cero comportamiento, y meterlo en la misma ronda que un
+  cambio de marcha convierte un rojo en un misterio.
+- Cazando y de cerca, el fantasma **orbita** en vez de cerrar (`movement_duelenemy_near`). Es la base
+  y es comportamiento de terminator armado; va con el bloque de la cordura.
 
 ### Estado por pieza, en una línea cada una
 
@@ -32,8 +311,8 @@ La **03** es la más importante y parece la más aburrida: que las puertas recup
 | El veto (`opendoors 0`) | **CERRADO en juego** — `VETADAS` sube; alcanza también a la base |
 | Flags por comando | **CERRADO en juego** — sobreviven al respawn, el reporte nombra la capa que ganó |
 | Correr cazando | **CORRE en juego**; falta confirmar que el que *camina* camine también sin verte |
-| **Silencio de puertas** | **MECANISMO NUEVO, SIN CORRER** — es lo que la ronda 6 mide |
-| Rescate de la hoja abierta | **SIN CORRER** — `fasesPorAtasco`, reescrito con la condición del autor |
+| **Silencio de puertas** | **CERRADO en juego (ronda 6)** — por keyvalues, con dos call sites: la escalera y `TerminatorBlockUse`. 11 de 42 ventanas fueron aperturas de la BASE |
+| Rescate de la hoja abierta | **RETIRADO de hecho** — `fasesPorAtasco` = 0 siempre y no puede subir: la cercanía llega antes. La trampa existe y **la cercanía sola la resuelve** (`peor` 5,2 s → 0,9 s) |
 
 ### Las cinco reglas que costaron una ronda cada una
 
@@ -107,7 +386,11 @@ Lo que existe:
 | ⚠ Riesgo nuevo: puertas mudas | El silencio **borra un dato del mapa**, no bloquea un sonido. Hay contador de *puertas mudas ahora mismo*, un `devuelto` por cada `silenciado`, y `phantasmagoria_ghost_doors restore` |
 | Sistema de cuartos + toolgun | **NO EXISTE** — diseñado en §14 |
 | SWEPs / entidades de equipo | **NO EXISTEN** — los modelos ya están, falta el Lua |
-| Corridas en GMod | **8** (2026-08-05 ×3; 2026-08-06 ×5) — refutaron **dos** predicciones del documento y **una lectura mía sobre la causa del giro**; destaparon **13** defectos: **12 del instrumento y 1 del fantasma**, y el del fantasma ya está **cerrado en juego** |
+| Corridas en GMod | **10** (2026-08-05 ×3; 2026-08-06 ×5; 2026-08-07 ×2) — refutaron **dos** predicciones del documento y **una lectura mía sobre la causa del giro**; destaparon **16** defectos: **15 del instrumento y 1 del fantasma**. Los dos últimos son de la ronda 7 y los dos míos: `peor` se imprimía sin decir de qué lado del A/B estaba, y el reporte de la planilla r7 se llamaba a sí mismo «ronda 6» |
+| La marcha cazando (`canRunOnPath`) | **CERRADA EN JUEGO por criterio del autor** — el veto se ve (`deseada` 252 → 60) y el A/B observacional es limpio: con 1 camina en escaleras y cerca de objetos, con 0 corre para todo. **Nadie midió que prevenga un atasco**, y así hay que leerlo |
+| ⚠ Salta y queda encajado contra el techo | **DEFECTO ABIERTO, el primero que necesita physgun.** Sin instrumento y sin check. `reallystuck_handler` existe, está registrado y no rescató |
+| La hoja hermana de una puerta doble | **CERRADA EN JUEGO** — `gm_prison`, ronda 7: `silenciado ( hermana )` y su `devuelto`, 5 campos cada uno |
+| El silencio de las puertas | **CERRADO EN JUEGO** — ronda 6, al quinto intento y con el tercer mecanismo. Ver «Ronda 6 corrida» |
 
 ---
 
