@@ -56,6 +56,21 @@ local NAVCHECK_DELAY = 10
 -- modelo se lo lleva puesto en silencio -- shared.lua:2989 lo aplica si es
 -- numero, sin preguntar si ese modelo tiene tantos skins.
 local MODEL_CANDIDATES = {
+    -- EL FANTASMA. Ghost_Girl_1 de Phasmophobia, ripeado y recompilado por este
+    -- taller: 53 huesos ValveBiped, ragdoll de 15 solidos y las 8 actividades
+    -- que la base pide portadas a NUESTRO esqueleto. Cerrado 7/7 como prop en la
+    -- ronda 2 ( dev/checks/phantasmagoria-ghostrig-r2.html ).
+    --
+    -- skin en nil: tiene UN solo skin, y shared.lua:2989 aplica ModelSkin sin
+    -- preguntar si ese indice existe.
+    --
+    -- ⚠ ESTE .mdl NO LLEGA A GITHUB. Es la condicion de la licencia del asset:
+    -- models/phantasmagoria/ghost_girl* esta gitignoreado. O sea que en un clon
+    -- limpio util.IsValidModel da false y pickModel cae al cadaver de abajo,
+    -- avisando por ghostPrint. Eso es a proposito y no es un defecto: el que
+    -- clona el repo tiene un fantasma que funciona, no un error.
+    { mdl = "models/phantasmagoria/ghost_girl.mdl" },
+
     -- EL DE PRUEBAS, por pedido del autor ( 2026-08-06 ): el cadaver de HL2.
     -- Es el mismo que usa HIM sobre ESTA MISMA BASE ( him/.../homeless/shared.lua:12 ),
     -- que es la mejor evidencia posible de que sirve: no es un modelo parecido,
@@ -113,6 +128,137 @@ ENT.Models = { chosen.mdl }
 -- "if isnumber( myTbl.ModelSkin )", asi que nil deja el 0 del modelo y no
 -- inventa un indice que ese .mdl puede no tener.
 ENT.ModelSkin = chosen.skin
+
+-- Si el elegido es el fantasma, se sabe aca y lo miran los dos bloques de abajo
+-- ( el hull y la traduccion de actividades ). Los dos son correcciones para ESTE
+-- modelo y aplicarselas al cadaver de HL2 -- que mide 76 u y trae las de m_anm
+-- sin portar -- seria romperlo.
+local esNuestroModelo = chosen.mdl == MODEL_CANDIDATES[ 1 ].mdl
+
+---------------------------------------------------------------------------
+-- ⚠ QUE ACTIVIDAD LLEGA AL MODELO, Y NO ES LA QUE DICE LA TABLA DE MOVIMIENTO
+---------------------------------------------------------------------------
+-- La base NO le pide al modelo una secuencia por nombre: le pide una ACTIVIDAD,
+-- y el engine elige entre las secuencias que la declaran. La cadena, censada en
+-- el codigo:
+--
+--   SetupMotionType    motionoverrides.lua:3742  -> uno de 8 ..._MOTIONTYPE_*
+--   MotionTypeActivities    motion.lua:14        -> un ACT_MP_*
+--   TranslateActivity  motionoverrides.lua:3681
+--     -> IdleActivityTranslations :3668          -> ACT_HL2MP_IDLE + N
+--   StartActivity      motion.lua:173            -> SelectWeightedSequence( act )
+--
+-- O SEA QUE EL ACT_MP_* NUNCA LLEGA AL MODELO. El handoff de este bloque decia
+-- que el QC lleva `activity ACT_MP_RUN`; eso habria declarado una actividad que
+-- nadie pide, y el fantasma habria seguido tomando las prestadas de m_anm.
+--
+-- ⚠ Y POR QUE SE PISA LA TABLA EN VEZ DE USAR LA HEREDADA: la de la base arma
+-- las actividades con ARITMETICA sobre el enum ( IdleActivity + 1, + 2, ... ),
+-- o sea que depende del orden exacto de los ACT_HL2MP_* en el enum de Lua. Ese
+-- orden yo NO lo medi: lo derive, y la derivacion cierra con tres cosas del
+-- .mdl de m_anm ( existen SWIM_IDLE y SWIM por separado, lo que justifica que
+-- el +9 sea SWIM; y ACT_HL2MP_JUMP no tiene NI UNA secuencia, que es lo que
+-- explica el comentario 'no normal jump anim' del +7 ). Cierra, pero derivar no
+-- es medir.
+--
+-- Nombrando las actividades no queda nada que derivar: sea cual sea el numero,
+-- el nombre resuelve al mismo. Es el punto de extension que la propia base
+-- documenta ( "custom anim translation support" ), no un parche encima.
+--
+-- LAS DOS QUE NO SON EL PATRON, y las dos salieron de medir m_anm y no de leer
+-- el enum:
+--   JUMP    va a ACT_HL2MP_JUMP_SLAM porque ACT_HL2MP_JUMP no tiene secuencia.
+--   RELOAD_CROUCH la base lo manda al +7, que bajo el patron de 10 ranuras por
+--     arma es ACT_HL2MP_JUMP y no una recarga. Da igual para nosotros -- un bot
+--     sin arma no recarga nunca -- pero se deja escrito para no "arreglarlo"
+--     despues creyendo que es nuestro.
+if esNuestroModelo then
+    ENT.IdleActivity = ACT_HL2MP_IDLE
+    ENT.IdleActivityTranslations = {
+        [ ACT_MP_STAND_IDLE ]                = ACT_HL2MP_IDLE,
+        [ ACT_MP_WALK ]                      = ACT_HL2MP_WALK,
+        [ ACT_MP_RUN ]                       = ACT_HL2MP_RUN,
+        [ ACT_MP_CROUCH_IDLE ]               = ACT_HL2MP_IDLE_CROUCH,
+        [ ACT_MP_CROUCHWALK ]                = ACT_HL2MP_WALK_CROUCH,
+        [ ACT_MP_JUMP ]                      = ACT_HL2MP_JUMP_SLAM,
+        [ ACT_MP_SWIM ]                      = ACT_HL2MP_SWIM,
+        [ ACT_LAND ]                         = ACT_LAND,
+
+        -- Estas dos las hereda la base y NO tenemos secuencia propia: un bot con
+        -- DefaultWeapon = false no dispara ni recarga nunca, asi que si alguna
+        -- vez llegan, que caigan en las de m_anm y se vea. Declararlas apuntando
+        -- a una nuestra que no existe seria peor.
+        [ ACT_MP_ATTACK_STAND_PRIMARYFIRE ]  = ACT_HL2MP_GESTURE_RANGE_ATTACK,
+        [ ACT_MP_ATTACK_CROUCH_PRIMARYFIRE ] = ACT_HL2MP_GESTURE_RANGE_ATTACK,
+    }
+
+end
+
+---------------------------------------------------------------------------
+-- ⚠ EL HULL CON EL QUE CAMINA, QUE LO PONE LA BASE Y NO EL MODELO
+---------------------------------------------------------------------------
+-- MEDIDO, y es el numero que decide como se ve el fantasma:
+--
+--   ENT.CollisionBounds de la base ... (-16,-16,0) .. (16,16,72)
+--       terminator_nextbot_base/init.lua:39, CLAVADO. InitializeCollisionBounds
+--       ( motionoverrides.lua:3855 ) solo lo multiplica por GetModelScale(), que
+--       es 1. O sea: el mismo hull para todos los modelos.
+--   malla del fantasma ............... 44,94 u de alto  ( leida del .vvd )
+--   su hull de COLISION del .mdl ..... -7,9 .. 46,65
+--
+-- ⚠ LOS DOS ULTIMOS NUMEROS NO SON LO MISMO Y CONFUNDIRLOS YA MORDIO DOS VECES
+-- EN ESTE TALLER: 104/116 del studiohdr es el hull de la FISICA ( sale del .phy
+-- del ragdoll ) y no dice nada sobre la malla ni sobre por donde camina el bot.
+-- La malla se mide en el .vvd, que es de donde salen los 44,94.
+--
+-- LO QUE EL HULL DE 72 LE HACE A UN CUERPO DE 45, medido en la formula de la
+-- base y no mirandolo:
+--
+--   ViewOffset = round( maxsZ - (maxsZ/72) * 8 )   motionoverrides.lua:3883-3885
+--
+--   con 72 -> 64 . La cabeza de la nena termina en 44,7, asi que los OJOS del
+--   fantasma quedan 19 u POR ENCIMA DE SU PROPIA CABEZA, en el aire. Y no es
+--   cosmetico: ese punto es el origen de CanSeePosition ( shared.lua:239 ), o
+--   sea que el fantasma ve desde donde no tiene cabeza, y `EntShootPos` lo
+--   convierte tambien en el punto al que los demas trazan.
+--
+-- ⚠ LA HIPOTESIS DE QUE FLOTABA ES FALSA, Y LA MEDICION LA REFUTO. El plan de
+-- este bloque decia "un cuerpo de 45 adentro de un hull de 72 flota". No: el
+-- mins.z del hull es 0 y el origen del modelo esta en los pies ( el SMD va de
+-- -0,22 a 44,72, que es la convencion de Source y por eso el QC usa --no-center ).
+-- El hull no la levanta del piso -- le sobran 27 u ARRIBA de la cabeza. El
+-- sintoma real no es que flote, es que ve y la ven desde el aire.
+--
+-- EL NUMERO NUEVO SALE DE UNA SOLA MEDICION Y UN SOLO FACTOR: 44,94 / 72 =
+-- 0,624, aplicado tambien al ancho ( 16 -> 10 ). Asi el fantasma queda con la
+-- misma proporcion hull/cuerpo que un jugador, que es lo que la base asume en
+-- todas sus cuentas. No se elige un ancho "que parezca bien": se escala el que
+-- ya estaba por lo unico que cambio.
+--
+-- LO QUE LA BASE DERIVA SOLA de esto, y por eso no hay que tocarlo:
+--   ViewOffset ......... round( 45 - (45/72)*8 )   = 40  -> adentro de la cabeza
+--   CrouchCollisionBounds maxs.z = 45 * 0,6        = 27
+--   CrouchViewOffset ... round( 27 - (27/43)*11 )  = 20
+--
+-- ⚠ Y UNA CONSECUENCIA DE DISENO QUE HAY QUE ESCRIBIR ANTES DE QUE SORPRENDA:
+-- Diseno 18.2.1 saco la cuenta de "que caja me tapa" con los ojos del bot en 64
+-- ( H > 64 - 46*t ). Con el hull nuestro los ojos van a 40 y la cuenta pasa a
+-- ser H > 40 - 22*t: TODOS los escondites se vuelven mas faciles, porque el
+-- fantasma es mas bajo. Es correcto y es un cambio de balance, no un efecto
+-- secundario -- el que revise Diseno 18 tiene que releerlo con 40.
+--
+-- Va por convar y no clavado porque es lo unico que hace el A/B posible: en 0
+-- el fantasma camina con el hull de 72 de la base, que es el comportamiento de
+-- hoy y el control negativo de la fila del hull.
+local cvHull = CreateConVar( "phantasmagoria_ghost_hull", "1", FCVAR_ARCHIVE,
+    "El fantasma usa un hull proporcional a SU cuerpo ( 20x20x45 ) en vez del de la base " ..
+    "( 32x32x72, clavado en terminator_nextbot_base/init.lua:39 ). " ..
+    "En 0 usa el de la base: los ojos le quedan 19 u sobre la cabeza. Sirve de control negativo. " ..
+    "Se lee AL SPAWNEAR, asi que cambiarla no afecta a los fantasmas ya vivos.", 0, 1 )
+
+-- 44,94 del .vvd, redondeado. El ancho es 16 * ( 45 / 72 ).
+local HULL_ALTO  = 45
+local HULL_ANCHO = 10
 
 ---------------------------------------------------------------------------
 -- Desarmado
@@ -520,6 +666,24 @@ function ENT:AdditionalInitialize()
     -- velocidad normal justo cuando el mecanismo dice que tiene que acelerar.
     self.phantom_BaseRunSpeed = self.RunSpeed
 
+    -- EL HULL, Y ACA ES EL UNICO LUGAR DONDE SE PUEDE. shared.lua llama
+    -- AdditionalInitialize en :3011 y InitializeCollisionBounds en :3017, o sea
+    -- que esta es la ultima linea que corre ANTES de que la base lea
+    -- CollisionBounds. Puesto un tick despues no pasa nada visible: el hull ya
+    -- se aplico, el ViewOffset ya se calculo con el numero viejo, y la unica
+    -- pista seria que los ojos siguen en 64.
+    --
+    -- Se escribe en la ENTIDAD y no en la clase a proposito: ENT.CollisionBounds
+    -- es una tabla COMPARTIDA que viene de la base, y mutarla se lo llevaria
+    -- puesto a todo terminator del mapa, incluidos los que no son nuestros.
+    if esNuestroModelo and cvHull:GetBool() then
+        self.CollisionBounds = {
+            Vector( -HULL_ANCHO, -HULL_ANCHO, 0 ),
+            Vector(  HULL_ANCHO,  HULL_ANCHO, HULL_ALTO ),
+        }
+
+    end
+
     -- Sincroniza el NW var con el campo. Va ANTES del return temprano de abajo:
     -- si queda del otro lado, el marcador del cliente miente en todo mapa que
     -- tenga navmesh, que son casi todos.
@@ -550,6 +714,52 @@ function ENT:AdditionalInitialize()
         -- override lo puede cambiar despues sin dejar rastro de cual era.
         "  tipo ", tostring( self.phantom_TypeKey or "NINGUNO" ),
         "\n" )
+
+    -- EL HULL SE REPORTA UN TICK DESPUES, Y NO ES PROLIJIDAD: aca todavia no
+    -- existe. InitializeCollisionBounds corre 6 lineas mas abajo que nosotros
+    -- ( shared.lua:3017 ) y SetupCollisionBounds otro tick despues ( :3039 ), asi
+    -- que imprimirlo aca imprimiria lo que acabamos de escribir en vez de lo que
+    -- la base hizo con eso. Es el mismo defecto que ya pagamos en la linea
+    -- `quiere` del instrumento de la mirada: una columna que te devuelve lo que
+    -- tu propio codigo escribio no es una medicion.
+    --
+    -- Y lo que se imprime es la CONSECUENCIA, no el ajuste: los ojos contra la
+    -- altura de la malla. "Los ojos a 40 y la cabeza a 44,7" se lee solo;
+    -- "CollisionBounds = 45" hay que ir a buscar contra que.
+    timer.Simple( 0, function()
+        if not IsValid( self ) then return end
+
+        local mins, maxs = self:GetCollisionBounds()
+
+        -- ⚠ EL ALTO DE LA MALLA ES UNA CONSTANTE MEDIDA FUERA DE JUEGO Y TIENE
+        -- QUE SERLO. En juego NO hay forma de preguntarlo: OBBMaxs() devuelve
+        -- las collision bounds -- o sea justo lo que acabamos de escribir, con
+        -- lo que la comparacion daria 45 contra 45 y siempre "OK" -- y
+        -- GetModelBounds() devuelve el hull del .phy, que en este modelo llega a
+        -- 46,65 porque es el del ragdoll. Los dos contestan con un numero
+        -- creible a una pregunta que no es la que se hizo, y ese error ya se
+        -- pago dos veces en este taller.
+        -- 44,94 sale del .vvd ( vvdbounds.py sobre ghost_girl.vvd ), que es la
+        -- unica fuente que contiene la malla y nada mas.
+        local MALLA_ALTO = 44.94
+
+        -- GetViewOffset puede no existir sobre un NextBot. Se prueba en vez de
+        -- suponerlo, y si no esta se DICE -- un cero por metodo faltante se leeria
+        -- como "los ojos estan en el piso", que es un defecto distinto.
+        local okOff, off = pcall( self.GetViewOffset, self )
+        local ojos = okOff and isvector( off ) and off.z or nil
+
+        ghostPrint( "spawn #", self:EntIndex(),
+            "  hull ", math.Round( maxs.x - mins.x ), "x", math.Round( maxs.y - mins.y ),
+            "x", math.Round( maxs.z - mins.z ),
+            "  ( la base sola da 32x32x72 )",
+            "  malla ", MALLA_ALTO, " de alto",
+            ojos and ( "  ojos z " .. math.Round( ojos, 1 ) ..
+                ( ojos > MALLA_ALTO and "  <- LOS OJOS ESTAN SOBRE LA CABEZA" or "" ) )
+                or "  ojos: GetViewOffset no se pudo leer en esta entidad",
+            "\n" )
+
+    end )
 
     -- El navmesh se mide DOS VECES a proposito, y esta es la correccion mas
     -- cara de la primera corrida (2026-08-05). La version anterior de este
@@ -873,6 +1083,151 @@ local function eachGhost( fn )
 end
 
 PHANTASMAGORIA.EachGhost = eachGhost
+
+---------------------------------------------------------------------------
+-- Instrumento: QUE SECUENCIA responde a cada actividad, y CUANTAS compiten
+---------------------------------------------------------------------------
+-- ESTE COMANDO EXISTE PARA MEDIR UNA SOLA COSA, que es lo unico del bloque del
+-- modelo que quedo sin medir: si el engine DESCARTA la secuencia prestada
+-- cuando el modelo dueno ya tiene una con el mismo nombre.
+--
+-- El fantasma declara sus 8 actividades con los nombres de secuencia de m_anm
+-- ( walk_all, run_all_01, idle_all_01, ... ) justamente para que eso pase. Si
+-- pasa, hay UNA secuencia por actividad y siempre gana la nuestra. Si NO pasa,
+-- hay DOS con el mismo peso y SelectWeightedSequence tira una moneda cada vez:
+-- el fantasma tomaria las proporciones del adulto de 1,83 una vez de cada dos.
+--
+-- ⚠ Y POR ESO NO ALCANZA CON MIRARLO NI CON `ph_ghost_bones`. Los dos miden UNA
+-- muestra, y contra una moneda una muestra no distingue "siempre bien" de "bien
+-- la mitad de las veces": el 50 % de las corridas darian verde sobre un modelo
+-- roto. Lo que separa los dos casos no es la pose, es el CONTEO -- y el conteo
+-- no depende de la suerte.
+--
+-- La cuenta se hace sobre GetSequenceCount(), que con $includemodel resuelto ya
+-- incluye las prestadas: son 2171 con las de m_anm y 11 sin ellas, asi que el
+-- propio total dice si el include se resolvio. Un total de 11 no seria un
+-- "esta limpio": seria que m_anm no se monto y la medicion no vale.
+local ACTS_QUE_PIDE_LA_BASE = {
+    -- La cadena que las eligio esta en el encabezado de IdleActivityTranslations.
+    { act = ACT_HL2MP_IDLE,          nuestra = "idle_all_01",  cuando = "parado" },
+    { act = ACT_HL2MP_WALK,          nuestra = "walk_all",     cuando = "caminando" },
+    { act = ACT_HL2MP_RUN,           nuestra = "run_all_01",   cuando = "corriendo" },
+    { act = ACT_HL2MP_IDLE_CROUCH,   nuestra = "cidle_all",    cuando = "agachado quieto" },
+    { act = ACT_HL2MP_WALK_CROUCH,   nuestra = "cwalk_all",    cuando = "agachado andando" },
+    { act = ACT_HL2MP_JUMP_SLAM,     nuestra = "jump_slam",    cuando = "saltando" },
+    { act = ACT_HL2MP_SWIM,          nuestra = "swimming_all", cuando = "nadando" },
+    { act = ACT_LAND,                nuestra = "jump_land",    cuando = "al aterrizar ( gesto )" },
+}
+
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_acts", function( ply )
+    local say = makeSay( ply )
+
+    local ghosts = {}
+    eachGhost( function( g ) ghosts[ #ghosts + 1 ] = g end )
+
+    if #ghosts == 0 then
+        say( "[Phantasmagoria] SIN CORRER: no hay ningun fantasma vivo." )
+        return
+
+    end
+
+    for _, ghost in ipairs( ghosts ) do
+        local total = ghost:GetSequenceCount()
+
+        say( "" )
+        say( "[Phantasmagoria] #" .. ghost:EntIndex() .. "  " .. tostring( ghost:GetModel() ) )
+        say( "    secuencias visibles: " .. total ..
+            ( total > 100 and "  ( el $includemodel se resolvio: las prestadas estan )" or
+              "  <- SIN LAS PRESTADAS: m_anm no se monto y esta medicion NO VALE" ) )
+
+        -- Un solo barrido de las N secuencias, agrupando por actividad. Barrer
+        -- una vez por actividad seria 8 pasadas sobre 2171.
+        local porAct = {}
+        for i = 0, total - 1 do
+            local a = ghost:GetSequenceActivity( i )
+            if a and a > 0 then
+                porAct[ a ] = porAct[ a ] or {}
+                table.insert( porAct[ a ], ghost:GetSequenceName( i ) )
+
+            end
+        end
+
+        local malas = 0
+
+        for _, fila in ipairs( ACTS_QUE_PIDE_LA_BASE ) do
+            local cands = porAct[ fila.act ] or {}
+            local elegida = ghost:GetSequenceName( ghost:SelectWeightedSequence( fila.act ) )
+
+            -- El veredicto es el CONTEO y el NOMBRE juntos. Uno solo no alcanza:
+            -- un conteo de 1 sobre la secuencia equivocada seria un modelo que
+            -- responde siempre igual y siempre mal, y un nombre correcto con
+            -- conteo 2 es la moneda.
+            local ok = #cands == 1 and cands[ 1 ] == fila.nuestra
+            if not ok then malas = malas + 1 end
+
+            say( "    " .. ( ok and "OK  " or "!!  " ) .. string.format( "%-22s", fila.nuestra ) ..
+                #cands .. " secuencia" .. ( #cands == 1 and "" or "s" ) ..
+                "   elige: " .. tostring( elegida ) ..
+                "   ( " .. fila.cuando .. " )" )
+
+            if #cands ~= 1 then
+                say( "         compiten: " .. table.concat( cands, ", " ) )
+
+            end
+        end
+
+        -- La linea de estado ahora mismo, que es lo que ata el conteo con lo que
+        -- se ve: si el bot esta caminando, la secuencia viva tiene que ser la
+        -- nuestra. Sin esto el comando prueba que el modelo PUEDE elegir bien y
+        -- no que la base le este pidiendo lo que creemos.
+        local viva = ghost:GetSequenceName( ghost:GetSequence() )
+        say( "    secuencia VIVA ahora: " .. tostring( viva ) ..
+            "   ( actividad " .. tostring( ghost:GetSequenceActivityName( ghost:GetSequence() ) ) .. " )" )
+
+        -- LOS POSE PARAMS, QUE SON LO QUE HACE MEDIBLE A LA MEZCLA. walk_all,
+        -- run_all_01, cwalk_all y swimming_all son grillas 3x3 sobre move_y ( eje
+        -- X ) y move_x ( eje Y ), leidas del mstudioseqdesc_t de m_anm y
+        -- reproducidas identicas en el nuestro. Quien las mueve es BodyMoveXY
+        -- ( motion.lua:353 ), que es del engine: la base no las toca nunca --
+        -- grep sobre sus 71 archivos: los unicos SetPoseParameter son aim_yaw y
+        -- aim_pitch, y viven en weapons.lua, que un bot desarmado no alcanza.
+        --
+        -- Sin esta linea, "camina de costado o hace moonwalk" es una impresion.
+        -- Con ella es un numero: yendo derecho hacia vos move_x se va a un
+        -- extremo y move_y se queda al medio; en un paso lateral se invierte.
+        --
+        -- ⚠ GetPoseParameter DEVUELVE 0..1 NORMALIZADO, no el rango declarado.
+        -- Se imprimen las dos columnas -- el crudo y el remapeado a -1..1 -- para
+        -- que no haya que acordarse: un 0.5 crudo y un 0.0 real son el mismo
+        -- numero y el segundo es el que se compara contra la grilla.
+        local px = ghost:GetPoseParameter( "move_x" )
+        local py = ghost:GetPoseParameter( "move_y" )
+
+        if px and py then
+            say( string.format(
+                "    pose  move_x %.2f ( -1..1: %+.2f )   move_y %.2f ( -1..1: %+.2f )   vel %d u/s",
+                px, px * 2 - 1, py, py * 2 - 1, math.Round( ghost:GetCurrentSpeed() ) ) )
+
+        else
+            -- Un nil se DICE. Si el modelo no declara move_x/move_y, la mezcla no
+            -- se puede mover y siempre se ve el centro -- que es un defecto real
+            -- y no la ausencia de un dato de debug.
+            say( "    pose  move_x/move_y NO EXISTEN en este modelo: la mezcla queda " ..
+                "clavada en el centro y el fantasma camina siempre igual." )
+
+        end
+
+        if malas == 0 then
+            say( "    >> PASA: 8/8 actividades con UNA sola secuencia, y es la nuestra." )
+
+        else
+            say( "    >> FALLA: " .. malas .. " de 8 actividades no resuelven a nuestra secuencia. " ..
+                "Con 2 candidatas el estiramiento sale una vez de cada dos." )
+
+        end
+    end
+end, "Cuenta cuantas secuencias responden a cada actividad que la base le pide al fantasma. " ..
+    "Mide si el $includemodel descarto las prestadas de m_anm: tiene que dar 1 por actividad." )
 
 ---------------------------------------------------------------------------
 -- EL BOTON DE LA MIRADA, Y LO QUE LO SEPARA DE UNA LECTURA ES QUE SE NIEGA
