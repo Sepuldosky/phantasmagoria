@@ -359,6 +359,63 @@ ENT.DefaultWeapon = false
 ENT.TERM_FISTS    = false
 
 ---------------------------------------------------------------------------
+-- ⚠ Y TAMPOCO LEVANTA UN ARMA DEL PISO. LOS DOS SINTOMAS DE LA r17 SON ESTO
+---------------------------------------------------------------------------
+-- `DefaultWeapon = false` dice con que NACE, no que no pueda agarrar una: la
+-- tarea `movement_getweapon` ( shared.lua:4637 ) sigue registrada y el bot
+-- levanta lo que encuentre. En la corrida de la r17 agarro una SMG, y eso
+-- produjo LOS DOS defectos que el autor reporto en el mismo mensaje --
+-- «tambien tomo un arma y se deformo» y la POSE T --, que resultaron ser el
+-- mismo bug. La cadena esta MEDIDA en el dump del actlog:
+--
+--   3115.93  Translate  ACT_MP_CROUCHWALK -> ACT_HL2MP_WALK_CROUCH_SMG1 (1801)
+--   3116.25  Translate  ACT_MP_STAND_IDLE -> ACT_HL2MP_IDLE_SMG1 (1797)
+--   3117.13  Translate  ACT_LAND (33)     -> ACT_INVALID (-1)
+--   3117.13  Gesture    ACT_INVALID (-1)
+--
+-- (1) `TranslateActivity` le pregunta AL ARMA **antes** que a nuestra tabla
+--     ( motionoverrides.lua:3694, la rama `way #2`, y nuestro
+--     IdleActivityTranslations recien se consulta en :3712 ). Con un arma en la
+--     mano toda nuestra traduccion queda anulada y el modelo vuelve a las
+--     actividades PRESTADAS de m_anm -- las `*_SMG1` de arriba. Eso es el
+--     estiramiento: la nena de 1,14 m tomando las distancias del adulto de 1,83.
+--
+-- (2) Y `luaWep:TranslateActivity( ACT_LAND )` devuelve **-1**, porque un arma no
+--     sabe traducir un aterrizaje. La base hace `if newact then return newact end`
+--     y **-1 es truthy en Lua**, asi que ese -1 sale tal cual y termina en
+--     `DoGesture( -1 )` ( :3456 ) -> `AddGesture( -1 )` -> **la pose de
+--     referencia**. Ahi esta la POSE T.
+--
+-- *Dos sintomas que se reportaron como cosas distintas, con causas que parecian
+-- de capas distintas -- un modelo estirado y una animacion faltante --, y eran
+-- el mismo evento.* Lo que los junto fue el dump, no la lectura del codigo.
+--
+-- EL ARREGLO VA EN LA CAUSA: un fantasma de Phasmophobia no usa armas. Se
+-- sobreescribe `CanPickupWeapon` ( weapons.lua:885 ), que es lo que consultan
+-- tanto la tarea como el pickup automatico, en vez de sacar la tarea -- asi el
+-- bot puede seguir yendo hacia un arma si algun dia eso sirve de senuelo, pero
+-- no se la lleva.
+--
+-- La convar existe para que el A/B sea posible: en 1 vuelve a agarrar armas y
+-- los dos defectos tienen que reaparecer JUNTOS. Si reaparece uno solo, el
+-- diagnostico de arriba esta incompleto.
+local cvPickup = CreateConVar( "phantasmagoria_ghost_pickup", "0", FCVAR_ARCHIVE,
+    "El fantasma puede levantar armas del piso. En 0 ( default ) no puede: con un arma en la mano " ..
+    "la base traduce las actividades contra el ARMA y no contra nuestra tabla, asi que el modelo " ..
+    "vuelve a las prestadas de m_anm ( se estira ) y ACT_LAND pasa a ACT_INVALID ( pose T ). " ..
+    "En 1 sirve de control negativo: los dos defectos tienen que volver juntos.", 0, 1 )
+
+function ENT:CanPickupWeapon( wep, doingHolstered, myTbl, wepsTbl )
+    if not cvPickup:GetBool() then return false end
+
+    local base = self.BaseClass and self.BaseClass.CanPickupWeapon
+    if not isfunction( base ) then return false end
+
+    return base( self, wep, doingHolstered, myTbl, wepsTbl )
+
+end
+
+---------------------------------------------------------------------------
 -- ATRAVIESA LAS PUERTAS
 ---------------------------------------------------------------------------
 -- Un fantasma de Phasmophobia atraviesa las puertas; el Alternate de Mandela
@@ -1249,9 +1306,67 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_acts", function( ply )
         local py = ghost:GetPoseParameter( "move_y" )
 
         if px and py then
-            say( string.format(
-                "    pose  move_x %.2f ( -1..1: %+.2f )   move_y %.2f ( -1..1: %+.2f )   vel %d u/s",
-                px, px * 2 - 1, py, py * 2 - 1, math.Round( ghost:GetCurrentSpeed() ) ) )
+            --[[
+                ⚠ LA SUPOSICION DE ABAJO NO ESTABA MEDIDA, Y LA r16 IMPRIMIO UN
+                NUMERO IMPOSIBLE SIN QUE NADIE LO MIRARA.
+
+                El comentario de arriba afirma que GetPoseParameter devuelve
+                0..1 normalizado, y sobre eso se hace `v * 2 - 1`. Pero la nota
+                de la r16 dice «move_y entre -1.04 y -1.00»: si el crudo fuera
+                normalizado, -1.04 remapeado exige un crudo de -0.02, que esta
+                FUERA de 0..1 y por lo tanto no es un normalizado.
+
+                O sea que una de las dos cosas es falsa -- o el rango, o la
+                lectura -- y la linea las mezclaba en una sola columna con cara
+                de dato. *Una conversion que no se puede equivocar en voz alta no
+                es una conversion: es una suposicion con formato.*
+
+                Ahora el comando NO elige: imprime el crudo, imprime las dos
+                interpretaciones, y **se niega a decir la celda** cuando el crudo
+                cae fuera de 0..1, que es la prueba de que la suposicion no vale.
+            ]]
+            local fuera = px < 0 or px > 1 or py < 0 or py > 1
+
+            say( string.format( "    pose  CRUDO  move_x %+.3f   move_y %+.3f   vel %d u/s",
+                px, py, math.Round( ghost:GetCurrentSpeed() ) ) )
+
+            if fuera then
+                say( "    pose  ⚠ EL CRUDO CAE FUERA DE 0..1, asi que NO es el normalizado que " ..
+                    "este comando supone. La columna -1..1 seria falsa y no se imprime." )
+                say( "    pose  Si estos valores ya estan en -1..1, entonces move_x " ..
+                    string.format( "%+.2f", px ) .. " / move_y " .. string.format( "%+.2f", py ) ..
+                    " se leen directo, y la conversion de este comando estaba de mas." )
+
+            else
+                local rx, ry = px * 2 - 1, py * 2 - 1
+
+                -- LA CELDA DE LA GRILLA, que es lo que ata el numero con lo que
+                -- se ve. Sin esto, «move_y -1.00» es un numero; con esto es
+                -- «esta reproduciendo la animacion de ir en diagonal».
+                -- Grilla leida del .mdl: eje X = move_y, eje Y = move_x.
+                local col = ry < -0.34 and 1 or ( ry > 0.34 and 3 or 2 )
+                local fil = rx < -0.34 and 1 or ( rx > 0.34 and 3 or 2 )
+                local NOMBRES = {
+                    { "SW", "S", "SE" },
+                    { "W",  "C", "E"  },
+                    { "NW", "N", "NE" },
+                }
+
+                say( string.format(
+                    "    pose  -1..1  move_x %+.2f ( adelante/atras )   move_y %+.2f ( der/izq )" ..
+                    "   -> celda %s", rx, ry, NOMBRES[ fil ][ col ] ) )
+
+                -- Y el discriminante del sintoma que reporto el autor
+                -- ( «sigue corriendo de lado» ): yendo derecho, la celda tiene
+                -- que ser N. Cualquier diagonal con el bot yendo al frente es el
+                -- defecto, y se dice en vez de dejarlo a la vista.
+                if ghost:GetCurrentSpeed() > 50 and NOMBRES[ fil ][ col ] ~= "N" then
+                    say( "    pose  ⚠ EL BOT SE MUEVE Y LA CELDA NO ES 'N': va a reproducir un " ..
+                        "paso en diagonal mientras avanza de frente. Es el sintoma de " ..
+                        "'corre de lado'." )
+
+                end
+            end
 
         else
             -- Un nil se DICE. Si el modelo no declara move_x/move_y, la mezcla no
@@ -1359,14 +1474,43 @@ local function anotar( self, punto, ev )
 
 end
 
---- Que secuencia elige el modelo para una actividad, y si eligio alguna.
---- SelectWeightedSequence devuelve -1 cuando ninguna la declara; ese -1 es el
---- dato entero de este instrumento.
+--[[
+    Que secuencia elige el modelo para una actividad, y si eligio alguna.
+
+    ⚠ ESTA FUNCION SE COMIO EL RESULTADO DEL BLOQUE EN LA r17. El dump trajo
+
+        3117.13  Translate  ACT_LAND (33)  -> ACT_INVALID (-1)
+        3117.13  Gesture    ACT_INVALID (-1)          <- sin seq y SIN MARCA
+
+    o sea LA POSE T, impresa, y el veredicto de abajo dijo «ninguna actividad
+    quedo SIN RESOLVER en esta ventana». La causa: con `act = -1`,
+    `SelectWeightedSequence` TIRA ERROR en vez de devolver -1, el `pcall` lo
+    atrapaba y la funcion devolvia `nil, nil, nil` -- o sea `resolvio = nil`, que
+    no es `false`, que es lo unico que la linea marca.
+
+    *Un instrumento que no distingue «no resolvio» de «no pude preguntar»
+    convierte su propio error en un verde.* Y el veredicto lo empeoraba contando
+    los sin-dato como resueltos, que es exactamente el defecto que este mismo
+    bloque le corrigio a `actmiss` dos dias antes, en otra funcion.
+
+    Ahora hay TRES salidas y las tres se dicen:
+      resolvio = true   hay secuencia
+      resolvio = false  NO hay -- y una actividad < 0 es invalida POR DEFINICION,
+                        sin preguntarle al modelo
+      resolvio = nil    no se pudo preguntar, y el dump lo cuenta aparte
+]]
 local function resolver( self, act )
-    if not isnumber( act ) then return nil, nil, nil end
+    if not isnumber( act ) then return nil, "no es un numero", nil end
+
+    -- ⚠ ACT_INVALID ( -1 ) Y CUALQUIER NEGATIVO SE CONTESTAN ACA, sin tocar el
+    -- modelo. No es un atajo de rendimiento: es que preguntarle al modelo por
+    -- una actividad invalida ERROREA, y ese error se leia como ausencia de dato.
+    -- Una actividad negativa no tiene secuencia por definicion, y eso es
+    -- precisamente una pose de referencia.
+    if act < 0 then return -1, "ACTIVIDAD INVALIDA", false end
 
     local ok, seq = pcall( self.SelectWeightedSequence, self, act )
-    if not ok or not isnumber( seq ) then return nil, nil, nil end
+    if not ok or not isnumber( seq ) then return nil, "no se pudo preguntar", nil end
 
     local nombre = seq >= 0 and tostring( self:GetSequenceName( seq ) ) or "NINGUNA"
 
@@ -1421,14 +1565,58 @@ function ENT:TranslateActivity( act )
 
     local salida, encontrada = base( self, act )
 
+    -- ⚠ UNA TRADUCCION QUE DEVUELVE UNA ACTIVIDAD INVALIDA ES EL EVENTO RAIZ, y
+    -- hay que marcarla ACA. En la r17 el dump trajo
+    --     Translate  ACT_LAND (33)  -> ACT_INVALID (-1)
+    -- y la linea sali&oacute; sin marca porque este bloque ponia `resolvio = nil`
+    -- fijo: la traduccion "no elige secuencia", asi que no parecia haber nada que
+    -- marcar. Pero devolver -1 SI es el defecto -- lo que sigue es un
+    -- DoGesture( -1 ), que es la pose de referencia.
+    --
+    -- De donde sale ese -1: la base le pregunta AL ARMA antes que a nuestra tabla
+    -- ( motionoverrides.lua:3694-3710 ), y `luaWep:TranslateActivity( ACT_LAND )`
+    -- devuelve -1 porque un arma no sabe traducir un aterrizaje. Como -1 es
+    -- truthy en Lua, el `if newact then return newact end` de la base lo deja
+    -- pasar tal cual.
+    local salidaMala = isnumber( salida ) and salida < 0 or nil
+
+    -- ⚠ GUARDA EN PROFUNDIDAD: una actividad NEGATIVA no sale de aca.
+    -- `phantasmagoria_ghost_pickup 0` corta la causa conocida ( el arma ), pero
+    -- el `if newact then return newact end` de la base deja pasar cualquier cosa
+    -- truthy que devuelva un tercero -- otro addon que le ponga un arma, un SWEP
+    -- con su propia traduccion. Si la salida es invalida, se usa NUESTRA tabla,
+    -- que para eso esta.
+    --
+    -- Se anota igual ANTES de corregir, porque el evento es el dato: si esta
+    -- linea empieza a aparecer con la convar en 0, el -1 viene de otro lado y eso
+    -- hay que saberlo. *Un arreglo que tapa el sintoma sin dejar rastro se lleva
+    -- puesta la unica evidencia de que el problema sigue.*
+    if salidaMala and esNuestroModelo then
+        local nuestra = ENT.IdleActivityTranslations and ENT.IdleActivityTranslations[ act ]
+
+        anotar( self, "Translate", {
+            pedida = act,
+            salida = salida,
+            seq = nil,
+            resolvio = false,
+            seqName = nuestra and "corregida a nuestra tabla" or "y NUESTRA tabla tampoco la tiene",
+        } )
+
+        if nuestra then return nuestra, true end
+
+        -- Sin traduccion nuestra, se devuelve la idle: es lo que hace la base en
+        -- su propio fallback, y es infinitamente mejor que un -1.
+        return ENT.IdleActivity or salida, false
+
+    end
+
     anotar( self, "Translate", {
         pedida = act,
         salida = salida,
         -- `encontrada == false` es el fallback de la base: NO habia traduccion y
-        -- devolvio la idle. No es lo mismo que "no resolvio a una secuencia", y
-        -- por eso no se marca como pose T -- se anota aparte abajo.
+        -- devolvio la idle. Eso NO es un defecto y por eso no se marca.
         seq = nil,
-        resolvio = nil,
+        resolvio = salidaMala and false or nil,
         cayoAlFallback = ( encontrada == false ) or nil,
     } )
 
@@ -1705,20 +1893,42 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_actlog_dump", function( ply )
     end
 
     local malos = PHANTASMAGORIA.ActLogUnresolved()
+    local sinDato = PHANTASMAGORIA.ActLogNoData()
 
     say( "" )
-    if #malos == 0 then
-        say( "    >> ninguna actividad quedo SIN RESOLVER en esta ventana." )
-        say( "    >> Si la pose T se vio en esta ventana, NO la causo una actividad sin " ..
-            "secuencia: hay que buscar en otro lado ( una capa de gesto con peso, un " ..
-            "SetSequence de otro addon )." )
-
-    else
+    if #malos > 0 then
         say( "    >> " .. #malos .. " evento(s) SIN RESOLVER -- estos son los que dejan la pose T:" )
         for _, ev in ipairs( malos ) do
             say( "       " .. PHANTASMAGORIA.ActLogLine( ev ) )
 
         end
+
+    end
+
+    -- ⚠ LOS SIN DATO SE DICEN, Y ANTES SE CONTABAN COMO RESUELTOS. En la r17 el
+    -- veredicto dijo "ninguna actividad quedo SIN RESOLVER" con la pose T impresa
+    -- tres lineas mas arriba: los eventos cuya consulta erroreo tenian
+    -- `resolvio = nil` y no entraban en ninguna de las dos cuentas.
+    if #sinDato > 0 then
+        say( "    >> " .. #sinDato .. " evento(s) donde NO SE PUDO PREGUNTAR si resolvia. " ..
+            "No cuentan como resueltos ni como fallados:" )
+        for _, ev in ipairs( sinDato ) do
+            say( "       " .. PHANTASMAGORIA.ActLogLine( ev ) )
+
+        end
+
+    end
+
+    if #malos == 0 and #sinDato == 0 then
+        say( "    >> ninguna actividad quedo SIN RESOLVER en esta ventana, y de las " ..
+            #eventos .. " se pudo preguntar por todas." )
+        say( "    >> Si la pose T se vio en esta ventana, NO la causo una actividad sin " ..
+            "secuencia: hay que buscar en otro lado ( una capa de gesto con peso, un " ..
+            "SetSequence de otro addon )." )
+
+    elseif #malos == 0 then
+        say( "    >> NINGUN evento marcado como fallado, pero " .. #sinDato .. " sin dato: " ..
+            "esta ventana NO descarta nada." )
 
     end
 end, "Imprime las ultimas actividades que se le pidieron al fantasma y marca las que no resolvieron." )

@@ -286,12 +286,22 @@ function PHANTASMAGORIA.ActLogLine( ev )
         partes[ #partes + 1 ] = "seq " .. tostring( ev.seq ) ..
             " (" .. tostring( ev.seqName ) .. ")"
 
+    elseif ev.seqName then
+        -- Sin numero de secuencia pero CON motivo. La version anterior no
+        -- imprimia nada en este caso, asi que el evento del `Gesture
+        -- ACT_INVALID` -- la pose T -- salio en el dump de la r17 como una linea
+        -- pelada, indistinguible de una traduccion normal.
+        partes[ #partes + 1 ] = "( " .. tostring( ev.seqName ) .. " )"
+
     end
 
     -- ⚠ ESTA ES LA COLUMNA POR LA QUE EXISTE EL ARCHIVO. Va con marca visible y
     -- en mayusculas: es la unica linea que hay que encontrar en un dump de 64.
     if ev.resolvio == false then
         partes[ #partes + 1 ] = "<<<< NO RESOLVIO -- POSE DE REFERENCIA ( T )"
+
+    elseif ev.resolvio == nil and ev.seqName then
+        partes[ #partes + 1 ] = "<<<< NO SE PUDO PREGUNTAR"
 
     end
 
@@ -312,6 +322,36 @@ function PHANTASMAGORIA.ActLogUnresolved()
 
     for _, ev in ipairs( PHANTASMAGORIA.ActLogEvents() ) do
         if ev.resolvio == false then out[ #out + 1 ] = ev end
+
+    end
+
+    return out
+
+end
+
+--[[
+    Los eventos donde NO SE PUDO PREGUNTAR, que son un tercer estado y no la
+    ausencia de uno.
+
+    ⚠ ESTA FUNCION EXISTE POR EL DEFECTO QUE SE COMIO EL RESULTADO DE LA r17. El
+    anillo guardaba tres estados en `resolvio` -- true, false y nil -- y el
+    veredicto solo miraba `false`. Los `nil` ( la consulta al modelo erroreo )
+    caian en el mismo saco que los resueltos, asi que el comando pudo imprimir
+    la pose T y despues afirmar «ninguna actividad quedo SIN RESOLVER».
+
+    *Tres estados con dos cuentas: el tercero se reparte solo, y siempre hacia el
+    lado que uno no queria.*
+
+    ⚠ Y solo cuenta los eventos que INTENTARON resolver. `Translate` no elige
+    secuencia -- no es que no haya podido preguntar, es que no pregunta -- asi
+    que un `resolvio = nil` ahi es correcto y no es un sin-dato. El discriminante
+    es `seqName`: lo pone `resolver()` en las tres salidas y solo en ellas.
+]]
+function PHANTASMAGORIA.ActLogNoData()
+    local out = {}
+
+    for _, ev in ipairs( PHANTASMAGORIA.ActLogEvents() ) do
+        if ev.resolvio == nil and ev.seqName ~= nil then out[ #out + 1 ] = ev end
 
     end
 

@@ -102,8 +102,27 @@ local function cmd()
 	-- MISMA CORRIDA para que la comparacion valga.
 	local encontrados, descartados = {}, {}
 
+	--[[
+		⚠ `e:GetModel()` NO DEVUELVE nil SOBRE UNA ENTIDAD SIN MODELO: NO DEVUELVE
+		NADA. Y `tostring()` con cero argumentos no da "nil", da
+		    bad argument #1 to 'tostring' (value expected)
+		que es lo que revento este comando en la corrida de la r17 -- sobre la
+		PRIMERA entidad sin modelo del mapa, o sea antes de mirar un solo fantasma.
+
+		La diferencia entre `nil` y "cero valores" no se ve escribiendo la linea:
+		`tostring( x() )` con x devolviendo nil anda, y con x devolviendo nada
+		revienta. Guardarlo en un local iguala los dos casos, porque un local sin
+		valor asignado ES nil.
+
+		*Y es el mismo defecto que este comando existia para arreglar, una capa mas
+		abajo: en la r16 el instrumento no veia al sujeto porque miraba otras
+		clases; en la r17 no lo veia porque se caia antes de llegar.* Dos rondas
+		seguidas sin que nadie mida un hueso sobre el bot.
+	]]
 	for _, e in ipairs( ents.GetAll() ) do
-		if IsValid( e ) and string.find( tostring( e:GetModel() ), "ghost_girl", 1, true ) then
+		local mdl = IsValid( e ) and e:GetModel() or nil
+
+		if isstring( mdl ) and string.find( mdl, "ghost_girl", 1, true ) then
 			local cls = e:GetClass()
 
 			if CLASES_EXCLUIDAS[ cls ] then
