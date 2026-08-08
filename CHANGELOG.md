@@ -7,6 +7,63 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-08 (25) — **El fantasma tiene cuerpo: `ghost_girl.mdl` en el NextBot** (corrida r16: 6 pasa · 1 falla · 1 sin correr)
+
+`phantasmagoria/ghost_girl.mdl` pasa de prop verificado a cuerpo de
+`terminator_nextbot_phantom`. Planilla `dev/checks/phantasmagoria-ghostbot-r16.html`.
+
+### La precondición era otra de la que el plan decía
+
+La base **no le pide al modelo una secuencia por nombre: le pide una ACTIVIDAD**, y el `ACT_MP_*` de
+su tabla de movimiento **nunca llega** — `TranslateActivity` (`motionoverrides.lua:3681`) lo convierte
+antes en un `ACT_HL2MP_*`. El plan heredado mandaba escribir `activity ACT_MP_RUN` en el QC: habría
+declarado una actividad que nadie pide, y el estiramiento habría seguido intacto **sobre un modelo que
+compila limpio**.
+
+**Y ninguna de las siete de locomoción estaba entre las «284 portables» que el taller tenía contadas**
+— ésas son las de arma en mano, justo las que un bot desarmado nunca pide. Las siete son mezclas 3×3 o
+animaciones seccionadas. Lo que destrabó: `--listar` cuenta **secuencias**, y las 8 direcciones de cada
+mezcla (`a_WalkN`, `a_RunSW`…) son **`animdesc` sueltos**; `mdlseq2smd.py` ya sabía direccionarlos y la
+rama llevaba meses invisible. **35 animaciones portadas, 53/53 huesos cada una.**
+
+### Lo medido en juego
+
+| | |
+|---|---|
+| **8/8 actividades con UNA sola secuencia** | y es la nuestra, con 2171 visibles (el `$includemodel` se resolvió). **Era lo único del bloque sin medir y quedó medido: el descarte por nombre OCURRE.** |
+| La secuencia viva cambia con el estado | `idle_all_01` a 0 u/s, `run_all_01` a 196 |
+| La mezcla responde | `move_x +1.00`, `move_y` moviéndose; paso lateral confirmado a ojo |
+| El ragdoll sobrevivió la recompilación | huesos y articulaciones correctos |
+
+### El hull: el mecanismo anda y **el instrumento no lo midió**
+
+`ENT.CollisionBounds` de la base está **clavado** en 32×32×72 para todos los modelos
+(`terminator_nextbot_base/init.lua:39`). El fantasma pasa a 20×20×45, de **un solo factor** (44,94/72).
+
+**La fila 03 salió roja y es culpa del instrumento.** Imprimió `hull 19x40x55` — que es *exactamente*
+el hull de **colisión** del `.mdl` (18,90 × 40,14 × 54,55, del `.phy` del ragdoll). `GetCollisionBounds()`
+devolvió la OBB del modelo porque **mi `timer.Simple(0)` corre ANTES que el de la base**: el mío se
+registra en `AdditionalInitialize` (`shared.lua:3011`) y `SetupCollisionBounds` en `:3035`.
+
+**El mecanismo sí anda, y lo prueba la otra columna:** `ojos z 40`, que es `round(45 − (45/72)·8)` con
+*nuestro* `maxs.z`; con el de la base da **64**, que es lo que imprimió el control negativo. *Un check
+que mide la cosa equivocada y otro que no mide no son lo mismo, y éste midió mal.*
+
+**⚠ Consecuencia de diseño:** §18.2.1 sacó la cuenta de escondites con los ojos en 64
+(`H > 64 − 46·t`); con 40 pasa a `H > 40 − 22·t`. **Todos los escondites se vuelven más fáciles.**
+
+### Lo que quedó abierto
+
+- **`ph_ghost_bones` no ve al NextBot** — busca `prop_dynamic`/`prop_ragdoll`, así que el check que
+  este bloque existía para correr es justo el que no alcanza al sujeto. Fila 05 **sin correr**.
+- **Una pose T al caer** [reportada por el autor]: hay una actividad que la base pide y que no resuelve
+  a ninguna secuencia. No está identificada — hace falta el instrumento que registre **qué** actividad
+  se pidió, que es lo que el autor pidió explícitamente.
+- El centro de las cuatro mezclas sigue **sustituido** por la dirección N: el original está partido en
+  secciones y `mdlseq2smd.py` no las soporta.
+
+---
+
 ## 2026-08-08 (24) — **La cordura arranca: tajada A, el fantasma ya es uno de los 30** (escrita, sin correr)
 
 §19 va en **tres tajadas**: **A · el tipo** → B · la cordura → C · el gatillo. Ésta es la A.
