@@ -261,6 +261,93 @@ local HULL_ALTO  = 45
 local HULL_ANCHO = 10
 
 ---------------------------------------------------------------------------
+-- ⚠ CUANDO SE MIDE EL HULL, Y ES LA FILA 03 QUE SALIO ROJA EN LA RONDA 16
+---------------------------------------------------------------------------
+-- La fila imprimio `hull 19x40x55` donde el criterio pedia `20x20x45`, y
+-- 19x40x55 es EXACTAMENTE el hull de COLISION del .mdl ( 18,90 x 40,14 x 54,55,
+-- del .phy del ragdoll ). O sea que no leyo mal: leyo TEMPRANO, cuando
+-- GetCollisionBounds todavia devolvia la OBB que el modelo trae de su .phy.
+--
+-- LA CAUSA FUE EL INSTANTE. Mi `timer.Simple( 0, ... )` se registraba adentro de
+-- AdditionalInitialize ( shared.lua:3011 ) y el de la base -- el que llama a
+-- SetupCollisionBounds -- en :3039. Los timers de delay 0 disparan EN ORDEN DE
+-- REGISTRO, no "despues": el mio corria primero y leia antes de que nadie
+-- escribiera.
+--
+-- *Un timer.Simple(0) no es «despues»: es «en orden de registro».* Y la otra
+-- leccion de esa fila: escribi el comentario que advierte de esta trampa para
+-- OBBMaxs() y cai una linea mas abajo con GetCollisionBounds(). Documentar un
+-- modo de falla no protege a la linea de al lado.
+--
+-- EL ARREGLO NO ES UN TIMER MAS LARGO. `timer.Simple( 0.25 )` alcanzaria hoy,
+-- pero seria el mismo instrumento apostando a que la base no cambie de orden --
+-- y la apuesta no se veria fallar: volveria a imprimir un numero creible. Asi
+-- que se mide DONDE OCURRE: enganchado a SetupCollisionBounds, que es la funcion
+-- que escribe el hull. Deja de existir el instante que adivinar.
+--
+-- ⚠ Y EL MECANISMO SIEMPRE ANDUVO: lo probo la otra columna del mismo print.
+-- `ojos z 40` = round( 45 - (45/72)*8 ) con NUESTRO maxs.z, y el control
+-- negativo ( convar en 0 ) dio 64, que es el de la base. El A/B quedo probado
+-- por los ojos, no por el hull.
+function ENT:SetupCollisionBounds( myTbl )
+    local base = self.BaseClass and self.BaseClass.SetupCollisionBounds
+
+    if not isfunction( base ) then
+        -- Sin la de la base no hay hull. Se avisa UNA vez y se sigue: un bot sin
+        -- collision bounds se ve enseguida, pero un aviso por frame tapa la
+        -- consola y con ella cualquier otra medicion.
+        if not self.phantom_avisoSetupBounds then
+            self.phantom_avisoSetupBounds = true
+            ghostPrint( "SetupCollisionBounds de la base NO ENCONTRADA. El fantasma se queda " ..
+                "sin hull: esto es un defecto del enganche del instrumento, no del modelo.\n" )
+
+        end
+
+        return
+
+    end
+
+    base( self, myTbl )
+
+    -- Una sola vez. La base la llama de nuevo en cada agachada y en cada salto
+    -- ( motionoverrides.lua:70, :2996, :3432, :3621 ), y un print por salto seria
+    -- ruido -- pero peor: la linea del spawn dejaria de ser la del spawn.
+    if self.phantom_hullReportado then return end
+    self.phantom_hullReportado = true
+
+    local mins, maxs = self:GetCollisionBounds()
+
+    -- ⚠ EL ALTO DE LA MALLA ES UNA CONSTANTE MEDIDA FUERA DE JUEGO Y TIENE QUE
+    -- SERLO. En juego NO hay forma de preguntarlo: OBBMaxs() devuelve las
+    -- collision bounds -- o sea justo lo que acabamos de escribir, con lo que la
+    -- comparacion daria 45 contra 45 y siempre "OK" -- y GetModelBounds()
+    -- devuelve el hull del .phy, que en este modelo llega a 46,65 porque es el
+    -- del ragdoll. Los dos contestan con un numero creible a una pregunta que no
+    -- es la que se hizo, y ese error ya se pago tres veces en este taller.
+    -- 44,94 sale del .vvd ( vvdbounds.py sobre ghost_girl.vvd ), que es la unica
+    -- fuente que contiene la malla y nada mas.
+    local MALLA_ALTO = 44.94
+
+    -- GetViewOffset puede no existir sobre un NextBot. Se prueba en vez de
+    -- suponerlo, y si no esta se DICE -- un cero por metodo faltante se leeria
+    -- como "los ojos estan en el piso", que es un defecto distinto.
+    local okOff, off = pcall( self.GetViewOffset, self )
+    local ojos = okOff and isvector( off ) and off.z or nil
+
+    ghostPrint( "spawn #", self:EntIndex(),
+        "  hull ", math.Round( maxs.x - mins.x ), "x", math.Round( maxs.y - mins.y ),
+        "x", math.Round( maxs.z - mins.z ),
+        "  ( la base sola da 32x32x72 )",
+        "  malla ", MALLA_ALTO, " de alto",
+        ojos and ( "  ojos z " .. math.Round( ojos, 1 ) ..
+            ( ojos > MALLA_ALTO and "  <- LOS OJOS ESTAN SOBRE LA CABEZA" or "" ) )
+            or "  ojos: GetViewOffset no se pudo leer en esta entidad",
+        "  [ medido DENTRO de SetupCollisionBounds, no en un timer ]",
+        "\n" )
+
+end
+
+---------------------------------------------------------------------------
 -- Desarmado
 ---------------------------------------------------------------------------
 -- El molde es terminator_nextbot_fakeply: un bot desarmado que funciona.
@@ -715,51 +802,9 @@ function ENT:AdditionalInitialize()
         "  tipo ", tostring( self.phantom_TypeKey or "NINGUNO" ),
         "\n" )
 
-    -- EL HULL SE REPORTA UN TICK DESPUES, Y NO ES PROLIJIDAD: aca todavia no
-    -- existe. InitializeCollisionBounds corre 6 lineas mas abajo que nosotros
-    -- ( shared.lua:3017 ) y SetupCollisionBounds otro tick despues ( :3039 ), asi
-    -- que imprimirlo aca imprimiria lo que acabamos de escribir en vez de lo que
-    -- la base hizo con eso. Es el mismo defecto que ya pagamos en la linea
-    -- `quiere` del instrumento de la mirada: una columna que te devuelve lo que
-    -- tu propio codigo escribio no es una medicion.
-    --
-    -- Y lo que se imprime es la CONSECUENCIA, no el ajuste: los ojos contra la
-    -- altura de la malla. "Los ojos a 40 y la cabeza a 44,7" se lee solo;
-    -- "CollisionBounds = 45" hay que ir a buscar contra que.
-    timer.Simple( 0, function()
-        if not IsValid( self ) then return end
-
-        local mins, maxs = self:GetCollisionBounds()
-
-        -- ⚠ EL ALTO DE LA MALLA ES UNA CONSTANTE MEDIDA FUERA DE JUEGO Y TIENE
-        -- QUE SERLO. En juego NO hay forma de preguntarlo: OBBMaxs() devuelve
-        -- las collision bounds -- o sea justo lo que acabamos de escribir, con
-        -- lo que la comparacion daria 45 contra 45 y siempre "OK" -- y
-        -- GetModelBounds() devuelve el hull del .phy, que en este modelo llega a
-        -- 46,65 porque es el del ragdoll. Los dos contestan con un numero
-        -- creible a una pregunta que no es la que se hizo, y ese error ya se
-        -- pago dos veces en este taller.
-        -- 44,94 sale del .vvd ( vvdbounds.py sobre ghost_girl.vvd ), que es la
-        -- unica fuente que contiene la malla y nada mas.
-        local MALLA_ALTO = 44.94
-
-        -- GetViewOffset puede no existir sobre un NextBot. Se prueba en vez de
-        -- suponerlo, y si no esta se DICE -- un cero por metodo faltante se leeria
-        -- como "los ojos estan en el piso", que es un defecto distinto.
-        local okOff, off = pcall( self.GetViewOffset, self )
-        local ojos = okOff and isvector( off ) and off.z or nil
-
-        ghostPrint( "spawn #", self:EntIndex(),
-            "  hull ", math.Round( maxs.x - mins.x ), "x", math.Round( maxs.y - mins.y ),
-            "x", math.Round( maxs.z - mins.z ),
-            "  ( la base sola da 32x32x72 )",
-            "  malla ", MALLA_ALTO, " de alto",
-            ojos and ( "  ojos z " .. math.Round( ojos, 1 ) ..
-                ( ojos > MALLA_ALTO and "  <- LOS OJOS ESTAN SOBRE LA CABEZA" or "" ) )
-                or "  ojos: GetViewOffset no se pudo leer en esta entidad",
-            "\n" )
-
-    end )
+    -- El hull se reporta cuando la base TERMINA de escribirlo, y quien avisa de
+    -- eso es el enganche a SetupCollisionBounds que esta mas abajo en este mismo
+    -- archivo. Aca no se puede: todavia no existe.
 
     -- El navmesh se mide DOS VECES a proposito, y esta es la correccion mas
     -- cara de la primera corrida (2026-08-05). La version anterior de este
@@ -1228,6 +1273,471 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_acts", function( ply )
     end
 end, "Cuenta cuantas secuencias responden a cada actividad que la base le pide al fantasma. " ..
     "Mide si el $includemodel descarto las prestadas de m_anm: tiene que dar 1 por actividad." )
+
+---------------------------------------------------------------------------
+-- Instrumento: LA POSE T -- que actividad se pidio, y si salio algo
+---------------------------------------------------------------------------
+-- Pedido textual del autor: "si hay algun cvar que calcule eso de la animacion
+-- para que sepas cual es seria bueno". Reporto la pose T dos veces, las dos
+-- tirando al fantasma con el physgun.
+--
+-- UNA POSE T ES LA POSE DE REFERENCIA: el modelo dibujado con su esqueleto de
+-- reposo, o sea SIN ANIMACION. Asi que lo que hay que encontrar es una actividad
+-- que la base pide y que no resuelve a ninguna secuencia -- ni nuestra ni
+-- prestada de m_anm. No esta identificada y esto NO la adivina: la registra.
+--
+-- El anillo, la resolucion de nombres y el formato viven en
+-- lua/phantasmagoria/actlog.lua, que el arnes SI puede cargar. Aca quedan las
+-- envolturas, que son lo unico que necesita el motor.
+--
+-- ⚠ SON SEIS PUNTOS DE ENTRADA Y HAY QUE TENER LOS SEIS, porque no todos pasan
+-- por el mismo lado y el que falte es justo el que no se va a ver:
+--
+--   TranslateActivity   la traduccion ACT_MP_* -> ACT_HL2MP_*
+--   StartActivity       lo que de verdad cambia la secuencia del cuerpo
+--   DoGesture/DoPosture los de la base ( ACT_LAND entra por aca, :3456 )
+--   AddGesture          ⚠ NATIVO Y DIRECTO: HandleFlinching lo llama sin pasar
+--                       por DoGesture ( damageandhealth.lua:634 ). Envolver solo
+--                       DoGesture dejaria los ocho flinch fuera del instrumento,
+--                       que es el modo de falla que la ronda 16 ya pago: un
+--                       instrumento que mide donde el sujeto no pasa.
+--   AddGestureSequence  el mismo camino cuando el gesto viene por nombre
+local cvActLog = CreateConVar( "phantasmagoria_ghost_actlog", "0", FCVAR_ARCHIVE,
+    "Anota que actividad se le pide al modelo y si resolvio a una secuencia. " ..
+    "Sirve para identificar la POSE T: la actividad que no resuelve es la que falta. " ..
+    "Se lee en cada llamada, asi que se puede prender y apagar con el bot vivo. " ..
+    "Ver con phantasmagoria_ghost_actlog_dump.", 0, 1 )
+
+-- Lo ultimo que se anoto por cada punto, para no escribir 66 eventos por segundo.
+-- TranslateActivity corre en CADA BodyUpdate; sin este filtro el anillo de 64 se
+-- llena en un segundo y el evento de la pose T se cae por el borde antes de que
+-- el autor suelte el physgun.
+local ultimoPorPunto = {}
+
+local function estadoAhora( self )
+    local partes = {}
+
+    -- Todo por pcall: son metodos de la base y de la metatabla de NextBot, y un
+    -- instrumento que revienta al bot para poder describirlo no sirve. Un dato
+    -- que no se pudo leer se omite; no se inventa un cero.
+    local ok, aire = pcall( self.IsOnGround, self )
+    if ok then partes[ #partes + 1 ] = aire and "en el piso" or "EN EL AIRE" end
+
+    if self.m_Jumping then partes[ #partes + 1 ] = "saltando" end
+    if self.m_Physguned then partes[ #partes + 1 ] = "PHYSGUN" end
+
+    local okV, vel = pcall( self.GetCurrentSpeed, self )
+    if okV and isnumber( vel ) then
+        partes[ #partes + 1 ] = math.Round( vel ) .. " u/s"
+
+    end
+
+    return table.concat( partes, " " )
+
+end
+
+--- Anota, si el log esta prendido y si el evento es distinto del anterior de su
+--- mismo punto. Devuelve el evento o nil.
+local function anotar( self, punto, ev )
+    if not cvActLog:GetBool() then return end
+    if not PHANTASMAGORIA.PushActLog then return end
+
+    -- ⚠ LA HUELLA INCLUYE `resolvio`. Si el filtro mirara solo la actividad, el
+    -- primer evento que NO resuelve quedaria tapado por el anterior que SI
+    -- resolvio la misma -- que es exactamente el instante que se esta buscando.
+    local huella = tostring( ev.pedida ) .. "|" .. tostring( ev.salida ) ..
+        "|" .. tostring( ev.seq ) .. "|" .. tostring( ev.resolvio )
+
+    if ultimoPorPunto[ punto ] == huella then return end
+    ultimoPorPunto[ punto ] = huella
+
+    ev.punto = punto
+    ev.t = CurTime()
+    ev.estado = estadoAhora( self )
+
+    return PHANTASMAGORIA.PushActLog( ev )
+
+end
+
+--- Que secuencia elige el modelo para una actividad, y si eligio alguna.
+--- SelectWeightedSequence devuelve -1 cuando ninguna la declara; ese -1 es el
+--- dato entero de este instrumento.
+local function resolver( self, act )
+    if not isnumber( act ) then return nil, nil, nil end
+
+    local ok, seq = pcall( self.SelectWeightedSequence, self, act )
+    if not ok or not isnumber( seq ) then return nil, nil, nil end
+
+    local nombre = seq >= 0 and tostring( self:GetSequenceName( seq ) ) or "NINGUNA"
+
+    return seq, nombre, seq >= 0
+
+end
+
+---------------------------------------------------------------------------
+-- Las envolturas
+---------------------------------------------------------------------------
+-- ⚠ NINGUNA DE ESTAS SE INSTALA SI NO SE ENCUENTRA LA ORIGINAL. Un instrumento
+-- que tapa un metodo de la base y no lo puede llamar de vuelta no mide al
+-- fantasma: lo rompe -- y romperlo se leeria como un defecto del modelo.
+--
+-- Los dos nativos se resuelven ACA ARRIBA y como LOCALES. Estaban abajo y como
+-- globales: en Lua eso "anda" -- una global se resuelve al llamar, no al
+-- definir -- pero deja dos nombres sueltos en _G que cualquier addon puede
+-- pisar, y en un archivo de 2000 lineas el lector no tiene como saber que la
+-- linea de arriba depende de una asignacion que esta cien lineas mas abajo.
+local metaEnt     = FindMetaTable( "Entity" )
+local metaNextBot = FindMetaTable( "NextBot" )
+
+local origStartActivity = metaNextBot and metaNextBot.StartActivity
+local origAddGesture    = metaEnt and metaEnt.AddGesture
+
+-- ⚠ TranslateActivity DEVUELVE DOS VALORES y el segundo decide. La base hace
+--     local jumpStartAct, isAnim = self:TranslateActivity( ACT_MP_JUMP_START )
+--     if not isAnim then return end
+-- ( motionoverrides.lua:3011-3013 ). El `false` sale del camino de fallback y es
+-- lo que impide que se toque un gesto que no existe. Una envoltura que devuelve
+-- solo el primer valor convierte ese `false` en nil... que tambien es falsy, asi
+-- que ESA no rompe -- pero al reves si: cualquier envoltura de las de abajo que
+-- se coma un valor de retorno cambia el comportamiento del bot en silencio. Por
+-- eso todas devuelven con `return orig( ... )` o guardan en tabla y desempaquetan.
+function ENT:TranslateActivity( act )
+    local base = self.BaseClass and self.BaseClass.TranslateActivity
+
+    if not isfunction( base ) then
+        -- Sin base no hay nada que envolver y tampoco hay que inventar: se
+        -- devuelve la actividad tal cual, que es lo que hace un modelo sin
+        -- traduccion, y se avisa UNA vez.
+        if not self.phantom_avisoTranslate then
+            self.phantom_avisoTranslate = true
+            ghostPrint( "TranslateActivity de la base NO ENCONTRADA: el instrumento de " ..
+                "actividades queda ciego en ese punto y la traduccion no se aplica.\n" )
+
+        end
+
+        return act
+
+    end
+
+    local salida, encontrada = base( self, act )
+
+    anotar( self, "Translate", {
+        pedida = act,
+        salida = salida,
+        -- `encontrada == false` es el fallback de la base: NO habia traduccion y
+        -- devolvio la idle. No es lo mismo que "no resolvio a una secuencia", y
+        -- por eso no se marca como pose T -- se anota aparte abajo.
+        seq = nil,
+        resolvio = nil,
+        cayoAlFallback = ( encontrada == false ) or nil,
+    } )
+
+    return salida, encontrada
+
+end
+
+function ENT:StartActivity( act )
+    local seq, nombre, resolvio = resolver( self, act )
+
+    anotar( self, "Start", {
+        pedida = act,
+        seq = seq,
+        seqName = nombre,
+        resolvio = resolvio,
+    } )
+
+    return origStartActivity( self, act )
+
+end
+
+function ENT:DoGesture( act, speed, wait )
+    -- Un gesto puede venir por NOMBRE de secuencia ( isstring ), y en ese caso
+    -- no hay actividad que resolver: se anota el nombre y se dice que el camino
+    -- fue otro. Tratarlo como numero daria "ACT desconocida (nil)".
+    if isstring( act ) then
+        local seq = self:LookupSequence( act )
+
+        anotar( self, "Gesture", {
+            pedida = -1,
+            seq = seq,
+            seqName = act,
+            resolvio = isnumber( seq ) and seq >= 0 or false,
+        } )
+
+    else
+        local seq, nombre, resolvio = resolver( self, act )
+
+        anotar( self, "Gesture", {
+            pedida = act,
+            seq = seq,
+            seqName = nombre,
+            resolvio = resolvio,
+        } )
+
+    end
+
+    -- La guarda del BaseClass, igual que en TranslateActivity y por el mismo
+    -- motivo: sin ella, un rename en la base convierte al instrumento en la
+    -- causa de que el fantasma no haga gestos nunca.
+    local base = self.BaseClass and self.BaseClass.DoGesture
+    if not isfunction( base ) then return end
+
+    return base( self, act, speed, wait )
+
+end
+
+function ENT:DoPosture( act, issequence, speed, noautokill )
+    if not issequence then
+        local seq, nombre, resolvio = resolver( self, act )
+
+        anotar( self, "Posture", {
+            pedida = act,
+            seq = seq,
+            seqName = nombre,
+            resolvio = resolvio,
+        } )
+
+    end
+
+    local base = self.BaseClass and self.BaseClass.DoPosture
+    if not isfunction( base ) then return end
+
+    return base( self, act, issequence, speed, noautokill )
+
+end
+
+-- ⚠ EL NATIVO, Y ES EL QUE MAS IMPORTA. HandleFlinching lo llama DIRECTO con un
+-- ACT_FLINCH_* ( damageandhealth.lua:634 ) sin comprobar que exista, y cinco de
+-- los ocho grupos de impacto piden una actividad que NO TIENE SECUENCIA ni en
+-- m_anm ni en nuestro modelo ( medido con mdlacts.py, ver actlog.lua ).
+function ENT:AddGesture( act, autokill )
+    local seq, nombre, resolvio = resolver( self, act )
+
+    anotar( self, "AddGest", {
+        pedida = act,
+        seq = seq,
+        seqName = nombre,
+        resolvio = resolvio,
+    } )
+
+    return origAddGesture( self, act, autokill )
+
+end
+
+-- Si el original no esta, la envoltura se DESINSTALA. Es preferible un
+-- instrumento ausente y ruidoso a un bot que no puede empezar una actividad.
+do
+    if not isfunction( origStartActivity ) then
+        ENT.StartActivity = nil
+        ghostPrint( "NextBot:StartActivity no se pudo encontrar en la metatabla: la envoltura " ..
+            "NO se instala y el actlog no va a ver los cambios de actividad del cuerpo. " ..
+            "El bot funciona igual.\n" )
+
+    end
+
+    if not isfunction( origAddGesture ) then
+        ENT.AddGesture = nil
+        ghostPrint( "Entity:AddGesture no se pudo encontrar en la metatabla: la envoltura NO se " ..
+            "instala y el actlog no va a ver los FLINCH, que son los que entran por ahi. " ..
+            "El bot funciona igual.\n" )
+
+    end
+end
+
+---------------------------------------------------------------------------
+-- El censo: que actividades NO resuelven, sin esperar el sintoma
+---------------------------------------------------------------------------
+-- ⚠ ESTE ES EL COMANDO QUE PUEDE CONTESTAR LA PREGUNTA SIN QUE EL SINTOMA
+-- OCURRA, y por eso va antes que el dump en la planilla. El log de arriba
+-- necesita que la pose T pase mientras el log esta prendido; esto le pregunta al
+-- modelo, ahora, por CADA actividad que la base puede llegar a pedirle, y lista
+-- las que no tienen secuencia. Una actividad sin secuencia es, por definicion,
+-- una pose de referencia esperando a que algo la pida.
+--
+-- El universo esta censado del codigo de la base, no recordado ( ver
+-- lua/phantasmagoria/actlog.lua ). Si estuviera incompleto, esto daria verde
+-- sobre una actividad que nunca miro.
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_actmiss", function( ply )
+    local say = PHANTASMAGORIA.MakeSay( ply )
+
+    if not PHANTASMAGORIA.ActUniverse then
+        say( "[Phantasmagoria] SIN CORRER: lua/phantasmagoria/actlog.lua no cargo. " ..
+            "El universo de actividades no existe, asi que no hay contra que barrer." )
+        return
+
+    end
+
+    local ghosts = {}
+    PHANTASMAGORIA.EachGhost( function( g ) ghosts[ #ghosts + 1 ] = g end )
+
+    if #ghosts == 0 then
+        say( "[Phantasmagoria] SIN CORRER: no hay ningun fantasma vivo." )
+        return
+
+    end
+
+    for _, ghost in ipairs( ghosts ) do
+        say( "" )
+        say( "[Phantasmagoria] #" .. ghost:EntIndex() .. "  " .. tostring( ghost:GetModel() ) )
+
+        local total = ghost:GetSequenceCount()
+        say( "    secuencias visibles: " .. total ..
+            ( total > 100 and "  ( el $includemodel se resolvio )" or
+              "  <- SIN LAS PRESTADAS: esta medicion NO VALE" ) )
+
+        local sinSecuencia, sinEnum = 0, 0
+
+        for _, fila in ipairs( PHANTASMAGORIA.ActUniverse ) do
+            local act = PHANTASMAGORIA.ActNumber( fila.act )
+
+            if not act then
+                -- Que el ACT_ no exista en este build es un dato y no un error:
+                -- se dice y se sigue. Declararlos por string es lo que permite
+                -- llegar hasta aca en vez de no cargar el archivo.
+                sinEnum = sinEnum + 1
+                say( "    ??  " .. string.format( "%-34s", fila.act ) ..
+                    "no existe como ACT_* en este build" )
+
+            else
+                local seq = ghost:SelectWeightedSequence( act )
+                local hay = isnumber( seq ) and seq >= 0
+
+                if not hay then sinSecuencia = sinSecuencia + 1 end
+
+                say( "    " .. ( hay and "OK  " or "!!  " ) ..
+                    string.format( "%-34s", fila.act ) ..
+                    ( hay and ( "seq " .. seq .. " (" .. tostring( ghost:GetSequenceName( seq ) ) .. ")" )
+                        or "NINGUNA SECUENCIA  <- pose de referencia ( T )" ) )
+
+                if not hay then
+                    say( "         se pide: " .. fila.via )
+                    say( "         cubre:   " .. fila.cubre )
+
+                end
+            end
+        end
+
+        -- ⚠ EL VEREDICTO LLEVA EL DENOMINADOR, Y ESTA LINEA YA SALIO MAL UNA VEZ.
+        -- La primera version decia ">> PASA: las 18 actividades del censo
+        -- resuelven" contando `sinSecuencia == 0` -- y en la corrida del arnes
+        -- OCHO de esas 18 no existian como ACT_* y por lo tanto NO SE MIDIERON:
+        -- cayeron en la otra rama y no sumaron a ningun contador. O sea que el
+        -- verde afirmaba sobre 18 habiendo mirado 10.
+        --
+        -- *Un veredicto que no resta lo que no pudo medir cuenta los ausentes
+        -- como aprobados.* Ahora el numero que se dice es el de las MEDIDAS, y
+        -- si falta alguna el veredicto no es PASA sino PARCIAL.
+        local medidas = #PHANTASMAGORIA.ActUniverse - sinEnum
+
+        if sinEnum > 0 then
+            say( "    ⚠ " .. sinEnum .. " de " .. #PHANTASMAGORIA.ActUniverse ..
+                " nombres del censo NO EXISTEN como ACT_* en este build: no se midieron. " ..
+                "No cuentan ni a favor ni en contra." )
+
+        end
+
+        if sinSecuencia > 0 then
+            say( "    >> " .. sinSecuencia .. " actividad(es) SIN SECUENCIA, de " .. medidas ..
+                " medidas. Cada una es una pose de referencia en cuanto algo la pida." )
+            say( "    >> Que esten NO prueba todavia que sean LA que vio el autor: eso lo ata " ..
+                "el dump, que dice si alguna se pidio en el momento de la T." )
+
+        elseif sinEnum > 0 then
+            say( "    >> PARCIAL: las " .. medidas .. " actividades que se pudieron medir " ..
+                "resuelven, pero " .. sinEnum .. " quedaron sin mirar. Esto NO descarta la lista." )
+
+        else
+            say( "    >> PASA: las " .. medidas .. " actividades del censo resuelven a alguna " ..
+                "secuencia." )
+            say( "    >> O sea que la pose T NO viene de una actividad de esta lista. " ..
+                "El siguiente paso es el log en vivo ( phantasmagoria_ghost_actlog 1 )." )
+
+        end
+    end
+end, "Barre TODAS las actividades que la base puede pedirle al modelo y dice cuales no resuelven " ..
+    "a ninguna secuencia. Una actividad sin secuencia es una pose T esperando." )
+
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_actlog_dump", function( ply )
+    local say = PHANTASMAGORIA.MakeSay( ply )
+
+    if not PHANTASMAGORIA.ActLogEvents then
+        say( "[Phantasmagoria] SIN CORRER: lua/phantasmagoria/actlog.lua no cargo." )
+        return
+
+    end
+
+    local eventos = PHANTASMAGORIA.ActLogEvents()
+    local totales = PHANTASMAGORIA.ActLogTotal()
+
+    if #eventos == 0 then
+        -- ⚠ EL VACIO TIENE QUE DECIR CUAL DE LOS DOS VACIOS ES. "No paso nada"
+        -- y "el log estaba apagado" se ven igual desde afuera y significan lo
+        -- contrario: el segundo no es una medicion.
+        if not cvActLog:GetBool() then
+            say( "[Phantasmagoria] SIN CORRER: el log esta APAGADO " ..
+                "( phantasmagoria_ghost_actlog 0 ). No es que no haya pasado nada: no se miro." )
+
+        else
+            say( "[Phantasmagoria] el log esta prendido y no anoto NADA todavia. " ..
+                "Con el bot vivo eso ya es raro: la primera actividad se anota al primer " ..
+                "BodyUpdate." )
+
+        end
+
+        return
+
+    end
+
+    say( "[Phantasmagoria] " .. #eventos .. " evento(s) en el anillo, de " .. totales ..
+        " anotados desde el ultimo clear." )
+
+    if totales > #eventos then
+        say( "    ( el anillo guarda los ultimos " .. #eventos .. "; los " ..
+            ( totales - #eventos ) .. " anteriores se perdieron. Correr " ..
+            "phantasmagoria_ghost_actlog_clear justo antes de reproducir el sintoma. )" )
+
+    end
+
+    say( "" )
+    for _, ev in ipairs( eventos ) do
+        say( "  " .. PHANTASMAGORIA.ActLogLine( ev ) )
+
+    end
+
+    local malos = PHANTASMAGORIA.ActLogUnresolved()
+
+    say( "" )
+    if #malos == 0 then
+        say( "    >> ninguna actividad quedo SIN RESOLVER en esta ventana." )
+        say( "    >> Si la pose T se vio en esta ventana, NO la causo una actividad sin " ..
+            "secuencia: hay que buscar en otro lado ( una capa de gesto con peso, un " ..
+            "SetSequence de otro addon )." )
+
+    else
+        say( "    >> " .. #malos .. " evento(s) SIN RESOLVER -- estos son los que dejan la pose T:" )
+        for _, ev in ipairs( malos ) do
+            say( "       " .. PHANTASMAGORIA.ActLogLine( ev ) )
+
+        end
+
+    end
+end, "Imprime las ultimas actividades que se le pidieron al fantasma y marca las que no resolvieron." )
+
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_actlog_clear", function( ply )
+    local say = PHANTASMAGORIA.MakeSay( ply )
+
+    if not PHANTASMAGORIA.ActLogClear then
+        say( "[Phantasmagoria] SIN CORRER: lua/phantasmagoria/actlog.lua no cargo." )
+        return
+
+    end
+
+    PHANTASMAGORIA.ActLogClear()
+    ultimoPorPunto = {}
+    say( "[Phantasmagoria] anillo vacio. Ahora reproducir el sintoma y correr " ..
+        "phantasmagoria_ghost_actlog_dump." )
+
+end, "Vacia el anillo del actlog. Correr justo antes de reproducir la pose T." )
 
 ---------------------------------------------------------------------------
 -- EL BOTON DE LA MIRADA, Y LO QUE LO SEPARA DE UNA LECTURA ES QUE SE NIEGA

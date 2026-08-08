@@ -57,6 +57,17 @@ PHANTASMAGORIA = PHANTASMAGORIA or {}
 local DATOS = {
     "phantasmagoria/ghost_types.lua",
     "phantasmagoria/prop_data.lua",
+
+    -- ⚠ ESTE NO ES UN DATO, Y ROMPE LA REGLA DE ARRIBA A PROPOSITO. Es el anillo
+    -- de actividades ( el instrumento de la pose T ). Vive aca y no adentro del
+    -- ENT porque `luaharness.py` no puede cargar
+    -- terminator_nextbot_phantom/server.lua -- no parsea el `continue` de GMod --
+    -- y un instrumento que no se puede ejercitar fuera del juego ya costo una
+    -- ronda entera en este arco ( ph_ghost_costura ).
+    --
+    -- En los DOS realms: el ENT lo escribe desde el servidor, y el conteo del
+    -- cargador de abajo lo mira en los dos.
+    "phantasmagoria/actlog.lua",
 }
 
 if SERVER then
@@ -107,14 +118,25 @@ end
 -- falla interesante es de un solo lado ( el cliente sin los 30 tipos deja el
 -- marcador diciendo la key cruda, sin ficha ). Con una sola linea sin realm, dos
 -- consolas distintas se leen como una.
+-- ⚠ CADA ARCHIVO DE `DATOS` TIENE QUE TENER SU COLUMNA ACA. Un archivo nuevo en
+-- la lista de arriba sin una linea aca queda vigilado por nadie, y el cargador
+-- seguiria imprimiendo su verde: el conteo diria "2 tipos, 9 modelos" con el
+-- tercer archivo caido. Eso no es un verde parcial, es un verde equivocado.
 hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
     local tipos = contar( PHANTASMAGORIA.Types )
     local props = contar( PHANTASMAGORIA.PropData )
+    -- ActUniverse es la tabla, pero lo que el ENT llama son las FUNCIONES. Se
+    -- comprueba una de cada: una tabla presente con las funciones sin definir
+    -- seria un archivo que se corto a la mitad, y el ENT reventaria recien al
+    -- primer evento -- o sea en juego y sin que nada lo anticipe.
+    local acts = contar( PHANTASMAGORIA.ActUniverse )
+    local pushOk = isfunction( PHANTASMAGORIA.PushActLog )
     local realm = SERVER and "server" or "cliente"
 
-    if tipos and tipos > 0 and props and props > 0 then
+    if tipos and tipos > 0 and props and props > 0 and acts and acts > 0 and pushOk then
         MsgC( Color( 190, 120, 255 ), "[Phantasmagoria] ", color_white,
-            "datos cargados en ", realm, ": ", tipos, " tipos · ", props, " modelos.\n" )
+            "datos cargados en ", realm, ": ", tipos, " tipos · ", props, " modelos · ",
+            acts, " actividades vigiladas.\n" )
 
         return
 
@@ -123,7 +145,9 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
     ErrorNoHalt( "[Phantasmagoria] LOS DATOS NO CARGARON BIEN en " .. realm .. ": " ..
         "Types " .. ( tipos and ( tipos .. " tipos" ) or "NO EXISTE" ) ..
         " · PropData " .. ( props and ( props .. " modelos" ) or "NO EXISTE" ) ..
-        ".  Los tipos los necesita la cordura ( threshold por tipo ) y PropData corrige la masa " ..
-        "de los props del pack.\n" )
+        " · ActUniverse " .. ( acts and ( acts .. " actividades" ) or "NO EXISTE" ) ..
+        " · PushActLog " .. ( pushOk and "OK" or "NO EXISTE" ) ..
+        ".  Los tipos los necesita la cordura ( threshold por tipo ), PropData corrige la masa " ..
+        "de los props del pack, y el actlog es el instrumento de la pose T.\n" )
 
 end )

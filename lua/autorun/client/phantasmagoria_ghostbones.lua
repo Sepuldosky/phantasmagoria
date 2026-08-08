@@ -1,7 +1,7 @@
 --[[
 	Medir los huesos del fantasma DEL LADO DEL CLIENTE.
 
-	    ph_ghost_bones      largos de hueso del ghost_girl que tengas spawneado
+	    ph_ghost_bones      largos de hueso de TODO lo que lleve puesto el modelo
 
 	POR QUE DE CLIENTE, Y NO EN ph_ghost_ragdoll / ph_ghost_anim
 
@@ -10,12 +10,23 @@
 	el ciclo avanzaba de 0 a 0,42. Una caminata mueve esos huesos; que no se
 	movieran ni un milesimo no era "no se estira", era que el servidor NO estaba
 	evaluando la animacion. Lo que leia era la tabla de huesos estatica, ya
-	fusionada con la de m_anm.mdl por el $includemodel.
+	fusionada con la de m_anm.mdl por el $includemodel. `Entity:SetupBones` es
+	de cliente por lo mismo.
 
-	Eso alcanzo para ENCONTRAR el problema (la tabla es la del ciudadano) y NO
-	alcanza para ver si el arreglo funciono: la capa de proporciones es una
-	animacion `autoplay`, y una animacion que el servidor no corre no se puede
-	medir desde el servidor. `Entity:SetupBones` es de cliente por lo mismo.
+	⚠ EL MECANISMO QUE ESTO MIDE CAMBIO, Y EL ENCABEZADO VIEJO DESCRIBIA UNO
+	ABANDONADO. Decia que hacia falta el cliente porque "la capa de proporciones
+	es una animacion autoplay": ese truco ( subtract + autoplay ) se probo,
+	compilo y midio 0/5, y se tiro. El mecanismo de hoy es otro -- nuestras
+	secuencias se llaman IGUAL que las de m_anm ( walk_all, run_all_01, ... ) y
+	el engine descarta la prestada homonima al resolver el $includemodel.
+
+	El instrumento sigue siendo de cliente, pero por un motivo distinto y que
+	conviene tener escrito: con el mecanismo nuevo el largo de hueso depende de
+	QUE SECUENCIA se este reproduciendo -- las animaciones de HL2 son de
+	rotacion pura, asi que todo hueso que la animacion no traslada toma su
+	reposo del modelo DUENO de esa animacion. O sea que esto no mide "el
+	modelo": mide el modelo EN LA SECUENCIA QUE ESTE VIVA, y por eso la
+	secuencia viva se imprime al lado de los numeros y no como adorno.
 
 	EL CRITERIO
 
@@ -24,8 +35,6 @@
 	Son dos juegos de numeros bien separados, asi que no hay que interpretar:
 	el que salga dice cual gano.
 ]]
-
-local MODELO = "models/phantasmagoria/ghost_girl.mdl"
 
 -- {padre, hijo, largo que declara el .mdl, largo que impone m_anm}
 local PARES = {
@@ -36,65 +45,176 @@ local PARES = {
 	{ "ValveBiped.Bip01_Neck1",      "ValveBiped.Bip01_Head1",     3.47,  3.59 },
 }
 
+--[[
+	⚠ ESTE COMANDO NO VEIA AL NEXTBOT, Y ERA EL CHECK QUE LA RONDA 16 EXISTIA
+	PARA CORRER. Buscaba por una LISTA BLANCA DE CLASES -- prop_dynamic,
+	prop_ragdoll, prop_physics -- que eran las tres formas en que el fantasma se
+	spawneaba cuando esto se escribio. Cuando el sujeto paso a ser
+	`terminator_nextbot_phantom` la busqueda quedo mirando un banco de pruebas
+	vacio, y contesto «no hay ningun ghost_girl spawneado», que se lee como
+	NO HAY NADA cuando lo que pasaba era NO MIRO AHI. La fila 05 quedo sin
+	correr y nadie midio un hueso sobre el bot.
+
+	El arreglo no es agregar la clase del bot a la lista -- eso vuelve a romperse
+	con los 30 tipos de Diseno 12.2, que se van a llamar phantasmagoria_<tipo>.
+	El sujeto se define por lo unico que lo hace sujeto: LLEVAR PUESTO EL MODELO.
+	Asi que la lista blanca se da vuelta y pasa a ser una lista NEGRA de la unica
+	clase que hay que sacar, con el motivo al lado.
+
+	Y cuando no encuentra nada, DICE DONDE MIRO y que descarto. Un instrumento
+	que puede salir vacio tiene que hacer que el vacio sea una medicion.
+]]
+
+-- Los seguidores del ragdoll. No tienen nuestros huesos y llenaban la consola
+-- con quince bloques de "hueso ausente" que tapaban la unica lectura que
+-- importaba. Es la UNICA exclusion, y por eso esta nombrada y no implicita.
+local CLASES_EXCLUIDAS = {
+	[ "phys_bone_follower" ] = "seguidor de fisica del ragdoll, no tiene los huesos del modelo",
+}
+
+--[[
+	LOS DOS CAMINOS DE LECTURA, Y SE CORREN LOS DOS A PROPOSITO.
+
+	El sondeo de ph_ghost_costura ( abajo en este mismo archivo ) midio que sobre
+	un ClientsideModel `GetBonePosition` devuelve algo que NO SE MUEVE aunque los
+	huesos esten armados -- no nil, no error: quieto -- y que `GetBoneMatrix`
+	sobre la misma entidad y en la misma llamada si. Sobre entidades replicadas
+	del servidor `GetBonePosition` si anduvo ( 5/5 en la ronda 2 ).
+
+	Sobre un NEXTBOT no lo midio nadie. Asi que no se elige uno: se leen los dos
+	y se imprimen los dos cuando difieren. Elegir sin medir es el error que este
+	arco ya pago cuatro veces, y aca el modo de falla es especialmente feo -- una
+	lectura congelada en la pose de reposo devolveria numeros PLAUSIBLES.
+]]
+local function leerPar( e, ia, ib )
+	local ma, mb = e:GetBoneMatrix( ia ), e:GetBoneMatrix( ib )
+	local dMat = ( ma and mb ) and ma:GetTranslation():Distance( mb:GetTranslation() ) or nil
+
+	local pa, pb = e:GetBonePosition( ia ), e:GetBonePosition( ib )
+	local dPos = ( pa and pb ) and pa:Distance( pb ) or nil
+
+	return dMat, dPos
+end
+
 local function cmd()
 	-- Cualquier variante de ghost_girl, no un nombre exacto: el control sin
 	-- $includemodel se llama ghost_girl_noinc.mdl y hay que medir los dos EN LA
 	-- MISMA CORRIDA para que la comparacion valga.
-	-- Y se filtran los `phys_bone_follower`: son los seguidores del ragdoll, no
-	-- tienen nuestros huesos, y llenaban la consola con quince bloques de
-	-- "hueso ausente" que tapaban la unica lectura que importaba.
-	local encontrados = {}
+	local encontrados, descartados = {}, {}
+
 	for _, e in ipairs( ents.GetAll() ) do
-		local cls = IsValid( e ) and e:GetClass() or ""
-		if ( cls == "prop_dynamic" or cls == "prop_ragdoll" or cls == "prop_physics" )
-			and string.find( tostring( e:GetModel() ), "ghost_girl", 1, true ) then
-			encontrados[ #encontrados + 1 ] = e
+		if IsValid( e ) and string.find( tostring( e:GetModel() ), "ghost_girl", 1, true ) then
+			local cls = e:GetClass()
+
+			if CLASES_EXCLUIDAS[ cls ] then
+				descartados[ cls ] = ( descartados[ cls ] or 0 ) + 1
+
+			else
+				encontrados[ #encontrados + 1 ] = e
+
+			end
 		end
 	end
+
 	if #encontrados == 0 then
-		print( "[ph_bones] no hay ningun ghost_girl spawneado (prop_dynamic/ragdoll)." )
-		print( "[ph_bones] correr antes ph_ghost_anim, ph_ghost_ragdoll o ph_ghost_control." )
+		-- EL VACIO COMO MEDICION: que se busco, entre cuantas, y que se saco.
+		print( "[ph_bones] NO HAY NINGUNA ENTIDAD con 'ghost_girl' en el modelo, de las " ..
+			#ents.GetAll() .. " que existen en el cliente." )
+		print( "[ph_bones] Se busca por MODELO y no por clase, asi que esto alcanza al NextBot, " ..
+			"a los props y al ragdoll por igual." )
+
+		local hubo = false
+		for cls, n in pairs( descartados ) do
+			hubo = true
+			print( "[ph_bones]   ( se descartaron " .. n .. " x " .. cls .. ": " ..
+				CLASES_EXCLUIDAS[ cls ] .. " )" )
+		end
+		if hubo then
+			print( "[ph_bones] O sea que el modelo SI esta en el mapa, pero solo en entidades " ..
+				"excluidas. Eso no es 'no hay nada'." )
+		end
+
+		print( "[ph_bones] Spawnear el NextBot, o correr ph_ghost_anim / ph_ghost_ragdoll." )
 		return
 	end
 
+	print( "[ph_bones] " .. #encontrados .. " entidad(es) con el modelo." )
+
 	for _, e in ipairs( encontrados ) do
 		if IsValid( e ) then
-			print( "[ph_bones] modelo: " .. tostring( e:GetModel() ) )
 			-- De cliente SI existe, y es lo que fuerza a que la pose este
-			-- evaluada con todas sus capas -- incluida la de proporciones,
-			-- que es `autoplay`.
+			-- evaluada. Sin esto se lee la pose del cuadro anterior o la de
+			-- reposo, que devuelve numeros creibles sin haber medido la pose.
 			e:SetupBones()
-			local seq = e:GetSequence()
-			print( string.format( "[ph_bones] --- %s  [%s]  seq %d (%s)  ciclo %.3f ---",
-				tostring( e ), e:GetClass(), seq,
-				tostring( e:GetSequenceName( seq ) ), e:GetCycle() ) )
 
-			local propio, ajeno = 0, 0
+			local seq = e:GetSequence()
+			print( string.format( "[ph_bones] --- %s  [%s]  modelo %s ---",
+				tostring( e ), e:GetClass(), tostring( e:GetModel() ) ) )
+			-- LA SECUENCIA VIVA NO ES CONTEXTO, ES PARTE DE LA MEDICION: con el
+			-- mecanismo de reemplazo por nombre, el largo de hueso depende de que
+			-- animacion se este reproduciendo. Un 17,85 durante una secuencia
+			-- PRESTADA es el comportamiento esperado, no el defecto.
+			print( string.format( "[ph_bones]     seq %d (%s)   ciclo %.3f",
+				seq, tostring( e:GetSequenceName( seq ) ), e:GetCycle() ) )
+
+			local propio, ajeno, difieren = 0, 0, 0
+
 			for _, par in ipairs( PARES ) do
-				local a, b = e:LookupBone( par[ 1 ] ), e:LookupBone( par[ 2 ] )
-				if not a or not b then
-					print( string.format( "[ph_bones]   %-24s hueso ausente",
-						par[ 1 ]:sub( 17 ) .. "->" .. par[ 2 ]:sub( 17 ) ) )
+				local ia, ib = e:LookupBone( par[ 1 ] ), e:LookupBone( par[ 2 ] )
+				local etiqueta = par[ 1 ]:sub( 17 ) .. "->" .. par[ 2 ]:sub( 17 )
+
+				if not ia or not ib then
+					print( string.format( "[ph_bones]   %-24s hueso ausente", etiqueta ) )
+
 				else
-					local pa, pb = e:GetBonePosition( a ), e:GetBonePosition( b )
-					local d = ( pa and pb ) and pa:Distance( pb ) or -1
-					-- Cual de los dos candidatos esta mas cerca. No se
-					-- interpreta un porcentaje: se dice a quien se parece.
-					local dp, da = math.abs( d - par[ 3 ] ), math.abs( d - par[ 4 ] )
-					local quien
-					if dp < da then quien = "NUESTRO" propio = propio + 1
-					else quien = "m_anm"  ajeno = ajeno + 1 end
-					print( string.format(
-						"[ph_bones]   %-24s %6.2f   (.mdl %5.2f / m_anm %5.2f)  -> %s",
-						par[ 1 ]:sub( 17 ) .. "->" .. par[ 2 ]:sub( 17 ),
-						d, par[ 3 ], par[ 4 ], quien ) )
+					local dMat, dPos = leerPar( e, ia, ib )
+
+					if not dMat and not dPos then
+						print( string.format( "[ph_bones]   %-24s LAS DOS LECTURAS DIERON NIL " ..
+							"-- no es 'no se estira', es que no se leyo", etiqueta ) )
+
+					else
+						-- El veredicto se toma con GetBoneMatrix, que es el que el
+						-- sondeo demostro que sigue la pose. GetBonePosition va al
+						-- lado como control: si los dos coinciden, la duda se cerro
+						-- en esta corrida y sobre ESTA clase de entidad.
+						local d = dMat or dPos
+						local dp, da = math.abs( d - par[ 3 ] ), math.abs( d - par[ 4 ] )
+						local quien
+						if dp < da then quien = "NUESTRO" propio = propio + 1
+						else quien = "m_anm"  ajeno = ajeno + 1 end
+
+						local nota = ""
+						if dMat and dPos and math.abs( dMat - dPos ) > 0.05 then
+							difieren = difieren + 1
+							nota = string.format( "   [GetBonePosition dio %.2f -- DIFIERE]", dPos )
+
+						elseif not dMat then
+							nota = "   [GetBoneMatrix dio nil; el numero es de GetBonePosition]"
+
+						elseif not dPos then
+							nota = "   [GetBonePosition dio nil]"
+
+						end
+
+						print( string.format(
+							"[ph_bones]   %-24s %6.2f   (.mdl %5.2f / m_anm %5.2f)  -> %s%s",
+							etiqueta, d, par[ 3 ], par[ 4 ], quien, nota ) )
+					end
 				end
 			end
+
 			print( string.format( "[ph_bones]   VEREDICTO: %d/%d se parecen a NUESTRO esqueleto  %s",
 				propio, #PARES,
-				propio == #PARES and "-> la capa de proporciones ANDA"
-				or ( ajeno == #PARES and "-> la capa NO entro: sigue el esqueleto de m_anm"
+				propio == #PARES and "-> el modelo usa SUS proporciones"
+				or ( ajeno == #PARES and "-> ESTIRADO: esta tomando el esqueleto de m_anm"
 				     or "-> mezcla; hay que mirar hueso por hueso" ) ) )
+
+			if difieren > 0 then
+				print( "[ph_bones]   ⚠ " .. difieren .. " par(es) leyeron distinto por los dos " ..
+					"caminos. Uno de los dos NO esta siguiendo la pose, y sobre esta clase " ..
+					"de entidad no estaba medido cual." )
+			end
 		end
 	end
 end
