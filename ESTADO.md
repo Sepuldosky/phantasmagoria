@@ -13,7 +13,48 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-08): la r15 CORRIÓ — 8 de 9. El MECANISMO del tipo queda CERRADO, y tres de
+> ⭐ **LO ÚLTIMO (2026-08-08): la r15b CORRIÓ — 6 de 6. La TAJADA A queda CERRADA en juego, y las
+> masas de los 66 propios también.**
+>
+> **Lo que cerró con evidencia dura:** `84 modelos ( 66 propios )` en la línea del cargador —el
+> **84 = 18 + 66** prueba que la fusión corrió **y** que el orden de carga es el bueno—; el serial
+> nuevo hizo decidible la lectura que la r15 no pudo (`#397 serie 1` Myling contra `#156 serie 2`
+> SIN TIPO); y **cinco masas corregidas en juego**, `1.50 kg` en las cinco, o sea que **el censo de
+> los 66 estaba bien medido**: `crucifix_i/ii/iii → 0.60`, `tripod_i → 2.00`, `salt_i → 0.30`. El
+> crucifijo verificado además **por fuera del log**, con el weight tool.
+>
+> ⭐ **Corrección del autor, ya aplicada: los crucifijos II y III son metálicos.** La tabla los tenía
+> en `item`. Es exactamente para lo que salió como propuesta. **El tier I no se tocó** —el autor no se
+> pronunció sobre él— y queda anotado como pregunta abierta.
+>
+> ⚠ **Y tres de los seis verdes tienen letra chica. Ninguno cambia el veredicto; los tres dicen algo
+> del instrumento:**
+>
+> - **La 01 pedía DOS líneas y la nota trae UNA, la del cliente.** Por el criterio literal era rojo.
+>   **No lo es, y lo prueban las filas vecinas:** el comando de tipos corre en el **servidor** y dijo
+>   `30 tipos cargados`; el fantasma recibió tipo al spawnear (servidor); y el hook de masas —que es
+>   `PlayerSpawnedProp`, **servidor**— imprimió cinco correcciones. *El veredicto es correcto y la
+>   fila no lo probó: lo probaron sus vecinas.*
+> - ⭐ **La 03 volvió a pegar la consola del servidor, y esta vez la culpa es MÍA: la fila pedía algo
+>   imposible.** Pedía *pegar* lo que dice un marcador 3D, y **un marcador no produce texto** — el
+>   único registro posible era la palabra del operador o una captura. Tres rondas seguidas terminaron
+>   pegando el servidor por eso. → Entró **`phantasmagoria_ghost_cl`**, un comando **del realm
+>   cliente** que imprime la key networkeada, si resuelve a ficha, y **el texto exacto que dibuja el
+>   marcador** — llamando a la misma función que dibuja, no a una copia. *Un criterio visual necesita
+>   un instrumento que produzca texto, o la fila nunca va a tener más evidencia que la vista de
+>   alguien.*
+> - **La 06 pasó midiendo la rama de al lado.** Salió `no la escribimos y no cambia hace 1.2 s
+>   ( parado )` — que es honesto y correcto—, pero **la rama corregida pide `cambio hace ≤ 1 s`** y
+>   con 1,2 s no se pasa por ahí. La rama nueva **no se ejerció**: para provocarla hay que leer dentro
+>   del primer segundo después de que el bot frene, o sea una ventana más corta que el trámite de
+>   tipear. Va con muestreador, no con una fila más.
+>
+> **Residual menor, sin ronda propia:** la 02 volvió a traer **un solo fantasma** en la salida (el
+> primero se borró antes de spawnear el segundo), así que *«al vivo no se le borra el tipo»* sigue sin
+> medirse. Ahora es lectura de tres líneas —la convar sólo se lee en `phantom_ResolveType`, que corre
+> en el spawn y en el comando— y el serial ya quitó la ambigüedad que hacía peligrosa la lectura.
+
+> **LO ANTERIOR (2026-08-08): la r15 CORRIÓ — 8 de 9. El MECANISMO del tipo queda CERRADO, y tres de
 > esos verdes no midieron lo que decían.**
 >
 > **Lo que quedó cerrado con evidencia completa, y no se re-discute:** el tipo se asigna al spawnear
@@ -1520,12 +1561,14 @@ cuándo** empieza, y reemplaza al andamio `phantasmagoria_hunt` (que queda de te
 
 **Lo pendiente ahora, en orden:**
 
-1. **Correr `dev/checks/phantasmagoria-tipo-r15b.html`** (6 filas): las tres de la r15 que no
-   midieron lo que decían (01, 04, 08), las dos del bloque de masas y la de la etiqueta de la mirada.
-   ⚠ **Empezar con `phantasmagoria_ghost_type auto`:** la r15 dejó el override en `demon` —la 07
-   pedía cerrar con `auto` y esa mitad no se corrió— así que **dentro de esa sesión todo fantasma
-   seguía naciendo Demon**. No contamina la próxima (es una variable de Lua, no `FCVAR_ARCHIVE`),
-   pero dentro de una sí.
+1. ✔ **La tajada A está CERRADA en juego** (r15 8/9 + r15b 6/6). Lo que queda del bloque son **tres
+   residuales chicos, sin ronda propia**, que se cuelgan de la próxima que toque el tema:
+   - **`phantasmagoria_ghost_cl` no se corrió nunca** — es el comando cliente que entró *después* de
+     la r15b, justamente para que la fila del networkeo pueda dejar registro. Una línea de check.
+   - **La rama corregida de la etiqueta de la mirada no se ejerció** (hace falta leer dentro del
+     primer segundo tras frenar: ventana más corta que el trámite de tipear, va con muestreador).
+   - **«Al fantasma vivo no se le borra el tipo»** sigue sin medirse: las dos corridas trajeron un
+     solo fantasma en la salida.
 2. **Enganchar `speed.base` (§5)**, que es una línea y ya tiene los dos lados: el campo
    `phantom_SpeedMul` gana sobre la convar andamio y el instrumento de velocidad ya imprime **de
    dónde salió el multiplicador**. Con su planilla, porque **sí** cambia comportamiento.
@@ -1567,6 +1610,18 @@ cambiarle el tamaño a los modelos, y la masa que Source calcula sola **sí** de
 los 66 **sin un solo error**, y el único síntoma sería equipamiento nuestro pesando 1,5 kg. La guarda
 del cargador lo mide con una columna que **no cuenta su propia tabla sino cuántas sobrevivieron en la
 de destino**: `30 tipos · N modelos ( 66 propios )`.
+
+> ✔ **CERRADO EN JUEGO (r15b):** `84 modelos ( 66 propios )` — el **84 = 18 + 66** prueba la fusión y
+> el orden de una sola vez. Y cinco masas corregidas con el `antes` en **1.50 kg en las cinco**, o sea
+> que **el censo de los 66 estaba bien medido**.
+>
+> **Corrección del autor, aplicada:** los crucifijos **II y III son metálicos** (la tabla los tenía en
+> `item`). ⚠ **El tier I quedó sin tocar** porque el autor no se pronunció sobre él — en el juego el
+> tier 1 es de madera, pero eso es mi lectura y no su decisión. *Una enmienda sobre un eje no autoriza
+> a fijar de contrabando el sub-eje que el autor no votó.* **Pregunta abierta.**
+>
+> **Lo que sigue sin decidirse:** las masas y materiales de las otras 19 familias. Nadie las
+> contradijo, pero tampoco las miró una por una: la r15b probó **cinco** modelos de **tres** familias.
 
 ✔ **§19.6 estaba vencida y quedó corregida:** decía que faltaba «la decisión de §19.5 — cuál de las
 tres formas», y §19.5 ya había decidido (NEAD no se integra). Ahora ese bloque es la tabla de las

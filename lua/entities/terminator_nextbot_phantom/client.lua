@@ -81,6 +81,102 @@ local LABEL_HEIGHT = 14
 -- 4 m ( 4 * 52,5 u ) la escala fija 0.35 se leia bien, asi que esa es la razon.
 local LABEL_SCALE_PER_UNIT = 0.35 / ( 4 * UNITS_PER_METER )
 
+---------------------------------------------------------------------------
+-- EL LADO CLIENTE, EN TEXTO -- y existe porque una planilla mia pedia algo
+-- imposible
+---------------------------------------------------------------------------
+-- La fila del networkeo se marco verde TRES VECES sin traer un dato del
+-- cliente, y las tres veces se pego la salida del SERVIDOR. No fue descuido del
+-- que corria: *la fila pedia pegar lo que dice un marcador 3D, y un marcador no
+-- produce texto.* El unico registro posible era la palabra del operador o una
+-- captura.
+--
+-- Y el realm cliente es justo donde este taller ya tuvo algo apagado dos
+-- arranques sin un solo error de Lua. Un punto ciego historico medido con el
+-- instrumento que no deja rastro es la peor combinacion posible.
+--
+-- ⚠ LLAMA A typeLabel, LA MISMA FUNCION QUE DIBUJA, y eso no es ahorro: si
+-- imprimiera su propia version del texto seria OTRA medicion, y el dia que las
+-- dos diverjan el comando diria que todo esta bien sobre un marcador que dice
+-- otra cosa. Este addon ya tuvo dos impresiones del mismo dato separandose.
+--
+-- El wrapper de comandos vive en server.lua y aca no existe -- include() corre
+-- otro chunk y ese archivo es del otro realm --, asi que se declara la misma
+-- guarda. Se duplica a proposito en vez de mover el original: mover codigo de
+-- cero comportamiento en la misma ronda que estrena un instrumento convierte un
+-- rojo en un misterio. Cuando exista un archivo compartido, se unifica.
+-- A la defensiva y por el mismo motivo que server.lua lo hace: el orden entre
+-- lua/autorun/ y lua/entities/ no esta garantizado, y si este archivo corre
+-- primero la mesa todavia no existe.
+PHANTASMAGORIA = PHANTASMAGORIA or {}
+
+if not PHANTASMAGORIA.AddCommand then
+    function PHANTASMAGORIA.AddCommand( name, fn, help )
+        if ConVarExists( name ) then
+            ErrorNoHalt( "[Phantasmagoria] COLISION DE NOMBRE: '" .. name .. "' ya existe como CONVAR, " ..
+                "asi que el comando homonimo queda inalcanzable ( la consola resuelve convars primero ). " ..
+                "Renombrar uno de los dos.\n" )
+            return false
+
+        end
+
+        concommand.Add( name, fn, nil, help )
+        return true
+
+    end
+end
+
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cl", function()
+    local function say( line )
+        MsgC( Color( 190, 120, 255 ), "[cl] ", color_white, line, "\n" )
+
+    end
+
+    -- La primera linea dice con que esta midiendo. Aca eso ES la mitad del
+    -- veredicto: si el cliente no tiene los 30 tipos, la key va a llegar igual y
+    -- el marcador va a mostrar la key cruda -- que es un sintoma con OTRA causa.
+    local T = PHANTASMAGORIA and PHANTASMAGORIA.Types
+    local n = 0
+
+    if istable( T ) then
+        for _ in pairs( T ) do n = n + 1 end
+
+    end
+
+    say( "LO QUE VE EL CLIENTE, no el servidor.   tipos en la tabla LOCAL: " ..
+        ( istable( T ) and ( n .. "" ) or "NO EXISTE ( lua/autorun/phantasmagoria_data.lua no corrio en cliente )" ) )
+
+    local vistos = 0
+
+    for _, ghost in ipairs( ents.GetAll() ) do
+        if not ghost.IsPhantasmagoriaGhost then continue end
+        if not IsValid( ghost ) then continue end
+
+        vistos = vistos + 1
+
+        local key = ghost:GetNWString( "phantasmagoria_type", "" )
+        local t   = istable( T ) and key ~= "" and T[ key ] or nil
+
+        say( "#" .. ghost:EntIndex() ..
+            "   key networkeada " .. ( key ~= "" and ( "'" .. key .. "'" ) or "( vacia: el server no le asigno tipo )" ) ..
+            "   ficha " .. ( t and ( "SI -> " .. t.name .. ", threshold " .. tostring( t.hunt and t.hunt.threshold ) .. " %" ) or "NO" ) )
+
+        -- La linea que importa: literalmente la que se dibuja sobre la cabeza.
+        say( "     el marcador dibuja:  " .. typeLabel( ghost ) )
+
+    end
+
+    if vistos <= 0 then
+        say( "ningun fantasma EN EL PVS. El cliente solo tiene los que estan a la vista: " ..
+            "que no aparezca aca NO prueba que no exista ( para eso, phantasmagoria_ghost_where )." )
+
+    else
+        say( vistos .. " fantasma(s) en el PVS." )
+
+    end
+
+end, "Imprime lo que el CLIENTE tiene de cada fantasma a la vista: la key networkeada, si resuelve a ficha, y el texto exacto que dibuja el marcador." )
+
 hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", function( _bDrawingDepth, bDrawingSkybox, isDraw3DSkybox )
     if bDrawingSkybox or isDraw3DSkybox then return end
     if not cvMarker:GetBool() then return end

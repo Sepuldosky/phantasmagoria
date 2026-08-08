@@ -43,8 +43,8 @@ PHANTASMAGORIA.PropDataEq = {
 
     -- crucifix -- copiado de prop_data.lua ( demit/crucifix )
     ["models/phantasmagoria/eq/crucifix_i.mdl"]                = { mass = 0.6, surfaceprop = "item" },
-    ["models/phantasmagoria/eq/crucifix_ii.mdl"]               = { mass = 0.6, surfaceprop = "item" },
-    ["models/phantasmagoria/eq/crucifix_iii.mdl"]              = { mass = 0.6, surfaceprop = "item" },
+    ["models/phantasmagoria/eq/crucifix_ii.mdl"]               = { mass = 0.6, surfaceprop = "metal" },  -- CORRECCION DEL AUTOR ( r15b ): el tier II es metalico
+    ["models/phantasmagoria/eq/crucifix_iii.mdl"]              = { mass = 0.6, surfaceprop = "metal" },  -- CORRECCION DEL AUTOR ( r15b ): el tier III es metalico
 
     -- dots -- proyector chico sobre base
     ["models/phantasmagoria/eq/dots_i.mdl"]                    = { mass = 0.9, surfaceprop = "item" },
@@ -69,12 +69,12 @@ PHANTASMAGORIA.PropDataEq = {
     -- ghost_writing -- cuaderno; los lapices se pisan abajo
     ["models/phantasmagoria/eq/ghost_writing_i_closed.mdl"]    = { mass = 0.8, surfaceprop = "paper" },
     ["models/phantasmagoria/eq/ghost_writing_i_open.mdl"]      = { mass = 0.8, surfaceprop = "paper" },
-    ["models/phantasmagoria/eq/ghost_writing_i_pencil.mdl"]    = { mass = 0.2, surfaceprop = "wood" },
+    ["models/phantasmagoria/eq/ghost_writing_i_pencil.mdl"]    = { mass = 0.2, surfaceprop = "wood" },  -- es un lapiz, no el cuaderno
     ["models/phantasmagoria/eq/ghost_writing_ii_closed.mdl"]   = { mass = 0.8, surfaceprop = "paper" },
     ["models/phantasmagoria/eq/ghost_writing_ii_open.mdl"]     = { mass = 0.8, surfaceprop = "paper" },
-    ["models/phantasmagoria/eq/ghost_writing_ii_pen.mdl"]      = { mass = 0.2, surfaceprop = "item" },
+    ["models/phantasmagoria/eq/ghost_writing_ii_pen.mdl"]      = { mass = 0.2, surfaceprop = "item" },  -- es una lapicera, no el cuaderno
     ["models/phantasmagoria/eq/ghost_writing_iii_book.mdl"]    = { mass = 0.8, surfaceprop = "paper" },
-    ["models/phantasmagoria/eq/ghost_writing_iii_pen.mdl"]     = { mass = 0.2, surfaceprop = "item" },
+    ["models/phantasmagoria/eq/ghost_writing_iii_pen.mdl"]     = { mass = 0.2, surfaceprop = "item" },  -- es una lapicera, no el cuaderno
 
     -- head_mounted -- camara de cabeza, plastico chico
     ["models/phantasmagoria/eq/head_mounted_camera.mdl"]       = { mass = 0.4, surfaceprop = "item" },

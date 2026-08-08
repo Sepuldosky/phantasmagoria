@@ -218,6 +218,73 @@ que mide la cosa equivocada y otro que no mide no son lo mismo, y éste midió m
 
 ---
 
+## 2026-08-08 (26) — Ronda 15b CORRIDA: **6 de 6, la tajada A CERRADA en juego** — y una fila mía pedía algo imposible
+
+**Cerrado con evidencia dura.** `84 modelos ( 66 propios )` en la línea del cargador: el **84 = 18 +
+66** prueba de una sola vez que la fusión corrió **y** que el orden de carga es el bueno. El serial
+hizo decidible lo que la r15 no pudo (`#397 serie 1` Myling contra `#156 serie 2` SIN TIPO — dos
+sujetos, no uno que perdió el dato). Y **cinco masas corregidas en juego**, con el `antes` en
+**1.50 kg en las cinco**, o sea que el censo de los 66 estaba bien medido:
+
+```
+masa corregida: .../crucifix_i.mdl     1.50 kg -> 0.60 kg
+masa corregida: .../crucifix_ii.mdl    1.50 kg -> 0.60 kg
+masa corregida: .../crucifix_iii.mdl   1.50 kg -> 0.60 kg
+masa corregida: .../tripod_i.mdl       1.50 kg -> 2.00 kg
+masa corregida: .../salt_i.mdl         1.50 kg -> 0.30 kg
+```
+
+El crucifijo se verificó además **por fuera del log**, con el weight tool: *dos instrumentos
+independientes sobre el mismo hecho*.
+
+### Corrección del autor, aplicada
+
+**Los crucifijos II y III son metálicos** — la tabla los tenía en `item`. Es exactamente para lo que
+salió como propuesta. ⚠ **El tier I no se tocó:** el autor no se pronunció sobre él. En el juego el
+tier 1 es de madera, pero eso es lectura mía y no su decisión. *Una enmienda sobre un eje no autoriza
+a fijar de contrabando el sub-eje que el autor no votó.*
+
+Y el generador tenía un defecto que esta corrección destapó: las excepciones enganchaban sólo por
+**sufijo** (`base.endswith("_" + clave)`), así que una excepción por **modelo entero**
+(`crucifix_ii`) no habría enganchado nunca — y la línea habría salido con el valor de la familia,
+callada y con cara de correcta. Ahora acepta las dos formas.
+
+### ⭐ Una fila mía pedía algo imposible, y por eso falló tres veces
+
+La fila del networkeo se marcó verde **tres rondas seguidas** sin traer un dato del cliente, y las
+tres veces se pegó la salida del **servidor**. No fue descuido del que corría: *la fila pedía pegar lo
+que dice un marcador 3D, y un marcador no produce texto.* El único registro posible era la palabra del
+operador o una captura.
+
+Y el realm cliente es justo donde este taller ya tuvo algo apagado dos arranques sin un error de Lua.
+**Un punto ciego histórico medido con el instrumento que no deja rastro es la peor combinación
+posible.**
+
+Entró **`phantasmagoria_ghost_cl`**: un comando **del realm cliente** que imprime, por fantasma en el
+PVS, la key networkeada, si resuelve a ficha, y **el texto exacto que dibuja el marcador**. ⚠ Llama a
+`typeLabel`, **la misma función que dibuja**, y eso no es ahorro: una copia sería otra medición, y el
+día que las dos diverjan el comando diría que todo está bien sobre un marcador que dice otra cosa.
+
+*Un criterio visual necesita un instrumento que produzca texto, o la fila nunca va a tener más
+evidencia que la vista de alguien.*
+
+### Los otros dos verdes con letra chica
+
+- **La 01 pedía DOS líneas de conteo y la nota trae UNA, la del cliente.** Por el criterio literal era
+  rojo. **No lo es, y lo prueban las filas vecinas:** el comando de tipos corre en el servidor y dijo
+  `30 tipos cargados`; el fantasma recibió tipo al spawnear; y el hook de masas —que es
+  `PlayerSpawnedProp`, servidor— imprimió cinco correcciones. *El veredicto es correcto y la fila no
+  lo probó: lo probaron sus vecinas.*
+- **La 06 pasó midiendo la rama de al lado.** Salió `no la escribimos y no cambia hace 1.2 s
+  ( parado )` —honesto y correcto—, pero **la rama corregida pide `cambio hace ≤ 1 s`** y con 1,2 s no
+  se pasa por ahí. La rama nueva **no se ejerció**: provocarla pide leer dentro del primer segundo tras
+  frenar, una ventana más corta que el trámite de tipear. Va con muestreador.
+
+**Residual:** la 02 volvió a traer un solo fantasma en la salida, así que *«al vivo no se le borra el
+tipo»* sigue sin medirse — ahora con el serial ya quitando la ambigüedad que lo hacía peligroso.
+
+---
+
 ## 2026-08-08 (25) — Ronda 15 CORRIDA: **el tipo CERRADO, 8 de 9** — y tres verdes que no midieron lo suyo
 
 **El mecanismo de la tajada A queda cerrado**, con evidencia completa en cinco filas: el tipo se
