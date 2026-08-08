@@ -13,7 +13,142 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> **LO ÚLTIMO QUE PASÓ (2026-08-07): corrieron la 9 y la 10. El encaje está EXPLICADO ENTERO y el
+> ⭐ **LO ÚLTIMO (2026-08-08): la r14 CORRIÓ — 5 de 5. El ALCANCE y la MIRADA quedan los dos CERRADOS
+> en juego.**
+>
+> **El A/B del `sightdist`, con `ve … SI` en las dos mitades** (el fantasma te ve igual y no le
+> importás): con **3000** → `ShouldBeEnemy NO`, `mem NO`, `enemigo ninguno`, `FUERA DE ALCANCE`; con
+> **0** → `ShouldBeEnemy SI`, `mem SI, hace 0.0 s`, `enemigo Player [1]`, `la cadena entera funciona`.
+>
+> **La fila 04 acotó el umbral sin que la fila lo pidiera:** cuatro lecturas acercándose —
+> **15.485 → 8.917 → 4.275 → 2.522 u** — con el volteo entre las dos últimas, o sea **atravesando el
+> 3000**, y adquisición inmediata al cruzar (*«si pasé los 50 metros y me vio de inmediato»*). **El
+> hunt de cerca quedó intacto y el corte es limpio.** Y la 05: a 4.819 u, `enemigo ninguno` + `mem NO`
+> — **te suelta al alejarte**, que sale del mismo punto que lee `ForgetOldEnemies`.
+>
+> ⚠ **EL GATE TAPA UNA ENTRADA LATERAL, y salió de un tiro que el autor pegó entre dos filas.** Las
+> cuatro lecturas siguientes tienen `vida 827/900` con `rel D_HT pri 1000` — eso es **`MakeFeud`**
+> (`damageandhealth.lua:482` → `enemyoverrides.lua:1046`, *«hate players more than anything else»*),
+> que reescribe la relación cuando te pegan. Pero **MakeFeud escribe la relación y el gate corta antes
+> de que la relación se lea**: `ShouldBeEnemy NO` a 20.879 u con el daño encima. **Un fantasma baleado
+> desde lejos ya no viene a buscarte.** *Un límite puesto delante de una cadena tapa también las
+> entradas laterales, y las laterales son las que nadie recuerda.* Queda así a propósito —en
+> Phasmophobia al fantasma no se le dispara— pero es una decisión, y el instrumento la dice cuando el
+> fantasma tiene daño encima.
+>
+> **Lo que quedó sin medirse:** la 05 pedía **cuánto tardó en soltarte** y trae una sola lectura ya del
+> otro lado. El mecanismo es determinístico (~0,5 s por barrido) así que el veredicto no cambia, pero
+> el número no está. Y sigue abierto el residual de la r13b: `congelada 5 de 117` en calma contra un
+> criterio de `0` (4 %), candidato el hueco del facewalk cuando el bot no está en el piso.
+
+> **LO ANTERIOR (2026-08-08): la r13b CORRIÓ y el ARCO DE LA MIRADA ESTÁ CERRADO. El rojo era de
+> diseño, no del mecanismo.**
+>
+> **El A/B quedó como par de verdad**, mismo régimen y una sola convar de diferencia:
+>
+> | | `facewalk 1` | `facewalk 0` (control) |
+> |---|---:|---:|
+> | `la escribio NOSOTROS` | **99**/100 | **0**/100 |
+> | `vs marcha` media | **1,1°** | **90,6°** |
+> | `giro` barrido · abanico | **670° · 151°** | **0° · 0°** |
+> | `congelada` | **0**/98 | **44**/48 |
+>
+> **El instrumento dejó de contradecirse** (seis `ghost_where` seguidos caminando derecho, los seis
+> `la escribimos NOSOTROS`, ninguno CONGELADA) y **el botón se negó cuando tenía que negarse**: pedir
+> `calmasin` justo después de `hunt 0` dio *«el fantasma está en calma CON enemigo»* — la memoria no se
+> vacía en el mismo frame. El operador esperó y repitió. *Ése es el lazo funcionando.*
+>
+> **La 06 de la r13 era LATENCIA, y ahora está medida:** `ve SI` → `mem SI, hace 0.0 s` → `enemigo
+> Player [1]` a **31.253 u**. Y salió de dónde vienen esos segundos: `enemy_handler` arranca con
+> `playerCheckIndex = 0` (`shared.lua:3115`) y Lua indexa desde 1, así que **el primer barrido de la
+> rama de distancia infinita no mira a nadie** (`idx 0`, `idx 0`, `idx 1` en el log). Con esa rama
+> corriendo *después* de `FindPriorityEnemy`: **hasta tres barridos, ~1,5 s.**
+>
+> ⚠ **EL ROJO: el fantasma te caza a 31.253 u — 542 m por la mira del rifle**, del otro lado de
+> flatgrass, con `mirada vs jugador 0°` y `movement_stalkenemy`. **La cadena funcionaba perfecto; el
+> defecto es que funciona demasiado lejos.** La base lo hace a propósito y con dos mecanismos:
+> `ShouldBeEnemy` exime a los jugadores del tope de distancia *en su propio comentario*, y
+> `enemy_handler` tiene la rama *cheap infinite view distance*. Correcto para un terminator; para un
+> fantasma de Phasmophobia no, porque el hunt es adentro de una casa.
+>
+> **`phantasmagoria_ghost_sightdist` (3000, `0` = sin límite).** Va en `ShouldBeEnemy`, que es la
+> puerta que consultan los cuatro caminos: un solo gate corta la adquisición **y** hace que te suelte
+> al alejarte — esa segunda mitad nadie la pidió y por eso tiene fila propia. ⚠ **El número no es mío:**
+> 3000 es `MaxSeeEnemyDistance`, el que la base ya aplica a todo lo demás.
+>
+> **Residual sin arreglar:** la guardia en calma dio `congelada 5 de 117` contra un criterio de `0`
+> (4 %); el candidato es el hueco deliberado del facewalk cuando el bot no está en el piso.
+>
+> Planilla `dev/checks/phantasmagoria-alcance-r14.html`, **5 filas, sin correr**.
+
+> **LO ANTERIOR (2026-08-08): la r13 CORRIÓ — 6 pasa, 1 falla, y TRES de esos verdes no lo son.**
+>
+> **La fila del ARREGLO no corrió**, y su propia salida lo decía: `regimen hunt CON enemigo`, cuando el
+> defecto vivía en `hunt SIN enemigo`. Ahí manda la base y **`NOSOTROS 0` es lo correcto por diseño**,
+> así que el veredicto salió con pinta de estar bien midiendo la fila de al lado. *Un botón que se
+> niega a lo que puede pasar en el medio, y no a lo que ya estaba mal al empezar, deja pasar el error
+> que de verdad ocurre.* → `ghost_look` toma ahora un segundo argumento
+> (`huntsin`/`huntcon`/`calmasin`/`calmacon`) y **se niega a arrancar** si no es ése. La **01** se marcó
+> verde con `hunt SI` + `enemigo Player [1]` pidiendo lo contrario, y la **07** con la nota cortada en
+> el encabezado: **el veredicto de los 30 s nunca salió**.
+>
+> ⚠ **Y mi instrumento se contradijo en la misma corrida.** Dos muestras, mismo estado
+> (`hunt SI · enemigo ninguno · facewalk 1`, 196 u/s derecho): una dijo `la escribimos NOSOTROS` y la
+> otra `NADIE la mueve hace 1.6 s -- CONGELADA`, **las dos con `mirada vs marcha 0 grados` al lado**.
+> `quieta` mide *que el valor no cambió* y yo lo llamaba *que nadie lo escribió* — un bot que camina
+> derecho recibe **el mismo ángulo cada tick**. La rama estaba adelante de la que sí tenía marca
+> directa. Reordenado, y el tercer balde dejó de llamarse `NADIE`.
+>
+> **CERRADO y no se repite:** el control con `facewalk 0` reprodujo el defecto exacto en el régimen
+> correcto (`congelada 91/95`, `giro 0 · 0`); la guarda del enemigo dio `LA BASE 60 · NOSOTROS 0` con
+> `vs jugador 5,2°`; y el separador mostró sus dos lados. **El arreglo tiene evidencia pero de otra
+> fila:** la 06 lo pilló en `hunt SIN enemigo` con `facewalk 1` → `la escribimos NOSOTROS` y
+> `mirada vs marcha 0`. Una muestra contra una ventana de 100.
+>
+> **La 06 (`ve SI` + `enemigo ninguno` a 26.014 u) NO se puede leer todavía.** Salió en el primer
+> segundo después de un `ai_ignoreplayers → 0`, y la segunda toma **sí** adquirió a 20.796 u. Arriba de
+> `MaxSeeEnemyDistance` (3000 u) la única rama es *cheap infinite view distance*, que mira **un jugador
+> por pase** y corre **después** de `FindPriorityEnemy`: **~1 s, dos barridos**. `ghost_rel` imprime
+> ahora `mem` (memoria + edad) y el próximo barrido, y el veredicto nombra cuál eslabón falla.
+>
+> Planilla `dev/checks/phantasmagoria-mirada-r13b.html`, **7 filas, sin correr**.
+
+> **LO ANTERIOR (2026-08-07, después de la r12): la mirada clavada en hunt. ARREGLADA, SIN CORRER.**
+> Reportado en juego: *«el stuck parece estar solucionado pero ahora el bot no me sigue cuando está
+> cazando, y queda mirando a un sitio en particular»* — el yaw en `-87.7` en **dos lecturas tomadas a
+> 1400 u de distancia una de la otra**, y *«cuando pasé de hunt 1 a 0 se giró correctamente»*.
+>
+> **No sale del bloque del encaje:** en esa corrida `escapedist` y `stuckbailoutsecs` estaban **los dos
+> en 0**. Sale del facewalk (2026-08-06), que se apagaba con `if phantom_Hunting then return end`.
+> **La premisa de esa guarda no es el hunt, es tener enemigo**, y el fantasma entra en hunt por el flag
+> — no porque haya visto a nadie. En ese hueco no hay enemigo, la base se sale antes de
+> `Term_LookAround` (sin arma ni puños, `shared.lua:3492-3506` corta los tres caminos, así que
+> **para este bot el único escritor de la mirada es `shootAt` sobre el enemigo**) y esa guarda apagaba
+> al único que quedaba. La guarda de verdad —`IsValid( GetEnemy )`— estaba escrita **en la línea de
+> abajo** y era inalcanzable. *Una guarda cuya premisa es otra condición tiene que preguntar por esa
+> condición, no por la que suele venir con ella.*
+>
+> ⚠ **El instrumento acreditó el defecto.** `lookLines` imprimía `( lo pide la base ( enemigo ) )`
+> **deducido del flag**, y el reporte de la r12 lo mostró **doce veces al lado de `enemigo ninguno`, en
+> la misma pantalla**. Ahora se **mide**: cuándo cambió el valor y cuándo lo escribimos nosotros.
+>
+> ⚠ **La otra mitad del reporte NO es este defecto.** `phantasmagoria_hunt 1` **abre la puerta**
+> (`ShouldBeEnemy`), **no apunta el fantasma hacia vos**: sin línea de visión no hay enemigo, y sin
+> enemigo el bot deambula (`movement_biginertia`, *«nothing better to do»*). La fila 8 de `hunt-r1`
+> cerró en verde **a 3 m** y nadie la corrió nunca a distancia. Que el hunt salga a buscarte es
+> **Diseño 4/19 (la cordura)**, no un arreglo de este archivo.
+>
+> **Botón nuevo, y se niega:** `phantasmagoria_ghost_look [seg]` aborta si hay más de un fantasma, si
+> el régimen (`hunt/calma` × `con/sin enemigo`) cambia en el medio —y dice en qué segundo— y si el bot
+> no caminó en ninguna muestra. `phantasmagoria_ghost_rel` ahora imprime `CanSeePosition`, `PosCanSee`,
+> `ClearOrBreakable`, **qué lo tapa** y `Term_FOV` (180 → la mirada **no** lo ciega; con menos, las dos
+> fallas serían una).
+>
+> Planilla `dev/checks/phantasmagoria-mirada-r13.html`, **7 filas, sin correr**. ⚠ La r12 dejó
+> `escapedist` y `stuckbailoutsecs` en **0** y las dos son `FCVAR_ARCHIVE`: **reponerlas antes de
+> correr nada**, o cualquier encaje va a parecer una regresión nueva.
+
+> **LO ANTERIOR (2026-08-07): corrieron la 9 y la 10. El encaje está EXPLICADO ENTERO y el
 > arreglo va por la mitad.**
 >
 > **La r9 midió que el rescate arranca y no rescata:** siete `RESCATE → CAMINAR` en 60 s, `quieto`

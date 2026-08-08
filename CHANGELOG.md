@@ -7,6 +7,279 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-08 (22) — Ronda 14 CORRIDA: **el alcance CERRADO, 5 de 5** — y el gate tapa una puerta lateral
+
+Las cinco en verde, y la aproximación de la fila 04 salió **mejor de lo que la fila pedía**.
+
+### El A/B, y el umbral queda acotado entre dos lecturas
+
+| | `sightdist 3000` | `sightdist 0` (control) |
+|---|---|---|
+| `ShouldBeEnemy` a ~20.000 u | **NO** | **SÍ** |
+| `mem` | **NO** | **SÍ, hace 0.0 s** |
+| enemigo | **ninguno** | **`Player [1]`** |
+| veredicto | `FUERA DE ALCANCE` | `la cadena entera funciona` |
+
+Con `ve CanSeePosition SI · PosCanSee SI · ClearOrBreakable SI` en **las dos mitades**: el fantasma te
+ve igual y no le importás. *Es exactamente lo pedido: no se le rompió la vista, se le acotó a quién
+puede odiar.*
+
+**La 04 acotó el umbral sin que la fila lo pidiera.** Cuatro lecturas acercándose —
+**15.485 → 8.917 → 4.275 → 2.522 u** — con el volteo entre las dos últimas, o sea **atravesando el
+3000**. Y en la de 2.522 u: `ShouldBeEnemy SI` sin la marca de fuera de alcance, `mem SI, hace 0.0 s`,
+`enemigo Player [1]`. El autor lo dijo mejor: *«si pasé los 50 metros y me vio de inmediato»*. **El hunt
+de cerca quedó intacto y el corte es limpio.**
+
+Y la 05 confirmó la mitad que nadie había pedido: a 4.819 u, `enemigo ninguno` + `mem NO`. **Te suelta
+al alejarte**, que es lo que sale de haber puesto el gate en `ShouldBeEnemy` — el mismo punto que lee
+`ForgetOldEnemies`.
+
+### ⚠ Y el gate tapa una entrada lateral que ninguna fila nombró
+
+Entre la 01 y la 02 el autor le pegó un tiro, y las cuatro lecturas siguientes tienen `vida 827 / 900`
+con `rel D_HT pri 1000`. **Ese 1000 es `MakeFeud`** (`damageandhealth.lua:482` →
+`enemyoverrides.lua:1046`, *«hate players more than anything else»*), que reescribe la relación cuando
+te pegan, sin preguntarle nada a nadie.
+
+Pero **MakeFeud escribe la relación, y el gate corta antes de que la relación se lea**: la 02 muestra
+`ShouldBeEnemy NO` a 20.879 u con el daño encima. O sea que **un fantasma baleado desde lejos ya no
+viene a buscarte** — antes venía desde cualquier distancia. *Un límite puesto delante de una cadena
+tapa también las entradas laterales de esa cadena, y las laterales son las que nadie recuerda.*
+
+Queda así a propósito — en Phasmophobia al fantasma no se le dispara — pero es una **decisión, no un
+descuido**, y ahora el instrumento la dice: el veredicto de fuera de alcance agrega una línea cuando el
+fantasma tiene daño encima, que es el único momento en que alguien se va a preguntar *«le disparé y no
+viene»*.
+
+### Dos filas se corrieron con menos lecturas de las que pedían
+
+La 02 pedía dos lecturas separadas 3 s y trae una; la queda cubierta por la 01, que es otra lectura a
+otra distancia y otro momento (27.687 u contra 20.879 u). Y **la 05 pedía anotar cuánto tardó en
+soltarte, y ese número no está** — trae una sola lectura ya del otro lado. El mecanismo es
+determinístico (`ForgetOldEnemies` corre cada barrido, ~0,5 s) así que el veredicto no cambia, pero el
+dato que la fila quería sigue sin medirse.
+
+---
+
+## 2026-08-08 (21) — Ronda 13b CORRIDA: **el arco de la mirada CERRADO**, y el rojo era de diseño
+
+Marcó 6 pasa y 1 falla. **Las seis son verdes de verdad** — y la falla no lo es: su criterio se cumplió.
+
+### El A/B, ahora sí como par
+
+| | 02 · `facewalk 1` | 03 · `facewalk 0` (control) |
+|---|---:|---:|
+| régimen | `hunt SIN enemigo` | `hunt SIN enemigo` |
+| `la escribio NOSOTROS` | **99** de 100 | **0** de 100 |
+| `vs marcha` media | **1,1°** | **90,6°** |
+| `giro` barrido · abanico | **670° · 151°** | **0° · 0°** |
+| `congelada` | **0** de 98 | **44** de 48 |
+
+Mismo régimen, misma ventana, **una sola convar de diferencia**. Es lo que la r13 no llegó a tener.
+
+**Y el instrumento dejó de contradecirse:** seis `ghost_where` seguidos con el bot caminando derecho, los
+seis con `la escribimos NOSOTROS` y `mirada vs marcha` entre 0 y 1,4° — **ninguno dice CONGELADA**. El
+reordenamiento (primero lo medido, después lo inferido) sostiene.
+
+**Y el botón se negó cuando tenía que negarse:** `phantasmagoria_ghost_look 30 calmasin` contestó
+*«pediste 'calma SIN enemigo' y el fantasma está en 'calma CON enemigo'»* justo después de un
+`hunt 0` — la memoria del enemigo no se vacía en el mismo frame. El operador esperó, repitió, y la
+ventana salió limpia. *Eso es el lazo funcionando: la fila no se marcó verde sobre el régimen
+equivocado porque el comando no la dejó.*
+
+Residual anotado y no arreglado: la 07 dio `congelada 5 de 117` contra un criterio de `0`. Son 4 %, y
+el candidato es el hueco deliberado del facewalk — se sale si el bot no está en el piso
+(`m_JumpingToPos` / `IsOnGround`), porque ahí manda la base.
+
+### La 06 de la r13 CERRADA: era latencia, y ahora está medida
+
+`ve SI` → `mem SI, hace 0.0 s` → `enemigo Player [1]` → `la cadena entera funciona`, **a 31.253 u**. El
+rojo de la r13 fue haber mirado en el primer segundo. Y la fila 01 de acá destapó **de dónde salen esos
+segundos**: `enemy_handler` arranca con `data.playerCheckIndex = 0` (`shared.lua:3115`) y Lua indexa
+desde 1, así que **el primer barrido de la rama de distancia infinita no mira a nadie**. Se ve en el
+log: `idx 0` en las dos primeras lecturas, `idx 1` desde la tercera. Sumado a que esa rama corre
+*después* de `FindPriorityEnemy`, la primera adquisición lejos cuesta **hasta tres barridos, ~1,5 s**.
+
+El control de la línea `mem` también pasó: tapado a 3464 u da `mem NO` con `lo tapa el mundo ( brush ) a
+2262 u`. *Una columna que nunca dice NO no es una medición.*
+
+### ⚠ El rojo NO era del mecanismo: era el alcance
+
+La fila 05 se marcó *Falla* y **su criterio se cumplió textualmente**. Lo que el autor reportó es otra
+cosa, y tiene razón: el fantasma lo tomó de enemigo **a 31.253 u — 542 m en la mira del rifle**, del
+otro lado de `gm_flatgrass`, con `mirada vs jugador 0°` y `movement_stalkenemy` corriendo. *La cadena
+funcionaba perfecto; el problema es que funciona demasiado lejos.*
+
+No es un bug de la base: lo hace **a propósito y con dos mecanismos**. `ShouldBeEnemy`
+(`enemyoverrides.lua:507-515`) descarta por distancia a todo lo que no sea jugador y **exime a los
+jugadores en su propio comentario** (*«ignore maxSeeingDist for plys»*); y `enemy_handler` tiene además
+la rama *cheap infinite view distance*, que existe justamente para verte sin límite. Para un terminator
+es correcto. Para un fantasma de Phasmophobia no: el hunt es adentro de una casa. *Un default de la
+base que es correcto para lo que ella es puede ser un defecto de diseño para lo que uno construye
+encima.*
+
+**`phantasmagoria_ghost_sightdist` (3000, `0` = sin límite).** Va en `ShouldBeEnemy` y no en los cuatro
+sitios, y ése es el motivo de que sea barato: es la puerta que consultan los cuatro, así que un solo
+gate corta la adquisición **y** hace que te suelte al alejarte. ⚠ **El número no es mío:** 3000 es
+`MaxSeeEnemyDistance`, el que la base ya aplica a todo lo demás — poner otro sería inventar un balance
+que Diseño no fijó. Y el instrumento lo muestra: la distancia se imprime contra su tope, y el veredicto
+distingue *fuera de alcance* de *puerta cerrada*, porque ahora hay **dos** motivos para un
+`ShouldBeEnemy NO` con el hunt puesto.
+
+Planilla `dev/checks/phantasmagoria-alcance-r14.html`, 5 filas, **sin correr**.
+
+---
+
+## 2026-08-08 (20) — Ronda 13 CORRIDA: **la fila del arreglo midió el régimen de al lado**
+
+Marcó 6 pasa y 1 falla. **Tres de esos verdes no lo son**, y el hallazgo caro es de mi instrumento.
+
+### La fila del arreglo no corrió, y su propia salida lo decía
+
+La fila 02 era la que probaba el arreglo, y su primer renglón dice
+`regimen hunt **CON** enemigo sostenido toda la ventana`. El defecto vivía en `hunt **SIN** enemigo`.
+Con enemigo manda la base y **`NOSOTROS 0` es lo correcto por diseño** — así que el veredicto salió
+con pinta de estar bien midiendo la fila de al lado (la 04, que dio lo mismo).
+
+El botón se negaba a *promediar* dos regímenes, pero no a *correr entero* en el que no era. *Un botón
+que se niega a lo que puede pasar en el medio, y no a lo que ya estaba mal al empezar, deja pasar el
+error que de verdad ocurre.* Ahora `phantasmagoria_ghost_look` toma un segundo argumento
+(`huntsin` · `huntcon` · `calmasin` · `calmacon`) y **se niega a arrancar** si no es ése, diciendo cuál
+es. La precondición (fila 01) también se marcó verde con `hunt SI` y `enemigo Player [1]` en su propia
+salida, pidiendo lo contrario; y la 07 se marcó verde con la nota cortada en el encabezado del
+muestreo — **el veredicto de los 30 s nunca salió**.
+
+### ⚠ Y el instrumento se contradijo a sí mismo en la misma corrida
+
+Dos muestras, mismo estado (`hunt SI · enemigo ninguno · facewalk 1`, 196 u/s en línea recta):
+
+```
+quiere yaw 90 ( la escribimos NOSOTROS ( facewalk ) )      mirada vs marcha 0 grados
+quiere yaw 90 ( NADIE la mueve hace 1.6 s -- CONGELADA )   mirada vs marcha 0 grados
+```
+
+**Causa:** `quieta` mide *que el valor no cambió* y yo lo llamaba *que nadie lo escribió*. Un bot que
+camina derecho tiene dirección de marcha constante, así que el facewalk le escribe **el mismo ángulo
+cada tick**: lo movemos siempre y el valor no se mueve nunca. Y la rama de `quieta` estaba **antes** de
+la que sí tenía marca directa (`phantom_lookWroteAt`).
+
+El «y caminando» que había agregado como discriminante no ataja nada de esto — el bot sí camina. *Un
+discriminante que no separa los dos casos que se confunden es decoración.* **El que lo atajaba estaba
+en la línea de abajo, `mirada vs marcha 0`, y no lo miré.** Reordenado: primero lo medido, después lo
+inferido. Y el tercer balde dejó de llamarse `NADIE`: sin una marca adentro del `shootAt` de la base,
+«no cambió y no fuimos nosotros» no distingue *nadie escribió* de *la base escribió el mismo valor*.
+*Un balde nombrado por la conclusión que uno quiere sacar la regala.*
+
+### Lo que sí cerró, y no se vuelve a correr
+
+- **El control (`facewalk 0`)** reprodujo el defecto **exacto y en el régimen correcto**:
+  `congelada 91 de 95`, `giro barrio 0 · abanico 0`, `nadie 96`.
+- **La otra guarda:** `LA BASE 60 · NOSOTROS 0 · NADIE 0` con `vs jugador media 5,2°`. No le peleamos
+  el aim a la base.
+- **El separador, con sus dos lados:** tapado → `lo tapa el mundo ( brush ) a 215 u`; de frente → las
+  tres columnas en `SI`. Y de yapa, `ai_ignoreplayers 1` dio `ShouldBeEnemy NO` con el veredicto
+  correcto — el control de que la puerta puede cerrarse.
+
+**El arreglo tiene evidencia, pero de una fila que no era la suya:** la primera toma de la 06 lo pilló
+en `hunt SIN enemigo` con `facewalk 1` → `( la escribimos NOSOTROS ( facewalk ) )` y
+`mirada vs marcha 0 grados`. Una muestra suelta contra una ventana de 100.
+
+### La 06 no se puede leer todavía, y ahora hay con qué
+
+`ve SI` + `ShouldBeEnemy SI` + `enemigo ninguno` a 26.014 u. Entre *«te ve»* y *«sos mi enemigo»* hay
+dos pasos que no se veían, y **tienen latencias distintas**: adentro de `MaxSeeEnemyDistance` (3000 u)
+`FindEnemies` escribe la memoria **antes** de `FindPriorityEnemy`, o sea un pase; arriba de 3000 u la
+única rama es *cheap infinite view distance* (`shared.lua:3185`), que mira **un jugador por pase** y
+corre **después** de `FindPriorityEnemy` — lo que escribe se lee recién en el pase siguiente: **~1 s**.
+
+Y esa primera toma salió **inmediatamente después** de un `ai_ignoreplayers` pasando a 0, o sea en el
+primer segundo de haberse abierto la puerta; la segunda toma **sí** adquirió, a 20.796 u. Con lo que
+hay **no se puede separar «tardó» de «no lo hace»**. `phantasmagoria_ghost_rel` imprime ahora la línea
+`mem` (memoria + edad) y el próximo barrido del `enemy_handler`, y el veredicto nombra el archivo y la
+línea según cuál de los dos eslabones falle. *Un mecanismo con latencia necesita que el instrumento
+diga cuánta, o el que mide la confunde con una falla.*
+
+Planilla `dev/checks/phantasmagoria-mirada-r13b.html`, 7 filas, **sin correr**.
+
+---
+
+## 2026-08-07 (19) — La mirada clavada en hunt: **una guarda preguntaba por el flag y su premisa era el enemigo**
+
+Reportado en juego después de la ronda 12: *«el stuck parece estar solucionado pero ahora el bot no me
+sigue cuando está cazando, y queda mirando a un sitio en particular»*. **No sale del bloque del
+encaje** — las tres perillas de las rondas 9-12 estaban en 0 en la corrida donde se vio.
+
+### La cadena, y es más cerrada de lo que el comentario del facewalk decía
+
+`enemyoverrides.lua:1874` —el único `SetDesiredEyeAngles` que puede correr caminando— vive dentro de
+`Term_LookAround`, y a `Term_LookAround` la llama **un** sitio: `shooting_handler`
+(`shared.lua:3512`). Cinco líneas antes, `:3492-3506`:
+
+```lua
+local wep = GetActiveLuaWeapon( self ) or GetActiveWeapon( self )
+if not IsValid( wep ) then
+    if TERM_FISTS then ... return
+    elseif IsValid( enemy ) then shootAt( LastEnemyShootPos ) return
+    else return                       -- <- NOSOTROS, SIEMPRE
+    end
+end
+...
+Term_LookAround( self )               -- <- INALCANZABLE para el fantasma
+```
+
+El fantasma pone `DefaultWeapon = false` y `TERM_FISTS = false`, así que `wep` **nunca** es válido y
+los tres caminos se salen antes. **Para este bot el único escritor de la mirada es
+`shootAt( LastEnemyShootPos )`, y ése pide un enemigo válido.**
+
+### El defecto: `if myTbl.phantom_Hunting then return end`
+
+El facewalk (2026-08-06) se apagaba en hunt con el comentario *«cazando manda la base: apunta al
+enemigo»*. **La premisa de esa frase no es el hunt, es tener enemigo**, y son cosas distintas: el
+fantasma entra en hunt por el flag —`phantasmagoria_hunt`, y mañana la cordura—, no porque haya visto
+a nadie. En todo el hueco entre el flag y el primer avistaje no hay enemigo, la base se sale antes de
+`Term_LookAround`, y esa guarda apagaba al único que quedaba. La cara quedaba clavada en el último yaw
+que alguien hubiera escrito: **`-87.7` en dos lecturas tomadas a 1400 u de distancia una de la otra**.
+
+**La guarda de verdad estaba escrita en la línea de abajo** (`IsValid( GetEnemy )`) y era inalcanzable
+en hunt. *Una guarda cuya premisa es otra condición tiene que preguntar por esa condición, no por la
+que suele venir con ella.*
+
+### El instrumento acreditó el defecto, y con la etiqueta al lado del dato que la desmentía
+
+`lookLines` imprimía `quiere … ( lo pide la base ( enemigo ) )` **deducido del flag**, y el reporte de
+la ronda 12 lo mostró **doce veces al lado de `enemigo ninguno`, en la misma pantalla**. Nadie pedía
+nada. *Una etiqueta deducida de un flag no es una medición de lo que pasó, y miente con la misma cara
+con que acierta.*
+
+Ahora se **mide**, con dos marcas que pone `BehaveUpdate`: cuándo cambió el valor (lo escriba quien lo
+escriba) y cuándo lo escribimos nosotros. Y el «CONGELADA» pide su discriminante —**y caminando**—
+porque un fantasma parado tiene la mirada quieta por el motivo correcto.
+
+### `phantasmagoria_ghost_rel` gana la mitad que le faltaba: **ver**
+
+Con sólo `ShouldBeEnemy`, *«no me sigue»* no se puede contestar: un `SI` al lado de `enemigo ninguno`
+deja igual de vivas *«la relación está mal»* y *«la relación está bien y no me ve»*, que son dos
+arreglos en dos archivos distintos. Ahora imprime `CanSeePosition` · `PosCanSee` · `ClearOrBreakable`
+· `IsSeeEnemy`, **qué lo tapa** (del trace que `PosCanSee` ya devuelve, no de uno nuestro) y el
+veredicto de las dos columnas juntas.
+
+Y `Term_FOV`, que **no es decoración**: con `< 180` la detección es un cono alrededor del aim y una
+cara clavada dejaría al bot ciego por atrás — las dos fallas serían **una**. Lo ponemos en 180
+exactos, donde `IsInMyFov` devuelve `true` siempre y `FindEnemies` usa una esfera, así que **son dos
+fallas separadas**. Eso hay que poder leerlo: un tercero mueve `termhunter_fovoverride` y cambia.
+
+### ⚠ La otra mitad del reporte NO es un defecto, y no se tocó
+
+*«No me sigue»* con el fantasma lejos es la forma actual del andamio: **`phantasmagoria_hunt 1` abre
+la puerta (`ShouldBeEnemy`), no apunta el fantasma hacia vos.** Sin línea de visión no hay enemigo, y
+sin enemigo el bot deambula (`movement_biginertia`, *«nothing better to do»*). La fila 8 de
+`hunt-r1` cerró en verde **a 3 m**. Que el hunt salga a buscarte es Diseño 4/19 (la cordura), no un
+arreglo de este archivo — se nombra acá para que no vuelva a leerse como regresión.
+
+Planilla `dev/checks/phantasmagoria-mirada-r13.html`, 6 filas, **sin correr**.
+
+---
+
 ## 2026-08-07 (18) — Ronda 11 CORRIDA: **el bailout nunca disparó, y el gatillo era mío**
 
 Marcó 6 de 6. Una lo está, tres son *Sin correr*, y el hallazgo es un defecto de mi diseño que

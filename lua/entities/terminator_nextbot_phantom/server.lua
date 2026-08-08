@@ -234,12 +234,67 @@ ENT.phantom_Hunting = false
 -- tareas siguen ahi. Es literalmente lo que pide Diseno 3.1 en su ultima linea
 -- -- "el bot nunca deja de pensar, solo deja de tener a quien odiar" -- solo que
 -- en la funcion de al lado. Y NO es DisableBehaviour: saltear no es apagar.
+---------------------------------------------------------------------------
+-- ⚠ EL ALCANCE DE LA VISTA, Y ES UN LIMITE QUE LA BASE LE SACA A LOS JUGADORES
+---------------------------------------------------------------------------
+-- MEDIDO EN LA RONDA 13b: el fantasma tomo al jugador de enemigo a **31.253 u**
+-- ( 542 m en la mira del rifle ) del otro lado de gm_flatgrass, con
+-- `mirada vs jugador 0 grados` y `movement_stalkenemy` corriendo. La cadena
+-- funcionaba perfecto; el problema es que funciona DEMASIADO LEJOS.
+--
+-- No es un bug: la base lo hace a proposito y con dos mecanismos.
+-- `ShouldBeEnemy` ( enemyoverrides.lua:507-515 ) descarta por distancia a todo
+-- lo que NO sea jugador, y a los jugadores los exime en su propio comentario
+-- ( "ignore maxSeeingDist for plys" ), dejandoles solo la niebla. Y
+-- `enemy_handler` tiene ademas la rama "cheap infinite view distance"
+-- ( shared.lua:3185 ), que existe justamente para verte sin limite.
+--
+-- Para un terminator es correcto -- te caza por todo el mapa. Para un fantasma
+-- de Phasmophobia no: el hunt es adentro de una casa. *Un default de la base que
+-- es correcto para lo que ella es puede ser un defecto de diseno para lo que uno
+-- construye encima.*
+--
+-- EL LIMITE VA ACA Y NO EN LOS CUATRO SITIOS, y ese es el motivo de que sea
+-- barato: ShouldBeEnemy es la puerta que consultan los cuatro
+-- ( FindEnemies/processFindingEnt :596, ForgetOldEnemies :676, FindPriorityEnemy
+-- :719, y la rama de distancia infinita :3202 ), asi que un solo gate corta la
+-- adquisicion Y hace que se olvide al alejarte, sin tocar ninguno.
+--
+-- ⚠ EL NUMERO NO ES MIO: 3000 es `MaxSeeEnemyDistance`, el que la base ya usa
+-- para todo lo demas. Poner otro seria inventar un balance que Diseno todavia no
+-- fijo; poner el de ella es restaurar la simetria que ella misma rompio solo
+-- para los jugadores. `0` = sin limite, que es el comportamiento medido en la
+-- r13b y sirve de control.
+-- ⚠ Y TAPA TAMBIEN LA ENTRADA LATERAL, que es la mitad que nadie evalua: pegarle
+-- un tiro dispara MakeFeud ( damageandhealth.lua:482 -> enemyoverrides.lua:1046,
+-- "hate players more than anything else" ), que reescribe la relacion a D_HT con
+-- prioridad 1000. Pero MakeFeud escribe la RELACION y este gate corta ANTES de
+-- que la relacion se lea, asi que **un fantasma baleado desde lejos ya no viene**.
+-- Medido sin querer en la r14: el autor le pego entre dos filas y las cuatro
+-- lecturas siguientes tienen `vida 827/900` con `rel D_HT pri 1000` y
+-- `ShouldBeEnemy NO` a 20.879 u. *Un limite puesto delante de una cadena tambien
+-- tapa las entradas laterales de esa cadena, y las laterales son las que nadie
+-- recuerda.* Queda asi a proposito -- en Phasmophobia al fantasma no se le
+-- dispara -- pero es una decision, no un descuido, y el instrumento la dice.
+local cvSightDist = CreateConVar( "phantasmagoria_ghost_sightdist", "3000", FCVAR_ARCHIVE,
+    "Distancia maxima a la que el fantasma puede tomar a un JUGADOR de enemigo, en unidades. " ..
+    "0 = sin limite ( el comportamiento de la base, medido en la r13b: te toma a 31.253 u del otro lado del mapa ). " ..
+    "El default es MaxSeeEnemyDistance, que es el limite que la base ya aplica a todo lo que no sea jugador. " ..
+    "OJO: tapa tambien a MakeFeud, o sea que un fantasma baleado desde mas lejos que esto NO viene a buscarte.", 0, 50000 )
+
 function ENT:ShouldBeEnemy( ent, fov, myTbl, entsTbl )
     myTbl = myTbl or self:GetTable()
 
     -- Fuera del hunt no hay enemigos. Ni jugadores ni NPCs: Diseno 3.1 dice
     -- "deja de tener a quien odiar", no "a quien odiar menos".
     if not myTbl.phantom_Hunting then return false end
+
+    -- Solo a JUGADORES, y no por prolijidad: a los NPCs la base ya les aplica su
+    -- propio tope ( :513 ). Meternos ahi seria poner un segundo limite sobre uno
+    -- que ya existe, y despues no se sabria cual de los dos corto.
+    local tope = cvSightDist:GetInt()
+
+    if tope > 0 and ent:IsPlayer() and self:GetRangeTo( ent ) > tope then return false end
 
     return myTbl.BaseClass.ShouldBeEnemy( self, ent, fov, myTbl, entsTbl )
 
@@ -328,6 +383,27 @@ end
 -- ahi no queda nadie que le mueva la cara. Los otros dos son caida y salto
 -- ( motionoverrides.lua:3306 y :3311 ).
 --
+-- ⚠ Y LA CADENA EXACTA ES MAS CERRADA TODAVIA, leida en la ronda 12 y peor de
+-- lo que este comentario decia. enemyoverrides.lua:1874 vive adentro de
+-- Term_LookAround, y a Term_LookAround la llama UN solo sitio: shooting_handler
+-- ( shared.lua:3512 ). Pero cinco lineas antes, :3492-3506, esta esto:
+--
+--     local wep = GetActiveLuaWeapon( self ) or GetActiveWeapon( self )
+--     if not IsValid( wep ) then
+--         if TERM_FISTS then ... return
+--         elseif IsValid( enemy ) then shootAt( LastEnemyShootPos ) return
+--         else return                       -- <- NOSOTROS, SIEMPRE
+--         end
+--     end
+--     ...
+--     Term_LookAround( self )               -- <- INALCANZABLE para el fantasma
+--
+-- El fantasma pone DefaultWeapon = false y TERM_FISTS = false ( :125-126 ), asi
+-- que `wep` nunca es valido y ese bloque se sale ANTES de Term_LookAround en los
+-- tres caminos. O sea: para este bot el UNICO escritor de la mirada es
+-- shootAt( LastEnemyShootPos ), y ese pide un enemigo valido. *Sin enemigo no
+-- hay nadie que le mueva la cara, tenga o no tenga hunt.*
+--
 -- No es cosa de HIM ni de la base: HIM tambien pone TERM_FISTS = false
 -- ( him/.../terminator_nextbot_homeless/server.lua:22 ), igual que
 -- terminator_nextbot_fakeply:35 y csoldier:26. Lo que HIM y el terminator tienen
@@ -352,10 +428,42 @@ function ENT:BehaveUpdate( interval )
     -- retoque de la cara despues, y solo en el hueco que la base deja vacio.
     myTbl.BaseClass.BehaveUpdate( self, interval )
 
+    -- ⚠ EL SEGUIMIENTO DE LA MIRADA, Y VA ANTES DE NUESTRA PROPIA ESCRITURA a
+    -- proposito: mide el valor con el que el frame anterior TERMINO, o sea el que
+    -- dejo el ultimo que escribio, sea la base o nosotros. Puesto despues, se
+    -- estaria midiendo lo que acabamos de escribir -- que es el defecto que ya
+    -- pagamos una vez en la linea `quiere` del instrumento.
+    local wantYaw = self:GetDesiredEyeAngles().y
+
+    if not myTbl.phantom_lookLastYaw or math.abs( math.AngleDifference( wantYaw, myTbl.phantom_lookLastYaw ) ) > 0.5 then
+        myTbl.phantom_lookLastYaw   = wantYaw
+        myTbl.phantom_lookChangedAt = CurTime()
+
+    end
+
     if not cvFaceWalk:GetBool() then return end
 
-    -- Cazando manda la base: apunta al enemigo y lo hace mejor que esto.
-    if myTbl.phantom_Hunting then return end
+    ---------------------------------------------------------------------------
+    -- ⚠ ACA HABIA UN `if myTbl.phantom_Hunting then return end` Y ERA EL BUG
+    ---------------------------------------------------------------------------
+    -- Reportado en juego despues de la ronda 11: "no me sigue cuando esta
+    -- cazando, y queda mirando a un sitio en particular", con el yaw clavado en
+    -- -87.7 en DOS lecturas tomadas a 1400 u de distancia una de la otra, y
+    -- "cuando paso de hunt 1 a 0 se giro correctamente".
+    --
+    -- La guarda decia "cazando manda la base: apunta al enemigo". La premisa de
+    -- esa frase no es EL HUNT, es TENER ENEMIGO -- y son cosas distintas: el
+    -- fantasma entra en hunt por el flag ( phantasmagoria_hunt, y manana la
+    -- cordura ), no porque haya visto a nadie. Entre el flag y el primer avistaje
+    -- hay un hueco de duracion indefinida -- puede ser eterno si el jugador esta
+    -- del otro lado del mapa -- y en TODO ese hueco no hay enemigo, la cadena de
+    -- shooting_handler se sale antes de Term_LookAround ( ver arriba ), y esta
+    -- guarda apagaba al unico que quedaba: nosotros. La cara quedaba clavada en
+    -- el ultimo yaw que alguien hubiera escrito.
+    --
+    -- La guarda de verdad es la linea de abajo, que estaba escrita JUSTO DEBAJO y
+    -- era inalcanzable en hunt. *Una guarda cuya premisa es otra condicion tiene
+    -- que preguntar por esa condicion, no por la que suele venir con ella.*
     if IsValid( myTbl.GetEnemy( self ) ) then return end
 
     local loco = myTbl.loco
@@ -378,6 +486,12 @@ function ENT:BehaveUpdate( interval )
     ang.r = 0
 
     self:SetDesiredEyeAngles( ang )
+
+    -- La otra mitad del instrumento de arriba: CUANDO escribimos NOSOTROS. Con
+    -- las dos marcas, "cambio" y "la escribimos", el reporte puede decir quien
+    -- movio la cara en vez de deducirlo del flag -- que es exactamente lo que
+    -- hacia mal y lo que tapo este bug una ronda entera.
+    myTbl.phantom_lookWroteAt = CurTime()
 
 end
 
@@ -598,17 +712,74 @@ local function lookLines( ghost, say )
     -- identico a "mirada vs marcha" POR CONSTRUCCION -- medido en la corrida 8:
     -- 2.7/2.7, 6.2/6.2, 0.6/0.6, 0.1/0.1. Una columna que te devuelve lo que tu
     -- propio codigo acaba de escribir NO es una medicion independiente.
-    -- Sigue valiendo como medicion en hunt ( ahi lo escribe la base ) y con
-    -- phantasmagoria_ghost_facewalk 0.
-    local quienPide
-    if ghost.phantom_Hunting then
-        quienPide = "lo pide la base ( enemigo )"
+    -- Sigue valiendo como medicion con phantasmagoria_ghost_facewalk 0.
+    --
+    -- ⚠ DEFECTO 4, Y ES EL QUE TAPO EL BUG DE LA MIRADA EN HUNT UNA RONDA ENTERA.
+    -- Esta etiqueta se DEDUCIA del flag: "si hunt, lo pide la base ( enemigo )".
+    -- Y el reporte de la ronda 12 la imprimio doce veces al lado de
+    -- `enemigo ninguno`, en la misma pantalla, sin que nadie lo viera -- porque
+    -- la etiqueta afirmaba justo lo contrario de la columna de arriba. Nadie
+    -- pedia nada: el fantasma estaba en hunt SIN enemigo y su cara no la escribia
+    -- ni la base ni nosotros. *Una etiqueta deducida de un flag no es una
+    -- medicion de lo que paso, y miente con la misma cara con que acierta.*
+    --
+    -- Ahora se MIDE, con dos marcas que pone BehaveUpdate: cuando cambio el valor
+    -- ( lo escriba quien lo escriba ) y cuando lo escribimos nosotros. Si cambio
+    -- recien y no fuimos nosotros, fue la base; si hace rato que no cambia, no
+    -- fue nadie -- y ESE es el sintoma que el autor reporto como "queda mirando a
+    -- un sitio en particular".
+    local ahora    = CurTime()
+    local cambio   = ghost.phantom_lookChangedAt
+    local escribio = ghost.phantom_lookWroteAt
 
-    elseif cvFaceWalk:GetBool() then
-        quienPide = "lo pedimos NOSOTROS: = mirada vs marcha, no es dato aparte"
+    local quieta   = cambio and ( ahora - cambio ) or nil
+    local nuestra  = escribio and ( ahora - escribio ) or nil
+
+    -- ⚠⚠ EL ORDEN DE ESTAS RAMAS ERA UN DEFECTO, Y LA RONDA 13 LO EXHIBIO CON
+    -- DOS MUESTRAS DEL MISMO REGIMEN QUE SE CONTRADECIAN ENTRE SI. Las dos con
+    -- `hunt SI · enemigo ninguno · facewalk 1` y el bot a 196 u/s en linea recta
+    -- por gm_flatgrass:
+    --
+    --     mira yaw 90 · quiere yaw 90 ( la escribimos NOSOTROS ( facewalk ) )   mirada vs marcha 0
+    --     mira yaw 90 · quiere yaw 90 ( NADIE la mueve hace 1.6 s -- CONGELADA ) mirada vs marcha 0
+    --
+    -- Mismo estado, misma rama del codigo, etiquetas opuestas. *Un rojo que
+    -- contradice a un verde de la misma corrida acusa al instrumento.*
+    --
+    -- LA CAUSA: `quieta` mide QUE EL VALOR NO CAMBIO, y eso NO es "nadie lo
+    -- escribio". Un bot que camina derecho tiene una direccion de marcha
+    -- constante, asi que el facewalk le escribe **el mismo angulo cada tick**: lo
+    -- estamos moviendo todo el tiempo y el valor no se mueve nunca. Y como la
+    -- rama de `quieta` estaba ANTES que la de `nuestra`, ganaba ella.
+    --
+    -- El "y caminando" que agregue como discriminante no ataja nada de esto: el
+    -- bot SI camina. El que lo atajaba estaba en la linea de abajo -- `mirada vs
+    -- marcha 0` -- y no lo mire. *Un discriminante que no separa los dos casos
+    -- que se confunden es decoracion.*
+    --
+    -- EL ORDEN BUENO: primero lo MEDIDO ( escribimos nosotros, y de eso hay marca
+    -- directa ), despues lo inferido. La ultima rama queda honesta sobre lo que
+    -- no puede saber: sin una marca adentro del `shootAt` de la base, "no cambio
+    -- y no fuimos nosotros" no distingue "nadie escribio" de "la base escribio el
+    -- mismo valor".
+    local quienPide
+    if not cambio then
+        quienPide = "sin medir todavia ( el bot no corrio un BehaveUpdate aun )"
+
+    elseif nuestra and nuestra <= 0.2 then
+        quienPide = "la escribimos NOSOTROS ( facewalk ): = mirada vs marcha, no es dato aparte"
+
+    elseif quieta <= 1 then
+        quienPide = "la escribe LA BASE ( shootAt sobre el enemigo ), cambio hace " ..
+            string.format( "%.1f", quieta ) .. " s"
+
+    elseif ghost:GetCurrentSpeed() >= FACEWALK_MIN_SPEED then
+        quienPide = "NO la escribimos nosotros y no cambia hace " .. string.format( "%.1f", quieta ) ..
+            " s, CAMINANDO -- mirar `mirada vs marcha` aca abajo: si da ~0 es una constante, no un clavado"
 
     else
-        quienPide = "no lo pide nadie: 0 es lo esperado"
+        quienPide = "no la escribimos y no cambia hace " .. string.format( "%.1f", quieta ) ..
+            " s ( parado: no hay a donde mirar, es lo normal )"
 
     end
 
@@ -683,6 +854,319 @@ local function eachGhost( fn )
 end
 
 PHANTASMAGORIA.EachGhost = eachGhost
+
+---------------------------------------------------------------------------
+-- EL BOTON DE LA MIRADA, Y LO QUE LO SEPARA DE UNA LECTURA ES QUE SE NIEGA
+---------------------------------------------------------------------------
+-- La ronda 9 dejo escrita la regla y la ronda 10 la cobro: *imprimir la
+-- precondicion al lado del veredicto no alcanza -- el boton tiene que negarse.*
+-- Tres filas de aquella planilla salieron verdes sobre un estado que la fila no
+-- pedia, con la precondicion impresa dos lineas mas arriba.
+--
+-- Esta medicion tiene DOS precondiciones que un ojo no puede sostener 20 s:
+--
+--   ① UN SOLO FANTASMA. Los comandos iteran sobre todos, y con dos las lecturas
+--     se mezclan en la misma pantalla sin que nada las separe.
+--
+--   ② UN SOLO REGIMEN. "hunt sin enemigo" y "hunt con enemigo" son los dos lados
+--     del arreglo, y el bot cruza de uno al otro solo, en el segundo en que te
+--     ve. Un promedio que atraviesa el cruce no describe ninguno de los dos.
+--
+-- Las dos se COMPRUEBAN y las dos ABORTAN, con el segundo exacto en que se
+-- rompieron. Y hay una tercera que no es precondicion sino denominador:
+--
+--   ③ CUANTAS MUESTRAS CAMINABA. Una mirada quieta en un bot parado es lo
+--     normal -- no hay a donde mirar. El defecto es la mirada quieta MIENTRAS
+--     CAMINA, asi que el numerador de "congelada" solo tiene sentido sobre las
+--     muestras en movimiento. *Un cero sin denominador de lecturas no es un
+--     cero: es una linea que no se corrio.* Si el bot no camino nunca, esto no
+--     da 0 congeladas: dice que la fila no se pudo correr.
+local LOOK_HZ          = 0.25 -- 4 muestras por segundo
+local LOOK_FROZEN_SECS = 1    -- lo que "nadie la movio" tiene que durar para contar
+
+local function lookRegimen( ghost )
+    return ( ghost.phantom_Hunting and "hunt" or "calma" ) ..
+        " " .. ( IsValid( ghost:GetEnemy() ) and "CON enemigo" or "SIN enemigo" )
+
+end
+
+-- ⚠⚠ EL SEGUNDO ARGUMENTO, Y SALE DEL ROJO MAS CARO DE LA RONDA 13. La fila del
+-- ARREGLO se marco verde habiendo medido `hunt CON enemigo`, que es el regimen de
+-- OTRA fila -- ahi manda la base, `NOSOTROS` tiene que dar 0 por diseno, y el
+-- veredicto salio con pinta de estar bien. El boton se negaba a promediar dos
+-- regimenes, pero no a correr ENTERO en el que no era.
+--
+-- *Un boton que se niega a lo que puede pasar en el medio y no a lo que ya estaba
+-- mal al empezar, deja pasar el error que de verdad ocurre.* La precondicion
+-- estaba escrita en la fila y en la salida; lo que faltaba era que el boton la
+-- pudiera EXIGIR.
+local LOOK_REGIMENES = {
+    huntsin   = "hunt SIN enemigo",
+    huntcon   = "hunt CON enemigo",
+    calmasin  = "calma SIN enemigo",
+    calmacon  = "calma CON enemigo",
+}
+
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_look", function( ply, _, args )
+    local say  = makeSay( ply )
+    local segs = math.Clamp( tonumber( args[ 1 ] or "" ) or 20, 5, 120 )
+
+    -- Y SE DICE QUE SE CANCELO. El timer es uno solo, asi que tipear el comando
+    -- dos veces mata la medicion anterior -- y una ventana de 25 s que se pierde
+    -- en silencio se lee despues como "esta fila no imprimio nada".
+    if timer.Exists( "phantasmagoria_look" ) then
+        say( "[Phantasmagoria] habia una medicion corriendo y se CANCELO: su veredicto no va a salir." )
+
+    end
+
+    timer.Remove( "phantasmagoria_look" )
+
+    local ghosts = {}
+    eachGhost( function( g ) ghosts[ #ghosts + 1 ] = g end )
+
+    if #ghosts == 0 then
+        say( "[Phantasmagoria] SIN CORRER: no hay ningun fantasma vivo." )
+        return
+
+    end
+
+    if #ghosts > 1 then
+        say( "[Phantasmagoria] SIN CORRER: hay " .. #ghosts .. " fantasmas vivos y esta medicion es de UNO." )
+        say( "    Con dos, las muestras de los dos caen en el mismo promedio y nada las separa despues." )
+        return
+
+    end
+
+    local ghost = ghosts[ 1 ]
+    local reg0  = lookRegimen( ghost )
+    local quien = ply
+    local total = math.ceil( segs / LOOK_HZ )
+
+    -- El regimen PEDIDO, si lo pidieron. Se compara ANTES de arrancar el timer:
+    -- una ventana de 25 s que despues resulta ser del regimen equivocado no es
+    -- un dato, son 25 s tirados y una fila mal marcada.
+    local pedido = string.lower( args[ 2 ] or "" )
+
+    if pedido ~= "" then
+        local esperado = LOOK_REGIMENES[ pedido ]
+
+        if not esperado then
+            say( "[Phantasmagoria] SIN CORRER: '" .. pedido .. "' no es un regimen." )
+            say( "    Los cuatro: huntsin · huntcon · calmasin · calmacon.  ( o sin argumento, y mide el que haya )" )
+            return
+
+        end
+
+        if esperado ~= reg0 then
+            say( "[Phantasmagoria] SIN CORRER: pediste '" .. esperado .. "' y el fantasma esta en '" .. reg0 .. "'." )
+            say( "    " .. ( ghost.phantom_Hunting and "hunt SI" or "hunt NO" ) ..
+                " · enemigo " .. ( IsValid( ghost:GetEnemy() ) and tostring( ghost:GetEnemy() ) or "ninguno" ) )
+            say( "    No se mide igual: el veredicto del regimen equivocado sale con pinta de estar bien." )
+            return
+
+        end
+    end
+
+    local n, nMov, nCongel = 0, 0, 0
+    local nNuestra, nBase, nNadie = 0, 0, 0
+    local sumMarcha, maxMarcha = 0, 0
+    local sumPly, maxPly, minPly, nPly = 0, 0, 360, 0
+    local barrido, yaw0, yawPrev = 0, nil, nil
+    local dMin, dMax = 0, 0
+    local roto = nil
+
+    say( "[Phantasmagoria] MIRADA: " .. segs .. " s a " .. math.Round( 1 / LOOK_HZ ) .. " muestras/s." )
+    say( "    regimen  " .. reg0 .. "   ( si cambia, la medicion se ABORTA: no se promedian dos regimenes )" )
+    say( "    #" .. ghost:EntIndex() .. "  Term_FOV " .. tostring( ghost.Term_FOV ) ..
+        " · facewalk " .. cvFaceWalk:GetInt() )
+
+    timer.Create( "phantasmagoria_look", LOOK_HZ, total, function()
+        local fin = makeSay( quien )
+
+        if not IsValid( ghost ) then
+            timer.Remove( "phantasmagoria_look" )
+            fin( "[Phantasmagoria] SIN CORRER: el fantasma murio o lo borraron en el segundo " ..
+                string.format( "%.1f", n * LOOK_HZ ) .. "." )
+            return
+
+        end
+
+        -- ⚠ EL ABORTO VA ANTES DE ACUMULAR, Y LA MUESTRA DEL CRUCE NO ENTRA.
+        -- Puesta adentro, la muestra que prueba que el promedio no sirve seria
+        -- ademas una de las que lo forman. Por eso el acumulado vive en el `else`
+        -- y no despues del `if`.
+        local reg = lookRegimen( ghost )
+
+        if reg ~= reg0 then
+            roto = { seg = n * LOOK_HZ, de = reg0, a = reg }
+            timer.Remove( "phantasmagoria_look" )
+
+        else
+            n = n + 1
+
+            local eyeYaw = math.NormalizeAngle( ghost:GetEyeAngles().y )
+
+            if yaw0 then
+                local d = math.AngleDifference( eyeYaw, yaw0 )
+
+                dMin = math.min( dMin, d )
+                dMax = math.max( dMax, d )
+
+                -- El barrido se suma entre muestras CONSECUTIVAS y el abanico se
+                -- mide contra la primera. Los dos porque fallan distinto: el
+                -- abanico se queda corto si el bot da mas de media vuelta
+                -- ( AngleDifference envuelve ), y el barrido cuenta como giro el
+                -- temblor de un bot parado. Para lo unico que hay que separar --
+                -- clavada o no -- los dos dan CERO, y ese acuerdo es el dato.
+                barrido = barrido + math.abs( math.AngleDifference( eyeYaw, yawPrev ) )
+
+            else
+                yaw0 = eyeYaw
+
+            end
+
+            yawPrev = eyeYaw
+
+            -- QUIEN la escribio, sobre las dos marcas que pone BehaveUpdate. No
+            -- es una deduccion del flag: es cuando cambio el valor y cuando lo
+            -- escribimos nosotros.
+            local ahora   = CurTime()
+            local quieta  = ahora - ( ghost.phantom_lookChangedAt or ahora )
+            local nuestra = ghost.phantom_lookWroteAt and ( ahora - ghost.phantom_lookWroteAt ) or nil
+
+            -- ⚠ EL ORDEN ES EL DE lookLines Y POR EL MISMO MOTIVO: lo MEDIDO
+            -- primero. `quieta` mide que el VALOR no cambio, y un bot que camina
+            -- derecho recibe el mismo angulo cada tick -- lo escribimos siempre y
+            -- el valor no se mueve nunca. Con la rama de `quieta` adelante, la
+            -- r13 conto como NADIE muestras que eran NOSOTROS.
+            local nadie = false
+
+            if nuestra and nuestra <= 0.2 then
+                nNuestra = nNuestra + 1
+
+            elseif quieta <= LOOK_FROZEN_SECS then
+                nBase = nBase + 1
+
+            else
+                nadie = true
+                nNadie = nNadie + 1
+
+            end
+
+            -- EL DENOMINADOR. Todo lo de abajo cuelga de que el bot estuviera
+            -- caminando en ESTA muestra.
+            local vel = ghost.loco and ghost.loco:GetVelocity() or vector_origin
+
+            if vel:Length2D() >= FACEWALK_MIN_SPEED then
+                nMov = nMov + 1
+
+                if nadie then nCongel = nCongel + 1 end
+
+                local marcha = math.abs( math.AngleDifference( math.NormalizeAngle( vel:Angle().y ), eyeYaw ) )
+
+                sumMarcha = sumMarcha + marcha
+                maxMarcha = math.max( maxMarcha, marcha )
+
+            end
+
+            local nearest, nearestDist
+            for _, target in ipairs( player.GetAll() ) do
+                local d = ghost:GetRangeTo( target )
+                if not nearest or d < nearestDist then nearest, nearestDist = target, d end
+
+            end
+
+            if IsValid( nearest ) then
+                local rumbo = math.NormalizeAngle( ( nearest:GetPos() - ghost:GetPos() ):Angle().y )
+                local aPly  = math.abs( math.AngleDifference( rumbo, eyeYaw ) )
+
+                nPly   = nPly + 1
+                sumPly = sumPly + aPly
+                maxPly = math.max( maxPly, aPly )
+                minPly = math.min( minPly, aPly )
+
+            end
+
+            if n < total then return end
+
+        end
+
+        -----------------------------------------------------------------------
+        -- EL VEREDICTO
+        -----------------------------------------------------------------------
+        fin( "" )
+
+        if roto then
+            fin( "[Phantasmagoria] MIRADA: SIN CORRER -- el regimen cambio en el segundo " ..
+                string.format( "%.1f", roto.seg ) .. "." )
+            fin( "    de  " .. roto.de )
+            fin( "    a   " .. roto.a )
+            fin( "    Esta fila mide UN regimen. Un promedio que cruza el borde no describe ninguno" ..
+                " de los dos, asi que no se emite: rehacer la ventana entera del lado que se queria medir." )
+            return
+
+        end
+
+        fin( "[Phantasmagoria] MIRADA: " .. n .. " muestras, regimen " .. reg0 .. " sostenido toda la ventana." )
+        fin( "    caminando   " .. nMov .. " de " .. n .. " muestras a >= " .. FACEWALK_MIN_SPEED .. " u/s" ..
+            "   <- EL DENOMINADOR de la linea de abajo" )
+
+        if nMov <= 0 then
+            fin( "    SIN CORRER: el bot no camino en ninguna muestra." )
+            fin( "    Una mirada quieta en un bot parado es lo NORMAL -- no hay a donde mirar --" ..
+                " asi que sin muestras caminando no hay como distinguir el defecto de lo normal." )
+            fin( "    Hacer que camine ( alejarse, o phantasmagoria_hunt 1 ) y repetir." )
+            return
+
+        end
+
+        fin( "    congelada   " .. nCongel .. " de " .. nMov .. " muestras CAMINANDO" ..
+            "   ( ni la escribimos nosotros ni cambio en " .. LOOK_FROZEN_SECS .. " s )" )
+
+        fin( "    giro        barrio " .. math.Round( barrido ) .. " grados en total" ..
+            " · abanico " .. math.Round( dMax - dMin ) .. " grados   ( los dos en 0 = CLAVADA )" )
+
+        -- ⚠ EL CARTEL QUE FALTABA EN LA R13, y sin el la fila 02 se marco verde
+        -- midiendo el regimen equivocado. `hunt CON enemigo` NO es donde vivia el
+        -- defecto: ahi manda la base y NOSOTROS tiene que dar 0 por diseno. La
+        -- mitad del A/B que prueba el arreglo es `hunt SIN enemigo`, y esa se
+        -- corrio una sola vez -- con facewalk 0, o sea el control.
+        if reg0 == "hunt CON enemigo" then
+            fin( "    ⚠ ESTE NO ES EL REGIMEN DEL ARREGLO. Con enemigo manda la base y NOSOTROS tiene" ..
+                " que dar 0: es la fila de la OTRA guarda. El arreglo se mide en `hunt SIN enemigo`." )
+
+        end
+
+        fin( "    vs marcha   media " .. math.Round( sumMarcha / nMov, 1 ) ..
+            " · max " .. math.Round( maxMarcha, 1 ) .. " grados   ( sobre las " .. nMov .. " caminando )" )
+
+        -- Con nPly en 0 NO se imprime un 0: no habia jugadores y un 0 grados se
+        -- leeria como "te apunta clavado", que es justo lo contrario. La misma
+        -- trampa del cero sin denominador, dos lineas mas abajo.
+        if nPly <= 0 then
+            fin( "    vs jugador  ( no hubo jugadores en ninguna muestra: sin dato, no cero )" )
+
+        else
+            fin( "    vs jugador  media " .. math.Round( sumPly / nPly, 1 ) ..
+                " · min " .. math.Round( minPly, 1 ) ..
+                " · max " .. math.Round( maxPly, 1 ) .. " grados   ( sobre " .. nPly .. " )" )
+
+        end
+
+        -- El tercer balde NO se llama "NADIE" y eso es correccion de la r13: sin
+        -- una marca adentro del shootAt de la base, "no cambio y no fuimos
+        -- nosotros" no distingue "nadie escribio" de "la base escribio el mismo
+        -- valor". *Un balde nombrado por la conclusion que uno quiere sacar la
+        -- regala.*
+        fin( "    la escribio NOSOTROS " .. nNuestra .. " · LA BASE " .. nBase ..
+            " · nadie, o la base el mismo valor " .. nNadie .. "   ( de " .. n .. ", medido )" )
+
+    end )
+
+end, "phantasmagoria_ghost_look [seg] [regimen]  -- muestrea la mirada y da el veredicto. " ..
+    "El regimen ( huntsin/huntcon/calmasin/calmacon ) es OPCIONAL y hace que el boton se niegue si el " ..
+    "fantasma no esta en el. Se NIEGA ademas si hay mas de un fantasma, si el regimen cambia en el " ..
+    "medio, o si el bot no camino en ninguna muestra." )
 
 PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_where", function( ply )
     local say = makeSay( ply )
@@ -827,6 +1311,21 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_rel", function( ply )
             ( lastT and ( ", la ultima a t=" .. math.Round( lastT, 1 ) ..
                 " con hunt=" .. ( ghost.phantom_relLastHunting and "SI" or "NO" ) ) or "" ) )
 
+        -- ⚠ EL FOV, Y NO ES DECORACION: es el numero que decide si la mirada
+        -- congelada de la ronda 12 podia ademas dejarlo CIEGO. Con Term_FOV < 180
+        -- la deteccion es un cono alrededor del aim ( FindInCone,
+        -- enemyoverrides.lua:629 ) y IsInMyFov ( :281-285 ) descarta a todo lo que
+        -- este a mas de 200 u fuera de el -- o sea que una cara clavada seria un
+        -- bot ciego por atras, y las dos fallas serian UNA. Con 180 exactos,
+        -- IsInMyFov devuelve true SIEMPRE y FindEnemies usa una esfera: la
+        -- deteccion no depende de a donde mire. Nosotros lo ponemos en 180
+        -- ( :398 ), asi que son DOS fallas separadas -- pero eso hay que poder
+        -- LEERLO, porque un tercero que mueva termhunter_fovoverride lo cambia.
+        say( "    Term_FOV  " .. tostring( ghost.Term_FOV ) ..
+            ( ( tonumber( ghost.Term_FOV ) or 0 ) >= 180 and
+                "   ( >= 180: ve en TODAS las direcciones, la mirada no lo ciega )" or
+                "   ⚠ < 180: solo ve en un cono. Una mirada clavada lo deja ciego por atras." ) )
+
         local players = player.GetAll()
 
         if #players <= 0 then
@@ -847,11 +1346,154 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_rel", function( ply )
             -- no agrega una clase de perturbacion que no estuviera ya ahi.
             local should = ghost:ShouldBeEnemy( target, nil, ghost:GetTable(), target:GetTable() )
 
+            -- ⚠ Y LA DISTANCIA SE IMPRIME CONTRA SU TOPE, no sola. Desde la
+            -- r13b hay DOS motivos por los que ShouldBeEnemy puede decir NO con
+            -- el hunt puesto -- `ai_ignoreplayers` y nuestro `sightdist` -- y un
+            -- `NO` pelado manda a mirar el interruptor cuando puede ser el
+            -- alcance. *Un gate nuevo que no se ve en el instrumento convierte
+            -- cada uso posterior en un diagnostico equivocado.*
+            local dist = ghost:GetRangeTo( target )
+            local tope = cvSightDist:GetInt()
+
             say( "    ply " .. target:Nick() ..
                 "   rel " .. dispName( disp ) .. " pri " .. tostring( priority ) ..
                 "   ShouldBeEnemy " .. ( should and "SI" or "NO" ) ..
-                "   dist " .. math.Round( ghost:GetRangeTo( target ) ) .. " u" )
+                "   dist " .. math.Round( dist ) .. " u" ..
+                ( tope <= 0 and "   ( sightdist 0: SIN limite )" or
+                    ( "   ( sightdist " .. tope .. ( dist > tope and " -- FUERA DE ALCANCE, corta aca )" or " )" ) ) ) )
 
+            -----------------------------------------------------------------
+            -- LA MITAD QUE FALTABA: la PUERTA abierta no alcanza, hace falta VER
+            -----------------------------------------------------------------
+            -- Reportado en juego tras la ronda 11: "no me sigue cuando esta
+            -- cazando". Con solo ShouldBeEnemy, ese reporte no se puede contestar:
+            -- un SI al lado de `enemigo ninguno` deja igual de vivas "la relacion
+            -- esta mal" y "la relacion esta bien y no me ve", que son dos arreglos
+            -- distintos en dos archivos distintos.
+            --
+            -- La base pide DOS visibilidades y por dos caminos que no son el
+            -- mismo, asi que se imprimen los dos:
+            --
+            --   CanSeePosition   enemyoverrides.lua:566, es el que usa FindEnemies
+            --                    ( TraceLine con LineOfSightMask, filtrando al bot )
+            --   PosCanSee+Clear  shared.lua:3204-3206, la rama "cheap infinite view
+            --                    distance" que revisa UN jugador por pase y es la
+            --                    unica que ignora MaxSeeEnemyDistance ( 3000 u )
+            --
+            -- Un NO en la primera y SI en la segunda no es una contradiccion: la
+            -- primera apunta al mejor hitbox y la segunda al mismo punto pero con
+            -- un hull. Que difieran es informacion, no ruido.
+            local myShoot    = ghost:GetShootPos()
+            local theirShoot = ghost:EntShootPos( target )
+
+            local canSeeFind = ghost:CanSeePosition( target, ghost:GetTable(), target:GetTable() )
+            local canSeeCheap, tr = terminator_Extras.PosCanSee( myShoot, theirShoot )
+            local clear = canSeeCheap and ghost:ClearOrBreakable( myShoot, theirShoot ) or false
+
+            -- QUE lo tapa, y sale del trace que PosCanSee ya devolvio -- no de un
+            -- trace nuestro. Sin esto, "no te ve" no distingue una pared del mapa
+            -- de un prop que el jugador acaba de poner, y solo una de las dos es
+            -- un problema del fantasma.
+            local tapa = ""
+            if not canSeeCheap and tr then
+                tapa = "   lo tapa " .. ( IsValid( tr.Entity ) and tostring( tr.Entity ) or "el mundo ( brush )" ) ..
+                    " a " .. math.Round( myShoot:Distance( tr.HitPos ) ) .. " u"
+
+            end
+
+            say( "        ve  CanSeePosition " .. ( canSeeFind and "SI" or "NO" ) ..
+                " · PosCanSee " .. ( canSeeCheap and "SI" or "NO" ) ..
+                " · ClearOrBreakable " .. ( clear and "SI" or "NO" ) ..
+                " · IsSeeEnemy " .. ( ghost.IsSeeEnemy and "SI" or "NO" ) .. tapa )
+
+            -----------------------------------------------------------------
+            -- EL ESLABON DEL MEDIO, Y LA R13 LO PIDIO CON UN ROJO
+            -----------------------------------------------------------------
+            -- La fila 06 dio `ve SI` + `ShouldBeEnemy SI` + `enemigo ninguno` a
+            -- 26.014 u, y con eso solo no se puede decir si es un defecto: entre
+            -- "te ve" y "sos mi enemigo" hay DOS pasos de la base y ninguno se
+            -- veia.
+            --
+            --   ① m_EnemiesMemory   se escribe con UpdateEnemyMemory, por DOS
+            --                       caminos que no cuestan lo mismo
+            --   ② FindPriorityEnemy la lee ( enemyoverrides.lua:709 ) y elige
+            --
+            -- ⚠ Y LOS DOS CAMINOS DE ① TIENEN LATENCIAS DISTINTAS, que es lo que
+            -- explica por que la fila 05 adquirio a 283 u y la 06 no a 26.014:
+            --
+            --   FindEnemies ( shared.lua:3168 ) corre ANTES de FindPriorityEnemy
+            --   en el mismo pase, asi que adentro de MaxSeeEnemyDistance ( 3000 u )
+            --   la adquisicion es de UN pase.
+            --
+            --   La rama "cheap infinite view distance" ( :3185 ) es la unica que
+            --   pasa de 3000 u, mira UN jugador por pase, y corre DESPUES de
+            --   FindPriorityEnemy -- o sea que lo que escribe recien se lee en el
+            --   pase SIGUIENTE. Con `UpdateEnemies` cada 0,5 s, **son ~1 s**.
+            --
+            -- Sin esta linea, mirar medio segundo despues de abrir la puerta se
+            -- lee igual que un defecto. *Un mecanismo con latencia necesita que
+            -- el instrumento diga cuanta, o el que mide la confunde con una falla.*
+            local mem  = istable( ghost.m_EnemiesMemory ) and ghost.m_EnemiesMemory[ target ] or nil
+            local hData = istable( ghost.m_ActiveTasks ) and ghost.m_ActiveTasks[ "enemy_handler" ] or nil
+
+            say( "        mem " .. ( mem and ( "SI, hace " .. string.format( "%.1f", CurTime() - ( mem.lastupdate or CurTime() ) ) .. " s" ) or "NO" ) ..
+                " · enemy_handler " .. ( hData and ( "proximo barrido en " ..
+                    string.format( "%+.1f", ( hData.UpdateEnemies or CurTime() ) - CurTime() ) .. " s · idx " ..
+                    tostring( hData.playerCheckIndex ) ) or "NO ESTA CORRIENDO" ) )
+
+            -- El veredicto de las columnas juntas, escrito una sola vez para que
+            -- no haya que cruzarlas a mano en la consola.
+            if not should and tope > 0 and dist > tope then
+                say( "        -> FUERA DE ALCANCE: " .. math.Round( dist ) .. " u contra un sightdist de " ..
+                    tope .. " u. No es la relacion ni la vista." )
+                say( "           Es NUESTRO limite, no el de la base: con sightdist 0 te tomaria igual" ..
+                    " ( medido en la r13b a 31.253 u )." )
+
+                -- ⚠ EL CASO QUE VA A CONFUNDIR, Y SALIO DE LA R14 SIN QUE NINGUNA
+                -- FILA LO PIDIERA: el autor le pego un tiro entre la 01 y la 02, y
+                -- las cuatro lecturas siguientes tienen `vida 827/900` con
+                -- `rel D_HT pri 1000` -- que es MakeFeud ( enemyoverrides.lua:1046,
+                -- "hate players more than anything else" ), disparado por
+                -- PostTookDamage ( damageandhealth.lua:482 ).
+                --
+                -- ANTES del gate, pegarle desde cualquier distancia lo mandaba a
+                -- buscarte. Ahora no: MakeFeud escribe la RELACION, y el gate corta
+                -- ANTES de que la relacion se lea. *Un limite puesto delante de una
+                -- cadena tambien tapa las entradas laterales de esa cadena, y las
+                -- laterales son las que nadie recuerda.*
+                --
+                -- Se dice solo cuando el fantasma tiene dano encima, porque es el
+                -- unico momento en que alguien va a preguntarse "le dispare y no
+                -- viene".
+                if ghost:Health() < ghost:GetMaxHealth() then
+                    say( "           ⚠ Y ESTE FANTASMA TIENE DANO: le pegaste, MakeFeud le puso" ..
+                        " D_HT pri 1000, y el gate lo tapa igual. Antes venia a buscarte desde cualquier lado." )
+
+                end
+
+            elseif not should then
+                say( "        -> la PUERTA esta cerrada: ShouldBeEnemy NO. Mirar hunt y rel, no la vista." )
+
+            elseif not ( canSeeFind or clear ) then
+                say( "        -> puerta abierta y NO te ve. No es la relacion: es que no hay linea de vision." )
+
+            -- Contra ESTE jugador y no contra "hay algun enemigo": con dos
+            -- jugadores, un `IsValid( enemy )` suelto le pondria el verde del
+            -- primero a las lineas de todos.
+            elseif enemy == target then
+                say( "        -> puerta abierta, te ve y SOS el enemigo. La cadena entera funciona." )
+
+            elseif not mem then
+                say( "        -> te ve y NO estas en la memoria todavia. NO es un defecto sin esperar:" ..
+                    " arriba de " .. tostring( ghost.MaxSeeEnemyDistance ) .. " u la adquisicion pide DOS" ..
+                    " barridos ( ~1 s ) y el proximo esta en la linea de arriba." )
+                say( "           Repetir el comando pasados 3 s. Si a los 3 s sigue sin memoria, ENTONCES si." )
+
+            else
+                say( "        -> ⚠ te ve, ESTA en la memoria y aun asi no sos el enemigo." ..
+                    " El defecto esta en FindPriorityEnemy ( enemyoverrides.lua:694 ), no en la vista ni en la relacion." )
+
+            end
         end
     end )
 
