@@ -7,6 +7,52 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-07 (18) — Ronda 11 CORRIDA: **el bailout nunca disparó, y el gatillo era mío**
+
+Marcó 6 de 6. Una lo está, tres son *Sin correr*, y el hallazgo es un defecto de mi diseño que
+**ninguna fila pedía**.
+
+### `disparados 0` en las dos mitades del A/B, por dos causas del gatillo
+
+Contaba *«N caminatas seguidas que vencen habiéndose movido menos de 15 u»*:
+
+- **El bot encajado se mueve.** `SE MOVIO 93 u`, `69 u`, `64 u` — se sacude adentro de la jaula de
+  props sin salir de ella, y cada una reseteaba el contador. *Cuánto se movió la caminata no dice si
+  el bot se despegó: dice cuánto se agitó en el lugar.*
+- **Entre caminata y caminata pasan hasta 81 s.** El gatillo colgaba del fin de una caminata, que la
+  arranca el handler — que tras cada rescate vacía `historicPositions` y vuelve a juntar 81 a una por
+  segundo. Medido: `rescates 1` en una ventana de 100 s. Con N=3, **cuatro minutos**.
+
+**Medí el movimiento de la caminata en vez del desplazamiento neto, y até el arreglo al reloj del
+mecanismo que estoy arreglando.** *Un rescate que espera al que falló hereda su latencia.*
+
+**Reescrito sobre `quieto desde`**, que ya estaba medido y a la vista: 59,7 s en la r10, 47 s en la
+r11, y **nunca más de 1 s** en el control con el bot sano. Pide además que el bot **quiera** moverse
+(`GetDesiredSpeed` alto, velocidad real en cero), porque *estar quieto y estar trabado se ven igual
+desde una posición* — sin eso, `movement_watch` (Diseño 18) haría que un fantasma plantado a
+propósito se teletransportara solo.
+
+⚠ **`_stuckbailout` → `_stuckbailoutsecs` (default 20).** Cambió de nombre porque **cambió de
+unidad**: las dos son `FCVAR_ARCHIVE`, así que un `stuckbailout 3` guardado se leería como tres
+segundos. *Una perilla que cambia de unidad tiene que cambiar de nombre, o el valor guardado miente en
+silencio.*
+
+### Tres filas *Sin correr*, y una que cerró a la cuarta
+
+Las **01** y **02** porque en ninguna de las dos mitades se reprodujo el bucle de `SE MOVIO 0 u`; la
+**03** porque se probó corriendo en vez de encerrando al bot en props. **La 04 CERRÓ**: `>>> PASA: la
+convar en 0 le gano a un flag que dice que SI`, con los dos lados del A/B y 39 pisadas en el `listen`.
+*El botón resolvió lo que cuatro recetas escritas no pudieron.*
+
+### Dos hallazgos que salieron de contadores puestos para otra cosa
+
+- **Catorce `SALTA altura pedida 20` en tres segundos** (`t=3005.8` a `t=3008.4`). Es el
+  `simpleJumpMinHeight` de la base: un bucle de salto contra algo.
+- **La alarma de `server_doors.lua` se disparó:** `atraveso mas de 5 s seguidos y se lo forzo a
+  solido. Eso no deberia pasar`.
+
+---
+
 ## 2026-08-07 (17) — Ronda 10 CORRIDA: el arreglo anduvo, **y destapó el defecto de abajo**
 
 Marcó 8 de 8. Cuatro lo están, una es la que cierra el arco y dos son *Sin correr*.

@@ -31,20 +31,31 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 > rama que sacaría a un bot inmóvil es el teleport, y `:3868` lo veta mientras te ve.
 > *no puede caminar + no puede teletransportarse = physgun.*
 >
-> **ESCRITO Y SIN CORRER: `phantasmagoria_ghost_stuckbailout` (3, `0` = control)** — tras N caminatas
-> que vencen sin mover al bot, lo teletransportamos nosotros. El gatillo son los dos números que la
-> r10 midió. ⚠ Teletransporta a un fantasma que te está mirando: se ve.
+> **El bailout está escrito, y la r11 REFUTÓ su primer gatillo sin que ninguna fila lo pidiera:**
+> `disparados 0` en las dos mitades. Contaba caminatas que vencían sin mover al bot, y el bot
+> encajado **sí se mueve** (`SE MOVIO 93 u`, `69 u`, `64 u` — se sacude en la jaula), además de que
+> entre caminata y caminata pasan hasta **81 s**. *Medí el movimiento de la caminata en vez del
+> desplazamiento neto, y até el arreglo al reloj del mecanismo que estoy arreglando.*
 >
-> **Lo pendiente de medir, en orden:** (1) el A/B del bailout; (2) **la mitad ① que nunca se corrió**
-> —`escapedist 0`—, que además es la única forma de cerrar por qué en la r9 un destino de ~100 u
-> tardaba 10 s en dar `LLEGO` cuando hoy uno de 301 u lo da en 1,4 s; (3) la fila del control de
-> `stepsilent`, que va **cuatro rondas** corriéndose mal y ahora tiene botón propio
-> (`phantasmagoria_ghost_steps control`).
+> **Reescrito sobre el número que ya estaba a la vista: `quieto desde`.**
+> `phantasmagoria_ghost_stuckbailoutsecs` (**20 s**, `0` = control) — quieto **y queriendo moverse**,
+> porque un fantasma plantado a propósito (`movement_watch`, Diseño 18) se teletransportaría solo. ⚠
+> Cambió de nombre porque cambió de unidad: el `_stuckbailout` viejo contaba caminatas y era
+> `FCVAR_ARCHIVE`.
 >
-> ⚠ **Dos arreglos de método que costaron caro:** el botón `force` **se niega** si la precondición de
-> la fila no está (*imprimir la precondición al lado del veredicto no alcanza*), y se **borraron dos
-> líneas predictivas** del reporte que la r10 refutó en su propia salida — una imprimía un ritmo
-> «neto» **negativo**.
+> **Lo pendiente de medir, en orden:** (1) el A/B del bailout nuevo, **encerrándolo en props** — las
+> tres filas *Sin correr* de la r11 lo fueron porque el bucle no se reprodujo; (2) la mitad ①
+> (`escapedist 0`) con el bot encajado, que es la única que cierra por qué en la r9 un destino de
+> ~100 u tardaba 10 s en dar `LLEGO` cuando hoy uno de 301 u lo da en 1,4 s; (3) **catorce saltos en
+> tres segundos**, que salió del contador de saltos sin que ninguna fila lo pidiera.
+>
+> ⭐ **La fila del control de `stepsilent` CERRÓ a la cuarta**, con el botón nuevo
+> (`phantasmagoria_ghost_steps control`), los dos lados del A/B y 39 pisadas en el `listen`.
+>
+> ⚠ **Tres arreglos de método que costaron caro:** el botón `force` **se niega** si la precondición no
+> está; se **borraron dos líneas predictivas** que la r10 refutó en su propia salida (una imprimía un
+> ritmo **negativo**); y *cuatro modos de falla distintos sobre la misma fila no son cuatro descuidos:
+> son una receta demasiado larga* — por eso el botón.
 >
 > **El salto queda descartado como causa, con número:** las alturas pedidas fueron 60, 60, 12, 67,9,
 > 67,9 y 32. El tope es 245 y **nadie pide 245**.
@@ -186,6 +197,73 @@ referencia:
 llevan `<code>`/`<strong>`, así que los siete títulos se leían literales. La corrección anterior
 había arreglado el criterio y se olvidó del encabezado. Arreglado, con `plain()` para que el
 reporte que se pega en el chat no salga con tags.
+
+---
+
+## Ronda 11 CORRIDA (2026-08-07) — **el bailout nunca disparó, y el gatillo era mío**
+
+Marcó 6 de 6. **Una lo está, tres son *Sin correr*, y el hallazgo es un defecto de mi diseño que
+ninguna fila pedía.**
+
+### ⚠ `disparados 0` en las dos mitades del A/B — y las dos causas son del gatillo
+
+El gatillo contaba *«N caminatas seguidas que vencen habiéndose movido menos de 15 u»*. Con el bot
+encajado de verdad **nunca llegó a dispararse**:
+
+- **① El bot encajado SE MUEVE.** Las caminatas dieron `SE MOVIO 93 u`, `69 u`, `64 u` — se sacude
+  adentro de la jaula de props sin salir de ella. Cada una reseteaba el contador. *Cuánto se movió la
+  caminata no dice si el bot se despegó: dice cuánto se agitó en el lugar.*
+- **② Entre caminata y caminata pueden pasar 81 s.** El gatillo colgaba del **fin** de una caminata,
+  y la arranca el handler — que tras cada rescate vacía `historicPositions` y necesita volver a
+  juntar 81 a una por segundo. Medido: **`rescates 1` en toda una ventana de 100 s**, con `hist 80/81`
+  al final. Con N=3, el bailout tardaría **cuatro minutos**.
+
+**Las dos son el mismo error: medí el movimiento de la caminata en vez del desplazamiento neto desde
+que quedó trabado, y até el arreglo al reloj del mecanismo que estoy arreglando.** *Un rescate que
+espera al que falló hereda su latencia.*
+
+**El gatillo bueno ya estaba medido y a la vista en el reporte: `quieto desde`** — llegó a 59,7 s en
+la r10 y a 47 s en la r11, y en el control de la r11 (100 muestras deambulando) **nunca pasó de 1 s**.
+No depende del handler y no lo resetea una sacudida. Pide además que el bot **quiera** moverse
+(`GetDesiredSpeed` alto con velocidad real en cero): sin eso, el día que exista `movement_watch`
+—Diseño 18, hoy registrada y no corriendo— un fantasma plantado a propósito se teletransportaría
+solo. *Estar quieto y estar trabado se ven igual desde una posición; lo que los separa es si quería
+moverse.*
+
+⚠ **Y la convar cambió de nombre porque cambió de unidad:** `_stuckbailout` contaba caminatas,
+`_stuckbailoutsecs` cuenta segundos (default **20**). Las dos son `FCVAR_ARCHIVE`, así que un servidor
+con `stuckbailout 3` guardado habría leído ese 3 como tres segundos. *Una perilla que cambia de unidad
+tiene que cambiar de nombre, o el valor guardado miente en silencio.*
+
+### Las tres filas que no midieron lo que decían
+
+- **01 y 02 son *Sin correr*:** en **ninguna** de las dos mitades se reprodujo el bucle de
+  `SE MOVIO 0 u` de la r10 — el bot se movía 64-93 u por caminata. Sin la condición que el bailout
+  existe para atacar, no hay A/B. La fila lo decía textual.
+- **03 es *Sin correr*, y contesto la pregunta del autor:** *«¿o querías que lo encerrara en props?»*
+  — **sí**. Se probó corriendo y saltando de camarote en camarote, así que dio `rescates 0 · destinos
+  cortos 0` y no midió ni el A/B de `escapedist` ni el ciclo de 10 s. **Lo que sí dejó, y vale:** el
+  fantasma *«me logra seguir sin bloquearse»* con 11 saltos de 40-100 u.
+
+### ⭐ La 04 CERRÓ, después de cuatro rondas
+
+`>>> PASA: la convar en 0 le gano a un flag que dice que SI`, con `override true` y `ahora mismo
+SUENA` — **y el A/B completo**, porque con `stepsilent 1` y el mismo override el reporte dice
+`CALLADA   el tipo camina callado ( el override … dice SI )`. Más `listen 20` con **39 pisadas, 8
+calladas publicadas al consumidor**. *El botón resolvió lo que cuatro recetas escritas no pudieron.*
+
+### La 05 pasa, y de paso destapó dos cosas que nadie pidió
+
+`disparados 0 · rescates 0` con el bot sano, en hunt y en calma, con la bitácora vacía. ✔
+
+> **⚠ CATORCE SALTOS EN TRES SEGUNDOS.** Entre `t=3005.8` y `t=3008.4`, catorce `SALTA altura pedida
+> 20` seguidos — el `simpleJumpMinHeight` de la base, o sea el default de `jumpingHeight or
+> aboveUsJumpHeight or simpleJumpMinHeight`. Es un bucle de salto contra algo, y **no lo pidió ninguna
+> fila**: salió del contador que existe para otra cosa. Va a la próxima ronda.
+>
+> **Y la alarma del bloque de puertas se disparó:** `#1335 atraveso mas de 5 s seguidos y se lo forzo
+> a solido. Eso no deberia pasar: mirar contra que puerta.` Es la guarda de `server_doors.lua`
+> avisando de lo que ella misma llama imposible.
 
 ---
 

@@ -557,18 +557,65 @@ local cvEscapeDist = CreateConVar( "phantasmagoria_ghost_escapedist", tostring( 
 --     no puede caminar  +  no puede teletransportarse  =  hay que sacarlo con
 --     el physgun.
 --
--- POR ESO ESTE BAILOUT EXISTE, y su gatillo NO es una lectura: son los dos
--- numeros que la ronda 10 midio. N caminatas seguidas que vencen habiendose
--- movido menos que el radio con el que la propia base define "quieto".
+-- POR ESO ESTE BAILOUT EXISTE.
+--
+-- ⚠⚠ Y SU PRIMER GATILLO ERA MIO Y ESTABA MAL. LA RONDA 11 LO REFUTO SIN QUE
+-- NINGUNA FILA LO PIDIERA: contaba "N caminatas seguidas que vencen habiendose
+-- movido menos de 15 u", y con el bot encajado de verdad **nunca disparo**.
+-- `disparados 0` con `llevamos 0` en las dos mitades del A/B. Dos causas, y las
+-- dos son del gatillo:
+--
+--   ① EL BOT ENCAJADO SE MUEVE. Las caminatas dieron `SE MOVIO 93 u`, `69 u`,
+--     `64 u` -- se sacude adentro de la jaula de props sin salir de ella. Cada
+--     una de esas reseteaba el contador. *Cuanto se movio la caminata no dice si
+--     el bot se despego: dice cuanto se agito en el lugar.*
+--
+--   ② ENTRE CAMINATA Y CAMINATA PUEDEN PASAR 81 SEGUNDOS. El gatillo colgaba del
+--     FIN de una caminata, y la caminata la arranca el handler -- que despues de
+--     cada rescate vacia `historicPositions` ( :3923 ) y necesita volver a
+--     juntar 81 a una por segundo cuando el bot esta en el piso. Medido en la
+--     ronda 11: `rescates 1` en toda una ventana de 100 s, con `hist 80/81` al
+--     final. Con N = 3 caminatas, el bailout tardaria CUATRO MINUTOS en llegar.
+--
+-- Las dos son el mismo error: **medi el movimiento de la caminata en vez del
+-- desplazamiento neto desde que quedo trabado**, y ate el arreglo al reloj del
+-- mecanismo que estoy arreglando. *Un rescate que espera al que fallo hereda su
+-- latencia.*
+--
+-- EL GATILLO BUENO YA ESTABA MEDIDO Y A LA VISTA EN EL REPORTE: `quieto desde`,
+-- que es el tiempo desde que el bot salio por ultima vez de un radio de 15 u --
+-- el mismo radio con el que la base define "stuck" ( :3792 ). Llego a 59,7 s en
+-- la ronda 10 y a 47 s en la 11, y en un bot sano se queda en 0-1 s ( medido en
+-- el control de la ronda 11: 100 muestras deambulando, `quieto` nunca paso de
+-- 1 s ). No depende del handler, no lo resetea una sacudida, y se puede leer en
+-- cualquier tick.
+--
+-- Y PIDE ADEMAS QUE EL BOT QUIERA MOVERSE: `GetDesiredSpeed()` alto con
+-- `GetCurrentSpeed()` en cero. Sin eso, el dia que exista `movement_watch` -- el
+-- comportamiento de Diseno 18 que se planta a distancia a mirarte -- un fantasma
+-- quieto A PROPOSITO se teletransportaria solo. *Estar quieto y estar trabado se
+-- ven igual desde una posicion; lo que los separa es si queria moverse.*
 --
 -- ⚠ TELETRANSPORTA A UN FANTASMA QUE TE ESTA MIRANDO, y eso se ve. Es un cambio
--- de comportamiento, no un arreglo invisible: el default es 3 porque la
+-- de comportamiento, no un arreglo invisible: el default es 20 s porque la
 -- alternativa medida es que el jugador lo saque con el physgun, y 0 lo apaga
 -- entero para el A/B.
-local cvBailout = CreateConVar( "phantasmagoria_ghost_stuckbailout", "3", FCVAR_ARCHIVE,
-    "Caminatas de rescate seguidas que pueden vencer SIN MOVER al bot antes de que lo teletransportemos nosotros. " ..
+--
+-- ⚠ Y LA CONVAR CAMBIO DE NOMBRE PORQUE CAMBIO DE UNIDAD. La vieja se llamaba
+-- `_stuckbailout` y contaba CAMINATAS; esta cuenta SEGUNDOS. Las dos son
+-- FCVAR_ARCHIVE, asi que un servidor que hubiera guardado `stuckbailout 3` leeria
+-- ese 3 como tres segundos y teletransportaria al fantasma todo el tiempo.
+-- *Una perilla que cambia de unidad tiene que cambiar de nombre, o el valor
+-- guardado miente en silencio.*
+local cvBailout = CreateConVar( "phantasmagoria_ghost_stuckbailoutsecs", "20", FCVAR_ARCHIVE,
+    "SEGUNDOS que el bot puede pasar sin salir de un radio de 15 u ( QUERIENDO moverse ) antes de que lo teletransportemos nosotros. " ..
     "0 = nunca ( control: el comportamiento medido en la ronda 10, donde el bot quedo trabado para siempre ). " ..
-    "Existe porque con el bot encajado la caminata no lo mueve y el teleport de la base esta vetado por IsSeeEnemy ( shared.lua:3868 ).", 0, 20 )
+    "Existe porque con el bot encajado la caminata no lo mueve y el teleport de la base esta vetado por IsSeeEnemy ( shared.lua:3868 ). " ..
+    "OJO: reemplaza a _stuckbailout, que contaba CAMINATAS y nunca llegaba a disparar.", 0, 300 )
+
+-- Debajo de esto no hay intencion de moverse que valga: es el mismo numero que
+-- server.lua usa como frontera de "casi quieto" para la mirada.
+local BAILOUT_SPEED = 30
 
 ---------------------------------------------------------------------------
 -- La prediccion de la rama, escrita ANTES de correr
@@ -649,6 +696,34 @@ local function poll( self, myTbl )
         myTbl.phantom_stuckAnchor = pos
         myTbl.phantom_stuckSince  = CurTime()
 
+    end
+
+    ---------------------------------------------------------------------------
+    -- EL GATILLO DEL BAILOUT, sobre el numero que la ronda 11 dejo a la vista
+    ---------------------------------------------------------------------------
+    -- Vive ACA y no en el fin de una caminata, y eso es el arreglo entero: el
+    -- gatillo viejo colgaba del handler y heredaba su latencia de hasta 81 s, y
+    -- se reseteaba con cada sacudida dentro de la jaula. `quieto` no depende de
+    -- nadie -- se mide contra el ancla de arriba, que es el mismo radio con el
+    -- que la base define "stuck".
+    --
+    -- LAS DOS CONDICIONES SON UNA SOLA IDEA: quieto Y queriendo moverse. Sin la
+    -- segunda, un fantasma plantado a proposito -- `movement_watch`, que es
+    -- Diseno 18 y hoy esta registrada pero no corriendo -- se teletransportaria
+    -- solo. *Estar quieto y estar trabado se ven igual desde una posicion.*
+    local tope = cvBailout:GetInt()
+
+    if tope > 0 and not myTbl.phantom_bailoutPendiente then
+        local quieto  = CurTime() - ( myTbl.phantom_stuckSince or CurTime() )
+        local deseada = myTbl.loco and myTbl.loco:GetDesiredSpeed() or 0
+        local real    = myTbl.GetCurrentSpeed( self )
+
+        if quieto >= tope and deseada > BAILOUT_SPEED and real < BAILOUT_SPEED then
+            myTbl.phantom_bailoutPendiente = true
+            myTbl.phantom_bailoutPorQue = string.format( "quieto %.1f s ( tope %d ) · deseada %d u/s · real %d u/s",
+                quieto, tope, math.Round( deseada ), math.Round( real ) )
+
+        end
     end
 
     ---------------------------------------------------------------------------
@@ -866,8 +941,10 @@ end
 local function hacerBailout( self, myTbl )
     if not myTbl.phantom_bailoutPendiente then return end
 
+    local porQue = myTbl.phantom_bailoutPorQue or "?"
+
     myTbl.phantom_bailoutPendiente = nil
-    myTbl.phantom_bailoutSeguidas  = 0
+    myTbl.phantom_bailoutPorQue    = nil
 
     local minDist = math.max( cvEscapeDist:GetInt(), B.ARRIVED_DIST )
     local destino, total, pasaron = buscarEscape( self, minDist )
@@ -889,14 +966,22 @@ local function hacerBailout( self, myTbl )
     local antes = self:GetPos()
 
     terminator_Extras.TeleportTermTo( self, destino )
-    self:InvalidatePath( "phantasmagoria: bailout, la caminata no lo movia" )
+    self:InvalidatePath( "phantasmagoria: bailout, quedo trabado" )
+
+    -- El ancla se reinicia a mano: sin esto `quieto` seguiria contando desde
+    -- antes del teleport y el gatillo volveria a dispararse en el pase siguiente,
+    -- que es un bucle de teleports. El poll lo haria solo al detectar que se
+    -- movio, pero "solo" es un tick despues y el gatillo mira cada tick.
+    myTbl.phantom_stuckAnchor = self:GetPos()
+    myTbl.phantom_stuckSince  = CurTime()
 
     st.bailouts = st.bailouts + 1
 
     -- El dato que importa es CUANTO SE MOVIO, no que se llamo: el teleport de la
-    -- base movia 8 u y se anunciaba igual.
+    -- base movia 8 u y se anunciaba igual. Y el POR QUE viaja al lado, porque un
+    -- gatillo de dos terminos no se puede leer desde el resultado.
     anotar( self, "BAILOUT   se movio " .. math.Round( self:GetPos():Distance( antes ) ) .. " u" ..
-        "   ( despues de " .. cvBailout:GetInt() .. " caminatas seguidas sin moverse )" ..
+        "   ( " .. porQue .. " )" ..
         "   ve " .. ( myTbl.IsSeeEnemy and "SI" or "NO" ) ..
         "   <- la base NO habria podido: :3868 lo veta mientras te ve" )
 
@@ -999,38 +1084,13 @@ function ENT:StartTask( task, data, reason )
 
                 myTbl.phantom_stuckWalkTo = nil
 
-                ---------------------------------------------------------------
-                -- EL GATILLO DEL BAILOUT, y sale de la medicion y no de leer
-                ---------------------------------------------------------------
-                -- La caminata termino. Si se movio menos que el radio con el que
-                -- la BASE define "quieto" ( :3792 ), esta caminata no rescato
-                -- nada. Se cuentan las seguidas: una sola puede ser mala suerte,
-                -- cinco con la misma posicion hasta el sexto decimal no.
-                --
-                -- El contador se resetea con cualquier caminata que SI mueva, asi
-                -- que un bot que se destraba solo nunca llega al umbral.
-                local movidos = desde and s.pos:Distance( desde ) or math.huge
+                -- ⚠ ACA VIVIA EL GATILLO DEL BAILOUT Y SE FUE AL POLL. Contaba
+                -- caminatas seguidas que vencian habiendose movido menos de 15 u,
+                -- y con el bot encajado nunca disparo: las caminatas daban
+                -- `SE MOVIO 93 u`, `69 u`, `64 u` -- el bot se sacude adentro de
+                -- la jaula sin salir de ella -- y ademas entre una y otra pasaban
+                -- hasta 81 s. Ver el comentario largo de la convar.
 
-                if movidos < B.STUCK_RADIUS then
-                    myTbl.phantom_bailoutSeguidas = ( myTbl.phantom_bailoutSeguidas or 0 ) + 1
-
-                else
-                    myTbl.phantom_bailoutSeguidas = 0
-
-                end
-
-                local tope = cvBailout:GetInt()
-
-                -- Se MARCA y no se ejecuta aca. Estamos adentro de StartTask, o
-                -- sea en medio del KillAllTasksWith de la base y dentro de su
-                -- corrutina; TeleportTermTo llama RestartMotionCoroutine, y
-                -- reiniciar la corrutina desde adentro de la corrutina es pedirle
-                -- al motor que se pise a si mismo. El AdditionalThink del pase
-                -- siguiente lo ejecuta con el mismo dato.
-                if tope > 0 and myTbl.phantom_bailoutSeguidas >= tope then
-                    myTbl.phantom_bailoutPendiente = true
-
-                end
             end
 
             anotar( self, hit.texto .. "   ve " .. ( s.veEnemigo and "SI" or "NO" ) ..
@@ -1256,10 +1316,21 @@ local function lineas( ghost, say )
     -- EL BAILOUT, con su contador de seguidas EN VIVO. El contador es la mitad
     -- que dice si el gatillo esta cerca; sin el, un `bailouts 0` no distingue
     -- "nunca hizo falta" de "hizo falta y falta una caminata mas".
-    say( "    el bailout    stuckbailout " .. cvBailout:GetInt() ..
+    -- LOS DOS TERMINOS DEL GATILLO, SIEMPRE, aunque uno solo este cerca. Con el
+    -- gatillo viejo el reporte decia `llevamos 0` y eso no distinguia "nunca
+    -- hizo falta" de "el contador se resetea con cada sacudida" -- que es lo que
+    -- estaba pasando y tardo una ronda entera en verse.
+    local deseada = ghost.loco and ghost.loco:GetDesiredSpeed() or 0
+
+    say( "    el bailout    stuckbailoutsecs " .. cvBailout:GetInt() .. " s" ..
         ( cvBailout:GetInt() <= 0 and "  ( 0 = NUNCA, el comportamiento de la ronda 10 )" or
-            "  ( caminatas seguidas sin moverse que se toleran )" ) ..
-        "   llevamos " .. ( ghost.phantom_bailoutSeguidas or 0 ) )
+            "  ( segundos quieto QUERIENDO moverse )" ) )
+
+    say( "                  quieto " .. string.format( "%.1f", quieto ) .. " s" ..
+        " · deseada " .. math.Round( deseada ) .. " u/s" ..
+        " · real " .. math.Round( ghost:GetCurrentSpeed() ) .. " u/s" ..
+        "   -> " .. ( ( quieto >= cvBailout:GetInt() and cvBailout:GetInt() > 0 ) and "el tiempo YA alcanza" or "el tiempo todavia no" ) ..
+        " · " .. ( ( deseada > BAILOUT_SPEED and ghost:GetCurrentSpeed() < BAILOUT_SPEED ) and "QUIERE moverse y no puede" or "no quiere moverse ( o si se mueve )" ) )
 
     say( "                  disparados " .. st.bailouts ..
         " · abortados por no haber adonde " .. st.bailoutSinDonde )
