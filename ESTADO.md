@@ -1,6 +1,6 @@
 # Phantasmagoria — Estado actual y handoff
 
-**Última actualización:** 2026-08-07
+**Última actualización:** 2026-08-08
 **Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
@@ -13,7 +13,36 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-08): la r14 CORRIÓ — 5 de 5. El ALCANCE y la MIRADA quedan los dos CERRADOS
+> ⭐ **LO ÚLTIMO (2026-08-08): `lua/phantasmagoria/` NO LO CARGABA NADIE. Cargador escrito, SIN pasada
+> en juego.**
+>
+> Salió de una sola pregunta antes de empezar §19: *¿existe `PHANTASMAGORIA.Types` en runtime?*
+> **No existía.** GMod auto-ejecuta un conjunto **fijo** de carpetas (`lua/autorun/`, `lua/entities/`,
+> `lua/weapons/`, `lua/effects/`, `lua/vgui/`) y `lua/phantasmagoria/` no está en la lista. El grep de
+> `include(`/`AddCSLuaFile` sobre **todo** el addon daba dos líneas, las dos de las armas.
+>
+> Apagados quedaban los **30 tipos** (o sea que §19 no se podía ni empezar: el disparo del hunt lee el
+> `hunt.threshold` **del tipo**) y ⚠ **`prop_data.lua`, que no es dato sino comportamiento**: registra
+> `PlayerSpawnedProp` para corregir la masa, y su propio comentario dice para qué — *«sin esto, un
+> jugador que saque el crucifijo del Prop Pack desde el spawnmenu se lleva la tonelada»*. **Esa red de
+> seguridad nunca corrió.**
+>
+> ⚠ **Y no dejó rastro porque el consumidor todavía no estaba escrito.** El grep de `ApplyPropData` /
+> `PropData` / `Types` fuera de la carpeta da **cero usos**: una tabla que no existe sólo tira error
+> cuando alguien la lee. **El defecto no tenía síntoma porque la función que lo hubiera mostrado era
+> justo la que faltaba** — y el síntoma iba a aparecer el primer día de la cordura, disfrazado de *«la
+> cordura no anda»*, a tres archivos de la causa.
+>
+> El cargador es `lua/autorun/phantasmagoria_data.lua`: **incluye y nada más**, los dos en los dos
+> realms (el HUD de cordura de §19.3 es cliente). ⚠ **Su guarda NO puede detectar la falla que acaba de
+> ocurrir** — si el archivo no corre, la guarda tampoco; detecta el otro modo (rename, `return`
+> temprano, error a mitad) y dice **el número**, no un booleano.
+>
+> **Medido:** parsea, las dos rutas existen, **30** tipos, `PropData` en la 39, el hook en la 118.
+> **Sin pasada en juego:** nadie vio el conteo en una consola de verdad ni volvió a pesar el crucifijo.
+> **Esas son dos filas y van con la planilla de la cordura.**
+
+> **LO ANTERIOR (2026-08-08): la r14 CORRIÓ — 5 de 5. El ALCANCE y la MIRADA quedan los dos CERRADOS
 > en juego.**
 >
 > **El A/B del `sightdist`, con `ve … SI` en las dos mitades** (el fantasma te ve igual y no le
@@ -1379,9 +1408,27 @@ tema: `congelada 5 de 117` en calma contra un criterio de `0` (r13b; candidato, 
 cuando el bot no está en el piso), y **cuánto tarda en soltarte** con `sightdist` puesto (r14, fila 05:
 la fila lo pedía y trae una sola lectura ya del otro lado).
 
-**3 · La cordura (§19)**, que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`. Todo lo
-de las últimas cuatro rondas fue sobre cómo se **comporta** el hunt; la cordura es la que **decide
-cuándo** empieza.
+**3 · La cordura (§19) — ES LA QUE SIGUE, y ya está elegida.** Todo lo de las últimas cuatro rondas fue
+sobre cómo se **comporta** el hunt; la cordura es la que **decide cuándo** empieza, y reemplaza al
+andamio `phantasmagoria_hunt` (que queda de test). **Se decidió el 2026-08-08, con el autor:**
+
+- **Drenaje por CAUSAS, sin reloj de fondo.** No hay goteo constante: la cordura baja por oscuridad
+  (§19.4), cercanía del fantasma y cacerías. *Si no pasa nada, no baja nada.*
+- **Va en tres tajadas, en este orden:** **A · el tipo del fantasma** (asignarlo al spawnear desde
+  `PHANTASMAGORIA.Types`, networkearlo, comando para forzarlo — mecánico, y desbloquea §5 entero
+  porque las velocidades por tipo ya están en la tabla y `server_speed.lua` ya existe) → **B · la
+  cordura** por jugador, servidor, networkeada, con sus causas e instrumentos → **C · el gatillo**,
+  cordura bajo el `hunt.threshold` del tipo → `phantom_SetHunting( true )`, con su A/B.
+- **Sólo `hunt.threshold` en la tajada 1.** `thresholdLow`/`thresholdHigh` (12 de los 30 tipos) es un
+  rango condicional por tipo (§5.2) y es de después.
+
+⚠ **La premisa de todo esto estuvo rota hasta hoy** — `PHANTASMAGORIA.Types` no existía en runtime
+porque nadie cargaba la carpeta. Arreglado (ver **LO ÚLTIMO** arriba), pero **sin pasada en juego**:
+las dos filas que faltan son *el conteo de la guarda en consola* y *el crucifijo del spawnmenu*, y van
+en la planilla de la cordura.
+
+⚠ **Y hay un bullet vencido que va a confundir: §19.6 dice que falta «la decisión de §19.5 — cuál de
+las tres formas». §19.5 ya decidió** (NEAD no se integra). Corregirlo cuando se abra el bloque.
 
 **Pendiente menor de papeleo:** `veldoors-r1` nunca se llenó como planilla — los mecanismos se
 verificaron por consola, pero el A/B de la fila **12** no se corrió.

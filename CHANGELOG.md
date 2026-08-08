@@ -7,6 +7,56 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-08 (23) — **`lua/phantasmagoria/` no lo cargaba nadie**: cargador escrito, sin pasada en juego
+
+Antes de empezar §19 (la cordura) hacía falta una sola respuesta: *¿existe `PHANTASMAGORIA.Types` en
+runtime?* **No existía.**
+
+GMod auto-ejecuta un conjunto **fijo** de carpetas — `lua/autorun/`, `lua/entities/`, `lua/weapons/`,
+`lua/effects/`, `lua/vgui/` — y `lua/phantasmagoria/` no está en esa lista. Una carpeta propia adentro
+de `lua/` no corre sola. El grep de `include(` y `AddCSLuaFile` sobre **todo** el addon daba dos
+líneas, las dos `AddCSLuaFile()` de las armas.
+
+### Lo que estaba apagado, y uno de los dos no era "datos sin usar"
+
+| | qué era | qué se perdía |
+|---|---|---|
+| `ghost_types.lua` | 30 tipos, con `hunt.threshold` y `speed.base` en los 30 | §19 no se podía **ni empezar**: el disparo del hunt lee el threshold **del tipo** |
+| `prop_data.lua` | ⚠ **comportamiento, no datos** | el hook `PlayerSpawnedProp` que corrige la masa; su propio comentario: *«sin esto, un jugador que saque el crucifijo del Prop Pack desde el spawnmenu se lleva la tonelada»* |
+
+**Esa red de seguridad nunca corrió.**
+
+### ⚠ Por qué no dejó rastro: el consumidor todavía no estaba escrito
+
+El grep de `ApplyPropData` / `PropData` / `Types` fuera de la carpeta da **cero usos**. Una tabla que
+no existe sólo tira error cuando alguien la lee, y nadie la leía todavía. O sea: **el defecto no tenía
+síntoma porque la función que lo hubiera mostrado era justo la que faltaba escribir** — y el síntoma
+iba a aparecer el primer día de §19, disfrazado de *«la cordura no anda»*, a tres archivos de
+distancia de la causa.
+
+*Un archivo que existe no es un archivo que corre, y un `include` que nadie escribió no falla:
+simplemente no pasa nada.* Los dos parsean, los dos están bien escritos, y los dos estaban apagados.
+
+### El cargador
+
+`lua/autorun/phantasmagoria_data.lua`. **Incluye, y nada más**, a propósito: la respuesta a *«¿por qué
+este dato está o no está?»* tiene que ser *«mirá la lista de este archivo»*. Los dos van a los dos
+realms — el HUD de cordura (§19.3) es cliente y necesita nombre y threshold del tipo; el hook de
+`prop_data` ya se guarda solo con `if SERVER`.
+
+⚠ **La guarda de `Initialize` NO puede detectar la falla que acaba de ocurrir**: si este archivo no
+corre, la guarda tampoco. Detecta el otro modo (un rename, un `return` temprano, un error a mitad). Y
+dice **el número**, no un booleano: `Types existe` no distingue 30 tipos de una tabla vacía.
+
+### Medido, y lo que no
+
+Parsea; las dos rutas existen; `ghost_types.lua` define **30** tipos; `PropData` en la línea 39; el
+hook en la 118. **Sin pasada en juego:** nadie vio todavía el conteo de la guarda en una consola de
+verdad, ni volvió a pesar el crucifijo del spawnmenu. Eso son dos filas de planilla y van con el
+bloque de la cordura.
+
+---
+
 ## 2026-08-08 (22) — Ronda 14 CORRIDA: **el alcance CERRADO, 5 de 5** — y el gate tapa una puerta lateral
 
 Las cinco en verde, y la aproximación de la fila 04 salió **mejor de lo que la fila pedía**.
