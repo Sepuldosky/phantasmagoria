@@ -13,34 +13,41 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> **LO ÚLTIMO QUE PASÓ (2026-08-07): la ronda 9 CORRIÓ, marcó 9 de 9 y cuatro lo están — pero
-> encontró la causa del encaje, y no es ninguno de los tres candidatos.**
+> **LO ÚLTIMO QUE PASÓ (2026-08-07): corrieron la 9 y la 10. El encaje está EXPLICADO ENTERO y el
+> arreglo va por la mitad.**
 >
-> ⚠ **El rescate ARRANCA. Corre SIETE veces en 60 s. Y no mueve al bot ni un centímetro.** Siete
-> `RESCATE → CAMINAR` cada 10 s clavados, con `quieto` subiendo monótono de 1,5 a 59,7 s y cinco
-> `la caminata LLEGO` sobre la **misma posición exacta**. Los tres teleports de la sesión movieron
-> **83 u, 8 u y 46 u** — ninguno llega a dos metros. **La raíz es común:** `freedomPos` se elige por
-> **distancia mínima** (`shared.lua:3849`) sobre un navmesh con **1715 áreas parcheadas**, así que el
-> destino nace pegado; y `:3676` declara la caminata terminada con `dist < 150`. *El rescate se
-> anuncia exitoso sin rescatar.* Detalle en «Ronda 9 CORRIDA» más abajo.
+> **La r9 midió que el rescate arranca y no rescata:** siete `RESCATE → CAMINAR` en 60 s, `quieto`
+> subiendo monótono a 59,7 s, cinco `la caminata LLEGO` sobre la misma posición, y teleports de
+> **83, 8 y 46 u**. Causa: `freedomPos` se elige por **distancia mínima** (`:3849`) sobre 1715
+> navareas parcheadas y `:3676` da la caminata por terminada con `dist < 150` — *el destino nacía
+> debajo del umbral con el que lo daban por cumplido.* **La r10 lo confirmó con números:** nacían a
+> 71-133 u, todos bajo 150.
 >
-> **EL ARREGLO YA ESTÁ ESCRITO Y SIN CORRER:** `phantasmagoria_ghost_escapedist` (default **300** =
-> 2×150, y **0 es el control**) reemplaza el destino cuando nace a menos de esa distancia. Planilla
-> [`dev/checks/phantasmagoria-encaje-r10.html`](../dev/checks/phantasmagoria-encaje-r10.html),
-> **8 filas** — el A/B sobre un encaje real, las tres filas de la r9 rehechas, y **un control de que
-> no rompa el caso sano**, porque esto escribe en la tabla `data` de una tarea de la base.
+> **`phantasmagoria_ghost_escapedist` (300, `0` = control) arregló esa mitad:** los destinos van a
+> ~300 u, el bot se mueve 152/155/185 u, y `llego` cayó de 7/7 a 1/6 — el éxito falso desapareció.
 >
-> ⚠ **Y el botón `force` ahora SE NIEGA.** Toma `primero` / `segundo` / `veto` y no gasta el disparo
-> si el mundo no está de ese lado. Sale de que tres filas de la r9 se corrieron fuera de su
-> precondición **con los valores impresos a la vista**: *imprimir la precondición al lado del
-> veredicto no alcanza.*
+> ⚠ **Y ahí apareció el defecto de abajo, que mi predicción daba por resuelto:** con el destino sano
+> a 306 u, **`SE MOVIO 0 u` en 10 s, cinco veces seguidas**. Encajado **no puede caminar**. La única
+> rama que sacaría a un bot inmóvil es el teleport, y `:3868` lo veta mientras te ve.
+> *no puede caminar + no puede teletransportarse = physgun.*
 >
-> **Lo único del mecanismo que sigue sin explicar** es por qué el ciclo dura **10 s** y no un tick;
-> es la fila 05 y el instrumento ya imprime lo que hace falta.
+> **ESCRITO Y SIN CORRER: `phantasmagoria_ghost_stuckbailout` (3, `0` = control)** — tras N caminatas
+> que vencen sin mover al bot, lo teletransportamos nosotros. El gatillo son los dos números que la
+> r10 midió. ⚠ Teletransporta a un fantasma que te está mirando: se ve.
+>
+> **Lo pendiente de medir, en orden:** (1) el A/B del bailout; (2) **la mitad ① que nunca se corrió**
+> —`escapedist 0`—, que además es la única forma de cerrar por qué en la r9 un destino de ~100 u
+> tardaba 10 s en dar `LLEGO` cuando hoy uno de 301 u lo da en 1,4 s; (3) la fila del control de
+> `stepsilent`, que va **cuatro rondas** corriéndose mal y ahora tiene botón propio
+> (`phantasmagoria_ghost_steps control`).
+>
+> ⚠ **Dos arreglos de método que costaron caro:** el botón `force` **se niega** si la precondición de
+> la fila no está (*imprimir la precondición al lado del veredicto no alcanza*), y se **borraron dos
+> líneas predictivas** del reporte que la r10 refutó en su propia salida — una imprimía un ritmo
+> «neto» **negativo**.
 >
 > **El salto queda descartado como causa, con número:** las alturas pedidas fueron 60, 60, 12, 67,9,
-> 67,9 y 32. El tope es 245 y **nadie pide 245**. La hipótesis del autor era razonable y el
-> instrumento la refuta.
+> 67,9 y 32. El tope es 245 y **nadie pide 245**.
 >
 > ⚠ **Y la evidencia de que el rescate estaba corriendo no servía como evidencia.** Era *«aparece en
 > la lista de 32 tareas de `phantasmagoria_ghost_where`»*, y esa lista sale de `m_TaskList`, que es el
@@ -179,6 +186,91 @@ referencia:
 llevan `<code>`/`<strong>`, así que los siete títulos se leían literales. La corrección anterior
 había arreglado el criterio y se olvidó del encabezado. Arreglado, con `plain()` para que el
 reporte que se pega en el chat no salga con tags.
+
+---
+
+## Ronda 10 CORRIDA (2026-08-07) — el arreglo anduvo, **y destapó el defecto de abajo**
+
+**Marcó 8 de 8. Cuatro lo están, una es la que cierra el arco y dos son *Sin correr*.**
+
+### El arreglo hizo exactamente lo que prometía
+
+`destinos cortos vistos 8 · corregidos 8 · sin reemplazo 0`, y **los destinos nacían a 71, 88, 96,
+97, 99, 100, 104, 111, 116 y 133 u** — todos por debajo del umbral de 150 con el que `:3676` los daba
+por cumplidos. *La premisa de la r9 era una inferencia y ahora está medida.* Corregidos a ~300 u, el
+bot **se movió**: `SE MOVIO 152 u en 1,4 s`, `155 u en 0,8 s`, `185 u en 4,7 s`. Y `llego` cayó de
+**7 de 7** a **1 de 6**: los demás dicen `se venció`, que es la verdad. *El éxito falso desapareció.*
+
+### ⚠ Y mi predicción del pie de la planilla quedó REFUTADA
+
+Decía: *«la apuesta es que arreglando la caminata el bot se despega y nunca se llega a la rama del
+teleport»*. Con el destino ya sano a **306 u**, el autor lo dejó encajado y salió esto **cinco veces
+seguidas**, con la misma posición hasta el sexto decimal:
+
+```
+759.8  DESTINO CORREGIDO  100 u -> 306 u
+769.8  la caminata SE VENCIO ( 10 s )   SE MOVIO 0 u   el destino estaba a 306 u
+771.9  DESTINO CORREGIDO  100 u -> 306 u
+781.8  la caminata SE VENCIO ( 10 s )   SE MOVIO 0 u   ...
+```
+
+**`SE MOVIO 0 u` en 10 s con un destino sano.** El defecto de abajo no es adónde lo manda: es que
+**encajado no puede caminar**, y la caminata no es un rescate para ese caso por construcción. La
+única rama que sacaría a un bot que no se puede mover es el **teleport**, y `:3868` la prohíbe
+mientras `IsSeeEnemy` sea true — que es exactamente la situación, porque se encaja saltando *hacia*
+el jugador.
+
+> **no puede caminar + no puede teletransportarse = hay que sacarlo con el physgun.**
+> Las dos mitades juntas dan el síntoma tal como el autor lo reportó. Y el criterio de FALLA de la
+> fila 04 lo tenía escrito de antemano: *«`SE MOVIO 0 u` con el destino ya corregido separa "el
+> destino era malo" de "no puede caminar", y son arreglos distintos»*. Eran los dos.
+
+**Entró `phantasmagoria_ghost_stuckbailout` (default 3, `0` = control):** tras N caminatas seguidas
+que vencen habiéndose movido menos que el radio con el que la propia base define «quieto» (15 u), lo
+teletransportamos nosotros. *El gatillo no es una lectura: son los dos números que esta ronda midió.*
+⚠ Teletransporta a un fantasma que te está mirando, y eso se ve — es un cambio de comportamiento, no
+un arreglo invisible.
+
+### La fila 04 no fue un A/B: nunca se corrió la mitad ①
+
+Las dos sesiones se corrieron con `escapedist 300`. **Sin la mitad rota no hay A/B**, y la fila lo
+decía. Lo que sí quedó es un antes/después contra la r9, que vale pero no es lo mismo.
+
+### La fila 05, contestada acá porque el autor la dejó abierta
+
+**PASA para el caso con destino ≥ 150, y con evidencia directa:** `RESCATE → CAMINAR … destino a
+306 u` y exactamente 10,0 s después `la caminata SE VENCIO ( 10 s )`. **El ciclo de 10 s es
+`extremeUnstuckingUntil`** (`:3913`), no un `SUCCESS` tardío — que era la segunda de las dos
+explicaciones escritas en el criterio.
+
+**Y para el caso con destino < 150 sigue sin explicarse.** Con el arreglo puesto, un destino a 301 u
+del que el bot recorre 152 u da `LLEGO` a **1,4 s**, o sea que `:3674` reacciona rápido cuando
+corresponde. Entonces en la r9, con destinos de ~100 u, el `LLEGO` tendría que haber sido casi
+inmediato y tardaba 10 s. **Los dos conjuntos de datos no se reconcilian**, y la medición que falta
+—el par (`destino a N u`, tiempo hasta el `LLEGO`) con un destino corto— se provoca con
+`escapedist 0`, que es justo la mitad que no se corrió. *No se cierra por lectura.*
+
+### Dos criterios míos que la corrida refutó, los dos en su propia salida
+
+- **`esperado +1 … menos 2 del trimming = -1 neto`.** Un neto **negativo**, que significaría que el
+  array nunca crece. Dos errores: el trimming de `:3774-3777` corre **sólo** dentro del
+  `if #historicPositions > size`, así que por debajo del umbral no resta nada; y por arriba tampoco
+  resta 2 en régimen, porque saca 2 y al pase siguiente inserta 1, de modo que **oscila**. No hay un
+  neto que sea un número. Y el `faltan ~81 s` de al lado usaba mi `noNav` contra el de la base — *la
+  misma fracción de dos relojes que la r9 ya había refutado, escrita otra vez en la línea de al
+  lado.* **Las dos líneas se borraron**: la medición (`último salto MEDIDO`) ya estaba al lado.
+- **«`tareas` tiene que seguir diciendo 8».** Salió 7, 8 y 8, con `movement_duelenemy_near` y
+  `movement_inertia` entrando y saliendo. **El número de tareas activas no es constante por diseño**,
+  y el criterio lo trataba como invariante.
+
+### La fila 08, por cuarta ronda
+
+`phantasmagoria_ghost_flag pasos 1` seguido de `pasos auto`, sin leer el reporte ni enganchar el
+oyente. **Cuatro modos de falla distintos sobre la misma fila** —en la r8 faltó el `hunt 1`, en la r8b
+la convar nunca pasó por 0, en la r9 el flag no se puso, en la r10 se puso y se sacó— *no son cuatro
+descuidos: son una receta de cinco pasos demasiado larga para ejecutarla a mano.* Entró
+**`phantasmagoria_ghost_steps control`**, que corre los cinco pasos, mide, **escribe el veredicto
+binario** y devuelve el estado con `control off`.
 
 ---
 

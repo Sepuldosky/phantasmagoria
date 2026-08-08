@@ -7,6 +7,59 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-07 (17) — Ronda 10 CORRIDA: el arreglo anduvo, **y destapó el defecto de abajo**
+
+Marcó 8 de 8. Cuatro lo están, una es la que cierra el arco y dos son *Sin correr*.
+
+### El arreglo hizo lo que prometía, con número
+
+Los destinos **nacían a 71, 88, 96, 97, 99, 100, 104, 111, 116 y 133 u** — todos bajo el umbral de
+150 de `:3676`. *La premisa de la r9 era una inferencia y ahora está medida.* Corregidos a ~300 u el
+bot **se movió**: `SE MOVIO 152 u en 1,4 s`, `155 u en 0,8 s`, `185 u en 4,7 s`, con
+`cortos 8 · corregidos 8 · sin reemplazo 0`. Y `llego` cayó de **7 de 7** a **1 de 6**: el resto dice
+`se venció`, que es la verdad. **El éxito falso desapareció.**
+
+### ⚠ Y la predicción del pie de la planilla quedó refutada
+
+Decía *«arreglando la caminata el bot se despega y nunca se llega a la rama del teleport»*. Con el
+destino sano a **306 u**, cinco `la caminata SE VENCIO ( 10 s )` seguidas con **`SE MOVIO 0 u`** y la
+misma posición hasta el sexto decimal. **Encajado, el bot no puede caminar** — la caminata no es un
+rescate para ese caso por construcción. La única rama que sacaría a un bot inmóvil es el teleport, y
+`:3868` lo veta mientras `IsSeeEnemy` sea true, que es exactamente la situación porque se encaja
+saltando *hacia* el jugador. *no puede caminar + no puede teletransportarse = physgun.*
+
+Entró **`phantasmagoria_ghost_stuckbailout`** (default 3, `0` = control): tras N caminatas seguidas
+que vencen habiéndose movido menos que el radio con el que la propia base define «quieto» (15 u), lo
+teletransportamos nosotros con el helper de la base. **El gatillo no es una lectura: son los dos
+números que esta ronda midió.** ⚠ Teletransporta a un fantasma que te está mirando: se ve.
+
+### La fila 05, contestada con los datos de la 04
+
+**El ciclo de 10 s es `extremeUnstuckingUntil`** (`:3913`), medido directo: `destino a 306 u` y
+exactamente 10,0 s después `SE VENCIO ( 10 s )`. **Pero el caso con destino < 150 sigue sin
+explicarse:** hoy un destino a 301 u del que el bot recorre 152 u da `LLEGO` a **1,4 s**, así que
+`:3674` reacciona rápido — y en la r9, con ~100 u, tardaba 10 s. Los dos conjuntos no se reconcilian
+y la medición que falta se provoca con `escapedist 0`, que es la mitad ① que nunca se corrió.
+
+### Dos criterios míos refutados en su propia salida
+
+- **`esperado … = -1 neto`.** Un ritmo **negativo**. El trimming de `:3774-3777` corre sólo dentro del
+  `if #historicPositions > size`, y por arriba tampoco resta 2 en régimen: saca 2 y al pase siguiente
+  inserta 1, o sea que **oscila**. No hay un neto que sea un número. Y el `faltan ~81 s` de al lado
+  usaba mi `noNav` contra el de la base: la misma fracción de dos relojes que la r9 ya había
+  refutado, **escrita otra vez en la línea de al lado**. Las dos se borraron.
+- **«`tareas` tiene que seguir diciendo 8».** Salió 7, 8 y 8. El número de tareas activas **no es
+  constante por diseño**.
+
+### La fila del control de `stepsilent`, por cuarta ronda
+
+Cuatro modos de falla distintos sobre la misma fila —falta el `hunt 1`, la convar nunca pasa por 0,
+el flag no se pone, el flag se pone y se saca— *no son cuatro descuidos: son una receta de cinco
+pasos demasiado larga para ejecutarla a mano.* Entró **`phantasmagoria_ghost_steps control`**, que
+corre los cinco, mide, **escribe el veredicto binario** y devuelve el estado con `control off`.
+
+---
+
 ## 2026-08-07 (16) — Ronda 9 CORRIDA: **el rescate se anuncia exitoso sin rescatar**
 
 Planilla `dev/checks/phantasmagoria-encaje-r9.html` corrida por el autor. **Marcó 9 de 9 y cuatro lo

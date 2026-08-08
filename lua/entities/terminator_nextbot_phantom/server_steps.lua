@@ -697,6 +697,127 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_steps", function( ply, _, args 
     end
 
     ---------------------------------------------------------------------------
+    -- EL BOTON DE LA FILA QUE SE CORRIO MAL CUATRO RONDAS SEGUIDAS
+    ---------------------------------------------------------------------------
+    -- La fila es "que stepsilent 0 le gane a un flag en 1", y es la UNICA que
+    -- convierte al 0 en un control: si el estado 0 no le gana a un flag que dice
+    -- que SI, no controla nada. Se corrio mal en la r8, la r8b, la r9 y la r10, y
+    -- cada vez por un paso distinto de una receta de cinco:
+    --
+    --   r8    la precondicion pedia hunt 1 y no estaba puesto
+    --   r8b   las convars arrancaron en 2 y siguieron en 1, nunca pasaron por 0
+    --   r9    el flag no se puso ( `override nil` en la propia salida )
+    --   r10   se puso el flag y se saco, sin leer el reporte ni enganchar el oyente
+    --
+    -- *Cuatro modos de falla distintos sobre la misma fila no son cuatro
+    -- descuidos: son una receta demasiado larga para ejecutarla a mano.* La
+    -- respuesta que ya funciono dos veces en este proyecto es un boton -- el
+    -- `listen` y el `jump` de la r8b -- asi que este corre los cinco pasos, mide,
+    -- imprime el veredicto BINARIO y devuelve todo a donde estaba.
+    --
+    -- Y devuelve el estado a proposito: un boton de prueba que deja el servidor
+    -- movido hace que la fila SIGUIENTE se corra sobre otra configuracion, que es
+    -- como se torcieron tres filas de la ronda 8.
+    if sub == "control" and args[ 2 ] == "off" then
+        local v = PHANTASMAGORIA.StepControlVuelta
+
+        if not v then
+            say( "[Phantasmagoria] no hay nada que devolver: `control` no se corrio en esta sesion." )
+            return
+
+        end
+
+        RunConsoleCommand( "phantasmagoria_ghost_stepsilent", tostring( v.convar ) )
+        PHANTASMAGORIA.FlagOverrides[ "phantom_SilentSteps" ] = v.flag
+
+        PHANTASMAGORIA.EachGhost( function( ghost )
+            local antes = v.hunt[ ghost:GetCreationID() ]
+            if antes ~= nil then ghost:phantom_SetHunting( antes ) end
+
+        end )
+
+        PHANTASMAGORIA.StepControlVuelta = nil
+
+        say( "[Phantasmagoria] devuelto: stepsilent " .. v.convar ..
+            " · flag " .. tostring( v.flag ) .. " · hunt como estaba." )
+        return
+
+    end
+
+    if sub == "control" then
+        local vueltaConvar = cvSilentSteps:GetInt()
+        local vueltaFlag   = PHANTASMAGORIA.FlagOverrides[ "phantom_SilentSteps" ]
+        local vueltaHunt   = {}
+
+        PHANTASMAGORIA.EachGhost( function( ghost )
+            vueltaHunt[ ghost:GetCreationID() ] = ghost.phantom_Hunting == true
+            ghost:phantom_SetHunting( true )
+
+        end )
+
+        RunConsoleCommand( "phantasmagoria_ghost_stepsilent", "0" )
+        PHANTASMAGORIA.FlagOverrides[ "phantom_SilentSteps" ] = true
+
+        say( "[Phantasmagoria] CONTROL de stepsilent: los cinco pasos, corridos por el comando." )
+        say( "    hunt -> SI · stepsilent -> 0 · flag pasos -> 1   ( se devuelve todo al terminar )" )
+
+        -- La convar tarda un frame en tomar el valor: RunConsoleCommand encola.
+        timer.Simple( 0.1, function()
+            local fin = PHANTASMAGORIA.MakeSay( ply )
+
+            fin( "    convar leida  stepsilent " .. cvSilentSteps:GetInt() ..
+                ( cvSilentSteps:GetInt() == 0 and "" or "   <- NO llego a 0: el resto de esta fila no vale" ) )
+
+            local visto = false
+
+            PHANTASMAGORIA.EachGhost( function( ghost )
+                local callada, motivo = ghost:phantom_StepsSilenced()
+
+                visto = true
+
+                fin( "    #" .. ghost:EntIndex() .. "  campo " .. tostring( ghost.phantom_SilentSteps ) ..
+                    " · override " .. tostring( PHANTASMAGORIA.FlagOverrides[ "phantom_SilentSteps" ] ) ..
+                    " · cazando " .. ( ghost.phantom_Hunting and "SI" or "NO" ) )
+                fin( "    #" .. ghost:EntIndex() .. "  ahora mismo " .. ( callada and "CALLADA" or "SUENA" ) )
+                fin( "        la decidio  " .. motivo )
+
+                -- EL VEREDICTO, BINARIO Y ESCRITO POR EL COMANDO. Es la regla 6
+                -- de la plantilla: si la conclusion sale de comparar dos cosas,
+                -- la comparacion la hace el comando -- un criterio que exige
+                -- cruzar tres lineas a mano invita a un veredicto inferido, y
+                -- esta fila ya se cerro cuatro veces por inferencia.
+                if callada then
+                    fin( "        >>> FALLA: el flag en 1 le GANO a la convar en 0, o hay otra capa callando." )
+                    fin( "            El estado 0 no es un control. Leer el motivo de arriba: nombra la capa que gano." )
+
+                else
+                    fin( "        >>> PASA: la convar en 0 le gano a un flag que dice que SI. ESO es un control." )
+
+                end
+            end )
+
+            if not visto then
+                fin( "    no hay ningun fantasma vivo: la fila es Sin correr." )
+
+            end
+
+            fin( "    Ahora: caminar cerca y correr `phantasmagoria_ghost_steps listen 15` para la otra mitad." )
+            fin( "    Cuando termines: `phantasmagoria_ghost_steps control off` devuelve todo." )
+
+        end )
+
+        -- El estado a devolver se guarda en la mesa compartida y NO en un upvalue
+        -- de este bloque: si el autor tipea el comando dos veces, el segundo
+        -- guardaria como "original" el estado que dejo el primero.
+        PHANTASMAGORIA.StepControlVuelta = PHANTASMAGORIA.StepControlVuelta or {
+            convar = vueltaConvar, flag = vueltaFlag, hunt = vueltaHunt,
+        }
+
+        return
+
+    end
+
+    ---------------------------------------------------------------------------
     -- EL OTRO BOTON: la fuga de la caida letal
     ---------------------------------------------------------------------------
     -- La rama que este archivo tapa ( ver el override de LethalFallDamage ) se
@@ -808,4 +929,5 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_steps", function( ply, _, args 
 
 end, "Reporte de las pisadas: quien decidio el silencio, cuantas se perdieron antes del gancho, y la bitacora de transiciones. " ..
     "'reset' limpia · 'listen [seg]' engancha un consumidor de prueba al hook y dice que recibio · " ..
-    "'jump' fuerza un salto ( la fila 06 ) · 'falltest' MATA al fantasma para probar la caida letal." )
+    "'jump' fuerza un salto · 'control' corre la fila del control de stepsilent ENTERA y escribe el veredicto ( 'control off' devuelve todo ) · " ..
+    "'falltest' MATA al fantasma para probar la caida letal." )

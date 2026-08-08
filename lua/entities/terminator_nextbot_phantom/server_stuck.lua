@@ -257,6 +257,9 @@ local function stuckStats( ghost )
         -- dice que el destino estaba bien, el otro que estaba mal y no habia
         -- adonde mandarlo. Un solo contador confundiria las dos cosas.
         corregidos = 0, sinReemplazo = 0, cortosVistos = 0,
+        -- El bailout. `bailoutSinDonde` es su propio `sinReemplazo`: no hay
+        -- adonde mandarlo, que es distinto de que no haya hecho falta.
+        bailouts = 0, bailoutSinDonde = 0,
     }
 
     return ghost.phantom_stuckStats
@@ -338,7 +341,10 @@ function ENT:phantom_StuckState()
 
     s.size    = s.noNav and ( B.SIZE / B.SIZE_DIV ) or B.SIZE
     s.umbral  = threshold( s.size )
-    s.porPase = ( s.noNav and B.ADD_NONAV or B.ADD ) * ( s.unstuck and B.ADD_UNSTUCK or 1 )
+    -- `porPase` y `faltan` VIVIAN ACA Y SE FUERON con la linea que los imprimia:
+    -- eran una prediccion del ritmo de insercion que la ronda 10 refuto en su
+    -- propia salida ( ver el comentario del reporte ). Un campo que se calcula y
+    -- nadie lee parece un registro autoritativo y no lo es.
 
     -- La nav mas lejana que mira el "instant unstuck check" de :3807. Se imprime
     -- porque es la otra puerta rapida y pide lo mismo ( noNav ), o sea que
@@ -354,7 +360,6 @@ function ENT:phantom_StuckState()
     s.hist = istable( hist ) and #hist or 0
     s.navs = istable( navs ) and #navs or 0
 
-    s.faltan = math.max( s.umbral - s.hist, 0 ) / math.max( s.porPase, 1 ) * B.CACHE_SECS
     s.evalua = s.hist >= s.umbral
 
     -- RECALCULADO, y sobre los arrays de la BASE. `stuck` y `sortaStuck` son
@@ -522,6 +527,48 @@ end
 local cvEscapeDist = CreateConVar( "phantasmagoria_ghost_escapedist", tostring( B.ARRIVED_DIST * 2 ), FCVAR_ARCHIVE,
     "Distancia MINIMA a la que se corrige el destino del rescate de la base. 0 = sin corregir ( control: el comportamiento medido en la ronda 9 ). " ..
     "El default es el doble del umbral con el que shared.lua:3676 da la caminata por terminada.", 0, 3000 )
+
+---------------------------------------------------------------------------
+-- EL DEFECTO DE ABAJO, QUE EL ARREGLO DE ARRIBA DESTAPO
+---------------------------------------------------------------------------
+-- LA RONDA 10 REFUTO UNA PREDICCION MIA, Y ESTABA ESCRITA COMO PREDICCION. El
+-- pie de la planilla decia: "la apuesta es que arreglando la caminata el bot se
+-- despega y nunca se llega a la rama del teleport". Falso.
+--
+-- Con el destino ya corregido a 306 u, el autor lo dejo encajado y la bitacora
+-- dio esto CINCO veces seguidas, con la misma posicion hasta el sexto decimal:
+--
+--   759.8  DESTINO CORREGIDO  100 u -> 306 u
+--   769.8  la caminata SE VENCIO ( 10 s )   SE MOVIO 0 u   el destino estaba a 306 u
+--   771.9  DESTINO CORREGIDO  100 u -> 306 u
+--   781.8  la caminata SE VENCIO ( 10 s )   SE MOVIO 0 u   ...
+--
+-- *SE MOVIO 0 u en 10 s con un destino sano.* El arreglo de arriba hizo lo que
+-- prometia -- `llego` cayo de 7/7 a 1/6 y el resto dice `se vencio`, que es la
+-- verdad -- y con eso quedo a la vista lo que aquel exito falso tapaba: **el bot
+-- encajado no puede caminar**. No es que el rescate lo mande mal: es que la
+-- caminata no es un rescate para este caso, por construccion.
+--
+-- Y LA OTRA MITAD ES EL VETO. La unica rama que saca a un bot que no se puede
+-- mover es el teleport, y :3868 la prohibe mientras `IsSeeEnemy` sea true --
+-- que es exactamente la situacion del autor, porque se encaja saltando HACIA el.
+-- Las dos mitades juntas dan el sintoma tal como lo reporto:
+--
+--     no puede caminar  +  no puede teletransportarse  =  hay que sacarlo con
+--     el physgun.
+--
+-- POR ESO ESTE BAILOUT EXISTE, y su gatillo NO es una lectura: son los dos
+-- numeros que la ronda 10 midio. N caminatas seguidas que vencen habiendose
+-- movido menos que el radio con el que la propia base define "quieto".
+--
+-- ⚠ TELETRANSPORTA A UN FANTASMA QUE TE ESTA MIRANDO, y eso se ve. Es un cambio
+-- de comportamiento, no un arreglo invisible: el default es 3 porque la
+-- alternativa medida es que el jugador lo saque con el physgun, y 0 lo apaga
+-- entero para el A/B.
+local cvBailout = CreateConVar( "phantasmagoria_ghost_stuckbailout", "3", FCVAR_ARCHIVE,
+    "Caminatas de rescate seguidas que pueden vencer SIN MOVER al bot antes de que lo teletransportemos nosotros. " ..
+    "0 = nunca ( control: el comportamiento medido en la ronda 10, donde el bot quedo trabado para siempre ). " ..
+    "Existe porque con el bot encajado la caminata no lo mueve y el teleport de la base esta vetado por IsSeeEnemy ( shared.lua:3868 ).", 0, 20 )
 
 ---------------------------------------------------------------------------
 -- La prediccion de la rama, escrita ANTES de correr
@@ -807,12 +854,62 @@ local function corregirDestino( self, myTbl, data )
 
 end
 
+---------------------------------------------------------------------------
+-- EL BAILOUT, ejecutado fuera del StartTask que lo marco
+---------------------------------------------------------------------------
+-- Hace lo mismo que la rama de teleport de la base ( :3875-3878 ) porque es lo
+-- unico que se midio que funcione con el bot encajado: el `force` de la ronda 9
+-- lo despego dos veces. No se reimplementa el teleport -- se llama al helper de
+-- la base, que ademas reinicia la corrutina, frena el movimiento y limpia el
+-- stuck del locomotor. Reescribir eso seria heredar sus bugs futuros sin
+-- ninguna ventaja.
+local function hacerBailout( self, myTbl )
+    if not myTbl.phantom_bailoutPendiente then return end
+
+    myTbl.phantom_bailoutPendiente = nil
+    myTbl.phantom_bailoutSeguidas  = 0
+
+    local minDist = math.max( cvEscapeDist:GetInt(), B.ARRIVED_DIST )
+    local destino, total, pasaron = buscarEscape( self, minDist )
+
+    local st = stuckStats( self )
+
+    if not destino then
+        -- NO SE INVENTA UN PUNTO, por lo mismo que en corregirDestino: un
+        -- destino inventado se veria igual que uno bueno, y este teletransporta
+        -- de verdad.
+        st.bailoutSinDonde = st.bailoutSinDonde + 1
+
+        anotar( self, "BAILOUT ABORTADO: no hay ninguna navarea a mas de " .. minDist ..
+            " u   ( " .. total .. " miradas, " .. pasaron .. " pasaron )" )
+        return
+
+    end
+
+    local antes = self:GetPos()
+
+    terminator_Extras.TeleportTermTo( self, destino )
+    self:InvalidatePath( "phantasmagoria: bailout, la caminata no lo movia" )
+
+    st.bailouts = st.bailouts + 1
+
+    -- El dato que importa es CUANTO SE MOVIO, no que se llamo: el teleport de la
+    -- base movia 8 u y se anunciaba igual.
+    anotar( self, "BAILOUT   se movio " .. math.Round( self:GetPos():Distance( antes ) ) .. " u" ..
+        "   ( despues de " .. cvBailout:GetInt() .. " caminatas seguidas sin moverse )" ..
+        "   ve " .. ( myTbl.IsSeeEnemy and "SI" or "NO" ) ..
+        "   <- la base NO habria podido: :3868 lo veta mientras te ve" )
+
+end
+
 function ENT:AdditionalThink( myTbl )
     myTbl = myTbl or self:GetTable()
 
     local data = myTbl.m_ActiveTasks and myTbl.m_ActiveTasks[ TASK ]
 
     if data then corregirDestino( self, myTbl, data ) end
+
+    hacerBailout( self, myTbl )
 
     poll( self, myTbl )
 
@@ -902,6 +999,38 @@ function ENT:StartTask( task, data, reason )
 
                 myTbl.phantom_stuckWalkTo = nil
 
+                ---------------------------------------------------------------
+                -- EL GATILLO DEL BAILOUT, y sale de la medicion y no de leer
+                ---------------------------------------------------------------
+                -- La caminata termino. Si se movio menos que el radio con el que
+                -- la BASE define "quieto" ( :3792 ), esta caminata no rescato
+                -- nada. Se cuentan las seguidas: una sola puede ser mala suerte,
+                -- cinco con la misma posicion hasta el sexto decimal no.
+                --
+                -- El contador se resetea con cualquier caminata que SI mueva, asi
+                -- que un bot que se destraba solo nunca llega al umbral.
+                local movidos = desde and s.pos:Distance( desde ) or math.huge
+
+                if movidos < B.STUCK_RADIUS then
+                    myTbl.phantom_bailoutSeguidas = ( myTbl.phantom_bailoutSeguidas or 0 ) + 1
+
+                else
+                    myTbl.phantom_bailoutSeguidas = 0
+
+                end
+
+                local tope = cvBailout:GetInt()
+
+                -- Se MARCA y no se ejecuta aca. Estamos adentro de StartTask, o
+                -- sea en medio del KillAllTasksWith de la base y dentro de su
+                -- corrutina; TeleportTermTo llama RestartMotionCoroutine, y
+                -- reiniciar la corrutina desde adentro de la corrutina es pedirle
+                -- al motor que se pise a si mismo. El AdditionalThink del pase
+                -- siguiente lo ejecuta con el mismo dato.
+                if tope > 0 and myTbl.phantom_bailoutSeguidas >= tope then
+                    myTbl.phantom_bailoutPendiente = true
+
+                end
             end
 
             anotar( self, hit.texto .. "   ve " .. ( s.veEnemigo and "SI" or "NO" ) ..
@@ -1034,18 +1163,30 @@ local function lineas( ghost, say )
         ( salto and ( "   ultimo salto MEDIDO " .. ( salto > 0 and "+" or "" ) .. salto ..
             " hace " .. string.format( "%.1f", CurTime() - ( saltoAt or CurTime() ) ) .. " s" ) or "   ( todavia sin dos muestras )" ) )
 
-    -- El umbral y la prediccion van SEPARADOS y etiquetados como tales. Y el
-    -- neto no es doAddCount: el trimming de :3774-3777 saca DOS por pase una vez
-    -- superado el umbral, asi que lo esperable es `doAddCount - 2` -- que es de
-    -- donde salio el +6 de la ronda 9 ( 4 por noNav x 2 por isUnstucking, menos
-    -- 2 ). El criterio de aquella planilla decia "de a 1 o de a 4" y ninguno de
-    -- los dos podia aparecer nunca.
+    -- ⚠ ACA HABIA UNA SEGUNDA PREDICCION Y LA RONDA 10 TAMBIEN LA REFUTO, EN LA
+    -- MISMA SALIDA EN LA QUE APARECIO. Imprimia
+    --
+    --     esperado  +1 por pase de la base, menos 2 del trimming = -1 neto
+    --               -> faltan ~81 s para que PUEDA evaluar
+    --
+    -- Un neto NEGATIVO, que significaria que el array nunca crece. Dos errores
+    -- mios encima: el trimming de :3774-3777 corre SOLO dentro del
+    -- `if #historicPositions > size`, asi que por debajo del umbral no resta
+    -- nada; y arriba del umbral tampoco resta 2 en regimen, porque saca 2 y al
+    -- pase siguiente inserta 1, de modo que el array OSCILA en vez de crecer.
+    -- No hay un "neto" que sea un numero.
+    --
+    -- Y el `faltan ~N s` decia 81 mientras el bot evaluaba a los pocos segundos,
+    -- porque ese calculo usa MI `noNav` y la base usaba el de SU pase: la misma
+    -- fraccion de dos relojes que la ronda 9 ya habia refutado, escrita otra vez
+    -- en la linea de al lado.
+    --
+    -- *Predecir un numero que se puede medir es regalar un criterio que nunca se
+    -- cumple.* Se borro la prediccion; queda el umbral, etiquetado como el de
+    -- esta muestra, y la medicion de arriba.
     say( "    umbral        " .. s.umbral .. " EN ESTA MUESTRA" ..
-        "   ( 11 con noNav · 81 sin el, y la base usa el de SU pase, no el de esta linea )" )
-
-    say( "    esperado      +" .. s.porPase .. " por pase de la base, menos 2 del trimming = " ..
-        ( s.porPase - 2 ) .. " neto" ..
-        "   -> " .. ( s.evalua and "YA EVALUA" or ( "faltan ~" .. math.Round( s.faltan ) .. " s para que PUEDA evaluar" ) ) )
+        "   ( 11 con noNav · 81 sin el, y la base usa el de SU pase, no el de esta linea )" ..
+        ( s.evalua and "   -> YA EVALUA" or "" ) )
 
     say( "    noNav         " .. ( s.noNav and "SI" or "NO" ) ..
         "   navarea " .. ( s.nav and ( "#" .. s.nav:GetID() .. " con " .. s.navVecin .. " vecinas" ) or "NINGUNA a " .. B.NAV_RADIUS .. " u" ) ..
@@ -1111,6 +1252,17 @@ local function lineas( ghost, say )
     say( "                  destinos cortos vistos " .. st.cortosVistos ..
         " · corregidos " .. st.corregidos ..
         " · sin reemplazo " .. st.sinReemplazo )
+
+    -- EL BAILOUT, con su contador de seguidas EN VIVO. El contador es la mitad
+    -- que dice si el gatillo esta cerca; sin el, un `bailouts 0` no distingue
+    -- "nunca hizo falta" de "hizo falta y falta una caminata mas".
+    say( "    el bailout    stuckbailout " .. cvBailout:GetInt() ..
+        ( cvBailout:GetInt() <= 0 and "  ( 0 = NUNCA, el comportamiento de la ronda 10 )" or
+            "  ( caminatas seguidas sin moverse que se toleran )" ) ..
+        "   llevamos " .. ( ghost.phantom_bailoutSeguidas or 0 ) )
+
+    say( "                  disparados " .. st.bailouts ..
+        " · abortados por no haber adonde " .. st.bailoutSinDonde )
 
 end
 
