@@ -792,7 +792,22 @@ end
 -- ( shared.lua:3011, con el modelo en :2987 y el FOV en :3005 ), por eso es
 -- el lugar correcto para pisar defaults. La implementacion de la base esta
 -- vacia ( shared.lua:2909-2910 ): no hay que encadenar al BaseClass.
+-- ⚠ UN EntIndex NO ES UNA IDENTIDAD ESTABLE, y eso dejo a medio medir una fila
+-- de la ronda 15. GMod RECICLA los indices: la 04 leyo `#52 ... Obake` y
+-- despues `#52 ... SIN TIPO`, y por la salida sola no se puede saber si el
+-- fantasma perdio el tipo -- que seria un defecto grave -- o si es OTRO fantasma
+-- que heredo el numero. Las dos cosas se ven exactamente igual.
+--
+-- El serial no se recicla nunca y la edad separa lo que un indice no puede.
+-- Cuesta dos campos y convierte una lectura ambigua en una decidible.
+PHANTASMAGORIA.SpawnSerial = PHANTASMAGORIA.SpawnSerial or 0
+
 function ENT:AdditionalInitialize()
+    PHANTASMAGORIA.SpawnSerial = PHANTASMAGORIA.SpawnSerial + 1
+
+    self.phantom_Serial  = PHANTASMAGORIA.SpawnSerial
+    self.phantom_BornAt  = CurTime()
+
     -- Trampa 2 (Referencia 4.3): Term_FOV solo NO alcanza. El comentario de
     -- shared.lua:152 dice que poner un numero ignora la convar
     -- termhunter_fovoverride, y miente: el callback de la convar
@@ -849,6 +864,7 @@ function ENT:AdditionalInitialize()
     end
 
     ghostPrint( "spawn #", self:EntIndex(),
+        "  serie ", self.phantom_Serial,
         "  modelo ", tostring( self:GetModel() ),
         "  skin ", self:GetSkin(),
         "  pos ", tostring( self:GetPos() ),
@@ -1100,9 +1116,30 @@ local function lookLines( ghost, say )
     elseif nuestra and nuestra <= 0.2 then
         quienPide = "la escribimos NOSOTROS ( facewalk ): = mirada vs marcha, no es dato aparte"
 
-    elseif quieta <= 1 then
+    -- ⚠ ESTA RAMA NOMBRABA A UN ESCRITOR SIN COMPROBAR SU PRECONDICION, y salio
+    -- de una fila VERDE de la ronda 15. Decia "la escribe LA BASE ( shootAt
+    -- sobre el enemigo )" con `enemigo ninguno` impreso DOS LINEAS MAS ARRIBA,
+    -- en la misma pantalla, y el bot `quieto ( 0 u/s )`.
+    --
+    -- Las dos mitades son falsas ahi: `shootAt` pide `IsValid( GetEnemy )` -- sin
+    -- enemigo la cadena de shooting_handler se sale antes ( shared.lua:3492-3506 )
+    -- --, y el facewalk se sale por debajo de 30 u/s. O sea que con el bot
+    -- frenado y sin enemigo NO HAY NINGUN ESCRITOR: el valor simplemente quedo
+    -- del ultimo que corrio, y "cambio hace 0.8 s" es cuando el bot venia
+    -- caminando y freno.
+    --
+    -- Es la MISMA familia de defecto que costo la ronda 12 -- una etiqueta que
+    -- deduce quien escribio en vez de medirlo -- reaparecida en la rama de al
+    -- lado. *Una etiqueta que nombra a un escritor tiene que preguntar por la
+    -- precondicion de ESE escritor, aunque el dato este impreso al lado.*
+    elseif quieta <= 1 and IsValid( ghost:GetEnemy() ) then
         quienPide = "la escribe LA BASE ( shootAt sobre el enemigo ), cambio hace " ..
             string.format( "%.1f", quieta ) .. " s"
+
+    elseif quieta <= 1 then
+        quienPide = "cambio hace " .. string.format( "%.1f", quieta ) ..
+            " s y NO fue ninguno de los dos: sin enemigo la base no mira" ..
+            ( ghost:GetCurrentSpeed() < FACEWALK_MIN_SPEED and " y el facewalk se sale por debajo de 30 u/s ( quedo del ultimo que corrio )" or "" )
 
     elseif ghost:GetCurrentSpeed() >= FACEWALK_MIN_SPEED then
         quienPide = "NO la escribimos nosotros y no cambia hace " .. string.format( "%.1f", quieta ) ..
@@ -2302,7 +2339,12 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_where", function( ply )
 
         end
 
-        say( "#" .. ghost:EntIndex() .. "  " .. ghost:GetClass() )
+        -- serie + edad, porque el EntIndex se recicla: ver el comentario de
+        -- AdditionalInitialize. Sin esto, "#52 tenia tipo y ahora no" no
+        -- distingue un fantasma que perdio el tipo de otro que heredo el numero.
+        say( "#" .. ghost:EntIndex() .. "  " .. ghost:GetClass() ..
+            "   serie " .. tostring( ghost.phantom_Serial or "?" ) ..
+            "   nacio hace " .. ( ghost.phantom_BornAt and ( string.format( "%.1f", CurTime() - ghost.phantom_BornAt ) .. " s" ) or "?" ) )
         say( "    pos     " .. tostring( ghost:GetPos() ) )
         say( "    vida    " .. ghost:Health() .. " / " .. ghost:GetMaxHealth() )
         say( "    modelo  " .. tostring( ghost:GetModel() ) )

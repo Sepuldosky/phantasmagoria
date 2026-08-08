@@ -54,9 +54,24 @@ PHANTASMAGORIA = PHANTASMAGORIA or {}
 
 -- El orden importa poco hoy -- ninguno de los dos lee al otro -- pero se declara
 -- una sola vez y en un solo lugar, que es el punto entero del archivo.
+--
+-- ⚠ SALVO UN PAR, Y AHI EL ORDEN ES OBLIGATORIO: prop_data_eq.lua FUSIONA sobre
+-- PHANTASMAGORIA.PropData, y prop_data.lua ASIGNA esa tabla entera
+-- ( `PropData = { ... }` ). Al reves, el segundo pisaria los 66 modelos propios
+-- y no habria ni un error: la tabla existiria, con las entradas de terceros
+-- adentro, y el unico sintoma seria equipamiento nuestro pesando 1,5 kg. La
+-- columna `propios` de la guarda de abajo mide justamente eso.
 local DATOS = {
     "phantasmagoria/ghost_types.lua",
     "phantasmagoria/prop_data.lua",
+
+    -- Los 66 modelos NUESTROS de equipamiento. Aparte de prop_data.lua a
+    -- proposito: ese archivo tiene las entradas de los packs de TERCEROS y las
+    -- retira OTRA sesion cuando termine de reemplazar los modelos. La division
+    -- es por PROCEDENCIA -- lo nuestro aca, lo ajeno alla -- y en runtime se
+    -- fusionan en un solo diccionario, asi que ApplyPropData sigue leyendo un
+    -- solo lugar. VA DESPUES de prop_data.lua ( ver el aviso de arriba ).
+    "phantasmagoria/prop_data_eq.lua",
 
     -- ⚠ ESTE NO ES UN DATO, Y ROMPE LA REGLA DE ARRIBA A PROPOSITO. Es el anillo
     -- de actividades ( el instrumento de la pose T ). Vive aca y no adentro del
@@ -133,10 +148,28 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
     local pushOk = isfunction( PHANTASMAGORIA.PushActLog )
     local realm = SERVER and "server" or "cliente"
 
-    if tipos and tipos > 0 and props and props > 0 and acts and acts > 0 and pushOk then
+    -- ⚠ ESTA COLUMNA NO CUENTA SU PROPIA TABLA, y esa es toda la gracia. Contar
+    -- PropDataEq diria 66 aunque prop_data.lua hubiera corrido despues y hubiera
+    -- pisado PropData entera: la tabla de origen seguiria ahi, intacta y sin que
+    -- nadie la lea. Lo que hay que medir es cuantas SOBREVIVIERON en la tabla
+    -- que ApplyPropData consulta de verdad. *Una guarda que mide la fuente en
+    -- vez del destino da verde justo en el modo de falla que existe para
+    -- atajar.*
+    local propios, propiosVivos = contar( PHANTASMAGORIA.PropDataEq ), 0
+
+    if istable( PHANTASMAGORIA.PropDataEq ) and istable( PHANTASMAGORIA.PropData ) then
+        for ruta in pairs( PHANTASMAGORIA.PropDataEq ) do
+            if PHANTASMAGORIA.PropData[ ruta ] then propiosVivos = propiosVivos + 1 end
+
+        end
+    end
+
+    if tipos and tipos > 0 and props and props > 0 and acts and acts > 0 and pushOk
+        and propios and propios > 0 and propiosVivos == propios then
+
         MsgC( Color( 190, 120, 255 ), "[Phantasmagoria] ", color_white,
-            "datos cargados en ", realm, ": ", tipos, " tipos · ", props, " modelos · ",
-            acts, " actividades vigiladas.\n" )
+            "datos cargados en ", realm, ": ", tipos, " tipos · ", props, " modelos ( ",
+            propios, " propios ) · ", acts, " actividades vigiladas.\n" )
 
         return
 
@@ -145,9 +178,12 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
     ErrorNoHalt( "[Phantasmagoria] LOS DATOS NO CARGARON BIEN en " .. realm .. ": " ..
         "Types " .. ( tipos and ( tipos .. " tipos" ) or "NO EXISTE" ) ..
         " · PropData " .. ( props and ( props .. " modelos" ) or "NO EXISTE" ) ..
+        " · propios " .. ( propios and ( propiosVivos .. " de " .. propios .. " vivos en PropData" ) or "NO EXISTE" ) ..
         " · ActUniverse " .. ( acts and ( acts .. " actividades" ) or "NO EXISTE" ) ..
         " · PushActLog " .. ( pushOk and "OK" or "NO EXISTE" ) ..
         ".  Los tipos los necesita la cordura ( threshold por tipo ), PropData corrige la masa " ..
-        "de los props del pack, y el actlog es el instrumento de la pose T.\n" )
+        "de los props, y el actlog es el instrumento de la pose T." ..
+        ( ( propios and propiosVivos < propios ) and
+            "  ⚠ 'propios' por debajo del total significa que prop_data.lua corrio DESPUES y piso la tabla: mirar el orden de DATOS." or "" ) .. "\n" )
 
 end )

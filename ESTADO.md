@@ -13,7 +13,50 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-08): la CORDURA arrancó por la tajada A — el fantasma ya es uno de los 30.
+> ⭐ **LO ÚLTIMO (2026-08-08): la r15 CORRIÓ — 8 de 9. El MECANISMO del tipo queda CERRADO, y tres de
+> esos verdes no midieron lo que decían.**
+>
+> **Lo que quedó cerrado con evidencia completa, y no se re-discute:** el tipo se asigna al spawnear
+> (`tipo Obake ( obake ) threshold 50 % speed.base x1.000 ( NO aplicado todavia )`); el sorteo cubre
+> **30 de 30** en dos corridas con números distintos (`obambo x19`/`yokai x3`, después
+> `hantu x16`/`mare x5` — sobre 300 tiros en 30 categorías eso **no es sesgo**: la σ es ~3,1 y hay 30
+> máximos compitiendo); el botón dio **las dos negativas exactas**; el override alcanzó a **7
+> fantasmas nuevos**, todos Demon con `threshold 70`; y los 30 thresholds son los del juego
+> (Demon 70 · Shade 35 · Deogen 40 · Thaye 75 · Obambo 65), con los 12 rangos marcados como no usados.
+> **La tajada C ya tiene contra qué comparar.**
+>
+> ⚠ **Las tres que no alcanzan, y las tres por el mismo motivo: la evidencia pegada no es la que el
+> criterio pedía.**
+>
+> | | Pedía | Trajo |
+> |---|---|---|
+> | **01** | **dos** líneas de conteo, `server` y `cliente` | *«sí vi ese dato»* — ni el texto ni cuántas |
+> | **04** | **dos** fantasmas en la misma salida, el viejo con su tipo | uno solo |
+> | **08** | lo que dice **el marcador del cliente** | la salida del **servidor** |
+>
+> ⚠ **Y la 01 y la 08 son, juntas, la única prueba de que el realm CLIENTE funciona.** Ninguna de las
+> dos trae un dato del cliente. En este taller el cliente ya fue el realm donde algo estuvo apagado
+> dos arranques sin un solo error de Lua.
+>
+> ⭐ **UN DEFECTO SALIÓ DE ADENTRO DE UNA FILA VERDE, y es de la familia que ya costó una ronda.** La
+> 03 imprimió `quiere … ( la escribe LA BASE ( shootAt sobre el enemigo ) )` con **`enemigo ninguno`
+> dos líneas más arriba, en la misma pantalla**, y el bot `quieto ( 0 u/s )`. Las dos mitades son
+> falsas ahí: `shootAt` pide un enemigo válido y el facewalk se sale por debajo de 30 u/s — **en ese
+> hueco no hay ningún escritor** y el valor quedó del último que corrió. *Una etiqueta que nombra a un
+> escritor tiene que preguntar por la precondición de ESE escritor, aunque el dato esté impreso al
+> lado.* Arreglado.
+>
+> ⭐ **Y un `EntIndex` no es una identidad: GMod los recicla.** La 04 leyó `#52 Obake` y después
+> `#52 SIN TIPO` — *«perdió el tipo»* y *«otro fantasma heredó el número»* se ven **exactamente
+> igual**. Entró `serie N · nacio hace N s` en la cabecera de los dos instrumentos.
+>
+> ⚠ **La 02 no estaba «sin correr»: estaba SIN SUJETO** — y la aclaración del autor abrió un bloque
+> entero. Ver el punto **4** de «lo pendiente» abajo: los 66 modelos propios traen **todos**
+> `mass 1.5` y `surfaceprop metal`.
+>
+> Planilla `dev/checks/phantasmagoria-tipo-r15b.html`, **6 filas, sin correr**.
+
+> **LO ANTERIOR (2026-08-08): la CORDURA arrancó por la tajada A — el fantasma ya es uno de los 30.
 > ESCRITA, SIN correr.**
 >
 > `server_type.lua`. El fantasma elige tipo al spawnear, lo guarda, lo networkea y lo publica en
@@ -1477,16 +1520,53 @@ cuándo** empieza, y reemplaza al andamio `phantasmagoria_hunt` (que queda de te
 
 **Lo pendiente ahora, en orden:**
 
-1. **Correr `dev/checks/phantasmagoria-tipo-r15.html`** (9 filas). Las **01 y 02** son las que
-   arrastraba el cargador de ayer y **se corren con el mapa recién cargado**, antes que nada: las dos
-   miden líneas que salen una sola vez, al arrancar. ⚠ La **04** deja
-   `phantasmagoria_ghost_typeassign` en **0** y es `FCVAR_ARCHIVE`: **reponerla en 1 al terminar**, o
-   la ronda siguiente va a ver fantasmas sin tipo y va a parecer una regresión — la misma trampa que
-   la r12 dejó con `escapedist` y `stuckbailoutsecs`.
+1. **Correr `dev/checks/phantasmagoria-tipo-r15b.html`** (6 filas): las tres de la r15 que no
+   midieron lo que decían (01, 04, 08), las dos del bloque de masas y la de la etiqueta de la mirada.
+   ⚠ **Empezar con `phantasmagoria_ghost_type auto`:** la r15 dejó el override en `demon` —la 07
+   pedía cerrar con `auto` y esa mitad no se corrió— así que **dentro de esa sesión todo fantasma
+   seguía naciendo Demon**. No contamina la próxima (es una variable de Lua, no `FCVAR_ARCHIVE`),
+   pero dentro de una sí.
 2. **Enganchar `speed.base` (§5)**, que es una línea y ya tiene los dos lados: el campo
    `phantom_SpeedMul` gana sobre la convar andamio y el instrumento de velocidad ya imprime **de
    dónde salió el multiplicador**. Con su planilla, porque **sí** cambia comportamiento.
 3. **La tajada B**, la cordura por jugador.
+4. **Las masas y los materiales de los 66 modelos propios** — bloque nuevo, abierto por la fila 02.
+
+### 4 · Los 66 modelos propios pesan todos lo mismo y suenan a chapa **[medido, 2026-08-08]**
+
+La fila 02 mandaba pesar el crucifijo del **Prop Pack de terceros**, y el autor contestó lo que
+convertía la fila en otra cosa: *«no usar los modelos demit, solo los nuestros pues los estamos
+cambiando»*. **La fila no estaba sin correr: estaba sin sujeto.**
+
+Medidos los `.phy` de `models/phantasmagoria/eq/` — **los 66 traen `mass 1.5` y `surfaceprop metal`**,
+que es el default del `.qc` sin ajustar. Los del árbol raíz (`candle`, `ouija_board`, `musicbox`,
+`haunted_mirror`, `monkeypaw`) **sí** están ajustados uno por uno (`wood`, `paper`, `glass`, `flesh`,
+`cloth`), así que no es descuido general: es que el lote de equipamiento nunca pasó por ahí.
+
+> **No es la tonelada del Prop Pack.** Aquel era un tercero clavando 1000 kg; éste es *nadie les puso
+> todavía el número*. El síntoma tampoco es el mismo: no es que no se puedan levantar, es que **la
+> sal, las pastillas y el cuaderno pesan lo mismo y suenan a chapa**.
+
+Entró **`lua/phantasmagoria/prop_data_eq.lua`**, generado por `dev/gen_eq_propdata.py` **desde los
+`.mdl` reales** (los nombres salen del disco, no de la memoria; el generador se niega si algún modelo
+no cae en ninguna de las 20 familias). Las masas se copian de las que `prop_data.lua` ya tenía
+decididas donde existe el equivalente, y el resto sale del objeto con el piso de 0,2 kg que ese mismo
+archivo documenta. ⚠ **Los números son una propuesta para que el autor los corrija.**
+
+**Archivo aparte, y por un motivo de coordinación, no de estilo:** las entradas de los packs de
+terceros las va a **retirar otra sesión** cuando termine de reemplazar los modelos. La división es
+por **procedencia** —lo nuestro en `prop_data_eq`, lo ajeno en `prop_data`— y en runtime se fusionan
+en un solo diccionario, así que `ApplyPropData` sigue leyendo un solo lugar.
+
+⚠ **El re-escalado que viene NO invalida estos números**, aunque parezca que sí: el autor va a
+cambiarle el tamaño a los modelos, y la masa que Source calcula sola **sí** depende del volumen — pero
+`PhysObj:SetMass()` la **clava**. Esta tabla no se calibra contra el tamaño: lo reemplaza.
+
+⚠ **Y hay un orden de carga que es obligatorio:** `prop_data_eq.lua` **fusiona** sobre
+`PHANTASMAGORIA.PropData` y `prop_data.lua` **asigna** esa tabla entera. Al revés, el segundo pisaría
+los 66 **sin un solo error**, y el único síntoma sería equipamiento nuestro pesando 1,5 kg. La guarda
+del cargador lo mide con una columna que **no cuenta su propia tabla sino cuántas sobrevivieron en la
+de destino**: `30 tipos · N modelos ( 66 propios )`.
 
 ✔ **§19.6 estaba vencida y quedó corregida:** decía que faltaba «la decisión de §19.5 — cuál de las
 tres formas», y §19.5 ya había decidido (NEAD no se integra). Ahora ese bloque es la tabla de las

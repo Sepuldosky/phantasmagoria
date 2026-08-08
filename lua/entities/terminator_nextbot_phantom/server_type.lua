@@ -413,7 +413,12 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_type", function( ply, _, args )
     ---------------------------------------------------------------------------
     local function fichas()
         local found = PHANTASMAGORIA.EachGhost( function( ghost )
-            say( "#" .. ghost:EntIndex() .. "  " .. ghost:GetClass() )
+            -- serie y edad: el EntIndex se recicla, y esta ficha es justo donde
+            -- se compara "el mismo fantasma antes y despues". Ver el comentario
+            -- de AdditionalInitialize en server.lua.
+            say( "#" .. ghost:EntIndex() .. "  " .. ghost:GetClass() ..
+                "   serie " .. tostring( ghost.phantom_Serial or "?" ) ..
+                "   nacio hace " .. ( ghost.phantom_BornAt and ( string.format( "%.1f", CurTime() - ghost.phantom_BornAt ) .. " s" ) or "?" ) )
             PHANTASMAGORIA.TypeLines( ghost, say )
 
         end )

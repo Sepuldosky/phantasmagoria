@@ -218,6 +218,89 @@ que mide la cosa equivocada y otro que no mide no son lo mismo, y éste midió m
 
 ---
 
+## 2026-08-08 (25) — Ronda 15 CORRIDA: **el tipo CERRADO, 8 de 9** — y tres verdes que no midieron lo suyo
+
+**El mecanismo de la tajada A queda cerrado**, con evidencia completa en cinco filas: el tipo se
+asigna al spawnear (`tipo Obake ( obake ) threshold 50 %`), el sorteo cubre **30 de 30** en dos
+corridas con números distintos, el botón dio **las dos negativas exactas**, el override alcanzó a
+**7 fantasmas nuevos** (todos Demon, `threshold 70`) y los 30 thresholds son los del juego. **La
+tajada C ya tiene contra qué comparar.**
+
+> **Y un número que parece un sesgo y no lo es:** `obambo x19` contra `yokai x3` sobre un esperado de
+> 10. Con 300 tiros en 30 categorías la desviación típica es ~3,1 y el **máximo de 30 categorías**
+> cae naturalmente cerca de 17-19; la segunda corrida dio 16 y 5. *No hay un dado cargado: hay treinta
+> máximos compitiendo.*
+
+### Las tres filas que no midieron lo que decían, y las tres por el mismo motivo
+
+| | Pedía | Trajo |
+|---|---|---|
+| **01** | **dos** líneas de conteo, `server` y `cliente` | *«sí vi ese dato»* |
+| **04** | **dos** fantasmas en la misma salida, el viejo con su tipo | uno solo |
+| **08** | lo que dice **el marcador del cliente** | la salida del **servidor** |
+
+⚠ **La 01 y la 08 son, juntas, la única prueba de que el realm CLIENTE funciona, y ninguna de las dos
+trae un dato del cliente.** No es formalidad: en este taller el cliente ya fue el realm donde algo
+estuvo apagado dos arranques sin un solo error de Lua.
+
+### ⭐ Un defecto salió de adentro de una fila VERDE, y es de la familia que ya costó una ronda
+
+La 03 imprimió `quiere … ( la escribe LA BASE ( shootAt sobre el enemigo ) )` con **`enemigo ninguno`
+dos líneas más arriba, en la misma pantalla**, y el bot `quieto ( 0 u/s )`.
+
+Las dos mitades son falsas en ese estado: `shootAt` pide `IsValid( GetEnemy )` —sin enemigo la cadena
+de `shooting_handler` se sale antes— y el facewalk se sale por debajo de 30 u/s. **En ese hueco no hay
+ningún escritor**: el valor quedó del último que corrió, y el `cambio hace 0.8 s` es cuando el bot
+venía caminando y frenó.
+
+*Una etiqueta que nombra a un escritor tiene que preguntar por la precondición de ESE escritor, aunque
+el dato esté impreso al lado.* Es la misma familia que costó la ronda 12 —deducir quién escribió en
+vez de medirlo— reaparecida en la rama de al lado.
+
+### ⭐ Un `EntIndex` no es una identidad: GMod los recicla
+
+La 04 leyó `#52 … Obake` y después `#52 … SIN TIPO`, con **un solo fantasma en la salida**. *«Perdió
+el tipo»* —que sería un rojo grave— y *«otro fantasma heredó el número»* se ven **exactamente igual**.
+Entró `serie N · nacio hace N s` en la cabecera de `ghost_where` y de las fichas del tipo: el serial
+no se recicla nunca.
+
+### ⚠ La 02 no estaba «sin correr»: estaba SIN SUJETO
+
+Mandaba pesar el crucifijo del **Prop Pack de terceros**, y el autor contestó lo que convertía la fila
+en otra cosa: *«no usar los modelos demit, solo los nuestros pues los estamos cambiando»*.
+
+**Medidos los `.phy` de `models/phantasmagoria/eq/`: los 66 traen `mass 1.5` y `surfaceprop metal`** —
+el default del `.qc`. Los del árbol raíz (`candle`, `ouija_board`, `musicbox`, `haunted_mirror`,
+`monkeypaw`) **sí** están ajustados uno por uno, así que no es descuido general: el lote de
+equipamiento nunca pasó por ahí.
+
+> **No es la tonelada del Prop Pack.** Aquel era un tercero clavando 1000 kg; éste es *nadie les puso
+> todavía el número*, y el síntoma tampoco es el mismo: no es que no se puedan levantar, es que **la
+> sal, las pastillas y el cuaderno pesan lo mismo y suenan a chapa**.
+
+Entró **`lua/phantasmagoria/prop_data_eq.lua`**, generado por `dev/gen_eq_propdata.py` desde los
+`.mdl` **reales** — el generador se niega si algún modelo no cae en ninguna de las 20 familias, porque
+un inventario escrito a mano es indistinguible de uno completo hasta que rompe. Las masas se copian de
+las que `prop_data.lua` ya tenía decididas donde hay equivalente; el resto sale del objeto con el piso
+de 0,2 kg que ese archivo documenta. **Los números son una propuesta para que el autor los corrija.**
+
+**Archivo aparte por coordinación y no por estilo:** las entradas de terceros las retira **otra
+sesión**. División por procedencia, fusión en runtime, un solo diccionario para `ApplyPropData`.
+
+⚠ **El re-escalado que viene no invalida estos números**, aunque parezca que sí: la masa que Source
+calcula sola depende del volumen, pero `PhysObj:SetMass()` la **clava**. La tabla no se calibra contra
+el tamaño: lo reemplaza.
+
+⚠ **Y hay un orden de carga obligatorio:** `prop_data_eq` **fusiona**, `prop_data` **asigna**. Al
+revés, el segundo pisaría los 66 sin un solo error, con el único síntoma de equipamiento nuestro
+pesando 1,5 kg. La columna nueva de la guarda **no cuenta su propia tabla sino cuántas sobrevivieron
+en la de destino** — *una guarda que mide la fuente en vez del destino da verde justo en el modo de
+falla que existe para atajar.*
+
+Planilla `dev/checks/phantasmagoria-tipo-r15b.html`, **6 filas, sin correr**.
+
+---
+
 ## 2026-08-08 (24) — **La cordura arranca: tajada A, el fantasma ya es uno de los 30** (escrita, sin correr)
 
 §19 va en **tres tajadas**: **A · el tipo** → B · la cordura → C · el gatillo. Ésta es la A.
