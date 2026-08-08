@@ -7,6 +7,66 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-08 (27) — **La pose T era el ARMA** (corrida r17: 7 pasa · 0 falla · 1 sin correr)
+
+La r17 contestó el bloque. Y los dos síntomas que el autor reportó en el mismo mensaje —
+*«también tomó un arma y se deformó»* y la pose T — resultaron **el mismo evento**.
+
+### La cadena, del dump del actlog
+
+```
+3115.93  Translate  ACT_MP_CROUCHWALK -> ACT_HL2MP_WALK_CROUCH_SMG1 (1801)
+3116.25  Translate  ACT_MP_STAND_IDLE -> ACT_HL2MP_IDLE_SMG1 (1797)
+3117.13  Translate  ACT_LAND (33)     -> ACT_INVALID (-1)
+3117.13  Gesture    ACT_INVALID (-1)
+```
+
+El bot levantó una SMG del piso. `TranslateActivity` **le pregunta al arma antes que a nuestra
+tabla** (`motionoverrides.lua:3694`; nuestro `IdleActivityTranslations` recién en `:3712`), así que
+con un arma en la mano toda nuestra traducción queda anulada y el modelo vuelve a las **prestadas de
+`m_anm`** — las `*_SMG1`. Eso es el estiramiento.
+
+Y `luaWep:TranslateActivity( ACT_LAND )` devuelve **`-1`**, porque un arma no sabe traducir un
+aterrizaje. La base hace `if newact then return newact end` y **`-1` es truthy en Lua**: sale tal
+cual y termina en `AddGesture( -1 )` — la pose de referencia. **Ahí está la T.**
+
+**El arreglo va en la causa:** `CanPickupWeapon` devuelve `false`. `DefaultWeapon = false` sólo decía
+con qué *nace*; la tarea `movement_getweapon` seguía registrada. Convar
+`phantasmagoria_ghost_pickup` (default 0) para que el A/B exista: en 1 los dos defectos tienen que
+volver **juntos** — si vuelve uno solo, el diagnóstico está incompleto.
+
+### El instrumento imprimió la pose T y después dijo que no la había
+
+El veredicto salió *«ninguna actividad quedó SIN RESOLVER en esta ventana»* con
+`Gesture ACT_INVALID (-1)` **tres líneas más arriba, en el mismo dump**. Con `act < 0`,
+`SelectWeightedSequence` *tira* en vez de devolver -1; el `pcall` lo atrapaba y el evento quedaba con
+`resolvio = nil` — que no es `false`, que es lo único que la línea marca. *Tres estados con dos
+cuentas: el tercero se reparte solo, y siempre hacia el lado que uno no quería.*
+
+Y es **el mismo defecto que este mismo bloque le había corregido a `actmiss` dos días antes**, en
+otra función del mismo archivo. Arreglarlo en un lugar no lo arregla en el de al lado.
+
+### `ph_ghost_bones` reventó antes de mirar un fantasma
+
+`bad argument #1 to 'tostring' (value expected)`. `e:GetModel()` sobre una entidad sin modelo **no
+devuelve `nil`: no devuelve nada**, y `tostring()` con cero argumentos da ese error. Es la **segunda
+ronda seguida** en que nadie mide un hueso sobre el bot: en la r16 el instrumento miraba otras
+clases, en la r17 se caía antes de llegar.
+
+### Abierto: «sigue corriendo de lado»
+
+Lo medido fuera del juego **descarta** la sospecha obvia: el orden de los pose params difiere entre
+`m_anm` (`[0] move_y, [1] move_x`) y el nuestro (`[0] move_x, [1] move_y`), pero los `paramindex` de
+las cuatro mezclas **resuelven a los mismos nombres**. La grilla compiló bien.
+
+Lo que sí apareció es una **suposición mía sin medir**: la línea convierte con `v * 2 - 1` afirmando
+que `GetPoseParameter` devuelve 0..1, y la r16 imprimió `move_y entre -1.04 y -1.00` — que exige un
+crudo de `-0.02`, **fuera de 0..1**. Nadie lo miró. Ahora imprime el crudo, **se niega** a convertir
+si cae fuera de rango, dice la **celda de la grilla**, y avisa cuando el bot se mueve y la celda no
+es `N` — que es el síntoma exacto.
+
+---
+
 ## 2026-08-08 (26) — **El instrumento de la pose T, el NextBot medible, y las secciones**
 
 Los tres pendientes que dejó la r16, más la fila roja. Nada de esto está corrido en juego todavía:
