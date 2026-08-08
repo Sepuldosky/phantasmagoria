@@ -1309,23 +1309,41 @@ local pos = entMeta.WorldSpaceCenter( ent )
 | De pie | hitbox de la **cabeza** | ~64 **[estimado]** |
 | **Agachado** | **`WorldSpaceCenter`** — centro de la caja de colisión | **18** |
 
-Los ojos del fantasma están a **64**: `GetShootPos` es `LocalToWorld( GetViewOffset() )`
-([`base/shared.lua:137`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot_base/shared.lua#L137))
-y el offset sale de `round( maxs.z - 8 )` con `maxs.z = 72`
+Los ojos del fantasma salen de `GetShootPos`, que es `LocalToWorld( GetViewOffset() )`
+([`base/shared.lua:137`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot_base/shared.lua#L137)),
+y el offset de `round( maxs.z − (maxs.z/72)·8 )`
 ([`motionoverrides.lua:3883-3886`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot/motionoverrides.lua#L3883)).
 
-**La cuenta que contesta «¿me tapa esta caja?»:** el rayo va de 64 a 18, así que una caja de altura
-`H` a la fracción `t` del camino lo corta si **`H > 64 − 46·t`**.
+> ⚠ **ESTA SECCIÓN SE ESCRIBIÓ CON LOS OJOS EN 64 Y AHORA ESTÁN EN 40.** Los 64 salían de
+> `maxs.z = 72`, que es el hull **clavado** de la base
+> ([`terminator_nextbot_base/init.lua:39`](../../dev/other/phantom/dev2/terminator%20nextbot/lua/entities/terminator_nextbot_base/init.lua#L39)),
+> el mismo para todos los modelos. Nuestro fantasma mide **44,94 u** de alto (medido en el `.vvd`,
+> no en el hull de colisión) y desde el 2026-08-08 usa un hull proporcional a su cuerpo — `20×20×45`
+> —, del que la base deriva sola `ViewOffset = 40`, crouch 27 y crouch view 20.
+> Va por `phantasmagoria_ghost_hull` (default 1); en 0 vuelve al de la base y a los 64.
+>
+> **Es un cambio de balance y no un efecto secundario**: con los ojos en 64 el fantasma miraba desde
+> 19 u *por encima de su propia cabeza*. Los números de abajo están reescritos con 40; los viejos
+> quedan en la última columna porque describen lo que se jugó hasta esa fecha.
 
-| Dónde está la caja | Altura que necesita |
-|---|---|
-| Pegada a vos (`t ≈ 1`) | **> 18** — cualquier caja |
-| A mitad de camino | > 41 — una `wood_crate001a` (~45 u) todavía sirve |
-| Pegada al fantasma (`t ≈ 0`) | > 64 |
+**La cuenta que contesta «¿me tapa esta caja?»:** el rayo va de los ojos (40) al punto trazado (18),
+así que una caja de altura `H` a la fracción `t` del camino lo corta si **`H > 40 − 22·t`**.
 
-**De pie el rayo va casi horizontal a 64, así que esa misma caja no tapa nada.** O sea:
+| Dónde está la caja | Altura que necesita | *(antes, con ojos en 64)* |
+|---|---|---|
+| Pegada a vos (`t ≈ 1`) | **> 18** — cualquier caja | > 18 |
+| A mitad de camino | **> 29** | > 41 |
+| Pegada al fantasma (`t ≈ 0`) | **> 40** | > 64 |
+
+**Todos los escondites se vuelven más fáciles**, y la razón es que el fantasma es más bajo: una
+`wood_crate001a` (~45 u) ya no «todavía sirve» a mitad de camino, sino que sobra. Lo que **no**
+cambia es el extremo `t ≈ 1`: pegado a vos, el que manda es el punto trazado (18) y no los ojos.
+
+**De pie el rayo va casi horizontal a 40, así que esa misma caja no tapa nada.** O sea:
 **agacharse ya es un mecanismo de esconderse, hoy, sin escribir una línea** — y la diferencia entre
-agachado y de pie detrás del mismo objeto es enorme y se aprende en una partida.
+agachado y de pie detrás del mismo objeto es enorme y se aprende en una partida. Eso sigue valiendo,
+pero el margen es más chico que con 64: la ventaja de agacharse contra este fantasma es de 22 u de
+caída del rayo, no de 46.
 
 ### 18.2.2 Corrección: «los 100 u» no son la frontera **[refutado]**
 

@@ -7,6 +7,100 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-08 (26) — **El instrumento de la pose T, el NextBot medible, y las secciones**
+
+Los tres pendientes que dejó la r16, más la fila roja. Nada de esto está corrido en juego todavía:
+lo que se cierra acá es *poder medirlo*.
+
+### `ph_ghost_bones` no veía al NextBot — y era el check que el bloque existía para correr
+
+Buscaba por **lista blanca de clases** (`prop_dynamic`, `prop_ragdoll`, `prop_physics`), que eran las
+formas en que el fantasma se spawneaba cuando se escribió. Con el sujeto ya en
+`terminator_nextbot_phantom`, la búsqueda miraba un banco vacío y contestaba *«no hay ningún
+ghost_girl spawneado»* — que se lee como **no hay nada** cuando lo que pasaba era **no miro ahí**. La
+fila 05 quedó sin correr y nadie midió un hueso sobre el bot.
+
+Ahora busca **por modelo**, con una lista *negra* de una sola clase (`phys_bone_follower`, con el
+motivo escrito al lado). Eso alcanza al bot, a los props y al ragdoll por igual — y a los 30 tipos de
+§12.2 sin tocar nada. Cuando no encuentra, dice **entre cuántas entidades buscó y qué descartó**.
+
+Y lee por los **dos** caminos (`GetBoneMatrix` y `GetBonePosition`), imprimiendo los dos cuando
+difieren: sobre `ClientsideModel` el sondeo de la r2 ya midió que `GetBonePosition` devuelve una pose
+congelada, y sobre un NextBot **no lo midió nadie**.
+
+### La pose T: un instrumento, no una hipótesis
+
+El autor la reportó dos veces tirando el fantasma con el physgun, y pidió el instrumento con todas
+las letras. Una pose T es la de **referencia**: hay una actividad que la base pide y que no resuelve a
+ninguna secuencia. **Cuál es sigue sin estar identificada, y esto no la adivina.**
+
+| comando | qué contesta |
+|---|---|
+| `phantasmagoria_ghost_actmiss` | barre **todas** las actividades que la base puede pedir y lista las que no resuelven. **Contesta sin esperar el síntoma.** |
+| `phantasmagoria_ghost_actlog 1` + `_dump` / `_clear` | anillo de 64 eventos: qué se pidió, qué salió, y si `SelectWeightedSequence` devolvió algo |
+
+El universo de actividades está **censado del código de la base**, no recordado. Y medirlo con
+`mdlacts.py` sobre `m_anm` destapó un sospechoso que el handoff no listaba: `HandleFlinching`
+(`damageandhealth.lua:634`) llama `AddGesture` **directo** con un `ACT_FLINCH_*`, y **cinco de los
+ocho no existen** ni en `m_anm` ni en nuestro modelo. *No* explica todavía la T del physgun — el daño
+de caída entra por `HITGROUP_GENERIC`, que mapea a `ACT_FLINCH_PHYSICS`, de los tres que sí existen —
+pero son actividades sin secuencia **confirmadas**.
+
+Se envuelven los **seis** puntos de entrada y no uno: `AddGesture` es nativo y no pasa por
+`DoGesture`, así que envolver sólo `DoGesture` habría dejado los ocho flinch fuera del instrumento —
+*el mismo modo de falla que este bloque vino a arreglar*.
+
+### La fila 03 era del instrumento: `timer.Simple(0)` no es «después»
+
+Imprimía `hull 19x40x55` — **exactamente** el hull de colisión del `.phy` — porque mi timer se
+registraba en `AdditionalInitialize` (`shared.lua:3011`) y el de la base en `:3039`, y los timers de
+delay 0 disparan **en orden de registro**. Leía antes de que nadie escribiera. No se arregla con un
+timer más largo (sería apostar a que la base no cambie de orden, y la apuesta no se vería fallar): se
+mide **enganchado a `SetupCollisionBounds`**, o sea donde ocurre.
+
+### Secciones: 284/325 → **325/325**, y el centro de las mezclas ya va de verdad
+
+`mdlanim.donde()` resuelve buffer y offset **por sección** (la tabla vive en el `.mdl`, los datos en
+el `.ani`, y **cada sección trae su propio `animblock`**). Las 41 secuencias partidas se portan.
+
+Dos cosas que aparecieron al poder leerlas, y las dos corrigen lo que estaba escrito:
+
+- **El centro de cada mezcla ES el idle.** `a_WalkC` y `idle_all_01` son la misma animación (0,056°
+  de diferencia máxima). Como viven en bloques distintos del `.ani` (10 y 2) con offsets distintos,
+  eso **acredita el lector de secciones por un camino que no se buscó**: dos lecturas de basura no
+  coinciden.
+- **La sustitución costaba más de lo que se creía.** El centro iba reemplazado por la dirección N, y
+  el argumento escrito era que ahí la velocidad es ~0 y casi no se usa. Medido: la N difiere **39,11°**
+  del centro real.
+
+Y el nombre del animdesc de cada celda **se lee del `.mdl`, no se construye**: dos de las cuatro
+mezclas no siguen la convención — el centro de `run_all_01` es `a_WalkC` (el del *walk*) y el de
+`swimming_all` es `@swimming_all`. `a_RunC` y `a_SwimC` no existen.
+
+**Modelo recompilado e instalado**: 39/39 animaciones, las 8 actividades intactas, malla sin cambios
+(44,94 u).
+
+### El arnés ya cubre el archivo del NextBot
+
+`luaharness.py` no podía cargar `terminator_nextbot_phantom/server.lua` — no parsea el `continue` de
+GMod — así que sobre sus 2000+ líneas lo único que había corrido era un chequeo de **sintaxis**. Ahora
+lo traduce a `goto` emparejando bloques de verdad (un `str.replace` pondría la etiqueta en el bucle
+equivocado: compila, corre, y saltea las iteraciones del bucle de afuera). Con eso, más `--fantasma` y
+stubs que faltaban, los **10 comandos** del archivo se ejercitan en 17 variantes × 2.
+
+Y ahí saltó un defecto **mío** antes de llegar a la planilla: el veredicto de `actmiss` decía
+*«PASA: las 18 actividades resuelven»* cuando **ocho no se habían medido** (no existían como `ACT_*`
+en ese build y caían en otra rama, sin sumar a ningún contador). *Un veredicto que no resta lo que no
+pudo medir cuenta los ausentes como aprobados.*
+
+### Consecuencia de diseño propagada
+
+§18.2.1 tenía la cuenta de escondites con los ojos del bot en **64**. Con el hull nuevo van a **40** y
+la fórmula pasa de `H > 64 − 46·t` a **`H > 40 − 22·t`**: todos los escondites se vuelven más fáciles.
+Reescrita, con los números viejos en una columna aparte porque describen lo que se jugó hasta hoy.
+
+---
+
 ## 2026-08-08 (25) — **El fantasma tiene cuerpo: `ghost_girl.mdl` en el NextBot** (corrida r16: 6 pasa · 1 falla · 1 sin correr)
 
 `phantasmagoria/ghost_girl.mdl` pasa de prop verificado a cuerpo de
