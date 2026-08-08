@@ -1361,15 +1361,30 @@ vista** (yo dejaba decidir a la base, que sólo se niega a correr cuando te ve),
 
 ## El próximo paso concreto
 
-**Correr `phantasmagoria-keyvalues-r6`** (6 filas). La **03** es la más importante aunque parezca la
-más aburrida: que las puertas recuperen su sonido **solas**. Las otras dos que valen: la **01** y la
-**02**, el silencio y su control, pendientes desde hace cuatro rondas.
+> ⚠ **ESTA SECCIÓN ESTUVO VENCIDA VARIAS RONDAS Y APUNTABA A TRABAJO CERRADO** (2026-08-08). Decía
+> *«correr `keyvalues-r6`»* — que es la **ronda 6, corrida el 2026-08-07** y documentada más arriba en
+> este mismo archivo. *Una sección que dice qué hacer después envejece más rápido que una que dice qué
+> pasó, y se lee primero.* Si vuelve a quedar así, el síntoma es el mismo: manda a hacer algo que ya
+> tiene su bloque de resultados arriba.
 
-Queda pendiente cerrar `veldoors-r1` como planilla, sobre todo el A/B de la fila **12**, que nunca se
-corrió.
+**1 · El bailout nunca disparó, y está prendido por default.** `phantasmagoria_ghost_stuckbailoutsecs`
+está en **20 s** y el contador leyó `disparados 0` en la **r10, la r11 y la r12** — las tres. En la r12
+el A/B no discriminó porque **el fantasma se escapó solo en las dos mitades**, así que el mecanismo
+sigue **sin haberse observado nunca**. Es un teleport que le va a pasar a un jugador algún día en una
+situación que nadie vio. El bloqueante no es código: es que **desde la r10 nadie logró volver a
+encajarlo de verdad**, y sin la mitad rota no hay A/B.
 
-Después de eso, **la cordura** (§19), que es la que tiene que reemplazar al andamio
-`phantasmagoria_hunt`.
+**2 · Dos residuales chicos, que no merecen ronda propia** — se cuelgan de la próxima que toque el
+tema: `congelada 5 de 117` en calma contra un criterio de `0` (r13b; candidato, el hueco del facewalk
+cuando el bot no está en el piso), y **cuánto tarda en soltarte** con `sightdist` puesto (r14, fila 05:
+la fila lo pedía y trae una sola lectura ya del otro lado).
+
+**3 · La cordura (§19)**, que es la que tiene que reemplazar al andamio `phantasmagoria_hunt`. Todo lo
+de las últimas cuatro rondas fue sobre cómo se **comporta** el hunt; la cordura es la que **decide
+cuándo** empieza.
+
+**Pendiente menor de papeleo:** `veldoors-r1` nunca se llenó como planilla — los mecanismos se
+verificaron por consola, pero el A/B de la fila **12** no se corrió.
 
 ---
 
@@ -2019,16 +2034,16 @@ Las trampas de la base están en §4.3 y §4.4 de la referencia. Resumidas:
 
 ## Lo que está abierto
 
-- **LA VELOCIDAD: el fantasma va a 1,96× la carrera del jugador, y §1.1 dice que tiene que derivarse
-  de ella.** Medido en juego por el autor (corrida 4) y con número desde el código: la base trae
-  `ENT.RunSpeed = 550` (`shared.lua:132`), el fantasma **no lo pisa**, y `sv_bm_speed_run` del autor
-  es **280**. También hereda `MoveSpeed = 300` y `WalkSpeed = 130`. El arreglo ya está diseñado —§1.1:
-  los tipos son **multiplicadores de la carrera real**, y el getter de Better Movement **no sirve**
-  porque lo multiplica por `_bmfraction` (1..2), así que hay que leer la convar— pero **no está
-  escrito**. Ojo con `overcharging.lua:20-22`, que puede volver a subirlo (`RunSpeed * 1.40`, piso
-  550).
-- **Cuánto mueve la vista el fantasma en calma, y qué se la mueve.** Sin caracterizar. El autor
-  reporta que **sí** la mueve, menos que cazando.
+- ~~LA VELOCIDAD: el fantasma va a 1,96× la carrera del jugador~~ **CERRADO EN JUEGO el 2026-08-06**
+  (`server_speed.lua`): `objetivo 280`, `deseada 66` caminando y `280` corriendo, con `real`
+  acompañando. **Este bullet siguió diciendo «no está escrito» durante ocho rondas** — el mismo defecto
+  que la sección «El próximo paso concreto». Lo único que queda es papeleo: las filas de
+  `veldoors-r1` nunca se marcaron, porque se midió por consola.
+- ~~Cuánto mueve la vista el fantasma en calma, y qué se la mueve~~ **CERRADO EN JUEGO el 2026-08-08**
+  (r13b, fila 07): en calma la escribimos **nosotros** con el facewalk — `NOSOTROS 104 · LA BASE 11` de
+  120 muestras — con `vs marcha` media **16,3°** y `vs jugador` media **121,9°** (rango 5,5–180). O
+  sea: mira hacia donde camina y **no** te sigue con la vista, que es exactamente lo que pedía el
+  criterio de la corrida 8.
 
 - ~~La forma de la capa de compat con NEAD~~ **DECIDIDO: no se integra** (§19.5). NEAD hace
   `ply:SetNoTarget(true)` a un segundo a oscuras sin linterna, y la base respeta `FL_NOTARGET` en

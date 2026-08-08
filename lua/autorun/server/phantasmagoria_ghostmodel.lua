@@ -418,6 +418,96 @@ local function cmd_control( ply )
 	print( "[ph_ghost] ahora correr ph_ghost_bones: mide los dos juntos." )
 end
 
+--------------------------------------------------- el A/B CIEGO de la costura
+
+--[[
+	ph_ghost_ab [secuencia]   spawnea los dos y NO dice cual es cual
+	ph_ghost_ab_revelar       recien ahi lo dice
+
+	El sintoma que hay que juzgar es visual --"en un punto tambalea hacia
+	adelante"-- y el juez es una persona que ya sabe que uno de los dos esta
+	arreglado. Si el comando imprime cual es cual antes de mirar, lo que se
+	mide deja de ser el modelo.
+
+	`ghost_girl_seam.mdl` sale de la MISMA malla, el MISMO esqueleto y el MISMO
+	.phy que el bueno: lo unico distinto son las dos secuencias, decodificadas
+	a proposito con el lector roto de antes del 2026-08-07 (el que leia un
+	short de mas en la rama de repeticion de la RLE). Los .vvd de los dos
+	difieren en 4 bytes, que son el checksum.
+
+	POR QUE HACE FALTA EL DE CONTROL: "no lo veo tambalear" no distingue *se
+	arreglo* de *no lo estoy mirando bien*. Si el de control tampoco tambalea,
+	el ojo no ve el defecto y el verde del otro no vale.
+]]
+
+local AB_MAPA = nil
+
+local function cmd_ab( ply, _, args )
+	local seq = args[ 1 ] or "walk_ours"
+	local BUENO   = "models/phantasmagoria/ghost_girl.mdl"
+	local CONTROL = "models/phantasmagoria/ghost_girl_seam.mdl"
+	for _, m in ipairs( { BUENO, CONTROL } ) do
+		-- La ruta va entera. util.IsValidModel no sirve de guarda: devuelve
+		-- false sobre modelos que el motor si sirve.
+		if not file.Exists( m, "GAME" ) then
+			print( "[ph_ghost_ab] falta " .. m )
+			-- EL CONTROL NEGATIVO NO ESTA, Y ESO ES LO NORMAL. Se borro al
+			-- cerrar la ronda 2 (7/7): es un instrumento, no un asset, y no lo
+			-- tiene que agarrar ningun NextBot. Sin decirlo, este mensaje se
+			-- lee como una instalacion rota.
+			print( "[ph_ghost_ab] ghost_girl_seam.mdl se BORRA al cerrar un bloque. "
+				.. "Si hace falta otra vez: python dev/phastools/_seamctl.py y "
+				.. "copiar los 5 archivos a models/phantasmagoria/." )
+			return
+		end
+	end
+
+	-- EL SORTEO. Sin esto el comando le dice al juez la respuesta.
+	local invertir = math.random() < 0.5
+	local izq = invertir and CONTROL or BUENO
+	local der = invertir and BUENO or CONTROL
+	AB_MAPA = { A = izq, B = der }
+
+	local base = donde( ply )
+	for etiqueta, datos in pairs( { A = { izq, -45 }, B = { der, 45 } } ) do
+		local e = agregar( ents.Create( "prop_dynamic" ) )
+		e:SetModel( datos[ 1 ] )
+		e:SetPos( base + Vector( 0, datos[ 2 ], 0 ) )
+		-- DefaultAnim es lo que instala el AnimThink de CDynamicProp; sin ella
+		-- el servidor no avanza el ciclo y los dos se ven quietos, que es el
+		-- unico resultado que este check no puede interpretar.
+		e:SetKeyValue( "DefaultAnim", seq )
+		e:Spawn()
+		e:Activate()
+		local i = e:LookupSequence( seq )
+		print( string.format( "[ph_ghost_ab] %s en Y%+d   secuencias %d   "
+			.. "LookupSequence(%q) = %s", etiqueta, datos[ 2 ],
+			e:GetSequenceCount(), seq, tostring( i ) ) )
+		if not i or i < 0 then
+			print( "[ph_ghost_ab] >> ese modelo no tiene la secuencia: el A/B no vale." )
+		end
+	end
+	print( "[ph_ghost_ab] A y B spawneados. NO se dice cual es cual." )
+	print( "[ph_ghost_ab] Mirar 5 vueltas enteras de cada uno y decidir cual "
+		.. "da un tiron hacia adelante." )
+	print( "[ph_ghost_ab] Despues: ph_ghost_ab_revelar" )
+end
+
+local function cmd_ab_revelar()
+	if not AB_MAPA then
+		print( "[ph_ghost_ab] no hay ningun A/B corrido en esta sesion." )
+		return
+	end
+	print( "[ph_ghost_ab] A (Y-45) = " .. AB_MAPA.A )
+	print( "[ph_ghost_ab] B (Y+45) = " .. AB_MAPA.B )
+	print( "[ph_ghost_ab] el que tiene que tambalear es ghost_girl_SEAM." )
+end
+
+agregarComando( "ph_ghost_ab", cmd_ab,
+	"A/B ciego del tambaleo: spawnea el bueno y el de control sin decir cual es cual." )
+agregarComando( "ph_ghost_ab_revelar", cmd_ab_revelar,
+	"Dice cual era A y cual era B. Recien despues de mirar." )
+
 agregarComando( "ph_ghost_control", cmd_control,
 	"Spawnea el mismo modelo SIN $includemodel, para comparar." )
 agregarComando( "ph_ghost_ragdoll", cmd_ragdoll,
