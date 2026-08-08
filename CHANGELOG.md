@@ -7,6 +7,100 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-08 (24) — **La cordura arranca: tajada A, el fantasma ya es uno de los 30** (escrita, sin correr)
+
+§19 va en **tres tajadas**: **A · el tipo** → B · la cordura → C · el gatillo. Ésta es la A.
+
+**Por qué el tipo va primero y no es un rodeo:** el gatillo de C no compara la cordura contra un
+número fijo, la compara contra `hunt.threshold`, que es un dato **del tipo** (Demon 70, Shade 35,
+Deogen 40). Sin tipo asignado, C no tiene contra qué comparar y B mediría una barra que no dispara
+nada.
+
+**Y el drenaje queda decidido: por CAUSAS, sin reloj de fondo** [decisión del autor]. No hay goteo
+constante — baja por oscuridad (§19.4), cercanía del fantasma y cacerías. *Si no pasa nada, no baja
+nada.* Los 10-20 min de §19.2 dejan de ser una tasa y pasan a ser la **escala**.
+
+### Lo que entró
+
+`lua/entities/terminator_nextbot_phantom/server_type.lua`, colgado del mismo patrón de includes que
+`server_speed` / `server_doors` / `server_steps` / `server_stuck`, y **primero de la lista**: es el
+único que no consume nada de los otros y es del que los otros van a colgar.
+
+| | |
+|---|---|
+| **Tres orígenes, en orden** | override de consola → `ENT.PhantomType` de la clase (§12.2) → sorteo |
+| **Networkeo** | `SetNWString` con la **key**, y el cliente resuelve la ficha con su propia copia de los 30 |
+| **Instrumentos** | línea en `phantasmagoria_ghost_where`, en la línea de spawn, en el marcador del cliente |
+| **Botón** | `phantasmagoria_ghost_type` — `<key>`, `random`, `auto`, `sorteo N`, `lista` |
+| **Control** | `phantasmagoria_ghost_typeassign` (1, `0` = spawnean **sin tipo**, que es el estado de ayer) |
+
+**El motivo del que ganó viaja con el fantasma** y se imprime al lado del tipo. Sin eso, «salió Oni»
+no distingue un sorteo de un override olvidado de la corrida anterior — y los overrides de este addon
+sobreviven al respawn a propósito (la lección de la ronda 3).
+
+### ⚠ Lo que NO hace, y es deliberado
+
+**No cambia ni un comportamiento.** `speed.base` está en los 30 tipos y `server_speed.lua` ya sabe
+leer un campo (`phantom_SpeedMul`) que **gana** sobre su convar andamio — y este bloque **no lo
+escribe**. Engancharlo habría cambiado la velocidad de todos los fantasmas de golpe, sin A/B, en la
+misma ronda que estrena el mecanismo que la decide: *un rojo de velocidad ahí sería imposible de
+atribuir.* Es una línea, y va con §5 y su propia planilla.
+
+Por el mismo motivo la línea del instrumento dice `speed.base x0.900 ( NO aplicado todavia )`: *una
+línea que muestra un dato que todavía no se usa tiene que decir que no se usa, o se lee como que sí.*
+
+### El botón se niega dos veces, y la segunda salió de la revisión antes de correr
+
+- Una key mal tipeada rebota **sugiriendo**: `twins` → `parecidos: the_twins`. El nombre del juego y
+  la key no siempre coinciden («The Twins» es `the_twins`), así que equivocarse es lo normal — y un
+  override aceptado apuntando a nada dejaría a los fantasmas siguientes **sin tipo, con el comando
+  habiendo dicho que sí**.
+- **Forzar un tipo con `typeassign 0` también rebota.** Aceptarlo habría dejado la peor salida
+  posible: `override -> oni` arriba y `SIN TIPO` en las fichas de abajo, **en la misma pantalla**.
+  Eso se lee como *«el override no funciona»*, que es la conclusión inversa a la verdadera.
+
+### ⚠ El modo de falla del sorteo que no tira error
+
+`ghost_types.lua` declara **dos** listas: `Types` (con clave) y `TypeOrder` (el array del sorteo). El
+archivo es **generado**, o sea que se regenera. Si se desincronizan:
+
+- en `Types` y no en `TypeOrder` → el tipo existe y **nunca sale sorteado**. 29 de 30, y se ve igual
+  que un sorteo con suerte.
+- en `TypeOrder` y no en `Types` → el sorteo devuelve una key que no resuelve, y el fantasma sale sin
+  ficha.
+
+Ninguno tira error. Va una guarda al arrancar que los cuenta y los nombra, y el subcomando
+`sorteo 300` los mide **en seco** — 300 tiros sin spawnear nada, `distintos 30 de 30` y la lista de
+los que **nunca salieron**. *Contar tipos spawneando fantasmas cuesta un spawn por muestra y no llega
+a ninguna N útil.*
+
+### Los dos arrastres del cargador, y los dos defectos de instrumento que destaparon
+
+Las dos filas que el cargador de ayer dejó pendientes ya están escritas (01 y 02 de la planilla), y al
+escribirlas apareció que **ninguna de las dos se podía medir**:
+
+- **La guarda hacía `return` en silencio cuando todo estaba bien.** La consola de un servidor sano y
+  la de uno donde el archivo **no corrió** se veían **exactamente igual** — y «no corrió» es el único
+  defecto que la guarda existe para no repetir. *Una guarda que sólo habla cuando falla no puede
+  acreditar que corrió: su silencio es el síntoma del defecto que vigila.* Ahora dice el conteo
+  siempre y **con el realm**, y la fila espera **dos** líneas (`server` y `cliente`): una sola es rojo
+  y además predice el rojo de la fila del networkeo.
+- **La masa del crucifijo no tenía cómo medirse.** *«Se levanta»* es una impresión. El hook imprime
+  ahora el par `1000.00 kg -> 0.60 kg`, que separa los tres modos: sin línea = el hook no corrió;
+  `1000 -> 1000` = corrió y no corrigió; `0.60 -> 0.60` = sacaste el crucifijo del **otro** pack.
+
+### Papeleo
+
+**§19.6 estaba vencida:** decía que faltaba *«la decisión de §19.5 — cuál de las tres formas»* y
+§19.5 ya había decidido (NEAD no se integra). El bullet sobrevivió tres versiones. *Una lista de
+pendientes que no se tacha cuando la sección de arriba decide manda a re-discutir lo cerrado — y como
+se lee antes que el cuerpo, gana ella.* §19.6 es ahora la tabla de las tres tajadas con su estado; los
+pendientes de verdad se mudaron a §19.7.
+
+Planilla `dev/checks/phantasmagoria-tipo-r15.html`, **9 filas, sin correr**.
+
+---
+
 ## 2026-08-08 (23) — **`lua/phantasmagoria/` no lo cargaba nadie**: cargador escrito, sin pasada en juego
 
 Antes de empezar §19 (la cordura) hacía falta una sola respuesta: *¿existe `PHANTASMAGORIA.Types` en

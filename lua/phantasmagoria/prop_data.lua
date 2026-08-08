@@ -114,10 +114,37 @@ end
     se lleva la tonelada. Con esto, cualquier prop de la tabla queda corregido
     venga de donde venga.
 ---------------------------------------------------------------------------]]
+--
+-- ⚠ Y DICE EL ANTES Y EL DESPUES, que se agrego el 2026-08-08 al ir a
+-- verificarlo en juego por primera vez. Este hook se escribio hace rondas y
+-- NUNCA CORRIO -- nadie cargaba esta carpeta -- y al escribir la fila del check
+-- aparecio que no habia forma de medirlo: "el crucifijo se levanta" es una
+-- impresion, y con la tonelada puesta tampoco se levantaba de una manera muy
+-- distinta a estar trabado contra algo. Con el par de numeros la fila es binaria
+-- y ademas se puede negar: si la linea no sale, el hook no corrio; si sale con
+-- `1000 -> 1000`, corrio y no corrigio; si sale con `0.6 -> 0.6`, el prop no era
+-- el pesado y la fila midio otro modelo.
+--
+-- El print vive ACA y no adentro de ApplyPropData a proposito: esta es la red de
+-- seguridad del spawnmenu, que se usa de a un prop. ApplyPropData la van a
+-- llamar las entidades de equipo desde su Initialize, y ahi una linea por prop
+-- seria ruido.
 if SERVER then
     hook.Add( "PlayerSpawnedProp", "phantasmagoria_propmass", function( ply, model, ent )
         timer.Simple( 0, function()
-            if IsValid( ent ) then PHANTASMAGORIA.ApplyPropData( ent ) end
+            if not IsValid( ent ) then return end
+
+            local phys  = ent:GetPhysicsObject()
+            local antes = IsValid( phys ) and phys:GetMass() or nil
+
+            if not PHANTASMAGORIA.ApplyPropData( ent ) then return end
+
+            local despues = IsValid( ent:GetPhysicsObject() ) and ent:GetPhysicsObject():GetMass() or nil
+
+            MsgC( Color( 190, 120, 255 ), "[Phantasmagoria] ", color_white,
+                "masa corregida: ", tostring( ent:GetModel() ), "   ",
+                antes and string.format( "%.2f", antes ) or "?", " kg -> ",
+                despues and string.format( "%.2f", despues ) or "?", " kg\n" )
         end )
     end )
 end

@@ -94,13 +94,33 @@ local function contar( t )
 
 end
 
+--
+-- ⚠ Y HABLA TAMBIEN CUANDO TODO ESTA BIEN, que es una correccion del 2026-08-08:
+-- la version anterior hacia `return` en silencio en el caso bueno. O sea que la
+-- consola de un servidor sano y la de uno donde este archivo NO CORRIO se veian
+-- EXACTAMENTE IGUAL -- y "no corrio" es el unico defecto que este archivo existe
+-- para no repetir. *Una guarda que solo habla cuando falla no puede acreditar
+-- que corrio: su silencio es el sintoma del defecto que vigila.* Ahora la
+-- ausencia de la linea del conteo ES la evidencia.
+--
+-- El REALM va en la linea por el mismo motivo: el cargador corre en los dos y la
+-- falla interesante es de un solo lado ( el cliente sin los 30 tipos deja el
+-- marcador diciendo la key cruda, sin ficha ). Con una sola linea sin realm, dos
+-- consolas distintas se leen como una.
 hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
     local tipos = contar( PHANTASMAGORIA.Types )
     local props = contar( PHANTASMAGORIA.PropData )
+    local realm = SERVER and "server" or "cliente"
 
-    if tipos and tipos > 0 and props and props > 0 then return end
+    if tipos and tipos > 0 and props and props > 0 then
+        MsgC( Color( 190, 120, 255 ), "[Phantasmagoria] ", color_white,
+            "datos cargados en ", realm, ": ", tipos, " tipos · ", props, " modelos.\n" )
 
-    ErrorNoHalt( "[Phantasmagoria] LOS DATOS NO CARGARON BIEN: " ..
+        return
+
+    end
+
+    ErrorNoHalt( "[Phantasmagoria] LOS DATOS NO CARGARON BIEN en " .. realm .. ": " ..
         "Types " .. ( tipos and ( tipos .. " tipos" ) or "NO EXISTE" ) ..
         " · PropData " .. ( props and ( props .. " modelos" ) or "NO EXISTE" ) ..
         ".  Los tipos los necesita la cordura ( threshold por tipo ) y PropData corrige la masa " ..

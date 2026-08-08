@@ -1955,12 +1955,49 @@ en **ambos sentidos** del vector (si no, la luz dinámica que te da de espaldas 
 **Y el sampler se escribe chico y autocontenido**, sin acoplarlo a la cordura: **Cortex va a
 necesitar lo mismo** más adelante y tiene que poder levantarlo tal cual.
 
-### 19.6 Lo que falta
+### 19.6 Las tres tajadas, y en qué va cada una **[2026-08-08]**
 
-- **La decisión de §19.5** — cuál de las tres formas.
+> ⚠ **Este bloque decía «falta la decisión de §19.5 — cuál de las tres formas», y §19.5 ya había
+> decidido**: NEAD **no** se integra, y el motivo está escrito ahí mismo (las seis muestras son API
+> del engine, no propiedad de NEAD). El bullet quedó vivo tres versiones. *Una lista de pendientes
+> que no se tacha cuando la sección de arriba decide manda a re-discutir lo cerrado — y como se lee
+> antes que el cuerpo, gana ella.*
+
+**El drenaje es por CAUSAS, sin reloj de fondo** [decisión del autor, 2026-08-08]. No hay goteo
+constante: la cordura baja por la oscuridad (§19.4), por la cercanía del fantasma y por las cacerías.
+*Si no pasa nada, no baja nada* — que es la primera de §19.2 llevada al mecanismo en vez de al número.
+
+El trabajo va en **tres tajadas, en este orden**, y el orden no es de gusto: cada una es la
+precondición de la siguiente.
+
+| | Qué es | Estado |
+|---|---|---|
+| **A · el tipo** | Asignarlo al spawnear desde `PHANTASMAGORIA.Types`, networkearlo, poder forzarlo | **ESCRITA, sin pasada en juego** (`server_type.lua`, planilla `phantasmagoria-tipo-r15`) |
+| **B · la cordura** | Por jugador, servidor, networkeada, con sus causas e instrumentos | sin empezar |
+| **C · el gatillo** | Cordura bajo el `hunt.threshold` **del tipo** → `phantom_SetHunting( true )` | sin empezar |
+
+**Por qué A va primero:** C no compara la cordura contra un número fijo, la compara contra
+`hunt.threshold`, que es un dato **del tipo** (Demon 70, Shade 35, Deogen 40). Sin tipo asignado, C no
+tiene contra qué comparar y B mediría una barra que no dispara nada. Y de paso desbloquea §5 entero:
+`speed.base` está en los 30 y `server_speed.lua` ya sabe leer un campo que gana sobre su convar
+andamio.
+
+**Sólo `hunt.threshold` en la tajada A.** `thresholdLow`/`thresholdHigh` (12 de los 30 tipos) es el
+rango condicional de §5.2 —el Mare según la luz, el Yokai si hablás, el Obambo según su ciclo— y es
+de después. El comando los imprime igual, marcados como no usados, para que estén a la vista sin
+parecer implementados.
+
+⚠ **Y la tajada A no engancha `speed.base` a propósito**, aunque el campo esté y el consumidor
+también. Escribirlo cambiaría la velocidad de todos los fantasmas de golpe, sin A/B, en la misma
+ronda que estrena el mecanismo que la decide: *un rojo de velocidad ahí sería imposible de atribuir.*
+
+### 19.7 Lo que falta
+
 - **Los 3 tiers de las pastillas** (§16): el modelo es uno; los tiers son cuánto restauran. El autor
   quiere **ripear el resto de los ítems**, así que la tabla lleva `tier` desde el principio.
-- **Qué drena y cuánto**: oscuridad (§19.4), ver manifestaciones, cercanía del fantasma —el banco
-  `ghost/scare_light` del catálogo **ya es ese evento**, §7.2— y los hunts. Los números salen de
-  repartir los 10-20 min de §19.2.
+- **Qué drena y cuánto** (tajada B): oscuridad (§19.4), ver manifestaciones, cercanía del fantasma
+  —el banco `ghost/scare_light` del catálogo **ya es ese evento**, §7.2— y los hunts. ⚠ Los 10-20 min
+  de §19.2 dejan de ser un **reloj** y pasan a ser la **escala**: son cuánto tiene que tardar una
+  partida con actividad normal, no una tasa que corra sola. Con las causas apagadas la barra no se
+  mueve, y eso es el diseño y no un bug.
 - **El medidor de actividad** (§19.3): qué suma actividad y con qué peso.

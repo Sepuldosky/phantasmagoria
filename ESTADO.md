@@ -13,7 +13,46 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-08): `lua/phantasmagoria/` NO LO CARGABA NADIE. Cargador escrito, SIN pasada
+> ⭐ **LO ÚLTIMO (2026-08-08): la CORDURA arrancó por la tajada A — el fantasma ya es uno de los 30.
+> ESCRITA, SIN correr.**
+>
+> `server_type.lua`. El fantasma elige tipo al spawnear, lo guarda, lo networkea y lo publica en
+> `phantasmagoria_ghost_where`, en la línea de spawn y en el marcador del cliente. Botón:
+> `phantasmagoria_ghost_type`, con `lista`, `sorteo N`, `random` y `auto`.
+>
+> **Por qué el tipo va primero y no es un rodeo:** el gatillo de la tajada C no compara la cordura
+> contra un número fijo, la compara contra `hunt.threshold`, que es un dato **del tipo** (Demon 70,
+> Shade 35, Deogen 40). Sin tipo asignado, C no tiene contra qué comparar y B mediría una barra que
+> no dispara nada.
+>
+> ⚠ **NO cambia ni un comportamiento, y es deliberado.** `speed.base` está en los 30 tipos y
+> `server_speed.lua` ya sabe leer un campo (`phantom_SpeedMul`) que **gana** sobre su convar andamio
+> — y este bloque **no lo escribe**. Engancharlo habría cambiado la velocidad de todos los fantasmas
+> de golpe, sin A/B, en la misma ronda que estrena el mecanismo que la decide: *un rojo de velocidad
+> ahí sería imposible de atribuir.* Es una línea, y va con §5 y su propia planilla.
+>
+> **Tres orígenes del tipo, en orden, y ninguno es silencioso:** el override de consola → el campo
+> `ENT.PhantomType` de la clase (que es como §12.2 va a generar los 30 NPCs del spawnmenu) → el
+> sorteo. **El motivo del que ganó viaja con el fantasma y se imprime al lado del tipo** — sin eso,
+> «salió Oni» no distingue un sorteo de un override olvidado de la corrida anterior, y los overrides
+> de este addon sobreviven al respawn a propósito (la lección de la ronda 3).
+>
+> **El botón se niega dos veces, y la segunda salió de la revisión antes de correr:** una key mal
+> tipeada rebota sugiriendo (`twins` → `parecidos: the_twins`), y **forzar un tipo con
+> `typeassign 0` también rebota**. Aceptarlo habría dejado la peor salida posible —`override -> oni`
+> arriba y `SIN TIPO` en las fichas de abajo, **en la misma pantalla**—, que se lee como *«el
+> override no funciona»*: la conclusión inversa a la verdadera.
+>
+> ⚠ **Y hay un modo de falla del sorteo que no tira error: `TypeOrder` y `Types` desincronizadas.**
+> El archivo es **generado**, o sea que se regenera. Un tipo que esté en `Types` y no en `TypeOrder`
+> **existe y no puede salir sorteado nunca** — 29 de 30, y se ve igual que un sorteo con suerte. Va
+> una guarda al arrancar y la fila **05** lo mide con 300 tiros en seco (`distintos 30 de 30` ·
+> `NUNCA salio ninguno`).
+>
+> Planilla `dev/checks/phantasmagoria-tipo-r15.html`, **9 filas, sin correr** — las **01 y 02** son
+> las dos que arrastraba el cargador de ayer.
+
+> **LO ANTERIOR (2026-08-08): `lua/phantasmagoria/` NO LO CARGABA NADIE. Cargador escrito, SIN pasada
 > en juego.**
 >
 > Salió de una sola pregunta antes de empezar §19: *¿existe `PHANTASMAGORIA.Types` en runtime?*
@@ -40,7 +79,21 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 >
 > **Medido:** parsea, las dos rutas existen, **30** tipos, `PropData` en la 39, el hook en la 118.
 > **Sin pasada en juego:** nadie vio el conteo en una consola de verdad ni volvió a pesar el crucifijo.
-> **Esas son dos filas y van con la planilla de la cordura.**
+>
+> ⭐ **Las dos filas ya están escritas —son la 01 y la 02 de `phantasmagoria-tipo-r15`— y al escribirlas
+> aparecieron DOS defectos de instrumento que había que arreglar antes de poder correrlas:**
+>
+> - **La guarda hacía `return` en silencio cuando todo estaba bien.** O sea que la consola de un
+>   servidor sano y la de uno donde este archivo **no corrió** se veían **exactamente igual** — y «no
+>   corrió» es el único defecto que la guarda existe para no repetir. *Una guarda que sólo habla
+>   cuando falla no puede acreditar que corrió: su silencio es el síntoma del defecto que vigila.*
+>   Ahora dice el conteo siempre, **con el realm**, y la fila espera **dos** líneas: `server` y
+>   `cliente`. Una sola es rojo, y además predice cuál va a ser el rojo de la fila del networkeo.
+> - **La masa del crucifijo no tenía cómo medirse.** *«Se levanta»* es una impresión, y con la
+>   tonelada puesta tampoco se distingue de estar trabado contra algo. El hook imprime ahora el par
+>   `1000.00 kg -> 0.60 kg`, que además separa los tres modos: **sin línea** = el hook no corrió;
+>   `1000 -> 1000` = corrió y no corrigió; `0.60 -> 0.60` = sacaste el crucifijo del **otro** pack y
+>   la fila midió otro modelo.
 
 > **LO ANTERIOR (2026-08-08): la r14 CORRIÓ — 5 de 5. El ALCANCE y la MIRADA quedan los dos CERRADOS
 > en juego.**
@@ -1408,27 +1461,36 @@ tema: `congelada 5 de 117` en calma contra un criterio de `0` (r13b; candidato, 
 cuando el bot no está en el piso), y **cuánto tarda en soltarte** con `sightdist` puesto (r14, fila 05:
 la fila lo pedía y trae una sola lectura ya del otro lado).
 
-**3 · La cordura (§19) — ES LA QUE SIGUE, y ya está elegida.** Todo lo de las últimas cuatro rondas fue
-sobre cómo se **comporta** el hunt; la cordura es la que **decide cuándo** empieza, y reemplaza al
-andamio `phantasmagoria_hunt` (que queda de test). **Se decidió el 2026-08-08, con el autor:**
+**3 · La cordura (§19) — ARRANCADA. La tajada A está ESCRITA y lo único que falta es correrla.** Todo
+lo de las últimas cuatro rondas fue sobre cómo se **comporta** el hunt; la cordura es la que **decide
+cuándo** empieza, y reemplaza al andamio `phantasmagoria_hunt` (que queda de test). **Se decidió el
+2026-08-08, con el autor:**
 
 - **Drenaje por CAUSAS, sin reloj de fondo.** No hay goteo constante: la cordura baja por oscuridad
   (§19.4), cercanía del fantasma y cacerías. *Si no pasa nada, no baja nada.*
-- **Va en tres tajadas, en este orden:** **A · el tipo del fantasma** (asignarlo al spawnear desde
-  `PHANTASMAGORIA.Types`, networkearlo, comando para forzarlo — mecánico, y desbloquea §5 entero
-  porque las velocidades por tipo ya están en la tabla y `server_speed.lua` ya existe) → **B · la
-  cordura** por jugador, servidor, networkeada, con sus causas e instrumentos → **C · el gatillo**,
-  cordura bajo el `hunt.threshold` del tipo → `phantom_SetHunting( true )`, con su A/B.
-- **Sólo `hunt.threshold` en la tajada 1.** `thresholdLow`/`thresholdHigh` (12 de los 30 tipos) es un
-  rango condicional por tipo (§5.2) y es de después.
+- **Va en tres tajadas, en este orden:** **A · el tipo del fantasma** → **B · la cordura** por
+  jugador, servidor, networkeada, con sus causas e instrumentos → **C · el gatillo**, cordura bajo el
+  `hunt.threshold` del tipo → `phantom_SetHunting( true )`, con su A/B.
+- **Sólo `hunt.threshold` en la tajada A.** `thresholdLow`/`thresholdHigh` (12 de los 30 tipos) es un
+  rango condicional por tipo (§5.2) y es de después. El comando los imprime marcados como no usados:
+  a la vista, sin parecer implementados.
 
-⚠ **La premisa de todo esto estuvo rota hasta hoy** — `PHANTASMAGORIA.Types` no existía en runtime
-porque nadie cargaba la carpeta. Arreglado (ver **LO ÚLTIMO** arriba), pero **sin pasada en juego**:
-las dos filas que faltan son *el conteo de la guarda en consola* y *el crucifijo del spawnmenu*, y van
-en la planilla de la cordura.
+**Lo pendiente ahora, en orden:**
 
-⚠ **Y hay un bullet vencido que va a confundir: §19.6 dice que falta «la decisión de §19.5 — cuál de
-las tres formas». §19.5 ya decidió** (NEAD no se integra). Corregirlo cuando se abra el bloque.
+1. **Correr `dev/checks/phantasmagoria-tipo-r15.html`** (9 filas). Las **01 y 02** son las que
+   arrastraba el cargador de ayer y **se corren con el mapa recién cargado**, antes que nada: las dos
+   miden líneas que salen una sola vez, al arrancar. ⚠ La **04** deja
+   `phantasmagoria_ghost_typeassign` en **0** y es `FCVAR_ARCHIVE`: **reponerla en 1 al terminar**, o
+   la ronda siguiente va a ver fantasmas sin tipo y va a parecer una regresión — la misma trampa que
+   la r12 dejó con `escapedist` y `stuckbailoutsecs`.
+2. **Enganchar `speed.base` (§5)**, que es una línea y ya tiene los dos lados: el campo
+   `phantom_SpeedMul` gana sobre la convar andamio y el instrumento de velocidad ya imprime **de
+   dónde salió el multiplicador**. Con su planilla, porque **sí** cambia comportamiento.
+3. **La tajada B**, la cordura por jugador.
+
+✔ **§19.6 estaba vencida y quedó corregida:** decía que faltaba «la decisión de §19.5 — cuál de las
+tres formas», y §19.5 ya había decidido (NEAD no se integra). Ahora ese bloque es la tabla de las
+tres tajadas con su estado, y los pendientes de verdad se mudaron a §19.7.
 
 **Pendiente menor de papeleo:** `veldoors-r1` nunca se llenó como planilla — los mecanismos se
 verificaron por consola, pero el A/B de la fila **12** no se corrió.

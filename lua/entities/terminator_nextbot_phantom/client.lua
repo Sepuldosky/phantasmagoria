@@ -32,6 +32,39 @@ local colText  = Color( 255, 255, 255 )
 -- ( Referencia 4.3, trampa 3 ).
 local colHunt = Color( 255, 70, 70 )
 
+-- EL TIPO ( Diseno 19, tajada A ), y esta es la unica lectura que prueba el
+-- networkeo: el servidor escribe la key con SetNWString y el cliente la resuelve
+-- contra su propia copia de PHANTASMAGORIA.Types.
+--
+-- LOS TRES ESTADOS SON DISTINTOS Y HAY QUE PODER SEPARARLOS, porque son tres
+-- fallas distintas y sin esto las tres se ven como "no dice nada":
+--
+--   ""              el server no le asigno tipo    ( o typeassign 0 )
+--   key sin ficha   la key VIAJO y el cliente no tiene los 30 -- o sea que
+--                   lua/autorun/phantasmagoria_data.lua no corrio EN CLIENTE,
+--                   que es justo la mitad que nadie miro nunca
+--   nombre          la cadena entera funciona
+--
+-- ⚠ Y esto es un INSTRUMENTO, no la UI del juego. En Phasmophobia el tipo es
+-- precisamente lo que hay que adivinar ( Diseno 12.1: "el tipo se sortea y no se
+-- anuncia" ), asi que vive detras de phantasmagoria_debug_ghost como todo lo
+-- demas de este marcador, y no se muda al HUD.
+local function typeLabel( ghost )
+    local key = ghost:GetNWString( "phantasmagoria_type", "" )
+    if key == "" then return "sin tipo" end
+
+    local T = PHANTASMAGORIA and PHANTASMAGORIA.Types
+    local t = istable( T ) and T[ key ] or nil
+
+    -- ASCII a proposito: esto se dibuja con DermaLarge, y un glifo que la fuente
+    -- no tenga sale como un cuadrito -- que en la fila del networkeo se leeria
+    -- como "el marcador esta roto" en vez de "el cliente no tiene los tipos".
+    if not t then return key .. " ( !! sin ficha en el cliente )" end
+
+    return t.name
+
+end
+
 -- El haz sigue siendo largo a proposito: es lo que te dice desde otra
 -- habitacion en que direccion esta, y atraviesa el techo porque se dibuja con
 -- IgnoreZ.
@@ -99,6 +132,7 @@ hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", funct
         cam.Start3D2D( top + Vector( 0, 0, LABEL_HEIGHT ), Angle( 0, yaw - 90, 90 ), escala )
             draw.SimpleText( "PHANTOM #" .. ghost:EntIndex(), "DermaLarge", 0, 0, colText, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM )
             draw.SimpleText( dist .. " m  " .. ( hunting and "HUNT" or "calma" ), "DermaLarge", 0, 6, col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP )
+            draw.SimpleText( typeLabel( ghost ), "DermaLarge", 0, 34, colText, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP )
         cam.End3D2D()
 
     end

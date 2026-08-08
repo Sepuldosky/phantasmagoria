@@ -525,11 +525,30 @@ function ENT:AdditionalInitialize()
     -- tenga navmesh, que son casi todos.
     self:phantom_SetHunting( self.phantom_Hunting )
 
+    -- Diseno 19, tajada A: el tipo se elige ACA y no mas tarde, porque es lo que
+    -- todo lo demas va a leer -- speed.base al primer tick, el hunt.threshold
+    -- cuando exista la cordura. Un tipo que llega tarde es un fantasma que
+    -- durante unos frames corre a la velocidad de otro.
+    --
+    -- Con guarda por el mismo motivo que la de server_speed.lua: si el include
+    -- fallara, esto correria en CADA spawn y el error taparia la causa real.
+    if self.phantom_ResolveType then
+        self:phantom_ResolveType()
+
+    else
+        ghostPrint( "server_type.lua no cargo: el fantasma spawnea SIN TIPO y la cordura no va a tener contra que comparar.\n" )
+
+    end
+
     ghostPrint( "spawn #", self:EntIndex(),
         "  modelo ", tostring( self:GetModel() ),
         "  skin ", self:GetSkin(),
         "  pos ", tostring( self:GetPos() ),
         "  hunt ", self.phantom_Hunting and "SI" or "NO",
+        -- El tipo en la linea de spawn y no solo en el comando: es el unico
+        -- lugar donde queda registro de con que tipo NACIO cada fantasma, y el
+        -- override lo puede cambiar despues sin dejar rastro de cual era.
+        "  tipo ", tostring( self.phantom_TypeKey or "NINGUNO" ),
         "\n" )
 
     -- El navmesh se mide DOS VECES a proposito, y esta es la correccion mas
@@ -1215,6 +1234,18 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_where", function( ply )
         say( "    hunt    " .. ( ghost.phantom_Hunting and "SI ( cazador )" or "NO ( fantasma )" ) )
         say( "    enemigo " .. ( IsValid( enemy ) and tostring( enemy ) or "ninguno" ) )
 
+        -- Diseno 19, tajada A. Va JUSTO DEBAJO del hunt a proposito: el dia que
+        -- la tajada C exista, las dos lineas se leen juntas -- "hunt SI" con
+        -- "threshold 70 %" al lado dice si el disparo tiene sentido. Con guarda
+        -- porque este comando es el que se tipea cuando algo no carga.
+        if PHANTASMAGORIA.TypeLines then
+            PHANTASMAGORIA.TypeLines( ghost, say )
+
+        else
+            say( "    tipo    ( server_type.lua no cargo )" )
+
+        end
+
         lookLines( ghost, say )
 
         -- UNA linea de cada bloque nuevo, no su reporte entero: para eso estan
@@ -1703,6 +1734,13 @@ end, "ANDAMIO. Pisa un flag de comportamiento en todos los fantasmas, vivos y fu
 -- correr shared.lua entero, includes adentro. Por eso alcanza con definirla
 -- aca abajo y no hace falta adelantarla.
 ENT.MyClassTask = {}
+
+-- Diseno 19, tajada A: el TIPO de fantasma ( uno de los 30 ). Va PRIMERO de la
+-- lista porque es el unico que no consume nada de los otros y porque los otros
+-- van a colgar de el: speed.base ( Diseno 5 ) y el hunt.threshold de la tajada C
+-- son campos DEL TIPO. Hoy no cambia ningun comportamiento: asigna, networkea y
+-- publica el dato.
+include( "server_type.lua" )
 
 -- Diseno 1.1: la velocidad se deriva de la carrera real del jugador.
 include( "server_speed.lua" )
