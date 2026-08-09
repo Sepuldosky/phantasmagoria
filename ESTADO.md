@@ -1,6 +1,6 @@
 # Phantasmagoria — Estado actual y handoff
 
-**Última actualización:** 2026-08-08
+**Última actualización:** 2026-08-09
 **Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
@@ -13,43 +13,69 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **TRASPASO (2026-08-09): el bloque siguiente es la INVISIBILIDAD, y arranca por un
-> BLOQUEANTE.** Prompt autocontenido en
-> [`dev/PROMPT_phantasmagoria_invisibilidad_2.txt`](../dev/PROMPT_phantasmagoria_invisibilidad_2.txt).
+> ⭐ **LO ÚLTIMO (2026-08-09): la r20 CORRIÓ — 7 pasa · 2 falla · 1 sin correr. LA AUSENCIA ANDA. Las
+> dos rojas son del INSTRUMENTO, y las dos son la misma.**
 >
-> **Lo primero, y manda sobre media planilla: con `absence 1` el marcador NO SE DIBUJA NI EN MODO 1**
-> — y el modo 1 es el que delata a propósito atravesando paredes, así que no es el modo honesto
-> funcionando. Dos causas, idénticas desde la pantalla:
+> **La mecánica de §20 ① queda medida en juego y no se re-discute:** invisible en calma y visible en
+> hunt (03), el control `absence 0` la apaga (04), el flag por NPC la apaga con la convar en 1 (08),
+> `absence 2` la fuerza también cazando (09), el reconciliador corre (02), y `ESCRITORES AJENOS 0` ·
+> `hijos máximo visto 0` (07) — o sea que **`SetNoDraw` sobre la entidad alcanza y el bucle sobre los
+> hijos es póliza**. La 10 cerró con dato: **`BecomeRagdoll` SÍ hereda `EF_NODRAW`** y salió la línea
+> que lo dice, así que esa guarda no era decorativa. La 06 quedó **sin correr** por lo mismo que
+> falló todo lo demás: *«no lo puedo ver»*.
 >
-> - **(a)** el cliente **no tiene la entidad** — `EF_NODRAW` se la lleva puesta. Entonces **ningún
->   marcador clientside puede dibujar un fantasma invisible**: se cae §20.4 entero y la salida es
->   networkear la posición por otro lado.
-> - **(b)** el cliente la tiene y el marcador la saltea — defecto nuestro.
+> ⚠⚠ **LO QUE SE CAYÓ ES UNA FRASE DEL DISEÑO, escrita como un hecho y nunca medida.** §20.3 decía de
+> `SetNoDraw`: *«es networkeado, o sea que el cliente puede leer `GetNoDraw()` y decir el estado
+> REAL»*. En juego, con el fantasma invisible y fuera de la pantalla, el cliente imprimió
+> **`render: se dibuja · el server dice INVISIBLE`**. De esa frase colgaban **las dos mitades de
+> §20.4**: el modo honesto nunca salteó a nadie y la línea de HUD contó `0 invisibles` con uno
+> delante (fila 05, roja). *Una propiedad de la red que nadie midió sostenía el instrumento entero de
+> un bloque.*
 >
-> **El instrumento ya está escrito y es un comando.** `phantasmagoria_ghost_cl` imprime los **dos
-> conteos del cliente** —por clase (`ents.FindByClass`, lo que usa el marcador) y por campo
-> (`ents.GetAll` + `IsPhantasmagoriaGhost`, lo que usa el comando)— y con `ghost_where` al lado, una
-> corrida decide. Si los dos dan 0 con el servidor diciendo 1, es (a). Si dan distinto entre sí, es
-> una tercera causa que nadie había nombrado: **el marcador y el comando estarían midiendo cosas
-> distintas desde siempre.**
+> ⚠ **Y LA FILA 01 NO FUE ROJA: contestó (b), que es una de sus dos salidas verdes.** `por clase 1 ·
+> por campo 1` es, por el texto de esa misma fila, *«el cliente LO TIENE»*. Marcarla roja porque el
+> marcador seguía sin aparecer es **puntuar la fila por el síntoma que la trajo y no por su
+> criterio** — y el criterio contestó bien: descartó la (a) que habría tumbado §20.4 de una.
 >
-> ⚠ **Y si sale (a), NO improvisar el reemplazo en la misma ronda.** Cambiar cómo se vuelve invisible
-> el fantasma es cambiar la mecánica que se estaba midiendo — es lo que costó las rondas 5 y 6.
+> ⭐ **LA TERCERA CAUSA LA NOMBRA UNA PISTA SUELTA, escrita al margen de la fila 10:** *«cuando lo
+> tomo el physgun va a su posición original, aunque lo tenga en frente»*. Con eso, los tres hechos
+> que no cerraban cierran juntos: **la entidad está en el cliente pero congelada**. La hipótesis —y
+> hay que medirla, no darla por buena— es que `EF_NODRAW` manda la entidad a `FL_EDICT_DONTSEND`: el
+> cliente deja de **recibirla**, la copia queda con la posición vieja y con la bandera sin llegar
+> (por eso `GetNoDraw` en `false`), y **el marcador sí dibuja: dibuja donde el fantasma estaba** — que
+> desde la pantalla se lee igual que «no dibuja nada». El NW var llegó porque viaja por otro sistema,
+> que es exactamente lo que el comentario de `phantom_SetVisible` decía que iba a servir para esto.
 >
-> **Entraron dos cosas más, y las dos son la r18b aplicada antes de correr:** la convar
-> `phantasmagoria_ghost_absence` **reconcilia a los vivos ella misma** y dice el número; y el reporte
-> separa las **dos causas de una discrepancia** entre lo que la política pide y lo que la entidad
-> tiene — (a) cambiaste algo en este frame y el reconciliador corre en el tick, volvé a tipearlo solo;
-> (b) si se lee igual tipeado solo dos veces, el reconciliador no corre. ⚠ El override de flags
-> (`phantasmagoria_ghost_flag ausencia 0`) **no tiene gancho** —vive en `server.lua`, que ahora mismo
-> tiene trabajo ajeno sin commitear— así que para esa fila la segunda lectura no es opcional.
+> **Lo que entró (r21, `client.lua` y NADA MÁS — `server_cloak.lua` no se abrió):**
 >
-> ⚠ **La planilla de la ausencia pasó de r19 a r20**: la sesión paralela tomó el número r19 para su
-> propia ronda (el crash de `TranslateActivity` leyendo el global `ENT` en runtime). *Dos sesiones
-> numerando rondas sobre el mismo repo es una colisión que sólo se ve leyendo el trabajo del otro.*
+> - **Cuatro lecturas en vez de una**: `NW` · `GetNoDraw()` · `IsEffectActive( EF_NODRAW )` ·
+>   `IsDormant()`, impresas juntas. *El principio de §20.4 —preguntarle al destino y no a la fuente—
+>   era correcto; el defecto fue elegir un solo campo del destino sin comprobar que contestara.*
+> - **El que decide pasa a ser el NW var**, con el motivo escrito al lado: no es «la verdad del
+>   render», es **la única lectura que se pudo acreditar**.
+> - **Un muestreador de posición**, porque *un valor congelado no se ve en una sola lectura*: una
+>   posición vieja y una actual son las dos un `Vector` plausible. Imprime `movimiento(s) vistos` y
+>   `N s desde el último cambio`. ⚠ Su trampa está escrita antes de correrlo: **un fantasma quieto
+>   también da congelado**, así que las filas piden el fantasma CAMINANDO y la 02 es el control.
+> - **El marcador declara su propia mentira**: si la posición está congelada, la etiqueta 3D dice
+>   `!! POS CONGELADA N s` y la línea de HUD suma un tercer número. *Un marcador dibujado en el lugar
+>   equivocado se ve igual que uno correcto.*
+>
+> **Lo siguiente: correr `dev/checks/phantasmagoria-render-r21.html` (7 filas).** La 01 decide entre
+> (a′) *el cliente no lo recibe* y (b) *sí lo recibe y el defecto es del marcador*.
+> ⚠⚠ **Y si sale (a′), NO improvisar el reemplazo en la misma ronda**: `SetNoDraw` dejaría de servir
+> para ① *y* para ②, y la salida que §20.3 tenía escrita para el parpadeo —networkear el horario—
+> **cae con ella**, porque una entidad que no se transmite tampoco puede recibir nada por la entidad.
+> Dato ya en disco para esa decisión: **`wraithcloaking.lua` nunca usa `SetNoDraw`** — se esconde con
+> `SetMaterial` y `SetRenderMode`. §20.1 rechazó ese módulo por cómo acopla la solidez y eso sigue en
+> pie: *la técnica de render y el módulo son dos decisiones distintas, y sólo una de las dos se había
+> medido.*
+>
+> ⚠ **Numeración:** la sesión paralela usa **r19** para su propia ronda (el crash de
+> `TranslateActivity`). La ausencia fue **r20** y esta es **r21**.
 
 
-> ⭐ **LO ÚLTIMO (2026-08-09): la r18b CORRIÓ — 5 de 5. `speed.base` queda CERRADO en juego, la foto
+> **LO ANTERIOR (2026-08-09): la r18b CORRIÓ — 5 de 5. `speed.base` queda CERRADO en juego, la foto
 > vieja está arreglada, y el arreglo destapó el SEGUNDO lector viejo sin que ninguna fila lo pidiera.**
 >
 > **El arco de Diseño 5.1 cierra con evidencia dura, y en los dos sentidos:**
@@ -95,6 +121,8 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 >
 > **Sigue abierto y sin diagnosticar:** con `absence 1` el marcador **no se dibuja ni en modo 1**. Ver
 > el bloque de más abajo; `phantasmagoria_ghost_cl` ya imprime los dos conteos que lo deciden.
+> → **Corrido en la r20:** los dos conteos dieron **1 y 1**, así que la entidad SÍ está en el cliente
+> y la causa es otra. Ver el bloque de arriba.
 
 
 > **LO ANTERIOR (2026-08-08): la r18 CORRIÓ — 8 de 8, y TRES de esos verdes imprimieron el número

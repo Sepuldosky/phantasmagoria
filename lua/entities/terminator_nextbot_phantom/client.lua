@@ -32,6 +32,15 @@
 -- "no lo dibuje" se ven exactamente igual. Por eso en 2 hay una linea de HUD
 -- que sigue contando los que NO dibujo. *El instrumento tiene que seguir
 -- hablando justo cuando deja de dibujar.*
+--
+-- ⚠ LA r20 CORRIO Y ESTE ARCHIVO SE LLEVO LAS DOS FALLAS -- ninguna del
+-- fantasma, las dos del instrumento. `GetNoDraw()` en el CLIENTE devolvio
+-- `false` sobre un fantasma que en la pantalla no estaba: con eso, el modo 2
+-- nunca salteaba a nadie y la linea de HUD conto `0 invisibles` con uno
+-- delante. Desde la r21 el que decide es el NW var -- la unica de las cuatro
+-- lecturas que se pudo acreditar -- y las otras tres se imprimen al lado
+-- ( renderState ). *Diseno 20.4 daba por buena una lectura: el juego la
+-- refuto, y la respuesta no es creerle a otra sino imprimir las cuatro.*
 local cvMarker = CreateClientConVar( "phantasmagoria_debug_ghost", "1", true, false,
     "Marcador de desarrollo sobre los fantasmas. 0 = nada · 1 = siempre, atravesando paredes ( tapa la invisibilidad de Diseno 20 ) · 2 = HONESTO: no dibuja al fantasma invisible, y cuenta cuantos oculto en una linea de HUD.", 0, 2 )
 
@@ -83,32 +92,140 @@ local function typeLabel( ghost )
 end
 
 ---------------------------------------------------------------------------
+-- ⚠ EL MUESTREADOR DE POSICION -- UN VALOR CONGELADO NO SE VE EN UNA LECTURA
+---------------------------------------------------------------------------
+-- Entro en la r21 y es la mitad que decide el bloqueante de la r20. Ahi el
+-- cliente dijo `por clase 1 · por campo 1` -- o sea que TIENE la entidad -- y
+-- sin embargo el marcador no aparecia por ningun lado, con `GetNoDraw()`
+-- devolviendo false sobre un fantasma que en la pantalla NO SE VE. Tres hechos
+-- que no cierran, y una pista suelta del autor que los explica a los tres:
+-- *"cuando lo tomo el physgun va a su posicion original, aunque lo tenga en
+-- frente"*.
+--
+-- La hipotesis que hay que MEDIR, no dar por buena: EF_NODRAW en el servidor
+-- manda la entidad a FL_EDICT_DONTSEND ( CBaseEntity::UpdateTransmitState ), o
+-- sea que el cliente deja de recibirla. La copia sigue en la lista -- por eso
+-- los dos conteos dan 1 -- pero queda CONGELADA con los ultimos valores que
+-- alcanzo a recibir: posicion vieja, y `GetNoDraw` en false porque la bandera
+-- se puso en el mismo tick en que dejo de transmitirse. Si es asi, el marcador
+-- si dibuja: dibuja donde el fantasma ESTABA, y eso desde la pantalla se lee
+-- igual que "no dibuja nada".
+--
+-- ⚠ Y NO SE PUEDE DECIDIR TIPEANDO UN COMANDO: una posicion vieja y una
+-- posicion actual son los dos un Vector plausible. Lo que las separa es que una
+-- DEJA DE CAMBIAR, y eso es una medicion en el tiempo. Mismo patron que
+-- phantasmagoria_ghost_look.
+--
+-- ⚠ LA TRAMPA DE ESTE MUESTREADOR, ESCRITA ANTES DE CORRERLO: un fantasma
+-- QUIETO tambien tiene la posicion congelada. El instrumento no puede
+-- distinguirlos solo -- por eso la fila trae su precondicion ( el fantasma
+-- CAMINANDO, con `ghost_where` diciendo `marcha` ) y su control ( con
+-- `absence 0`, visible y caminando, esto tiene que dar CERCA DE 0 ). *Un
+-- numero que sube igual cuando el mecanismo anda y cuando no, no mide.*
+local POS_EPSILON = 0.5
+
+hook.Add( "Think", "phantasmagoria_ghost_possampler", function()
+    for _, ghost in ipairs( ents.FindByClass( "terminator_nextbot_phantom" ) ) do
+        if not IsValid( ghost ) then continue end
+
+        local pos = ghost:GetPos()
+        local ant = ghost.phantom_clPos
+
+        if not ant or ant:DistToSqr( pos ) > ( POS_EPSILON * POS_EPSILON ) then
+            ghost.phantom_clPos = pos
+            ghost.phantom_clPosAt = CurTime()
+
+            -- El primer muestreo cuenta como movimiento y esta bien que asi
+            -- sea: `movimientos 1` con muchos segundos encima dice "llego una
+            -- sola vez y despues nada", que es exactamente el sintoma.
+            ghost.phantom_clMoves = ( ghost.phantom_clMoves or 0 ) + 1
+
+        end
+    end
+end )
+
+-- Devuelve: segundos desde el ultimo cambio de posicion ( nil si nunca se
+-- muestreo ), y el texto.
+local function posFreshness( ghost )
+    local at = ghost.phantom_clPosAt
+    if not at then return nil, "( sin muestrear todavia )" end
+
+    local edad = CurTime() - at
+
+    return edad, string.format( "%.1f s desde el ultimo cambio · %d movimiento(s) vistos", edad, ghost.phantom_clMoves or 0 )
+
+end
+
+-- Cuantos segundos sin moverse ya son sospechosos. No es un criterio de la
+-- fila -- el criterio lo fija la planilla comparando contra el servidor -- es
+-- el umbral con que el marcador decide GRITAR que puede estar mintiendo.
+local POS_CONGELADA = 2
+
+---------------------------------------------------------------------------
 -- EL ESTADO DE RENDER, LEIDO DEL DESTINO Y NO DE NUESTRA CREENCIA
 ---------------------------------------------------------------------------
--- Diseno 20.4. `GetNoDraw()` y `GetMaterial()` son lo que el ENGINE tiene
--- puesto de verdad en esta maquina: si el servidor cree una cosa y el cliente
--- tiene otra, esta funcion lo dice y el NW var de al lado dice la otra mitad.
+-- Diseno 20.4 pedia UNA lectura ( `GetNoDraw()` ) y la daba por buena: *"es
+-- networkeado, o sea que el cliente puede leer GetNoDraw() y decir el estado
+-- REAL"*. La r20 REFUTO esa frase en juego -- `render: se dibuja · el server
+-- dice INVISIBLE` sobre un fantasma que no se veia --, asi que aca ya no hay
+-- una lectura sino CUATRO, y ninguna manda sobre las otras:
 --
--- *Preguntarle al servidor que cree haber escrito acredita el pedido; preguntar
--- GetNoDraw acredita el efecto.* Ese es exactamente el modo de falla que este
--- taller ya pago: una guarda que mide la fuente en vez del destino.
+--   GetNoDraw()                     lo que este taller venia creyendo que era
+--                                   la verdad del engine
+--   IsEffectActive( EF_NODRAW )     la MISMA bandera leida por el otro lado.
+--                                   Si las dos difieren, una de las dos no
+--                                   sirve para decidir y hay que saber cual
+--   IsDormant()                     si el cliente dejo de RECIBIR la entidad.
+--                                   Es la hipotesis de arriba, contestada por
+--                                   el engine en una palabra
+--   el NW var                       la creencia del servidor, que viaja por
+--                                   OTRO sistema de red
 --
--- Devuelve: invisible ( bool ), texto.
+-- *Preguntarle al servidor que cree haber escrito acredita el pedido.* Pero la
+-- r20 mostro la vuelta de tuerca: **preguntarle al cliente tampoco acredita el
+-- efecto si se le pregunta con el campo equivocado**. Dos lecturas de la misma
+-- bandera al lado son mas baratas que otra ronda.
+--
+-- Devuelve: oculto ( bool, el que USA el marcador ), texto.
 local function renderState( ghost )
-    local nodraw = ghost:GetNoDraw()
-    local mat    = ghost:GetMaterial()
+    local nodraw  = ghost:GetNoDraw()
+    local efecto  = ghost:IsEffectActive( EF_NODRAW )
+    local dormida = ghost:IsDormant()
+    local mat     = ghost:GetMaterial()
 
-    -- El NW var es la CREENCIA del servidor y viaja aparte de la bandera. Que
-    -- los dos coincidan no es obvio: son dos sistemas de red distintos, y la
-    -- unica forma de ver una divergencia es imprimirlos juntos.
+    -- ⚠ EL QUE DECIDE ES EL NW VAR, Y ES UN CAMBIO DE LA r21 CON MOTIVO
+    -- MEDIDO. Hasta la r20 decidia `GetNoDraw()`, con este argumento escrito al
+    -- lado: *"lo que decide si el marcador delata es si el fantasma SE DIBUJA, y
+    -- eso lo contesta la bandera de la entidad"*. El argumento sigue siendo
+    -- correcto y la lectura no: en la r20 esa bandera dijo `false` sobre un
+    -- fantasma que no se dibujaba, asi que el modo honesto NUNCA se activo y la
+    -- linea de HUD conto `0 invisibles` con uno delante ( fila 05, roja ).
+    --
+    -- El NW var es la unica de las cuatro lecturas que la r20 vio llegar bien.
+    -- No es "la verdad del render": es la creencia del servidor, y se elige
+    -- porque **es la que se puede acreditar**. Las otras tres se siguen
+    -- imprimiendo, que es como una divergencia se vuelve un hallazgo en vez de
+    -- una decision en silencio.
     local dice = ghost:GetNWBool( "phantasmagoria_invisible", false )
 
-    local txt = ( nodraw and "INVISIBLE ( GetNoDraw true )" or "se dibuja" ) ..
-        ( ( mat and mat ~= "" ) and ( "   material '" .. mat .. "'" ) or "" ) ..
-        "   ·  el server dice " .. ( dice and "INVISIBLE" or "visible" ) ..
-        ( ( nodraw ~= dice ) and "   !! NO COINCIDEN" or "" )
+    local txt = "NW " .. ( dice and "INVISIBLE" or "visible" ) ..
+        "  ·  GetNoDraw " .. ( nodraw and "true" or "false" ) ..
+        "  ·  IsEffectActive( EF_NODRAW ) " .. ( efecto and "true" or "false" ) ..
+        "  ·  IsDormant " .. ( dormida and "SI" or "no" ) ..
+        ( ( mat and mat ~= "" ) and ( "  ·  material '" .. mat .. "'" ) or "" )
 
-    return nodraw, txt
+    if nodraw ~= efecto then
+        txt = txt .. "\n                           !! LAS DOS LECTURAS DE LA MISMA BANDERA DIFIEREN: " ..
+            "GetNoDraw no sirve para decidir en este realm."
+
+    elseif nodraw ~= dice then
+        txt = txt .. "\n                           !! LA BANDERA Y EL NW VAR NO COINCIDEN. " ..
+            ( dormida and "IsDormant SI lo explica: el cliente dejo de recibir la entidad y esa bandera quedo vieja."
+            or "IsDormant dice que no, asi que NO es que dejo de recibirla: es un hallazgo de red." )
+
+    end
+
+    return dice, txt
 
 end
 
@@ -264,6 +381,25 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cl", function()
 
         say( "     render:               " .. estado )
 
+        -- ⚠ LA POSICION DEL CLIENTE, Y ES LA FILA 01 DE LA r21. El servidor
+        -- imprime la suya en phantasmagoria_ghost_where: si las dos NO
+        -- COINCIDEN mientras el fantasma camina, la copia del cliente esta
+        -- congelada y ningun marcador clientside sabe donde esta el fantasma
+        -- -- que es la version de la causa ( a ) que la r20 no habia nombrado,
+        -- porque la entidad SI esta y lo que falta es la informacion.
+        local edad, txtPos = posFreshness( ghost )
+        local p = ghost:GetPos()
+
+        say( string.format( "     pos EN EL CLIENTE:    %.1f %.1f %.1f   ( %s )", p.x, p.y, p.z, txtPos ) )
+        say( "                           comparar con la linea 'pos' de phantasmagoria_ghost_where, " ..
+            "CON EL FANTASMA CAMINANDO." )
+
+        if edad and edad >= POS_CONGELADA then
+            say( "                           !! esta posicion NO CAMBIA hace " .. string.format( "%.1f", edad ) ..
+                " s. Si el servidor lo da caminando, el cliente NO lo esta recibiendo." )
+
+        end
+
         -- Y QUE HACE EL MARCADOR CON ESO. Sin esta linea, un fantasma sin
         -- marcador no distingue "esta invisible y el modo honesto lo respeto"
         -- de "el marcador esta roto" ni de "no esta en el PVS".
@@ -289,10 +425,13 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cl", function()
 end, "Imprime lo que el CLIENTE tiene de cada fantasma a la vista: la key networkeada, si resuelve a ficha, y el texto exacto que dibuja el marcador." )
 
 -- Lo que el marcador vio en el ultimo frame, para la linea de HUD del modo 2.
--- Son DOS numeros y no uno: los que estan en el PVS y los que no dibuje. Sin el
--- segundo, una pantalla sin marcadores no distingue "los oculte" de "no hay
--- ninguno cerca".
-local ultimoConteo = { enPVS = 0, ocultos = 0 }
+-- Eran DOS numeros y ahora son TRES, y el tercero entro por la r20: los que
+-- estan en el PVS, los que no dibuje, y los que tengo con LA POSICION
+-- CONGELADA. Sin el segundo, una pantalla sin marcadores no distingue "los
+-- oculte" de "no hay ninguno cerca". Sin el tercero, un marcador dibujado en el
+-- lugar equivocado se lee como un marcador correcto -- que es peor, porque es
+-- el instrumento mintiendo con confianza.
+local ultimoConteo = { enPVS = 0, ocultos = 0, congelados = 0 }
 
 hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", function( _bDrawingDepth, bDrawingSkybox, isDraw3DSkybox )
     if bDrawingSkybox or isDraw3DSkybox then return end
@@ -311,8 +450,9 @@ hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", funct
     -- El conteo se escribe ANTES del early return, y esa es la diferencia entre
     -- un instrumento y un dibujo: con cero fantasmas la linea de HUD tiene que
     -- decir cero, no quedarse con el numero del frame anterior.
-    ultimoConteo.enPVS   = #ghosts
-    ultimoConteo.ocultos = 0
+    ultimoConteo.enPVS      = #ghosts
+    ultimoConteo.ocultos    = 0
+    ultimoConteo.congelados = 0
 
     if #ghosts <= 0 then return end
 
@@ -331,17 +471,29 @@ hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", funct
     for _, ghost in ipairs( ghosts ) do
         if not IsValid( ghost ) then continue end
 
-        -- Se lee GetNoDraw y no el NW var a proposito: lo que decide si el
-        -- marcador delata es si el fantasma SE DIBUJA, y eso lo contesta la
-        -- bandera de la entidad. El NW var es la creencia del servidor y se
-        -- imprime aparte, en phantasmagoria_ghost_cl, justo para que una
-        -- divergencia entre los dos sea visible en vez de decidir en silencio.
-        if ghost:GetNoDraw() then
+        -- ⚠ DECIDE EL NW VAR, Y HASTA LA r20 DECIDIA GetNoDraw. El motivo
+        -- entero esta arriba, en renderState: en juego esa bandera dijo `false`
+        -- sobre un fantasma que no se dibujaba, asi que el modo honesto no se
+        -- activaba nunca y este contador daba 0 con un fantasma invisible
+        -- delante. Las cuatro lecturas se siguen imprimiendo en
+        -- phantasmagoria_ghost_cl: la que decide es la que se pudo acreditar,
+        -- no la que sonaba mejor.
+        if ghost:GetNWBool( "phantasmagoria_invisible", false ) then
             ultimoConteo.ocultos = ultimoConteo.ocultos + 1
 
             if honesto then continue end
 
         end
+
+        -- ⚠ Y ACA EL MARCADOR PUEDE ESTAR MINTIENDO. Si el cliente dejo de
+        -- recibir la entidad, GetPos() devuelve la ultima que llego y la caja
+        -- se dibuja donde el fantasma ESTABA. Un instrumento que no puede
+        -- saberlo dibuja lo mismo que uno correcto; este lo dice en la
+        -- etiqueta, que es donde el que mira ya esta mirando.
+        local edadPos = posFreshness( ghost )
+        local congelada = edadPos and edadPos >= POS_CONGELADA
+
+        if congelada then ultimoConteo.congelados = ultimoConteo.congelados + 1 end
 
         local pos = ghost:GetPos()
         local mins, maxs = ghost:OBBMins(), ghost:OBBMaxs()
@@ -368,6 +520,12 @@ hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", funct
             draw.SimpleText( "PHANTOM #" .. ghost:EntIndex(), "DermaLarge", 0, 0, colText, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM )
             draw.SimpleText( dist .. " m  " .. ( hunting and "HUNT" or "calma" ), "DermaLarge", 0, 6, col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP )
             draw.SimpleText( typeLabel( ghost ), "DermaLarge", 0, 34, colText, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP )
+
+            if congelada then
+                draw.SimpleText( "!! POS CONGELADA " .. string.format( "%.0f", edadPos ) .. " s",
+                    "DermaLarge", 0, 62, colHunt, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP )
+
+            end
         cam.End3D2D()
 
     end
@@ -396,7 +554,10 @@ hook.Add( "HUDPaint", "phantasmagoria_ghost_marker_hud", function()
     if cvMarker:GetInt() < 2 then return end
 
     local txt = "debug_ghost 2 ( honesto )   ·   " .. ultimoConteo.enPVS .. " en PVS   ·   " ..
-        ultimoConteo.ocultos .. " invisibles ( NO se dibujan )"
+        ultimoConteo.ocultos .. " invisibles ( NO se dibujan )" ..
+        ( ultimoConteo.congelados > 0
+        and ( "   ·   !! " .. ultimoConteo.congelados .. " CON LA POSICION CONGELADA ( el cliente no los esta recibiendo )" )
+        or "" )
 
     -- Sin fondo ni caja: es un instrumento de desarrollo y tapar el mapa seria
     -- pelearle a lo que se esta tratando de mirar.

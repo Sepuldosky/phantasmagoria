@@ -2161,9 +2161,28 @@ del hunt se agrega **en `server_doors.lua`**, que es el que ya sabe manejarla, y
 
 | | Qué hace | Dónde va | Por qué |
 |---|---|---|---|
-| `SetNoDraw( true )` | no se dibuja **nada** | **① y ②** | barato, no toca la solidez, alternable cada tick, y es **networkeado**: el cliente puede leer `GetNoDraw()` y decir el estado REAL |
+| `SetNoDraw( true )` | no se dibuja **nada** | **① y ②** | barato, no toca la solidez, alternable cada tick, y es **networkeado**: el cliente puede leer `GetNoDraw()` y decir el estado REAL ⚠ **la última mitad está REFUTADA, ver abajo** |
 | `SetMaterial( mat )` | se dibuja con otro material | **③** | es lo único que da **silueta translúcida** y **sombra opaca** |
 | `SetRenderMode` + alpha | el clásico | ninguna, por ahora | ⚠ la lección ya pagada en este taller: **`$alpha` no vuelve translúcido a nada, es `$translucent`**, y un material sin la flag se dibuja opaco sin un solo error |
+
+> ⚠⚠ **REFUTADO EN JUEGO (r20, 2026-08-09): «el cliente puede leer `GetNoDraw()` y decir el estado
+> REAL» es falso.** Con el fantasma invisible y **fuera de la pantalla**, el cliente imprimió
+> `render: se dibuja · el server dice INVISIBLE`. La lectura que esta tabla daba por buena devolvió
+> `false` sobre una entidad que el engine no estaba dibujando — y de esa frase colgaban **las dos
+> mitades de §20.4**: el modo honesto nunca salteó a nadie y la línea de HUD contó `0 invisibles` con
+> uno delante. *Una propiedad de la red que nadie midió sostuvo el instrumento entero de un bloque.*
+>
+> La causa **todavía no está cerrada** y la decide la planilla `phantasmagoria-render-r21`: la
+> hipótesis es que `EF_NODRAW` manda la entidad a `FL_EDICT_DONTSEND`, o sea que el cliente **deja de
+> recibirla** — la copia sigue en la lista (los dos conteos de la r20 dieron 1) pero congelada, con la
+> posición vieja y la bandera sin llegar. Si eso se confirma, **`SetNoDraw` deja de servir para ① y
+> para ②**, y la salida escrita más abajo —networkear el horario del parpadeo— cae con ella, porque
+> una entidad que no se transmite tampoco puede recibir nada por la entidad.
+>
+> Dato ya en disco para esa decisión: **`wraithcloaking.lua` nunca usa `SetNoDraw`** — se esconde con
+> `SetMaterial` (`:94`, `:110`) y `SetRenderMode` (`:136`), que es la familia que *no* deja de
+> transmitir. §20.1 rechazó ese módulo por cómo acopla la solidez, y eso sigue en pie: **la técnica de
+> render y el módulo son dos decisiones distintas, y sólo una de las dos se había medido.**
 
 ⚠ **El riesgo abierto de ② es la RED, no el render.** `SetNoDraw` es una bandera de entidad que
 viaja en el snapshot. Con un ciclo visible de **0,08 s** y snapshots a ~20-30 Hz, un pulso corto
@@ -2194,11 +2213,23 @@ exactamente igual**:
   cliente lee `GetNoDraw()` y `GetMaterial()` de la entidad —que es lo que el engine va a usar de
   verdad— y lo imprime al lado de lo que el servidor *dice* por NW var. **Si los dos divergen, eso
   mismo es el hallazgo**, y hoy no habría forma de verlo.
+  > ⚠ **Y divergieron en la primera corrida — pero el hallazgo no era el que este renglón esperaba.**
+  > La divergencia no delató al servidor: delató a *la lectura*. Desde la r21 se imprimen **cuatro**
+  > —`NW`, `GetNoDraw()`, `IsEffectActive( EF_NODRAW )` e `IsDormant()`— y **la que decide es el NW
+  > var**, que es la única que se pudo acreditar. *El principio («preguntar al destino, no a la
+  > fuente») era correcto; el defecto fue elegir un solo campo del destino y no comprobar que
+  > contestara.* Dos lecturas de la misma bandera, al lado, salen más baratas que otra ronda.
 - **En modo 2 hay una línea de HUD permanente** — `debug_ghost 2 ( honesto ) · N en PVS · M
   invisibles ( no se dibujan )`. Un fantasma invisible deja de dibujar su marcador, pero el contador
   sigue subiendo: *el instrumento sigue hablando cuando deja de dibujar*. Es la regla que costó tres
   rondas en la tajada A —**si el criterio es visual, el instrumento tiene que producir texto**— y
   además queda dentro de la captura.
+  > ⚠ **La línea habló, y dijo `0`.** En la r20 contó `0 invisibles` con el fantasma invisible
+  > delante, porque colgaba de la misma lectura refutada. *Un instrumento que sigue hablando cuando
+  > deja de dibujar es media garantía: la otra mitad es que lo que dice se pueda acreditar.* Desde la
+  > r21 cuenta por el NW var y trae un **tercer** número —`K con la posición CONGELADA`—, que es el
+  > que cubre el modo de falla que ninguna de las dos mitades podía ver: **un marcador dibujado en el
+  > lugar equivocado se ve igual que uno correcto**, y desde la pantalla se lee como «no se dibuja».
 
 ### 20.5 De dónde sale el parpadeo — **las dos fuentes, y una de las dos ya no existe**
 

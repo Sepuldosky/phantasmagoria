@@ -7,6 +7,69 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-09 (29) — **La ausencia ANDA (r20: 7/2/1). Las dos rojas son del instrumento, y la frase que se cayó estaba en el diseño**
+
+Diseño §20 ①. La r20 corrió sobre `server_cloak.lua`, escrito la sesión anterior y sin una sola
+pasada en juego.
+
+**Lo que quedó cerrado, y no se re-discute:** invisible en calma y visible en hunt (03), el control
+`absence 0` (04), el flag por NPC con la convar en 1 (08), `absence 2` forzando también en hunt (09),
+el reconciliador corriendo (02), y los dos números que medían suposiciones del diseño en vez de
+darlas por buenas: **`ESCRITORES AJENOS 0`** y **`hijos máximo visto 0`** (07) — o sea que `SetNoDraw`
+sobre la entidad alcanza y el bucle sobre los hijos es póliza. La 10 cerró **con dato**:
+`BecomeRagdoll` **SÍ hereda `EF_NODRAW`**, salió la línea que lo dice, y esa guarda no era decorativa.
+La 06 quedó *sin correr* por lo mismo que falló el resto: *«no lo puedo ver»*.
+
+### ⚠⚠ Lo que se cayó es una frase de §20.3, escrita como un hecho y nunca medida
+
+> *«`SetNoDraw` … es **networkeado**, o sea que el cliente puede leer `GetNoDraw()` y decir el estado
+> REAL»*
+
+En juego, con el fantasma invisible y **fuera de la pantalla**, el cliente imprimió `render: se
+dibuja · el server dice INVISIBLE`. De esa frase colgaban **las dos mitades de §20.4**: el modo
+honesto nunca salteó a nadie, y la línea de HUD contó `0 invisibles` con uno delante. *Una propiedad
+de la red que nadie midió sostenía el instrumento entero de un bloque.*
+
+### ⚠ Y la fila 01 no fue roja: contestó (b), que era una de sus dos salidas verdes
+
+`por clase 1 · por campo 1` es, **por el texto de esa misma fila**, *«el cliente LO TIENE»* — y con
+eso descartó la causa (a), la que habría tumbado §20.4 de una. Se marcó roja porque el marcador
+seguía sin aparecer: *puntuar una fila de diagnóstico por el síntoma que la trajo, y no por su
+criterio, convierte un resultado en una falla.*
+
+### ⭐ La tercera causa la nombra una pista escrita al margen de otra fila
+
+> *«cuando lo tomo el physgun va a su posición original, aunque lo tenga en frente»*
+
+Con eso, los tres hechos que no cerraban cierran juntos: **la entidad está en el cliente, pero
+congelada**. Hipótesis a medir en la r21: `EF_NODRAW` manda la entidad a `FL_EDICT_DONTSEND`, el
+cliente deja de **recibirla**, la copia queda con la posición vieja y con la bandera sin llegar — y
+entonces **el marcador sí dibuja: dibuja donde el fantasma estaba**, que desde la pantalla se lee
+igual que «no dibuja nada». El NW var llegó porque viaja por otro sistema, que es exactamente para lo
+que `phantom_SetVisible` decía en un comentario que iba a servir.
+
+### Lo que entró — `client.lua` y nada más (`server_cloak.lua` no se abrió)
+
+- **Cuatro lecturas en vez de una**: `NW` · `GetNoDraw()` · `IsEffectActive( EF_NODRAW )` ·
+  `IsDormant()`, impresas juntas, con el `!!` que dice cuál de las dos divergencias posibles salió.
+  *El principio de §20.4 —preguntarle al destino y no a la fuente— era correcto; el defecto fue
+  elegir un solo campo del destino sin comprobar que contestara.*
+- **El que decide pasa a ser el NW var**, con el motivo escrito: no es «la verdad del render», es la
+  única lectura que se pudo acreditar.
+- **Un muestreador de posición**, porque *un valor congelado no se ve en una sola lectura*. Imprime
+  `movimiento(s) vistos` y los segundos desde el último cambio. ⚠ Su trampa va escrita **antes** de
+  correrlo: un fantasma quieto también da congelado, así que las filas piden el fantasma caminando y
+  la 02 de la r21 es el control que le exige decir que NO.
+- **El marcador declara su propia mentira**: `!! POS CONGELADA N s` en la etiqueta 3D y un tercer
+  número en la línea de HUD.
+
+Planilla nueva: `dev/checks/phantasmagoria-render-r21.html` (7 filas). ⚠ **Si la 01 sale (a′),
+`SetNoDraw` deja de servir para ① *y* para ②** — y la salida que §20.3 tenía escrita para el parpadeo
+(networkear el horario al cliente) **cae con ella**. El reemplazo se decide **después** de cerrar la
+hoja: cambiar cómo se vuelve invisible el fantasma es cambiar la mecánica que se está midiendo.
+
+---
+
 ## 2026-08-09 (28) — **`speed.base` CERRADO en juego**, y dos rondas de instrumento para llegar (r18: 8/8 con tres verdes falsos · r18b: 5/5)
 
 Diseño 5.1. `phantom_SetType` escribe `phantom_SpeedMul` con el `speed.base` del tipo, y ese campo
