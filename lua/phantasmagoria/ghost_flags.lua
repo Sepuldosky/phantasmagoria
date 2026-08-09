@@ -746,8 +746,7 @@ local malFormados = auditarNeutro()
 if malFormados > 0 then
     ErrorNoHalt( "[Phantasmagoria] ghost_flags.lua NO FUSIONA por " .. malFormados ..
         " rasgo(s) mal formado(s) ( arriba ). Los 30 tipos quedan con el neutro y ninguno se " ..
-        "diferencia -- que es un defecto visible en juego, a diferencia de una fusion a medias.
-" )
+        "diferencia -- que es un defecto visible en juego, a diferencia de una fusion a medias.\n" )
 
 else
     PHANTASMAGORIA.AplicarRasgosDeEvento()

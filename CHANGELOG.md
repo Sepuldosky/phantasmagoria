@@ -7,6 +7,82 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-09 (34) — **El motor no cargó en juego: un salto de línea CRUDO dentro de un string. Y el verificador de sintaxis había dicho OK.**
+
+Primera corrida en GMod del bloque de eventos. `ghost_flags.lua:749` tiraba
+`unfinished string near '"diferencia -- que es un defecto visible en juego...'` y el archivo
+**entero** no cargaba: `rasgos de evento 0 de 30 filas con events`.
+
+**La causa:** ese `ErrorNoHalt` se escribió a través de un script de Python adentro de un heredoc de
+shell — **dos capas de escape** — y el `\n` final llegó a Lua como un salto de línea **real** en vez
+de como la secuencia de dos caracteres. Un string corto de Lua no puede contener un salto crudo.
+
+### ⚠ Lo que importa no es la línea: es que EL VERIFICADOR DIO VERDE
+
+La entrada anterior acreditó *«sintaxis verificada con cinco archivos de control»*. **Esa
+acreditación era falsa.** Medido aislando el caso:
+
+```lua
+local x = f( "primera parte
+segunda parte" )
+```
+
+`luaparser`: **OK**. GMod: `unfinished string`. El taller ya tenía anotado que `luaparser` da
+**falsos rojos** sobre Lua de GMod (rechaza `continue`); lo que no estaba medido es que también da un
+**falso VERDE** sobre esto. *Un verificador que sólo da falsos rojos se descubre la primera vez que
+se usa; uno que da un falso verde se descubre en el juego, y mientras tanto ACREDITA.*
+
+Y el error se repitió **dos veces más** en la misma sesión —al generar los archivos de control con
+`printf`, y al escribir esta misma entrada de changelog por `python -c`— lo que fija la regla real:
+**la prosa y el código no se escriben a través de una capa de shell.** Van con la herramienta de
+archivos, que no tiene niveles de escape.
+
+**Entra `dev/luacheck_gmod.py`**, con dos instrumentos porque ninguno solo alcanza: `luaparser` con
+`continue` neutralizado, **más un lexer propio** que separa a mano los cuatro contextos (comentario
+de línea, comentario largo, string largo, string corto) y busca ese único defecto. Trae **sus dos
+controles versionados** — `luacheck_control_roto.lua` y `luacheck_control_sano.lua` — porque un
+verificador sin control es lo que produjo esta entrada. El sano cubre lo que un detector ingenuo
+confundiría: strings largos `[[ ]]` con saltos (legales), comentarios con comillas sueltas, comillas
+escapadas.
+
+Corrido sobre **los 32 `.lua` del addon**: el defecto estaba en esa sola línea, y los otros 31 están
+limpios.
+
+### Lo que la corrida SÍ acreditó, y no es poco
+
+- **La degradación elegante funcionó en su primer uso real.** El `NEUTRO` de emergencia del motor
+  —que existe justamente por si `ghost_flags.lua` no carga, y que salió de la revisión adversarial—
+  hizo que **los eventos siguieran corriendo** con el archivo de rasgos caído: el autor escuchó el
+  teléfono, el crujido, los golpes y el mueble, y tiró props a mano. Sin ese fallback el scheduler
+  habría tirado un error de Lua **por segundo, para siempre**.
+- **Los tres instrumentos dijeron la verdad todo el tiempo.** `rasgos: el tipo no tiene rasgos de
+  evento ( ghost_flags.lua no fusiono )` en la ficha del fantasma; la guarda (2) de
+  `server_events.lua` nombrando la causa; y el cargador con `0 de 30 filas con events` más la flecha
+  a la lista `DATOS`. **Ninguno dijo que estaba todo bien.**
+- **`vueltas 364 del scheduler`** — la línea que existe para distinguir *«el motor no corre»* de *«el
+  motor corre y no encuentra sujeto»*. Hizo exactamente eso.
+- El evento de luces reportó su vacío **enumerando las siete clases que buscó**, en un mapa sin luces
+  alcanzables: el vacío como medición y no como silencio.
+- Y `throw` mostró su propia discriminación sin que nadie la pidiera: el primer disparo forzado dio
+  `NO SALIO -- no habia props fisicos movibles a 450 u ( 0 vetado(s) )` y los cuatro siguientes
+  `1 prop(s) tirado(s)`. **El `( 0 vetado(s) )` es el dato**: no había candidatos, no es que los
+  hubiera descartado.
+
+### Lo que queda sin medir hasta la próxima corrida
+
+Con la fusión caída, **los 30 tipos se comportaron como el neutro** — el Shade de la corrida tenía
+`rate x1.00 count 1 burst 1`. O sea que **la fila 06 de la planilla (Poltergeist contra Shade), que
+es el corazón del pedido del autor, todavía no se ejerció.** Verificado fuera del juego que
+`auditarNeutro` devuelve **0 mal formados** sobre las 25 filas —o sea que la fusión va a correr— pero
+eso es una simulación, no una corrida.
+
+⚠ Y hay una consecuencia del orden nuevo que hay que tener presente al leer el próximo arranque: la
+guarda corre **antes** de la fusión y, si encuentra un rasgo mal formado, **se niega a fusionar**.
+Eso produce *exactamente el mismo síntoma* que el archivo que no carga (`0 de 30 filas con events`),
+y las dos causas se distinguen sólo por cuál `ErrorNoHalt` salió arriba.
+
+---
+
 ## 2026-08-09 (33) — **Los eventos paranormales: el motor ESCRITO, y quince defectos propios agarrados antes de que llegaran al juego**
 
 Pedido del autor: portar los eventos de `[gm] paranormal events` —parpadeo de luces, tirar objetos y
