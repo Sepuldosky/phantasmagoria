@@ -142,6 +142,7 @@ local function stats( ghost )
 
 end
 
+
 -- TRANSICIONES, no muestras por tick: una linea por frame serian 66 por segundo
 -- y la bitacora taparia el dato. Misma decision que en server_steps.lua.
 local BITACORA_MAX = 40
@@ -170,6 +171,52 @@ local function anotar( texto )
     log[ #log + 1 ] = string.format( "%8.1f  ", CurTime() ) .. texto
 
     while #log > BITACORA_MAX do table.remove( log, 1 ) end
+
+end
+
+---------------------------------------------------------------------------
+-- ⚠⚠ EL CENSO DE HIJOS -- Y ESTE ES EL ARREGLO DE LA r23
+---------------------------------------------------------------------------
+-- La r23 se corrio con MAS DE CIEN fantasmas y no aparecio un solo hijo, asi que
+-- las tres filas que dependian de que apareciera uno **no midieron nada**. Y no
+-- fue mala suerte: la fila estaba mal pensada. Pedia estar mirando la consola en
+-- el instante exacto en que un tercero parentea algo -- un evento que en la r22
+-- ocurrio UNA vez, en un tramo con hunt, physgun y disparos, y que puede durar
+-- menos de un segundo si el hijo es un efecto que se autodestruye.
+--
+-- *Una fila que exige presenciar un evento raro no es una medicion: es una
+-- guardia.* Lo que se puede medir en cambio es **el rastro**, y para eso hace
+-- falta que el rastro sobreviva a los dos: al instante y al fantasma.
+--
+-- Por eso el censo es GLOBAL y no del NPC. `st.hijosMax` muere con el bot -- que
+-- es exactamente por que el hijo de la r22 quedo sin nombre: cuando se lo fue a
+-- buscar, el fantasma que lo habia tenido ya no existia y su contador se habia
+-- ido con el. Este vive en la mesa del addon y lo imprime cualquier corrida
+-- posterior, sin haber estado mirando.
+PHANTASMAGORIA.KidsSeen = PHANTASMAGORIA.KidsSeen or {}
+
+local function censarHijo( ghost, child, invisible, ocultado )
+    local clave = tostring( child:GetClass() ) .. "  modelo '" .. tostring( child:GetModel() ) .. "'"
+    local reg = PHANTASMAGORIA.KidsSeen[ clave ]
+
+    if not reg then
+        reg = { veces = 0, primera = CurTime(), conInvisible = 0, ocultados = 0 }
+        PHANTASMAGORIA.KidsSeen[ clave ] = reg
+
+        -- La primera vez de cada clase de hijo va a la bitacora: es el momento
+        -- en que aparece un tercero que nadie habia visto, y es lo que la r22 no
+        -- pudo reconstruir despues.
+        anotar( quien( ghost ) .. "  ⚠ HIJO NUEVO EN EL CENSO: " .. clave ..
+            "   ( el fantasma estaba " .. ( invisible and "INVISIBLE" or "visible" ) .. " )" )
+
+    end
+
+    reg.veces = reg.veces + 1
+    reg.ultima = CurTime()
+    reg.ultimoDueno = tostring( ghost.phantom_Serial or "?" )
+
+    if invisible then reg.conInvisible = reg.conInvisible + 1 end
+    if ocultado then reg.ocultados = reg.ocultados + 1 end
 
 end
 
@@ -290,6 +337,8 @@ function ENT:phantom_SetVisible( visible, motivo )
 
         st.hijosTocados = st.hijosTocados + 1
 
+        censarHijo( self, child, not visible, not visible )
+
         -- Ruidoso a proposito: si esto corre, la corrida tiene que enterarse en
         -- el momento y no dos rondas despues -- que es exactamente lo que paso.
         anotar( quien( self ) .. "  !! HIJO " .. ( visible and "MOSTRADO" or "OCULTADO" ) ..
@@ -409,10 +458,44 @@ function ENT:phantom_ReconcileVisibility( myTbl )
     --
     -- Se consulta SOLO cuando queremos ocultar, y por dos motivos que son el
     -- mismo: `GetChildren()` arma una tabla nueva cada vez y esto corre cada
-    -- tick, y con el fantasma visible no hay nada que hacer -- un hijo nuevo ya
-    -- nace dibujado. *Una comprobacion por tick se paga; conviene que se pague
-    -- solo en el caso en que puede encontrar algo.*
+    -- tick, y con el fantasma visible no hay nada que ocultar -- un hijo nuevo
+    -- ya nace dibujado. *Una comprobacion por tick se paga; conviene que se
+    -- pague solo en el caso en que puede encontrar algo.*
     local hijosCambiaron = not quiere and #self:GetChildren() ~= ( myTbl.phantom_visKids or 0 )
+
+    -- ⚠⚠ Y ACA EL HUECO POR EL QUE SE ESCAPO EL HIJO DE LA r22. La linea de
+    -- arriba mira los hijos SOLO cuando el fantasma tiene que estar invisible, y
+    -- para OCULTARLOS eso alcanza. Pero para SABER QUE EXISTEN no alcanza: un
+    -- hijo que aparece con el fantasma visible -- que es la mitad del tiempo, y
+    -- justo la mitad en la que uno le dispara y lo agarra con el physgun -- no lo
+    -- veia nadie. La r23 spawneo mas de cien fantasmas y no encontro ninguno;
+    -- eso no prueba que no haya: prueba que **la unica ventana abierta era la
+    -- equivocada**.
+    --
+    -- El censo va aparte del ocultamiento y por eso se muestrea siempre,
+    -- limitado a 4 veces por segundo. Con eso el costo esta acotado incluso con
+    -- cien fantasmas vivos ( 400 GetChildren por segundo en total, no 6600 ).
+    --
+    -- ⚠ Y DECLARA SU PROPIA CEGUERA, que es la condicion para que un "no
+    -- aparecio" valga algo: **un hijo que viva menos de 0,25 s puede no ser visto
+    -- por este muestreo**. Si el hijo de la r22 era un efecto que se autodestruye
+    -- -- muchos lo son --, esta ventana lo puede seguir perdiendo, y entonces el
+    -- que falta es un testigo en el nacimiento y no un muestreo mas rapido.
+    if ( myTbl.phantom_kidsNext or 0 ) < CurTime() then
+        myTbl.phantom_kidsNext = CurTime() + 0.25
+
+        for _, child in ipairs( self:GetChildren() ) do
+            if not IsValid( child ) then continue end
+            if child:IsPlayer() then continue end
+            if child:GetParent() ~= self then continue end
+
+            local st = stats( self )
+            if 1 > st.hijosMax then st.hijosMax = 1 end
+
+            censarHijo( self, child, not quiere, false )
+
+        end
+    end
 
     if quiere == real and myTbl.phantom_Visible ~= nil and not hijosCambiaron then return end
 
@@ -533,7 +616,22 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
 
         PHANTASMAGORIA.VisLog = {}
 
+        -- ⚠ EL CENSO NO SE BORRA ACA, Y ES DELIBERADO. Es lo unico del bloque
+        -- que sobrevive a los fantasmas, y existe justamente porque el hijo de
+        -- la r22 se perdio cuando murio el bot que lo tenia. Un `reset` entre
+        -- filas no puede llevarse el unico registro largo. Se borra a mano y
+        -- diciendolo: `phantasmagoria_ghost_vis resetcenso`.
         say( "[Phantasmagoria] contadores y bitacora de visibilidad vaciados en " .. n .. " fantasma(s)." )
+        say( "    el censo de hijos NO se toco ( sobrevive a proposito ). Para vaciarlo: ..._ghost_vis resetcenso" )
+        return
+
+    end
+
+    if sub == "resetcenso" then
+        PHANTASMAGORIA.KidsSeen = {}
+
+        say( "[Phantasmagoria] censo de hijos vaciado. ⚠ A partir de ahora un censo vacio vuelve a " ..
+            "significar 'no vi ninguno DESDE EL RESET', no 'no hay'." )
         return
 
     end
@@ -669,6 +767,38 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
 
     local log = PHANTASMAGORIA.VisLog
 
+    -- ⚠ EL CENSO VA ANTES DE LA BITACORA Y SE IMPRIME SIEMPRE, con fantasmas o
+    -- sin ellos. Es lo que convierte una fila de guardia en una fila que se
+    -- puede correr despues: el rastro sobrevive al instante Y al fantasma, que
+    -- son las dos cosas que le faltaron a la r22 -- cuando se fue a buscar quien
+    -- era el hijo, el bot que lo habia tenido ya no existia y su contador se
+    -- habia ido con el.
+    local censo, nCenso = PHANTASMAGORIA.KidsSeen or {}, 0
+
+    for _ in pairs( censo ) do nCenso = nCenso + 1 end
+
+    say( "[Phantasmagoria] censo de HIJOS de toda la sesion ( sobrevive a los fantasmas ): " ..
+        ( nCenso > 0 and ( nCenso .. " clase(s) distinta(s)" ) or "NINGUNO todavia" ) )
+
+    if nCenso <= 0 then
+        -- Un vacio tiene que decir de que es vacio. Aca hay DOS lecturas y sin
+        -- esta linea se confunden: "no hay terceros que parenteen nada" y "los
+        -- hubo pero duraron menos que el muestreo".
+        say( "    ⚠ Un censo vacio NO prueba que no pase: el muestreo es de 4 por segundo, asi que" )
+        say( "      un hijo que viva menos de 0.25 s puede no aparecer nunca aca. La r22 vio uno" )
+        say( "      ( base_gmodentity ) en un tramo con hunt, physgun y disparos." )
+
+    else
+        for clave, reg in pairs( censo ) do
+            say( "    " .. clave )
+            say( "        visto " .. reg.veces .. " vez(ces) · " .. reg.conInvisible ..
+                " con el fantasma invisible · ocultado por nosotros " .. reg.ocultados ..
+                " · ultimo dueno serie " .. tostring( reg.ultimoDueno ) ..
+                " · hace " .. string.format( "%.0f", CurTime() - ( reg.ultima or CurTime() ) ) .. " s" )
+
+        end
+    end
+
     say( "[Phantasmagoria] bitacora ( transiciones, ultimas " .. BITACORA_MAX .. " ):" )
 
     if #log <= 0 then
@@ -684,7 +814,7 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
 
     end
 
-end, "phantasmagoria_ghost_vis [reset]  -- que pide la politica de ausencia, que creemos haber escrito, y que tiene puesto la entidad." )
+end, "phantasmagoria_ghost_vis [reset|resetcenso]  -- que pide la politica de ausencia, que creemos haber escrito, y que tiene puesto la entidad." )
 
 ---------------------------------------------------------------------------
 -- LAS DOS GUARDAS DEL CIERRE, y este archivo es el ultimo include

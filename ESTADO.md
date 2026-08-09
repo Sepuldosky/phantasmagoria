@@ -13,7 +13,48 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐⭐ **LO ÚLTIMO (2026-08-09): la r22 CORRIÓ — 8 de 8. LA AUSENCIA (§20 ①) QUEDA CERRADA EN JUEGO.**
+> ⭐ **LO ÚLTIMO (2026-08-09): la r23 corrió y el veredicto real es 1 pasa · 3 SIN CORRER. La única
+> que midió cerró con evidencia dura; las otras tres fueron una hoja mal pensada — mía.**
+>
+> **La 04 PASA, y hay que releerla porque el autor la dejó en *sin correr* pidiendo que la mirara
+> alguien.** Con más de cien fantasmas spawneados, la bitácora trajo el par que la fila pedía:
+> `#89/s103` (t=182,5) y `#89/s131` (t=198,3) · `#100/s114` y `#100/s142` · `#78/s1`, `s2`, `s3` …
+> `s124`. **El `EntIndex` se recicla en segundos**, la serie desempata, y ninguna línea salió con
+> `s?`. El defecto que hizo que la r22 se contradijera a sí misma queda cerrado.
+>
+> ⚠⚠ **Las otras tres NO son verdes: ninguna tuvo sujeto.** Las tres notas dicen
+> `hijos 0 ahora · maximo visto 0 · tocados 0` — **no apareció un solo hijo en más de cien
+> fantasmas**. La 01 pedía la línea del hijo con clase y modelo; la 02, un `nodraw SI` sobre ese hijo;
+> la 03, la línea `[ re-aplicado: cambio la cantidad de hijos ]`. **No salió ninguna de las tres.**
+> La hoja lo decía en la rama roja y en el pie — *«si no aparece ninguno, no es un verde: es Sin
+> correr»* — y aun así se marcaron verdes. *Una advertencia que vive en la rama que nadie lee cuando
+> algo sale bien no es una advertencia: el que corre puntúa desde la rama de PASA.*
+>
+> ⚠ **Y no fue mala suerte: la fila estaba mal pensada de dos maneras.** (a) Exigía **presenciar el
+> instante** en que un tercero parentea algo — en la r22 pasó *una* vez, en un tramo con hunt, physgun
+> y disparos, y pudo durar menos de un segundo. (b) Peor: el único lugar que miraba hijos era el
+> reconciliador **cuando el fantasma tiene que estar invisible** — o sea que **la ventana abierta era
+> la equivocada**, porque disparar y agarrar con el physgun pasa con el fantasma *visible*.
+>
+> **Lo que entró (r23b):** un **censo de hijos GLOBAL**, que sobrevive al instante *y al fantasma* —
+> que son las dos cosas que le faltaron a la r22, donde cuando se fue a buscar quién era el hijo el
+> bot que lo había tenido ya no existía y su contador se había ido con él. Se muestrea **siempre**
+> (no sólo con el fantasma invisible), limitado a 4 veces por segundo, y `phantasmagoria_ghost_vis` lo
+> imprime aunque no quede ningún fantasma vivo. ⚠ **Declara su propia ceguera**: un hijo que viva menos
+> de 0,25 s puede no aparecer nunca, así que un censo vacío se imprime *con esa advertencia al lado* —
+> *un cero tiene que decir de qué es cero*. Y el `reset` **no** lo borra (`resetcenso` para eso).
+>
+> ⚠ Un detalle del camino: el censo quedó escrito **antes** de `quien()` y `anotar()`, o sea que los
+> habría tomado como globales `nil` — un error que sólo hubiera aparecido el día que apareciera un
+> hijo. Es la trampa de siempre (*una guarda que sólo corre en el caso raro es código sin estrenar*),
+> agarrada leyendo el orden de declaración y no corriéndolo.
+>
+> **Lo siguiente:** `dev/checks/phantasmagoria-hijo-r23b.html`. Se juega normal y **se corre el
+> comando al final**, no durante.
+>
+> ---
+>
+> **LO ANTERIOR (2026-08-09): la r22 CORRIÓ — 8 de 8. LA AUSENCIA (§20 ①) QUEDA CERRADA EN JUEGO.**
 >
 > El fantasma no se ve **y el marcador lo sigue**, que es lo que la r20 no podía dar:
 > `saltos del Draw 4493` y subiendo · `NW INVISIBLE · GetNoDraw false · IsEffectActive false ·

@@ -7,6 +7,47 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-09 (32) — **La r23: 1 pasa · 3 sin correr. El índice reciclado queda CERRADO; el hijo no tuvo sujeto**
+
+**Lo que sí midió (fila 04, que el autor dejó en *sin correr* para que la revisara alguien):** con más
+de cien fantasmas spawneados la bitácora trajo `#89/s103` y `#89/s131`, `#100/s114` y `#100/s142`,
+`#78/s1…s124`. **El `EntIndex` se recicla en segundos** y la serie desempata; ninguna línea salió con
+`s?`. El defecto que hizo que la r22 se contradijera dentro de una misma pantalla queda cerrado.
+
+### ⚠ Las otras tres no eran verdes: no tuvieron sujeto
+
+Las tres notas dicen `hijos 0 ahora · maximo visto 0 · tocados 0`. Ninguna de las tres líneas que las
+filas pedían —la del hijo con clase y modelo, el `nodraw SI`, el `[ re-aplicado: cambio la cantidad de
+hijos ]`— salió. La hoja lo advertía en la rama roja y en el pie, y aun así se marcaron verdes:
+*una advertencia que vive en la rama que nadie lee cuando algo sale bien no es una advertencia — el
+que corre puntúa desde la rama de PASA.*
+
+Y no fue mala suerte, la fila estaba mal pensada de dos maneras: exigía **presenciar el instante** en
+que un tercero parentea algo (en la r22 pasó una vez, y pudo durar menos de un segundo), y el único
+lugar que miraba hijos era el reconciliador **cuando el fantasma tiene que estar invisible** — o sea
+que **la ventana abierta era la equivocada**, porque dispararle y agarrarlo con el physgun pasa con el
+fantasma visible.
+
+### Lo que entró: el censo
+
+Un **censo de hijos global**, que sobrevive al instante *y al fantasma* — las dos cosas que le
+faltaron a la r22, donde el bot que había tenido el hijo ya no existía cuando se lo fue a buscar y su
+contador se había ido con él. Se muestrea siempre, no sólo con el fantasma invisible, limitado a 4
+veces por segundo, y `phantasmagoria_ghost_vis` lo imprime aunque no quede ningún fantasma vivo.
+
+⚠ **Declara su propia ceguera**: un hijo que viva menos de 0,25 s puede no aparecer nunca, así que un
+censo vacío se imprime con esa advertencia al lado — *un cero tiene que decir de qué es cero*. Y el
+`reset` no lo borra: para eso está `resetcenso`, que además avisa qué cambia de significado.
+
+⚠ Escrito y movido: el censo quedó al principio **antes** de `quien()` y `anotar()`, o sea que los
+habría tomado como globales `nil` — un error que sólo hubiera aparecido el día que apareciera un hijo.
+*Una guarda que sólo corre en el caso raro es código sin estrenar*: se agarró leyendo el orden de
+declaración, no corriéndolo.
+
+Planilla: `dev/checks/phantasmagoria-hijo-r23b.html`.
+
+---
+
 ## 2026-08-09 (31) — **La r22 CERRÓ la ausencia (8/8), y dos de esos verdes traían un hallazgo adentro**
 
 `saltos del Draw 4493` y subiendo, el marcador siguiendo a un fantasma que no se ve, `ESCRITORES
