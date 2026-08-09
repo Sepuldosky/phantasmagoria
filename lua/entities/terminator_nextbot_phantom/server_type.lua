@@ -18,14 +18,20 @@
       SI   elige un tipo al spawnear, lo guarda, lo networkea y lo publica en
            los instrumentos. Un DATO y su plomeria.
 
-      NO   no cambia NI UN comportamiento. speed.base esta en los 30 tipos y
-           server_speed.lua ya sabe leer un campo `phantom_SpeedMul` que GANA
-           sobre la convar andamio... y este archivo NO lo escribe, a proposito.
-           Escribirlo aca haria que la velocidad de todos los fantasmas cambiara
-           de golpe, sin A/B, en la misma ronda que estrena el mecanismo que la
-           decide. *Un rojo de velocidad en esta ronda seria imposible de
-           atribuir.* Lo escribe la tajada de Diseno 5, con su propia planilla, y
-           el enganche es una linea.
+      SI   ( desde Diseno 5.1, 2026-08-08 ) escribe `phantom_SpeedMul` con el
+           speed.base del tipo, en phantom_SetType. Es LO UNICO de este archivo
+           que cambia comportamiento, tiene su propia convar de control
+           ( phantasmagoria_ghost_typespeed ) y su propia planilla.
+
+      NO   no toma `speed.top`, `isRange`, `alt` ni `losSpeedUp` -- 13 de los 30
+           traen una segunda velocidad. Eso es §5.1 entero y va despues. Los
+           instrumentos los imprimen marcados como no usados, igual que los 12
+           rangos de threshold.
+
+      ⚠ ESTE ENCABEZADO DECIA "no cambia NI UN comportamiento" y ahora es falso.
+      Se corrige aca y no en una nota al pie porque es lo primero que lee el que
+      abre el archivo, y una advertencia vencida arriba gana contra el codigo
+      correcto de abajo.
 
     LOS TRES ORIGENES DEL TIPO, EN ORDEN DE PRIORIDAD, Y NINGUNO ES SILENCIOSO:
 
@@ -230,6 +236,31 @@ function ENT:phantom_SetType( key, motivo )
     -- dos estados distintos que en la fila del networkeo hay que poder separar.
     self:SetNWString( "phantasmagoria_type", self.phantom_TypeKey or "" )
 
+    -- ⚠ DISENO 5.1 ENTRA ACA, Y ESTA ES LA UNICA LINEA DEL ARCHIVO QUE CAMBIA
+    -- COMPORTAMIENTO. La tajada A dejo el enganche escrito y sin conectar a
+    -- proposito ( ver el encabezado ); este bloque lo conecta, y lo hace en LA
+    -- PUERTA UNICA y no en phantom_ResolveType.
+    --
+    -- El motivo es que SetType tiene DOS entradas y ResolveType solo cubre una:
+    -- el spawn pasa por ResolveType, pero `phantasmagoria_ghost_type <key>`
+    -- sobre un fantasma vivo tambien termina aca. Colgado del spawn, forzar un
+    -- tipo en caliente dejaria el multiplicador del tipo VIEJO con el reporte
+    -- diciendo `campo phantom_SpeedMul ( tipo )`: la fuente correcta con el
+    -- valor equivocado.
+    --
+    -- Con guarda, por el mismo motivo que la de AdditionalInitialize: este
+    -- archivo se incluye ANTES que server_speed.lua, y aunque en tiempo de
+    -- ejecucion el metodo ya exista, un include roto tiene que decir QUE falto
+    -- en vez de tirar un error por spawn.
+    if self.phantom_ApplyTypeSpeed then
+        self:phantom_ApplyTypeSpeed( "phantom_SetType -> " .. tostring( motivo ) )
+
+    else
+        ErrorNoHalt( "[Phantasmagoria] phantom_ApplyTypeSpeed no existe ( server_speed.lua no cargo ): " ..
+            "el tipo se asigna pero speed.base NO se aplica, y el reporte va a decir que manda el andamio.\n" )
+
+    end
+
     return self.phantom_TypeKey
 
 end
@@ -275,27 +306,67 @@ end
 -- Compartida porque la imprimen dos comandos distintos y ya hubo un caso en este
 -- addon de dos impresiones del mismo dato divergiendo.
 --
--- ⚠ DICE QUE speed.base NO ESTA APLICADO, y esa aclaracion es el punto de la
--- linea. Sin ella, leer "speed.base 0.900" al lado de la velocidad se entiende
--- como que el fantasma ya va al 0,9 -- y no: el multiplicador que manda hoy
--- sigue siendo la convar andamio. *Una linea que muestra un dato que todavia no
--- se usa tiene que decir que no se usa, o se lee como que si.*
+-- ⚠ ESTA LINEA DECIA "( NO aplicado todavia )" Y ERA CIERTO HASTA ESTE BLOQUE.
+-- Ahora speed.base SI se aplica ( Diseno 5.1 ), asi que el parentesis dejo de
+-- ser una aclaracion permanente y paso a ser un ESTADO que hay que medir: el
+-- mismo texto que antes protegia de una lectura falsa la produciria hoy.
+--
+-- Y no se decide por la convar sino por EL CAMPO, que es el destino. Preguntarle
+-- a `phantasmagoria_ghost_typespeed` diria lo que se pidio; preguntarle a
+-- `phantom_SpeedMul` dice lo que quedo escrito, que es lo unico que el
+-- multiplicador va a leer. *Una guarda que mide la fuente en vez del destino
+-- acredita el pedido y no el efecto.*
 function PHANTASMAGORIA.TypeLines( ghost, say )
     local t = ghost.phantom_Type
 
     if not t then
         say( "    tipo    SIN TIPO   ( " .. tostring( ghost.phantom_TypeWhy or "nunca se resolvio: phantom_ResolveType no corrio" ) .. " )" )
+
+        -- ⚠ SIN TIPO PERO CON CAMPO ES UN ESTADO IMPOSIBLE, y hay que poder
+        -- verlo. Es el residuo que dejaria un borrado que no ocurrio, y sin esta
+        -- linea el fantasma sin tipo seguiria corriendo a la velocidad del tipo
+        -- que tenia -- con las dos lineas del reporte de acuerdo entre si.
+        if isnumber( ghost.phantom_SpeedMul ) then
+            say( "            !! y sin embargo phantom_SpeedMul vale x" .. string.format( "%.3f", ghost.phantom_SpeedMul ) ..
+                " -- RESIDUO de un tipo anterior: el borrado de phantom_ApplyTypeSpeed no corrio" )
+
+        end
+
         return
+
+    end
+
+    local base  = t.speed and t.speed.base or 0
+    local campo = ghost.phantom_SpeedMul
+    local estado
+
+    if not isnumber( campo ) then
+        estado = "NO aplicado ( " .. tostring( ghost.phantom_SpeedMulWhy or "phantom_ApplyTypeSpeed nunca corrio" ) .. " )"
+
+    elseif math.abs( campo - base ) < 0.0005 then
+        estado = "APLICADO ( phantom_SpeedMul, gana sobre la convar andamio )"
+
+    else
+        estado = "!! APLICADO CON OTRO NUMERO: el campo vale x" .. string.format( "%.3f", campo )
 
     end
 
     say( "    tipo    " .. t.name .. "   ( " .. tostring( ghost.phantom_TypeKey ) .. " )" ..
         "   threshold " .. tostring( ghost:phantom_HuntThreshold() ) .. " %" ..
-        "   speed.base x" .. string.format( "%.3f", t.speed and t.speed.base or 0 ) .. " ( NO aplicado todavia )" )
+        "   speed.base x" .. string.format( "%.3f", base ) .. " " .. estado )
 
     say( "            lo eligio: " .. tostring( ghost.phantom_TypeWhy ) ..
         "   ·  networkeado como '" .. ghost:GetNWString( "phantasmagoria_type", "" ) .. "'" )
 
+    -- Los rasgos de velocidad que este bloque NO toma. Van aca y no solo en
+    -- phantasmagoria_ghost_speed porque ghost_where es el comando que se tipea
+    -- durante una corrida.
+    local extras = PHANTASMAGORIA.SpeedExtras and PHANTASMAGORIA.SpeedExtras( t )
+
+    if extras then
+        say( "            speed: " .. extras .. "   ( Diseno 5.1, NO se usan todavia )" )
+
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -353,17 +424,34 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_type", function( ply, _, args )
 
     ---------------------------------------------------------------------------
     if sub == "lista" then
+        -- LOS SUJETOS UTILES DEL A/B DE VELOCIDAD, contados por el comando y no
+        -- por el que escribe la planilla ( regla 6 ). El default de
+        -- phantasmagoria_ghost_speedmul es 1.0, que es EXACTAMENTE el speed.base
+        -- de la mayoria de los tipos: sobre uno de esos, el enganche roto y el
+        -- enganche andando imprimen el mismo numero y **el check no puede
+        -- fallar**. Esta lista es la que hay que usar para elegir sujeto.
+        local discriminan = {}
+
         for _, key in ipairs( PHANTASMAGORIA.TypeOrder or {} ) do
             local t = T[ key ]
+            local base = t and t.speed and t.speed.base
+            local raro = isnumber( base ) and math.abs( base - 1 ) > 0.0005
+
+            if raro then table.insert( discriminan, key .. " x" .. string.format( "%.3f", base ) ) end
 
             say( "    " .. key .. string.rep( " ", math.max( 1, 14 - #key ) ) ..
                 ( t and ( t.name .. string.rep( " ", math.max( 1, 14 - #t.name ) ) ..
                     "threshold " .. tostring( t.hunt and t.hunt.threshold ) .. " %" ..
-                    "   speed.base x" .. string.format( "%.3f", t.speed and t.speed.base or 0 ) ..
+                    "   speed.base x" .. string.format( "%.3f", base or 0 ) .. ( raro and " *" or "  " ) ..
                     ( t.hunt and t.hunt.thresholdLow and t.hunt.thresholdHigh and ( "   rango " .. t.hunt.thresholdLow .. "-" .. t.hunt.thresholdHigh .. " % ( Diseno 5.2, NO se usa todavia )" ) or "" ) )
                 or "!! SIN FICHA: esta en TypeOrder y no en Types" ) )
 
         end
+
+        say( "" )
+        say( "    * = speed.base distinto de 1.000, o sea distinto del default de la convar andamio." )
+        say( "      SON " .. #discriminan .. " DE " .. a.nOrden .. ", y el A/B de velocidad solo se puede medir sobre estos:" )
+        say( "      " .. ( #discriminan > 0 and table.concat( discriminan, " · " ) or "NINGUNO -- con esta tabla el A/B de speed.base no es medible" ) )
 
         return
 
@@ -512,11 +600,13 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_type", function( ply, _, args )
     say( "[Phantasmagoria] override -> '" .. sub .. "' ( " .. T[ sub ].name .. " )." )
     say( "    alcanza a los fantasmas vivos Y a los que spawneen despues, hasta que alguien ponga 'auto'." )
 
-    -- ⚠ HOY ESTO NO CAMBIA NINGUN COMPORTAMIENTO: el tipo todavia no lo lee
-    -- nadie. Cuando Diseno 5 enganche speed.base, cambiarlo en vivo va a cambiar
-    -- la velocidad en el acto, y esa linea de aviso tiene que actualizarse con
-    -- el enganche -- no despues.
-    say( "    NADA de comportamiento cambia todavia: el tipo es un dato hasta que Diseno 5 lo lea." )
+    -- ⚠ ESTA LINEA DECIA "NADA de comportamiento cambia todavia" Y HOY SERIA
+    -- FALSA. El comentario que la acompañaba pedia actualizarla junto con el
+    -- enganche "y no despues", asi que se actualiza en la misma edicion.
+    -- Cambiar el tipo en caliente cambia la velocidad EN EL ACTO.
+    say( "    ⚠ ESTO CAMBIA LA VELOCIDAD EN EL ACTO ( Diseno 5.1 ): el speed.base del tipo se escribe " ..
+        "en phantom_SpeedMul y gana sobre phantasmagoria_ghost_speedmul." )
+    say( "      para volver al andamio sin perder el tipo:  phantasmagoria_ghost_typespeed 0" )
 
     PHANTASMAGORIA.EachGhost( function( ghost ) ghost:phantom_ResolveType() end )
 

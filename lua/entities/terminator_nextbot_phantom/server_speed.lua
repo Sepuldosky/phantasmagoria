@@ -41,13 +41,40 @@
 local cvDerive = CreateConVar( "phantasmagoria_ghost_derivespeed", "1", FCVAR_ARCHIVE,
     "El fantasma deriva su velocidad de la carrera del jugador ( Diseno 1.1 ). En 0 usa los 550 u/s de la base, que es el defecto original: sirve para el A/B.", 0, 1 )
 
--- ANDAMIO, igual que phantasmagoria_hunt: el multiplicador lo va a poner la
--- tabla de tipos ( ghost_types.lua ya lo trae en los 30, speed.base ) via el
--- campo phantom_SpeedMul. Mientras el motor de rasgos no exista, esta convar es
--- la unica forma de moverlo en juego, y el campo GANA cuando exista.
+-- ANDAMIO, y desde este bloque ya NO es el que manda por default: el
+-- multiplicador lo pone la tabla de tipos ( ghost_types.lua, speed.base ) via el
+-- campo phantom_SpeedMul, que GANA. Esta convar queda para tres cosas: el lado
+-- de control del A/B ( con typespeed 0 ), un fantasma SIN TIPO, y mover la
+-- escala a mano en una corrida.
 -- 1.0 = Spirit = va tan rapido como vos corriendo ( Diseno 5.1 ).
+--
+-- ⚠ Y SU DEFAULT ES EXACTAMENTE speed.base DE 19 DE LOS 30 TIPOS. Contado sobre
+-- la tabla: solo 11 tipos traen un base distinto de 1.000 ( aswang 0.900,
+-- dayan 0.706, deildegast 0.235, deogen 0.235, gallu 0.800, hantu 0.824,
+-- moroi 0.882, obambo 0.850, revenant 0.588, thaye 0.588, the_twins 0.882 ).
+-- O sea que **un check que pruebe un Spirit, un Demon o un Oni no puede fallar**:
+-- el enganche roto y el enganche andando imprimen el mismo x1.000. Los sujetos
+-- de este bloque tienen que salir de esos 11.
 local cvMul = CreateConVar( "phantasmagoria_ghost_speedmul", "1", FCVAR_ARCHIVE,
-    "ANDAMIO. Multiplicador de la carrera del jugador ( Spirit = 1.0 ). Lo va a reemplazar speed.base de la tabla de tipos.", 0.1, 5 )
+    "ANDAMIO. Multiplicador de la carrera del jugador ( Spirit = 1.0 ). Lo reemplaza speed.base de la tabla de tipos cuando el fantasma tiene tipo y phantasmagoria_ghost_typespeed esta en 1.", 0.1, 5 )
+
+-- EL A/B DEL ENGANCHE DE speed.base ( Diseno 5.1 ), y hace falta una convar
+-- propia aunque parezca que el A/B ya existia. El prompt de este bloque decia
+-- que el par ya estaba -- la convar andamio contra el campo -- y es cierto a
+-- medias: **desde que el campo se escribe, la convar andamio deja de poder
+-- moverse**, porque el campo gana siempre. Sin una perilla que apague la
+-- escritura, el lado "manda el andamio" del A/B queda inalcanzable.
+--
+-- ⚠ Y `phantasmagoria_ghost_typeassign 0` NO es este control, aunque tambien
+-- devuelva el mando a la convar. Ese apaga el TIPO entero: el fantasma queda sin
+-- threshold, sin ficha y sin networkeo, o sea que un rojo en esa mitad tendria
+-- cuatro causas posibles. Este apaga UNA cosa: la escritura del multiplicador,
+-- con el tipo intacto y a la vista en el reporte. *Un control que apaga de mas
+-- no separa la causa: la reparte.*
+local cvTypeSpeed = CreateConVar( "phantasmagoria_ghost_typespeed", "1", FCVAR_ARCHIVE,
+    "El tipo escribe su speed.base en el campo phantom_SpeedMul, que GANA sobre phantasmagoria_ghost_speedmul ( Diseno 5.1 ). " ..
+    "En 0 el campo se borra y manda la convar andamio, con el tipo intacto: ese es el control negativo del enganche. " ..
+    "Se re-aplica a los fantasmas VIVOS al cambiarla, y lo dice por consola.", 0, 1 )
 
 -- Sin Better Movement Y sin jugadores no hay de donde derivar nada. 400 es la
 -- carrera default de un player de GMod sandbox. Se imprime como "fallback" en
@@ -154,8 +181,9 @@ function ENT:phantom_RefreshSpeed()
     local ref             = self:phantom_SpeedReferencePlayer()
     local base, fuente    = PHANTASMAGORIA.PlayerBaseRunSpeed( ref )
 
-    -- El campo gana sobre la convar: cuando el motor de rasgos exista va a
-    -- escribir phantom_SpeedMul por tipo y el andamio deja de mandar solo.
+    -- El campo gana sobre la convar. Desde Diseno 5.1 lo escribe
+    -- phantom_ApplyTypeSpeed con el speed.base del tipo; sin tipo, o con
+    -- phantasmagoria_ghost_typespeed en 0, queda vacio y manda el andamio.
     local mul, mulFuente
     if isnumber( self.phantom_SpeedMul ) then
         mul, mulFuente = self.phantom_SpeedMul, "campo phantom_SpeedMul ( tipo )"
@@ -193,6 +221,122 @@ function ENT:phantom_SpeedFactor()
     end
 
     return self.phantom_speedFactor
+
+end
+
+---------------------------------------------------------------------------
+-- EL ENGANCHE DE speed.base -- Diseno 5.1, y es la linea que la tajada A dejo
+-- escrita y sin conectar
+---------------------------------------------------------------------------
+-- LO QUE ESCRIBE Y NADA MAS: `speed.base`. Los 30 tipos traen ademas `top`,
+-- `isRange`, `alt` y `losSpeedUp` -- 13 de los 30 tienen una segunda velocidad --
+-- y eso es §5.1 entero ( onLOS, inverseDistance, rampDuringHunt... ), que va
+-- despues y con su propia planilla. El instrumento los IMPRIME marcados como no
+-- usados, igual que la tajada A hizo con `thresholdLow`/`High`: a la vista sin
+-- parecer implementados.
+--
+-- ⚠ DONDE SE ESCRIBE: en `phantom_SetType`, que es LA PUERTA UNICA, y no en
+-- `phantom_ResolveType` ni en `AdditionalInitialize`. El motivo es medible:
+-- `phantasmagoria_ghost_type <key>` cambia el tipo de un fantasma VIVO, y si el
+-- multiplicador se escribiera solo al spawnear, forzar un tipo en caliente
+-- dejaria el campo con el numero del tipo VIEJO -- y el reporte diria
+-- `campo phantom_SpeedMul ( tipo )`, que es **la fuente correcta con el valor
+-- equivocado**. Ese es el peor de los modos de falla posibles: el instrumento
+-- acreditando el mecanismo mientras miente el numero.
+--
+-- ⚠ Y BORRA, que es la mitad que se olvida. Un fantasma que pierde el tipo
+-- ( `typeassign 0`, o un override a una key que no existe ) tiene que volver al
+-- andamio. Si el campo quedara escrito, el reporte seguiria diciendo "( tipo )"
+-- sobre un fantasma SIN TIPO -- las dos lineas contradiciendose en la misma
+-- pantalla, que es el defecto que la r15 ya pago una vez.
+--
+-- ⚠ INVALIDA EL CACHE, y sin esto el A/B en caliente no se puede leer.
+-- `phantom_RefreshSpeed` cachea 0,5 s ( RECALC_EVERY ), asi que un
+-- `phantasmagoria_ghost_type deogen` seguido de un `phantasmagoria_ghost_speed`
+-- -- que son dos tipeos, o sea decimas -- podria imprimir el factor del tipo
+-- anterior. Un rojo ahi seria del reloj del instrumento y no del mecanismo, y se
+-- veria exactamente igual a un enganche roto.
+function ENT:phantom_ApplyTypeSpeed( porque )
+    local t     = self.phantom_Type
+    local base  = t and t.speed and t.speed.base
+    local antes = self.phantom_SpeedMul
+
+    if cvTypeSpeed:GetBool() and isnumber( base ) then
+        self.phantom_SpeedMul    = base
+        self.phantom_SpeedMulWhy = "speed.base del tipo '" .. tostring( self.phantom_TypeKey ) .. "'"
+
+    else
+        self.phantom_SpeedMul = nil
+
+        -- Las tres causas de que NO haya campo son distintas y se ven iguales
+        -- desde el reporte de velocidad, que solo diria "convar ( ANDAMIO )".
+        -- Nombrarlas aca es lo que hace que la fila del control negativo pueda
+        -- decir de que lado del A/B esta.
+        if not cvTypeSpeed:GetBool() then
+            self.phantom_SpeedMulWhy = "phantasmagoria_ghost_typespeed 0 ( CONTROL: manda el andamio )"
+
+        elseif not t then
+            self.phantom_SpeedMulWhy = "el fantasma no tiene tipo"
+
+        else
+            self.phantom_SpeedMulWhy = "el tipo '" .. tostring( self.phantom_TypeKey ) .. "' no trae speed.base"
+
+        end
+    end
+
+    self.phantom_SpeedMulAt  = CurTime()
+    self.phantom_SpeedMulHow = porque or "( sin motivo declarado )"
+
+    -- El cache muere aca, no en el proximo tick.
+    self.phantom_speedNext = 0
+
+    return self.phantom_SpeedMul, antes
+
+end
+
+-- LA CONVAR ALCANZA A LOS VIVOS, y esto no es comodidad. `phantom_SetType` solo
+-- corre al spawnear y al forzar un tipo; sin este callback, mover la convar con
+-- fantasmas en el mapa **no haria nada** y el A/B se leeria como "el control no
+-- funciona". *Una perilla que no alcanza a los sujetos que ya existen es una
+-- perilla que el operador cree que movio.*
+cvars.AddChangeCallback( "phantasmagoria_ghost_typespeed", function( _, old, new )
+    if not PHANTASMAGORIA.EachGhost then return end
+
+    local n = PHANTASMAGORIA.EachGhost( function( ghost )
+        if not ghost.phantom_ApplyTypeSpeed then return end
+
+        ghost:phantom_ApplyTypeSpeed( "phantasmagoria_ghost_typespeed paso de " .. tostring( old ) .. " a " .. tostring( new ) )
+
+    end )
+
+    -- Dice el numero SIEMPRE, incluido el 0: "no habia fantasmas" y "no se
+    -- re-aplico" se ven igual en una consola muda, y la primera es una
+    -- precondicion sin cumplir mientras la segunda es un defecto.
+    PHANTASMAGORIA.Print( "phantasmagoria_ghost_typespeed ", tostring( old ), " -> ", tostring( new ),
+        ": re-aplicado a ", n, " fantasma(s) vivo(s).\n" )
+
+end, "phantasmagoria_typespeed_vivos" )
+
+-- Lo que el tipo trae y este bloque NO usa. Se imprime para que este a la vista
+-- sin parecer implementado -- el precedente es `phantasmagoria_ghost_type lista`
+-- con los 12 rangos de threshold.
+function PHANTASMAGORIA.SpeedExtras( t )
+    local s = t and t.speed
+    if not s then return nil end
+
+    local partes = {}
+
+    if isnumber( s.top ) then
+        table.insert( partes, "top x" .. string.format( "%.3f", s.top ) ..
+            ( s.isRange and " ( rango continuo )" or " ( alterna )" ) )
+
+    end
+
+    if isnumber( s.alt ) then table.insert( partes, "alt x" .. string.format( "%.3f", s.alt ) ) end
+
+    table.insert( partes, "losSpeedUp " .. ( s.losSpeedUp and "si" or "no" ) )
+
+    return table.concat( partes, " · " )
 
 end
 
@@ -456,6 +600,43 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_speed", function( ply )
 
         say( "    referencia  " .. dbg.ref .. "   base " .. math.Round( dbg.base ) .. " u/s   de " .. dbg.fuente )
         say( "    multiplic.  x" .. string.format( "%.3f", dbg.mul ) .. "   de " .. dbg.mulFuente )
+
+        -- EL ENGANCHE DE speed.base, Y SE MIDE CONTRA LA TABLA -- no se cree.
+        -- La linea de arriba dice de donde salio el multiplicador; esta dice si
+        -- ese numero es EL DEL TIPO. Son dos preguntas distintas y la segunda es
+        -- la que atrapa el modo de falla que este bloque existe para evitar: el
+        -- campo escrito con el valor del tipo ANTERIOR imprime `( tipo )` arriba
+        -- y es falso. Con el `!!` de abajo, la fuente correcta con el valor
+        -- equivocado deja de verse igual que el acierto.
+        local t        = ghost.phantom_Type
+        local esperado = t and t.speed and t.speed.base
+        local campo    = ghost.phantom_SpeedMul
+
+        if isnumber( campo ) then
+            local coincide = isnumber( esperado ) and math.abs( campo - esperado ) < 0.0005
+
+            say( "    speed.base  campo x" .. string.format( "%.3f", campo ) ..
+                "   la tabla dice " .. ( isnumber( esperado ) and ( "x" .. string.format( "%.3f", esperado ) ) or "( el fantasma no tiene tipo )" ) ..
+                "   " .. ( coincide and "COINCIDEN" or "!! NO COINCIDEN: el campo quedo de otro tipo o lo escribio otro" ) )
+
+        else
+            say( "    speed.base  campo VACIO   -> manda el andamio.   motivo: " ..
+                tostring( ghost.phantom_SpeedMulWhy or "( nunca se llamo phantom_ApplyTypeSpeed )" ) )
+
+        end
+
+        say( "                lo escribio: " .. tostring( ghost.phantom_SpeedMulHow or "( nadie todavia )" ) ..
+            ( ghost.phantom_SpeedMulAt and ( "   hace " .. string.format( "%.1f", CurTime() - ghost.phantom_SpeedMulAt ) .. " s" ) or "" ) )
+
+        -- Lo que el tipo trae y este bloque NO usa. Sin esta linea, `top` y
+        -- `losSpeedUp` no existen para el que lee el reporte, y el dia que §5.1
+        -- los enganche nadie va a poder decir si ya estaban.
+        local extras = PHANTASMAGORIA.SpeedExtras and PHANTASMAGORIA.SpeedExtras( t )
+
+        if extras then
+            say( "                el tipo trae ademas: " .. extras .. "   ( Diseno 5.1, NO se usan todavia )" )
+
+        end
         say( "    objetivo    " .. math.Round( dbg.target ) .. " u/s   ( base x multiplicador )" )
         say( "    factor      x" .. string.format( "%.3f", dbg.factor ) ..
             "   ( objetivo / RunSpeed declarada " .. math.Round( dbg.baseRun ) .. " )" )
