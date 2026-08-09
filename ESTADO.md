@@ -13,7 +13,55 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-08): la r18 CORRIÓ — 8 de 8, y TRES de esos verdes imprimieron el número
+> ⭐ **LO ÚLTIMO (2026-08-09): la r18b CORRIÓ — 5 de 5. `speed.base` queda CERRADO en juego, la foto
+> vieja está arreglada, y el arreglo destapó el SEGUNDO lector viejo sin que ninguna fila lo pidiera.**
+>
+> **El arco de Diseño 5.1 cierra con evidencia dura, y en los dos sentidos:**
+>
+> - **Deogen x0.235** → `multiplic. x0.235 · objetivo 66 · convertidas run 66 · deseada 66 · real 66`.
+> - **Revenant x0.588** → `165` en las cinco cifras, **con la misma `serie 1`**: cambiar el tipo de un
+>   fantasma vivo mueve la velocidad en el acto, que es el motivo entero de escribir en la puerta
+>   única.
+> - **El control**: `typespeed 0` con el andamio en 2 → `multiplic. x2.000 de convar ( ANDAMIO )`,
+>   `campo VACIO · motivo: typespeed 0`, `objetivo 560`, y el autor: ***«salió volando»***.
+> - **El sello nuevo funciona**: `[ foto de hace 0.00 s ]` en las cuatro filas, y el `!!` de foto
+>   vencida no apareció nunca — que es el resultado (a) que la fila 01 pedía anotar.
+>
+> ⚠ **Y ARREGLAR LA FOTO MOVIÓ EL PROBLEMA UN ESLABÓN ABAJO.** Con `dbg` ya fresco, tres filas
+> quedaron con `convertidas run 165` al lado de **`deseada 280`**. Esta vez **el número no está mal**:
+> `deseada` sale del locomotion, que lo escribe `SetupSpeed` **en el tick**, así que en el mismo frame
+> del cambio todavía tiene el valor anterior — y el bot de verdad va a la velocidad vieja un tick más.
+>
+> **El defecto era del CRITERIO, no del número.** Las filas 02 y 03 pedían que `convertidas` y
+> `deseada` coincidieran *en la misma salida*, y **en el frame de un cambio eso es imposible**. Las
+> tres pasaron porque el autor volvió a tipear el comando solo, sin que ninguna fila se lo pidiera —
+> y esa segunda lectura da `165/165` y `66/66`. *En una cadena de valores derivados, cada eslabón
+> tiene su propio instante: arreglar el caché de arriba deja al descubierto al lector de abajo.*
+>
+> Entró la línea que lo dice: si `deseada` no es ninguna de las tres `convertidas`, el reporte
+> **nombra las dos causas y las separa por lo que pasa en la lectura siguiente** — (a) cambiaste algo
+> en este frame, volvé a tipear el comando solo; (b) si sigue sin coincidir tipeado solo, el callback
+> no llega al locomotion y *eso* sí es el defecto. Y cuando coincide lo dice también, con el nombre de
+> la marcha.
+>
+> ⚠ **Y una fila pedía un dato que el comando no imprime.** La 04 exigía *«y el tipo sigue diciendo
+> Revenant»* sobre una salida de `ghost_speed`, **que no imprime el tipo en ningún lado**. Con el
+> campo vacío, la única pista era `top x1.765`… que también es la del Deogen. Ahora esa línea dice el
+> nombre y la key. *Un check no puede pedir un dato que el comando no imprime, y una pista parecida no
+> lo reemplaza.*
+>
+> ⚠ **LA 05 NO PASÓ: está SIN CORRER, y lo dice su propia salida.** `phantasmagoria_ghost_speed`
+> imprimió **`no hay ningun fantasma vivo`** — el fantasma se spawneó *después*. La línea que la fila
+> pedía (`campo VACIO … motivo: el fantasma no tiene tipo`) nunca salió. Lo que sí trajo el
+> `ghost_where` de al lado —`tipo SIN TIPO` sin línea `!!` de residuo— es **la 08 de la r18 otra vez**,
+> que ya estaba cerrada. Queda como residual de **un solo comando**: con un fantasma sin tipo vivo,
+> `phantasmagoria_ghost_speed`.
+>
+> **Sigue abierto y sin diagnosticar:** con `absence 1` el marcador **no se dibuja ni en modo 1**. Ver
+> el bloque de más abajo; `phantasmagoria_ghost_cl` ya imprime los dos conteos que lo deciden.
+
+
+> **LO ANTERIOR (2026-08-08): la r18 CORRIÓ — 8 de 8, y TRES de esos verdes imprimieron el número
 > del tipo ANTERIOR. El mecanismo está bien; el instrumento mintió.**
 >
 > **Lo que quedó cerrado con evidencia limpia, y no se re-discute:** la **01** (`SON 11 DE 30` con la

@@ -710,7 +710,15 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_speed", function( ply )
         local extras = PHANTASMAGORIA.SpeedExtras and PHANTASMAGORIA.SpeedExtras( t )
 
         if extras then
-            say( "                el tipo trae ademas: " .. extras .. "   ( Diseno 5.1, NO se usan todavia )" )
+            -- ⚠ CON EL NOMBRE DEL TIPO, y eso salio de la fila 04 de la r18b. El
+            -- criterio pedia "y el tipo sigue diciendo Revenant" sobre una
+            -- salida que **no imprime el tipo en ningun lado**: con el campo
+            -- vacio, la unica pista de que el tipo seguia puesto era este
+            -- `top x1.765`... que tambien es el del Deogen. *Un check no puede
+            -- pedir un dato que el comando no imprime, y la pista parecida no lo
+            -- reemplaza.*
+            say( "                tipo " .. tostring( t.name ) .. " ( " .. tostring( ghost.phantom_TypeKey ) .. " )" ..
+                ", que trae ademas: " .. extras .. "   ( Diseno 5.1, NO se usan todavia )" )
 
         end
         say( "    objetivo    " .. math.Round( dbg.target ) .. " u/s   ( base x multiplicador )" )
@@ -732,9 +740,56 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_speed", function( ply )
         -- ( terminator_nextbot_base/motion.lua:54 ).
         local loco = ghost.loco
 
-        say( "    AHORA       deseada " .. math.Round( loco and loco:GetDesiredSpeed() or -1 ) .. " u/s" ..
+        local deseada = loco and loco:GetDesiredSpeed() or -1
+
+        say( "    AHORA       deseada " .. math.Round( deseada ) .. " u/s" ..
             "   real " .. math.Round( ghost:GetCurrentSpeed() ) .. " u/s" ..
             "   ( deseada = lo que SetupSpeed escribio; real = lo que va )" )
+
+        -- ⚠ EL SEGUNDO LECTOR VIEJO, Y SALIO DE LA r18b SIN QUE NINGUNA FILA LO
+        -- PIDIERA. Arreglada la foto de `dbg`, tres filas quedaron con
+        -- `convertidas run 165` al lado de `deseada 280` -- y esta vez el numero
+        -- NO esta mal: `deseada` sale del locomotion, que lo escribe SetupSpeed
+        -- **en el tick**, asi que en el mismo frame del cambio todavia tiene el
+        -- valor anterior. El bot de verdad va a la velocidad vieja por un tick
+        -- mas.
+        --
+        -- O sea que el defecto no era del numero sino DEL CRITERIO: las filas de
+        -- la r18b pedian que `convertidas` y `deseada` coincidieran en la misma
+        -- salida, **y en el frame de un cambio eso es imposible**. Un check que
+        -- pide algo que no puede pasar se marca a ojo o se marca mal.
+        --
+        -- *Arreglar el cache de arriba movio el problema al lector de abajo: en
+        -- una cadena de valores derivados, cada eslabon tiene su propio
+        -- instante.*
+        local conv = {
+            { n = "run",  v = ( ghost.RunSpeed  or 0 ) * dbg.factor },
+            { n = "move", v = ( ghost.MoveSpeed or 0 ) * dbg.factor },
+            { n = "walk", v = ( ghost.WalkSpeed or 0 ) * dbg.factor },
+        }
+
+        local cual
+
+        for _, m in ipairs( conv ) do
+            if math.abs( deseada - m.v ) < 1.5 then
+                cual = m.n
+                break
+
+            end
+        end
+
+        if cual then
+            say( "                deseada = la marcha '" .. cual .. "' de la linea de arriba: el factor YA llego al locomotion." )
+
+        else
+            say( "    !! deseada NO ES NINGUNA de las tres convertidas. Las dos causas, y no se ven igual en la proxima lectura:" )
+            say( "       ( a ) acabas de cambiar algo en ESTE frame. `convertidas` se recalcula al escribir y `deseada` la" )
+            say( "             escribe SetupSpeed en el TICK, asi que el locomotion todavia tiene el valor anterior --" )
+            say( "             correcto, y el bot de verdad va a la velocidad vieja un tick mas. Volve a tipear el comando SOLO." )
+            say( "       ( b ) si SIGUE sin coincidir con el comando tipeado solo, el callback ModifyMovementSpeed no esta" )
+            say( "             llegando al locomotion y eso si es el defecto que este bloque existe para atrapar." )
+
+        end
 
         -- EL DISCRIMINANTE QUE FALTABA EN LA RONDA 4. La fila del walkhunt no se
         -- pudo juzgar porque a 0 u del jugador la base camina POR SU CUENTA

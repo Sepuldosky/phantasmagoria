@@ -7,6 +7,83 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-09 (28) — **`speed.base` CERRADO en juego**, y dos rondas de instrumento para llegar (r18: 8/8 con tres verdes falsos · r18b: 5/5)
+
+Diseño 5.1. `phantom_SetType` escribe `phantom_SpeedMul` con el `speed.base` del tipo, y ese campo
+gana sobre la convar andamio. Va en **la puerta única** y no en el spawn, porque
+`phantasmagoria_ghost_type <key>` cambia el tipo de un fantasma **vivo**.
+
+**Medido en juego, en los dos sentidos y sobre la misma `serie`:**
+
+| | `multiplic.` | `objetivo` | `convertidas run` | `deseada` / `real` |
+|---|---:|---:|---:|---:|
+| Deogen `x0.235` | x0.235 | 66 | 66 | 66 / 66 |
+| Revenant `x0.588` | x0.588 | 165 | 165 | 165 / 165 |
+| control `typespeed 0` + andamio en 2 | x2.000 **de convar** | 560 | 560 | *«salió volando»* |
+
+Y las tres piezas de plomería: `campo VACIO · motivo: typespeed 0` con el tipo intacto, `SIN TIPO`
+sin línea `!!` de residuo, y `SON 11 DE 30` con la lista de los tipos que discriminan.
+
+### ⚠ La r18 salió 8 de 8 y tres de esos verdes imprimieron el número del tipo ANTERIOR
+
+`phantom_ApplyTypeSpeed` invalidaba el caché **del factor** (`phantom_speedNext = 0`) para que el
+próximo tick recalculara. Recalcula — **pero el reporte no lee el factor: lee `phantom_speedDbg`**,
+que sólo se reescribe en ese recalculo. Y **dos concommands en la misma línea corren en el mismo
+frame**, sin tick en el medio. La 05 lo dijo en una sola pantalla: `x0.588 de campo
+phantom_SpeedMul ( tipo )` con **`campo VACIO` dos líneas abajo**.
+
+*Invalidar un caché no actualiza lo que ya se calculó de él: marca que hay que recalcular, y el que
+imprime no es el que recalcula.*
+
+**La 06 fue el control sin que ninguna fila lo pidiera:** el mismo comando, dos veces, sobre el mismo
+estado — encadenado `x1.000 / 280`, solo y 16 s después `x0.235 / 66`. Y las notas del autor
+(*«se puso más rápido»*, *«va más rápido aún»*) concuerdan con los valores **verdaderos** y no con los
+impresos: la impresión del operador fue mejor instrumento que la consola, porque la consola tenía un
+caché adentro.
+
+**Y la 03 pasó por casualidad**: habían pasado 0,6 s y el tick ya había refrescado. *Una fila que pasa
+porque el operador tardó en tipear no midió nada.*
+
+### ⚠ Y arreglarlo movió el problema un eslabón abajo (r18b)
+
+Con `dbg` ya fresco (`[ foto de hace 0.00 s ]`), tres filas quedaron con `convertidas run 165` al lado
+de `deseada 280`. **Esta vez el número no está mal:** `deseada` sale del locomotion, que lo escribe
+`SetupSpeed` **en el tick**, así que en el frame del cambio todavía tiene el valor anterior — y el bot
+de verdad va a la velocidad vieja un tick más. **El defecto era del criterio**, que pedía que las dos
+coincidieran en la misma salida: imposible en el frame de un cambio. Las tres pasaron porque el autor
+volvió a tipear el comando solo, sin que ninguna fila se lo pidiera.
+
+*En una cadena de valores derivados, cada eslabón tiene su propio instante: arreglar el caché de
+arriba deja al descubierto al lector de abajo.*
+
+### Lo que entró al instrumento, y cada cosa por una fila que falló
+
+- **Sello de tiempo en la foto** (`[ foto de hace N s ]`) y comparación contra el estado en vivo, con
+  un `!! ESTA FOTO YA NO VALE` que dice cuánto valdría ahora. El reporte ya comparaba el campo contra
+  la tabla y esa comparación funcionó; **nadie estaba comparando el campo contra el multiplicador
+  impreso tres líneas arriba**.
+- **`phantom_ApplyTypeSpeed` recalcula en el acto** — sólo si ya había foto: en el spawn no, porque
+  `phantom_speedDbg == nil` es la única prueba de que el callback nunca corrió.
+- **`phantasmagoria_ghost_speedmul` ganó su propio callback**, que es lo que le faltaba a la 03.
+- **`deseada` se compara contra las tres `convertidas`** y, cuando no coincide, el reporte nombra las
+  dos causas **separándolas por lo que pasa en la lectura siguiente**.
+- **El tipo se nombra en el reporte de velocidad.** La 04 de la r18b pedía *«y el tipo sigue diciendo
+  Revenant»* sobre una salida que **no imprime el tipo**: la única pista era `top x1.765`, que también
+  es la del Deogen. *Un check no puede pedir un dato que el comando no imprime, y una pista parecida
+  no lo reemplaza.*
+- **`phantasmagoria_ghost_type lista` cuenta los tipos que discriminan.** El default de la convar
+  andamio es `1.0` y **19 de los 30 tipos traen `speed.base` exactamente 1.000**: sobre cualquiera de
+  esos, el enganche roto y el enganche andando imprimen el mismo número.
+
+### Lo que queda
+
+- **La 05 de la r18b está *Sin correr*** y lo dice su propia salida: `ghost_speed` imprimió *«no hay
+  ningun fantasma vivo»* — el fantasma se spawneó después. Residual de **un comando**.
+- **`speed.top`, `isRange`, `alt` y `losSpeedUp` no se toman** (13 de los 30 traen segunda velocidad):
+  se imprimen marcados como no usados. Es §5.1 entero y va después.
+
+---
+
 ## 2026-08-08 (27) — **La pose T era el ARMA** (corrida r17: 7 pasa · 0 falla · 1 sin correr)
 
 La r17 contestó el bloque. Y los dos síntomas que el autor reportó en el mismo mensaje —
