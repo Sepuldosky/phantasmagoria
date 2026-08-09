@@ -482,6 +482,18 @@ ENT.phantom_WalksWhenHunting = false
 -- pase". El detalle esta en el encabezado de server_steps.lua.
 ENT.phantom_SilentSteps = false
 
+-- Y LA AUSENCIA ( Diseno 20 ① ), que arranca en TRUE al reves que los otros
+-- tres. El motivo es que no es un rasgo de algunos tipos: en Phasmophobia el
+-- fantasma fuera del hunt NO SE VE, y eso vale para los 30. El flag existe para
+-- el que NO -- el Alternate de Mandela Catalogue ( docs/ALTERNATE.md ), cuyo
+-- terror es justamente que se lo vea parado ahi.
+--
+-- ⚠ ES INVISIBILIDAD Y NADA MAS: el fantasma ausente SIGUE SIENDO SOLIDO. La
+-- solidez tiene un dueno unico y es server_doors.lua. El motivo, con lineas del
+-- codigo de la base, esta en el encabezado de server_cloak.lua y en Diseno
+-- 20.1-20.2.
+ENT.phantom_Absent = true
+
 ---------------------------------------------------------------------------
 -- EL INTERRUPTOR FANTASMA / CAZADOR
 ---------------------------------------------------------------------------
@@ -717,6 +729,27 @@ function ENT:BehaveUpdate( interval )
     -- El BaseClass PRIMERO: es el que corre el cerebro entero. Lo nuestro es un
     -- retoque de la cara despues, y solo en el hueco que la base deja vacio.
     myTbl.BaseClass.BehaveUpdate( self, interval )
+
+    -- LA AUSENCIA ( Diseno 20 ①, server_cloak.lua ) SE RECONCILIA ACA Y NO EN
+    -- UNA TAREA, y el motivo esta medido: `RunTask( "BehaveUpdatePriority" )` y
+    -- `RunTask( "Think" )` viven los dos adentro del coroutine de prioridad
+    -- ( behaviouroverrides.lua:694-695 ), que NO corre mientras un jugador
+    -- maneja al bot -- el propio autor de la base lo dice al lado del cloak del
+    -- wraith ( wraithcloaking.lua:69 ). La primera rama de la politica es
+    -- justamente "manejado por un jugador se ve siempre", asi que puesta ahi no
+    -- se habria aplicado nunca y el sintoma seria un bot invisible imposible de
+    -- pilotear, sin un solo error.
+    --
+    -- Va DESPUES del BaseClass por la misma razon que el facewalk: la base
+    -- puede haber tocado el estado en su propio tick, y lo que queremos
+    -- reconciliar es lo que quedo.
+    --
+    -- Con guarda -- el include podria fallar --, y la guarda del final de
+    -- server_cloak.lua comprueba el otro sentido: que esta llamada exista.
+    if myTbl.phantom_ReconcileVisibility then
+        myTbl.phantom_ReconcileVisibility( self, myTbl )
+
+    end
 
     -- ⚠ EL SEGUIMIENTO DE LA MIRADA, Y VA ANTES DE NUESTRA PROPIA ESCRITURA a
     -- proposito: mide el valor con el que el frame anterior TERMINO, o sea el que
@@ -2796,6 +2829,27 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_where", function( ply )
 
         local door = ghost.phantom_doorLast
 
+        -- UNA linea de la ausencia ( Diseno 20 ① ), no su reporte: para eso
+        -- esta phantasmagoria_ghost_vis. Va acá porque este es el comando que
+        -- se tipea durante una corrida, y porque un fantasma invisible es
+        -- justamente el que no se puede mirar.
+        --
+        -- Se imprime `GetNoDraw` -- el destino -- y al lado lo que la politica
+        -- pide. Un instrumento que solo dijera "quiere ser invisible" no podria
+        -- separar "la politica esta al reves" de "alguien mas lo dibuja".
+        if ghost.phantom_WantsVisible then
+            local quiere, motivo = ghost:phantom_WantsVisible()
+
+            say( "    render  " .. ( ghost:GetNoDraw() and "INVISIBLE" or "se dibuja" ) ..
+                "   la politica pide " .. ( quiere and "VISIBLE" or "INVISIBLE" ) ..
+                ( ( quiere == not ghost:GetNoDraw() ) and "" or "   !! NO COINCIDEN" ) ..
+                "   ( " .. motivo .. " )" )
+
+        else
+            say( "    render  ( server_cloak.lua no cargo )" )
+
+        end
+
         say( "    puerta  " .. ( IsValid( door ) and door:GetClass() or "ninguna delante" ) ..
             "   trabado " .. string.format( "%.1f", ghost.phantom_doorBlocked or 0 ) .. " s" ..
             "   peor " .. string.format( "%.1f", ghost.phantom_doorWorst or 0 ) .. " s" ..
@@ -3198,9 +3252,13 @@ local FLAGS = {
     [ "silencio" ]  = { campo = "phantom_SilentDoors",      que = "abre sin hacer ruido" },
     [ "caminar" ]   = { campo = "phantom_WalksWhenHunting", que = "camina en vez de correr cazando" },
     [ "pasos" ]     = { campo = "phantom_SilentSteps",      que = "camina sin hacer ruido ( el Myling )" },
+    -- ⚠ Este arranca en TRUE y los otros cuatro en false: no es un rasgo de
+    -- algunos tipos sino la regla ( Diseno 20 ① ). El flag existe para el que NO
+    -- desaparece, que hoy es el Alternate.
+    [ "ausencia" ]  = { campo = "phantom_Absent",           que = "no se ve fuera del hunt ( Diseno 20 ① )" },
 }
 
-local FLAG_ORDER = { "abrir", "atravesar", "silencio", "caminar", "pasos" }
+local FLAG_ORDER = { "abrir", "atravesar", "silencio", "caminar", "pasos", "ausencia" }
 
 PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_flag", function( ply, _, args )
     if not adminOnly( ply ) then return end
@@ -3303,6 +3361,16 @@ include( "server_steps.lua" )
 -- comprueba: no usa ENT.MyClassTask ( la clave Think ya es de las puertas ) sino
 -- ENT:AdditionalThink, que la base declara como stub libre.
 include( "server_stuck.lua" )
+
+-- Diseno 20 ①: fuera del hunt el fantasma NO SE VE.
+--
+-- VA ULTIMO, y por dos motivos que son medibles. ( a ) consume
+-- PHANTASMAGORIA.ResolveFlag, que se declara en server_doors.lua. ( b ) su
+-- guarda del final comprueba que las TRES claves de MyClassTask sigan siendo
+-- funciones -- `Think` de las puertas, `ModifyMovementSpeed` de la velocidad y
+-- `BehaveUpdatePriority` de este archivo --, y una guarda de ese tipo solo vale
+-- si corre despues de todos los que podrian pisarlas.
+include( "server_cloak.lua" )
 
 ---------------------------------------------------------------------------
 -- GUARDA: un campo pisado por un metodo del mismo nombre

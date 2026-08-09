@@ -15,8 +15,25 @@
       term_debughearing   lo que el bot oye
 ---------------------------------------------------------------------------]]
 
+-- ⚠ TRES VALORES DESDE DISENO 20, Y EL MOTIVO ES QUE ESTE MARCADOR PASO A
+-- CORROMPER LO QUE MIDE. Dibuja con IgnoreZ, o sea a traves de las paredes:
+-- hasta ayer era lo unico que hacia visible a un modelo oscuro en un mapa
+-- oscuro, y desde que existe la ausencia ( server_cloak.lua ) es lo unico que
+-- te dice donde esta un fantasma que el diseno quiere invisible. Una corrida
+-- hecha con esto en 1 no mide la invisibilidad: la tapa.
+--
+--   0  nada
+--   1  SIEMPRE -- el wallhack de siempre. Sigue siendo el default, porque es el
+--      instrumento de todo lo demas.
+--   2  HONESTO -- no dibuja al fantasma que no se dibuja. Es el modo obligatorio
+--      de las filas de invisibilidad.
+--
+-- ⚠ Y EL MODO 2 NECESITA UNA SEGUNDA MITAD O NO SE PUEDE JUZGAR: "no lo veo" y
+-- "no lo dibuje" se ven exactamente igual. Por eso en 2 hay una linea de HUD
+-- que sigue contando los que NO dibujo. *El instrumento tiene que seguir
+-- hablando justo cuando deja de dibujar.*
 local cvMarker = CreateClientConVar( "phantasmagoria_debug_ghost", "1", true, false,
-    "Dibuja un marcador sobre los fantasmas de Phantasmagoria. Instrumento de desarrollo.", 0, 1 )
+    "Marcador de desarrollo sobre los fantasmas. 0 = nada · 1 = siempre, atravesando paredes ( tapa la invisibilidad de Diseno 20 ) · 2 = HONESTO: no dibuja al fantasma invisible, y cuenta cuantos oculto en una linea de HUD.", 0, 2 )
 
 -- Diseno 1: 1 u = 1,905 cm, o sea 1 m ~ 52,5 u.
 local UNITS_PER_METER = 52.5
@@ -62,6 +79,36 @@ local function typeLabel( ghost )
     if not t then return key .. " ( !! sin ficha en el cliente )" end
 
     return t.name
+
+end
+
+---------------------------------------------------------------------------
+-- EL ESTADO DE RENDER, LEIDO DEL DESTINO Y NO DE NUESTRA CREENCIA
+---------------------------------------------------------------------------
+-- Diseno 20.4. `GetNoDraw()` y `GetMaterial()` son lo que el ENGINE tiene
+-- puesto de verdad en esta maquina: si el servidor cree una cosa y el cliente
+-- tiene otra, esta funcion lo dice y el NW var de al lado dice la otra mitad.
+--
+-- *Preguntarle al servidor que cree haber escrito acredita el pedido; preguntar
+-- GetNoDraw acredita el efecto.* Ese es exactamente el modo de falla que este
+-- taller ya pago: una guarda que mide la fuente en vez del destino.
+--
+-- Devuelve: invisible ( bool ), texto.
+local function renderState( ghost )
+    local nodraw = ghost:GetNoDraw()
+    local mat    = ghost:GetMaterial()
+
+    -- El NW var es la CREENCIA del servidor y viaja aparte de la bandera. Que
+    -- los dos coincidan no es obvio: son dos sistemas de red distintos, y la
+    -- unica forma de ver una divergencia es imprimirlos juntos.
+    local dice = ghost:GetNWBool( "phantasmagoria_invisible", false )
+
+    local txt = ( nodraw and "INVISIBLE ( GetNoDraw true )" or "se dibuja" ) ..
+        ( ( mat and mat ~= "" ) and ( "   material '" .. mat .. "'" ) or "" ) ..
+        "   ·  el server dice " .. ( dice and "INVISIBLE" or "visible" ) ..
+        ( ( nodraw ~= dice ) and "   !! NO COINCIDEN" or "" )
+
+    return nodraw, txt
 
 end
 
@@ -146,6 +193,18 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cl", function()
     say( "LO QUE VE EL CLIENTE, no el servidor.   tipos en la tabla LOCAL: " ..
         ( istable( T ) and ( n .. "" ) or "NO EXISTE ( lua/autorun/phantasmagoria_data.lua no corrio en cliente )" ) )
 
+    -- ⚠ EL MODO DEL MARCADOR VA EN LA PRIMERA PANTALLA, y no es formalidad: el
+    -- servidor no puede leerlo, asi que esta es la unica linea de toda la
+    -- corrida que dice si la invisibilidad se estaba midiendo o se estaba
+    -- tapando. Una fila de Diseno 20 corrida en modo 1 no vale, y sin esto no
+    -- habria forma de saberlo despues.
+    local modoTxt = cvMarker:GetInt()
+
+    say( "phantasmagoria_debug_ghost " .. modoTxt .. "   ( " ..
+        ( modoTxt == 0 and "apagado"
+        or modoTxt == 1 and "SIEMPRE -- atraviesa paredes y DELATA al fantasma invisible: las filas de Diseno 20 no se pueden medir asi"
+        or "HONESTO -- no dibuja al fantasma invisible" ) .. " )" )
+
     local vistos = 0
 
     for _, ghost in ipairs( ents.GetAll() ) do
@@ -161,8 +220,24 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cl", function()
             "   key networkeada " .. ( key ~= "" and ( "'" .. key .. "'" ) or "( vacia: el server no le asigno tipo )" ) ..
             "   ficha " .. ( t and ( "SI -> " .. t.name .. ", threshold " .. tostring( t.hunt and t.hunt.threshold ) .. " %" ) or "NO" ) )
 
-        -- La linea que importa: literalmente la que se dibuja sobre la cabeza.
-        say( "     el marcador dibuja:  " .. typeLabel( ghost ) )
+        -- Diseno 20.4: el estado de render, del lado que lo dibuja. Es LA
+        -- medicion de la invisibilidad, porque el criterio de esa mecanica es
+        -- visual y un marcador 3D no produce texto -- que es lo que hizo que la
+        -- fila del networkeo se marcara verde tres rondas sin evidencia.
+        local invisible, estado = renderState( ghost )
+
+        say( "     render:               " .. estado )
+
+        -- Y QUE HACE EL MARCADOR CON ESO. Sin esta linea, un fantasma sin
+        -- marcador no distingue "esta invisible y el modo honesto lo respeto"
+        -- de "el marcador esta roto" ni de "no esta en el PVS".
+        local modo = cvMarker:GetInt()
+
+        say( "     el marcador " ..
+            ( modo == 0 and "esta APAGADO ( phantasmagoria_debug_ghost 0 )"
+            or ( modo >= 2 and invisible ) and "NO LO DIBUJA ( modo 2 honesto, y el fantasma esta invisible )"
+            or "dibuja:  " .. typeLabel( ghost ) ..
+               ( ( modo < 2 and invisible ) and "   !! EN MODO 1 SOBRE UN FANTASMA INVISIBLE: el marcador lo esta delatando" or "" ) ) )
 
     end
 
@@ -177,6 +252,12 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cl", function()
 
 end, "Imprime lo que el CLIENTE tiene de cada fantasma a la vista: la key networkeada, si resuelve a ficha, y el texto exacto que dibuja el marcador." )
 
+-- Lo que el marcador vio en el ultimo frame, para la linea de HUD del modo 2.
+-- Son DOS numeros y no uno: los que estan en el PVS y los que no dibuje. Sin el
+-- segundo, una pantalla sin marcadores no distingue "los oculte" de "no hay
+-- ninguno cerca".
+local ultimoConteo = { enPVS = 0, ocultos = 0 }
+
 hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", function( _bDrawingDepth, bDrawingSkybox, isDraw3DSkybox )
     if bDrawingSkybox or isDraw3DSkybox then return end
     if not cvMarker:GetBool() then return end
@@ -190,10 +271,20 @@ hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", funct
     -- ( phantasmagoria_<tipo> ), asi que esta busqueda por clase exacta va a
     -- dejar de encontrarlos y hay que ampliarla cuando existan.
     local ghosts = ents.FindByClass( "terminator_nextbot_phantom" )
+
+    -- El conteo se escribe ANTES del early return, y esa es la diferencia entre
+    -- un instrumento y un dibujo: con cero fantasmas la linea de HUD tiene que
+    -- decir cero, no quedarse con el numero del frame anterior.
+    ultimoConteo.enPVS   = #ghosts
+    ultimoConteo.ocultos = 0
+
     if #ghosts <= 0 then return end
 
     local ply = LocalPlayer()
     if not IsValid( ply ) then return end
+
+    -- Diseno 20.4: en modo 2 el marcador NO delata al fantasma invisible.
+    local honesto = cvMarker:GetInt() >= 2
 
     local eyePos = ply:EyePos()
     local yaw = ply:EyeAngles().y
@@ -203,6 +294,18 @@ hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", funct
 
     for _, ghost in ipairs( ghosts ) do
         if not IsValid( ghost ) then continue end
+
+        -- Se lee GetNoDraw y no el NW var a proposito: lo que decide si el
+        -- marcador delata es si el fantasma SE DIBUJA, y eso lo contesta la
+        -- bandera de la entidad. El NW var es la creencia del servidor y se
+        -- imprime aparte, en phantasmagoria_ghost_cl, justo para que una
+        -- divergencia entre los dos sea visible en vez de decidir en silencio.
+        if ghost:GetNoDraw() then
+            ultimoConteo.ocultos = ultimoConteo.ocultos + 1
+
+            if honesto then continue end
+
+        end
 
         local pos = ghost:GetPos()
         local mins, maxs = ghost:OBBMins(), ghost:OBBMaxs()
@@ -234,5 +337,33 @@ hook.Add( "PostDrawTranslucentRenderables", "phantasmagoria_ghost_marker", funct
     end
 
     cam.IgnoreZ( false )
+
+end )
+
+---------------------------------------------------------------------------
+-- LA LINEA QUE SIGUE HABLANDO CUANDO EL MARCADOR DEJA DE DIBUJAR
+---------------------------------------------------------------------------
+-- Diseno 20.4, y es la mitad sin la cual el modo 2 no se puede juzgar: un
+-- fantasma invisible deja de tener marcador, y una pantalla sin marcadores no
+-- distingue tres cosas -- que lo oculte, que no hay ninguno cerca, o que el
+-- marcador se rompio.
+--
+-- ⚠ Y ADEMAS ES LA UNICA EVIDENCIA QUE SOBREVIVE A UNA CAPTURA. La regla que
+-- costo tres rondas en la tajada A es que *un criterio visual necesita un
+-- instrumento que produzca texto*; una consola se pega en el chat, pero la
+-- pregunta de este bloque -- "no lo veo" -- se contesta mirando la pantalla. Que
+-- el conteo este DENTRO de la pantalla es lo que hace que la captura sea
+-- evidencia y no una impresion.
+--
+-- Solo en modo 2: en 1 el marcador ya se ve y esta linea seria ruido permanente.
+hook.Add( "HUDPaint", "phantasmagoria_ghost_marker_hud", function()
+    if cvMarker:GetInt() < 2 then return end
+
+    local txt = "debug_ghost 2 ( honesto )   ·   " .. ultimoConteo.enPVS .. " en PVS   ·   " ..
+        ultimoConteo.ocultos .. " invisibles ( NO se dibujan )"
+
+    -- Sin fondo ni caja: es un instrumento de desarrollo y tapar el mapa seria
+    -- pelearle a lo que se esta tratando de mirar.
+    draw.SimpleText( txt, "DermaDefault", 12, 12, colGhost, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP )
 
 end )

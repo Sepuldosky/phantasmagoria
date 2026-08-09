@@ -14,9 +14,17 @@
 
     LO QUE DELIBERADAMENTE NO TIENE, Y POR QUE:
 
-      ENT.IsWraith                 un instrumento invisible no sirve para ver
-                                   donde esta. Es un campo y se enciende solo
-                                   cuando haya que ver el cloak, no antes.
+      ENT.IsWraith                 ⚠ Y AHORA ES PERMANENTE, no un "todavia no".
+                                   La invisibilidad existe ( Diseno 20 ①,
+                                   server_cloak.lua ) y es PROPIA. El cloak de
+                                   la base acopla el invisible a la NO-SOLIDEZ
+                                   en dos lugares -- su material se salta si el
+                                   bot es solido ( wraithcloaking.lua:99 ) y su
+                                   unhide escribe SetSolidMask sin consultar la
+                                   bandera ( :172-173 ) --, y la solidez de este
+                                   fantasma tiene un dueno unico que es
+                                   server_doors.lua. Detalle en Diseno 20.1-20.2
+                                   y en el encabezado de server_cloak.lua.
       SetupDataTables              la base no lo usa: networkea con slots
                                    hardcodeados y el Bool 0 ya es Crouching
                                    (Referencia 4.3, defecto D-6 de HIM). El
@@ -74,6 +82,31 @@ else
     -- propio error. Este aviso existe para que la causa se lea de una.
     ErrorNoHalt( "[Phantasmagoria] Falta la base 'Terminator NextBot' (StrawWagen). " ..
         "El fantasma no se registra ni se puede spawnear sin ella.\n" )
+
+end
+
+---------------------------------------------------------------------------
+-- ⚠ EL CADAVER DE UN FANTASMA INVISIBLE, Y VA ACA PORQUE TIENE QUE SER SHARED
+---------------------------------------------------------------------------
+-- Diseno 20 ①. Desde server_cloak.lua el fantasma anda con EF_NODRAW puesto
+-- fuera del hunt, y la base crea el ragdoll ANTES de limpiar nada
+-- ( damageandhealth.lua:804 BecomeRagdoll, y recien :826 el SetNoDraw sobre el
+-- bot ). Si BecomeRagdoll hereda la bandera -- NO esta medido --, un fantasma
+-- que muere invisible deja un cadaver invisible.
+--
+-- El stub de la base esta COMENTADO ( damageandhealth.lua:943-947 ), asi que no
+-- hay a quien encadenar, y su propio comentario dice por que va compartido:
+-- *"make sure you add this shared, this is called for client ragdolls too"* --
+-- cl_ragdolldeaths.lua:8 la llama desde el hook CreateClientsideRagdoll, que es
+-- del cliente. Declarada solo en el servidor, esa mitad quedaria descubierta.
+--
+-- server_cloak.lua la PISA en el servidor con una version que ademas mide si la
+-- herencia ocurrio. Esta es la de cliente, y hace lo minimo.
+function ENT:AdditionalRagdollDeathEffects( ragdoll )
+    if not IsValid( ragdoll ) then return end
+
+    ragdoll:SetNoDraw( false )
+    ragdoll:DrawShadow( true )
 
 end
 

@@ -334,6 +334,23 @@ Silencio: `function ENT:IsSilentStepping() return self.wraithTerm_IsCloaked end`
 > donde el ciclo entero —visible 0,08-0,3 s, invisible 0,1-1,0 s— dura **menos que el cooldown solo**.
 > Encima `DoHiding` **se niega en silencio** cuando el reloj no venció (`:128`, un `return` pelado):
 > el pedido se pierde sin dejar rastro. Ver §5.3 del prompt de la invisibilidad.
+>
+> ⚠ **Y los cooldowns NO son el peor de los defectos — eso salió de medirlos el 2026-08-08.** El
+> reloj tiene **un solo lector** en toda la base (`:128`, en la misma función que lo escribe), así
+> que pisarlo sería seguro. Los dos que sí bloquean son de acoplamiento, no de tiempo:
+>
+> - **(c) el material de invisibilidad no se aplica si el bot es sólido.** `CloakedMatFlicker`
+>   difiere el material real a un `timer.Simple( 0.65-0.75 )` que empieza con
+>   `if self:IsSolid() then return end` (`:99`). Un fantasma sólido y «cloakeado» queda
+>   **permanentemente a medio ver**, sin error.
+> - **(d) el `unhide` escribe la solidez sin consultar `NotSolidWhenCloaked`.** `:172-173` hacen
+>   `SetCollisionGroup( COLLISION_GROUP_NPC )` y `SetSolidMask( MASK_NPCSOLID )` incondicionalmente,
+>   mientras el `hide` sí pregunta por la bandera en `:131`. **Apagar la bandera no apaga la
+>   escritura**, así que el módulo pelea con cualquier otro dueño de la máscara — y en este addon lo
+>   hay: `server_doors.lua`.
+>
+> Por eso §11.2 quedó revertida y la invisibilidad de PHANTOM es propia. Detalle en
+> `PHANTOM_Phasmophobia_Diseno.md` §20.
 
 ### 5.4 Otras piezas listas **[verificado]**
 
@@ -572,9 +589,18 @@ Decisiones que recomiendo:
 1. **Heredar de `terminator_nextbot`** y **no** reescribir el cerebro con `DoCustomTasks`. HIM lo
    reescribió entero (5 tareas propias, ~1.500 líneas) porque necesitaba su lore. PHANTOM no:
    con `MyClassTask` agrega su tarea y deja las 33 de la base.
-2. **Usar `ENT.IsWraith = true`** y no la invisibilidad de HIM. Es un campo contra 44 líneas, y el
+2. ~~**Usar `ENT.IsWraith = true`** y no la invisibilidad de HIM. Es un campo contra 44 líneas, y el
    punto de extensión `wraithTerm_CloakDecidingTask` está hecho para esto. Costo: los cooldowns
-   asimétricos de §5.3, que hay que tener en cuenta al elegir los tiempos.
+   asimétricos de §5.3, que hay que tener en cuenta al elegir los tiempos.~~
+   ⚠ **REVERTIDA el 2026-08-08 por medición. `IsWraith` queda APAGADO y la invisibilidad es
+   propia** — ver `PHANTOM_Phasmophobia_Diseno.md` §20.2. El costo no eran los cooldowns: el módulo
+   **acopla la invisibilidad a la no-solidez en dos lugares**, y uno de ellos
+   (`CloakedMatFlicker` → `timer.Simple` → `if self:IsSolid() then return end`, `:99`) hace que **con
+   el bot sólido el material de invisibilidad no se aplique nunca**. Encima el `unhide` escribe
+   `SetSolidMask`/`SetCollisionGroup` **sin consultar `NotSolidWhenCloaked`** (`:172-173`, mientras
+   el `hide` sí lo consulta en `:131`), y eso pelea contra `server_doors.lua`, que es el dueño único
+   de la solidez del fantasma y ya está cerrado en juego. *Este consejo era correcto cuando se
+   escribió y lo que lo tumbó fue una decisión posterior de OTRO archivo: la solidez tiene dueño.*
 3. **`OnFirstRelationWithPlayer` → `D_NU`** desde el día uno, o la base lo hace cazador.
 4. **La dimensión, portada de HIM**, no reinventada — y **detrás de un contador de encuentros**, para
    que sea el final de un arco y no un evento aleatorio.

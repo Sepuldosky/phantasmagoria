@@ -293,7 +293,7 @@ end
 |---|---|---|
 | `hunt.threshold` | % de cordura que habilita el hunt (default 50) | Demon 70, Shade 35 |
 | `hunt.durationMul` | Cuánto dura | Moroi, Demon |
-| `hunt.blinkRate` | Frecuencia del parpadeo (fingerprint visual del tipo) | ⚠ ver abajo |
+| ~~`hunt.blinkRate`~~ → `hunt.blink` | **Dos duraciones**, `visible` e `invisible`, en segundos | ⚠ ver abajo y **§20.6** |
 | `hunt.rangeMul` | Radio de interferencia (default 525 u) | Raiju 787 u |
 | `hunt.canOpenDoors` | Si abre puertas persiguiendo | casi todos |
 | `hunt.crucifixRange` | Radio del crucifijo (default 157 u) | Demon 262 u |
@@ -311,8 +311,14 @@ end
 >
 > ⚠ **Y ojo con la palabra:** en Phasmophobia *blink* es el momento en que **aparece**, no el momento
 > en que desaparece. Con el sentido invertido, el Oni sale invisible y el Phantom visible — y las dos
-> fuentes seguirían pareciendo correctas. Fijar el sentido por escrito antes del primer número.
-> Detalle en `dev/PROMPT_phantasmagoria_invisibilidad_y_speed.txt`.
+> fuentes seguirían pareciendo correctas.
+>
+> ⭐ **RESUELTO en §20.6 [2026-08-08], y no fijando el sentido por escrito sino cambiando el nombre:**
+> el campo pasa a ser `hunt.blink = { visible = {min,max}, invisible = {min,max} }`, en segundos.
+> *Una duración trae su dirección adentro; una frecuencia no.* `blinkRate` queda prohibido en el
+> código. El dato va **a mano y en un archivo aparte** (`lua/phantasmagoria/ghost_blink.lua`),
+> porque `ghost_types.lua` es generado — y **hoy ni siquiera se puede regenerar: `dev/g2.json` no
+> está en el repo**, y el esquema del generador no tiene ningún campo de parpadeo.
 
 ### 5.3 Rasgos de habilidad
 
@@ -2032,3 +2038,243 @@ ronda que estrena el mecanismo que la decide: *un rojo de velocidad ahí sería 
   partida con actividad normal, no una tasa que corra sola. Con las causas apagadas la barra no se
   mueve, y eso es el diseño y no un bug.
 - **El medidor de actividad** (§19.3): qué suma actividad y con qué peso.
+
+---
+
+## 20. La invisibilidad — **son DOS mecánicas y una tercera que no hay que pisar** [2026-08-08]
+
+> **Esta sección DECIDE.** Las decisiones salen de leer `wraithcloaking.lua` línea por línea contra
+> nuestros propios archivos, y cada una lleva la medición al lado. Lo que sigue sin medir está
+> marcado como tal.
+
+La palabra «invisibilidad» junta tres cosas con requisitos **opuestos**, y separarlas es el trabajo:
+
+| | Qué es | Cuánto dura | ¿Sólido? | Estado |
+|---|---|---|---|---|
+| **①  LA AUSENCIA** | fuera del hunt el fantasma no se ve; se mueve, interactúa y hace ruido paranormal | minutos | **sí** (ver §20.2) | **escrita**, `server_cloak.lua` |
+| **②  EL PARPADEO** | durante el hunt alterna visible/invisible para desorientar | **décimas** | **sí, siempre** | diseñada acá, **sin escribir** |
+| **③  LOS EVENTOS** | se manifiesta unos segundos: modelo completo · sombra opaca · silueta translúcida | segundos | indistinto | §7, otro bloque |
+
+**② no es cloak: es sólo render.** En hunt el fantasma te alcanza y te mata; uno que se vuelve
+intangible cada 0,2 s no puede cazar. Y **③ necesita `SetMaterial`**, no `SetNoDraw`, porque una
+sombra opaca y una silueta translúcida son *materiales* y no ausencias.
+
+### 20.1 ⚠ El cloak de la base **acopla la invisibilidad a la NO-SOLIDEZ, en dos lugares distintos**
+
+`PHANTOM_Referencia.md` §11 recomendaba `ENT.IsWraith = true` y decía que el costo eran «los
+cooldowns asimétricos, que hay que tener en cuenta al elegir los tiempos». **El costo es otro y es
+mayor.** Censado sobre las 202 líneas del módulo:
+
+**(a) El reloj tiene UN solo lector, y esa mitad de la preocupación queda refutada.**
+`wraithTerm_NextHidingSwap` se escribe en tres lugares y se lee en **uno** (`:128`), dentro de la
+misma función que lo escribe. Grep sobre los 71 archivos de la base + HIM: ningún otro consumidor.
+O sea que *pisarlo* (`self.wraithTerm_NextHidingSwap = 0`) sería técnicamente seguro. **No es el
+bloqueante**, y la duda que el plan del bloque dejaba abierta —«hay que leer si algo más lo consulta
+antes de romperlo»— queda cerrada por medición.
+
+**(b) El material de invisibilidad NUNCA se aplica si el bot es sólido.** `CloakedMatFlicker`
+(`:83-114`) pone `FlickerBarelyVisibleMat` en el acto y difiere el material *de verdad* a un
+`timer.Simple( 0.65-0.75 )` que arranca con:
+
+```lua
+if self:IsSolid() then return end          -- :99
+```
+
+⚠ **Esto solo ya decide ②.** El parpadeo del hunt exige sólido; con el bot sólido el segundo paso
+se sale siempre y el fantasma queda **permanentemente a medio ver**, sin error y sin log. Y decide
+también contra `NotSolidWhenCloaked = false` como atajo: apagar la no-solidez apaga la
+invisibilidad.
+
+**(c) El `unhide` escribe la solidez SIN preguntar por la bandera, y el `hide` sí pregunta.** La
+asimetría es del tercero:
+
+```lua
+if hide then
+    if self.NotSolidWhenCloaked then          -- :131  GUARDADO
+        self:SetCollisionGroup( COLLISION_GROUP_DEBRIS )
+        self:SetSolidMask( MASK_NPCSOLID_BRUSHONLY )
+    end
+    ...
+else
+    timer.Simple( 0.25, function()
+        self:SetCollisionGroup( COLLISION_GROUP_NPC )   -- :172  SIN GUARDAR
+        self:SetSolidMask( MASK_NPCSOLID )              -- :173  SIN GUARDAR
+```
+
+⚠ **Y eso choca contra un mecanismo nuestro que ya está cerrado en juego.**
+`server_doors.lua` es el dueño de la solidez del fantasma: `phantom_SetPhasing` escribe
+`SetSolidMask` para atravesar la hoja, tiene un techo duro de 5 s y un vigilante que grita
+*«atravesó más de 5 s seguidos y se lo forzó a sólido. Eso no debería pasar»*. Con el cloak
+encendido habría **dos escritores independientes de la misma máscara, sin árbitro**: el último que
+corre gana, en silencio. Los dos síntomas concretos son un fantasma invisible que de golpe te
+bloquea el paso, y un fantasma que se vuelve sólido **adentro de una hoja de puerta** porque el
+`timer.Simple( 0.25 )` del unhide venció ahí.
+
+**(d) Cada `DoHiding` cuesta un `EmitSound`, un `RemoveAllDecals`, un add/remove de `FL_NOTARGET`,
+un `timer.Simple( 0.65-0.75 )` y —al aparecer— otro `timer.Simple( 0.25 )` con un segundo
+`EmitSound` y un `OnStuck()`.** A la cadencia de ② (3-5 conmutaciones por segundo) eso es una
+tormenta de timers superpuestos y un sonido cada 0,2 s.
+
+> **Y lo que el módulo NO hace, contra lo que la Referencia sugería:** `wraithcloaking.lua` **no
+> define `IsSilentStepping`**. El único `ENT:IsSilentStepping` de la base es `sharedextras.lua:7`,
+> que devuelve `false` pelado — y nosotros ya lo pisamos en `server_steps.lua`. **Un fantasma
+> cloakeado sigue sonando al caminar**, y el silencio de verdad ya está resuelto y cerrado en juego.
+> **No se duplica.**
+
+### 20.2 **DECISIÓN: la invisibilidad no toca la solidez, y `IsWraith` queda APAGADO**
+
+Las tres salidas que había sobre la mesa eran: (a) pisar el reloj, (b) no usar `DoHiding` para ② y
+sí para ①, (c) reimplementar el módulo. **Gana una cuarta, que apareció al medir (b):**
+
+> **Una sola primitiva propia — `ENT:phantom_SetVisible( visible, motivo )` — para ① y para ②, que
+> cambia SÓLO cómo se dibuja y no toca la solidez nunca.**
+
+Y no es «reimplementar 202 líneas». De esas 202, el bucle sobre `GetChildren()` no nos aplica (ver
+abajo), la danza de solidez la queremos fuera, el `CloakedMatFlicker` diferido está roto para
+nuestro caso, y la `SpecialAction` es para el jugador-piloto. **Lo que queríamos del módulo son
+cinco cosas** —`DrawShadow`, `FL_NOTARGET`, `RemoveAllDecals`, el material y los FX— y las cinco son
+una línea cada una.
+
+**Por qué (b) —«la base tal cual para la ausencia»— no alcanza, aunque para ① los tiempos del cloak
+sí sirvan:** el conflicto de solidez de §20.1(c) es de **①**, no de ②. Un fantasma ausente que
+atraviesa puertas es exactamente el caso donde los dos escritores se pisan. *La hipótesis del plan
+era razonable y la medición la corrige por el lado que no se estaba mirando.*
+
+**Lo que esto gana, y es el criterio de diseño y no una comodidad:** *la solidez del fantasma
+conserva un dueño único*. Hoy es `server_doors.lua`, y su vigilante puede seguir afirmando que un
+no-sólido de más de 5 s es imposible. Con el cloak encendido, esa afirmación dejaría de ser cierta y
+**el vigilante no lo sabría**.
+
+⚠ **Lo que esto CUESTA, escrito para que no aparezca después como sorpresa:** el fantasma ausente
+**sigue siendo sólido**, o sea que se lo puede chocar, empujar con el physgun y tapar con un prop
+sin verlo. En Phasmophobia el fantasma en fase de deambuleo *no* tiene cuerpo. Es una diferencia
+real con el juego y se acepta a cambio del dueño único; si algún día molesta, la no-solidez fuera
+del hunt se agrega **en `server_doors.lua`**, que es el que ya sabe manejarla, y no en el cloak.
+
+> **La medición que falta y que la planilla de ① tiene que traer:** `#self:GetChildren()`. El bucle
+> del wraith existe porque el bot lleva un arma parenteada (`weapons.lua:321`), y el nuestro no
+> lleva ninguna (`DefaultWeapon = false` + `CanPickupWeapon` en false desde la r17). **Si el conteo
+> da 0, `SetNoDraw` solo alcanza; si da distinto de 0, hay que recorrerlos** — y por eso el
+> instrumento lo imprime en vez de que este documento lo dé por sentado.
+
+### 20.3 Cuál de las tres invisibilidades de Source, y para qué
+
+| | Qué hace | Dónde va | Por qué |
+|---|---|---|---|
+| `SetNoDraw( true )` | no se dibuja **nada** | **① y ②** | barato, no toca la solidez, alternable cada tick, y es **networkeado**: el cliente puede leer `GetNoDraw()` y decir el estado REAL |
+| `SetMaterial( mat )` | se dibuja con otro material | **③** | es lo único que da **silueta translúcida** y **sombra opaca** |
+| `SetRenderMode` + alpha | el clásico | ninguna, por ahora | ⚠ la lección ya pagada en este taller: **`$alpha` no vuelve translúcido a nada, es `$translucent`**, y un material sin la flag se dibuja opaco sin un solo error |
+
+⚠ **El riesgo abierto de ② es la RED, no el render.** `SetNoDraw` es una bandera de entidad que
+viaja en el snapshot. Con un ciclo visible de **0,08 s** y snapshots a ~20-30 Hz, un pulso corto
+puede caber en **dos** actualizaciones o en **una**, y el cliente se lo tragaría. Eso **no es una
+objeción a la decisión**: es la fila de check que ② tiene que traer, y si sale roja la salida está
+escrita — mover el parpadeo al cliente, networkeando **el horario** y no cada conmutación. Queda
+anotado ahora para que el día que aparezca no se lea como «el material está mal».
+
+### 20.4 **DECISIÓN: qué hace el marcador de debug cuando el fantasma es invisible**
+
+`phantasmagoria_debug_ghost` (cliente, default **1**) dibuja caja, haz de 220 u y etiqueta **con
+`IgnoreZ`**. Hasta hoy era el instrumento que hacía visible un modelo oscuro en un mapa oscuro.
+**Desde este bloque es lo único que te dice dónde está algo que el diseño quiere invisible:
+cualquier corrida hecha con eso en 1 no mide la mecánica, la tapa.**
+
+La convar pasa a tener **tres** valores, y el default no cambia:
+
+| | Qué hace |
+|---|---|
+| `0` | nada |
+| `1` | **siempre** — el wallhack de hoy. Sirve para todo lo que no sea la invisibilidad |
+| `2` | **honesto** — no dibuja al fantasma que está invisible. Es el modo obligatorio de las filas de ① y ② |
+
+Y las dos mitades que hacen que el modo 2 sea medible, porque **«no lo veo» y «no lo dibujé» se ven
+exactamente igual**:
+
+- **La etiqueta dice el estado de render**, leído del **destino** y no de nuestra creencia: el
+  cliente lee `GetNoDraw()` y `GetMaterial()` de la entidad —que es lo que el engine va a usar de
+  verdad— y lo imprime al lado de lo que el servidor *dice* por NW var. **Si los dos divergen, eso
+  mismo es el hallazgo**, y hoy no habría forma de verlo.
+- **En modo 2 hay una línea de HUD permanente** — `debug_ghost 2 ( honesto ) · N en PVS · M
+  invisibles ( no se dibujan )`. Un fantasma invisible deja de dibujar su marcador, pero el contador
+  sigue subiendo: *el instrumento sigue hablando cuando deja de dibujar*. Es la regla que costó tres
+  rondas en la tajada A —**si el criterio es visual, el instrumento tiene que producir texto**— y
+  además queda dentro de la captura.
+
+### 20.5 De dónde sale el parpadeo — **las dos fuentes, y una de las dos ya no existe**
+
+| | Qué es | Qué trae | Confianza |
+|---|---|---|---|
+| **A** | `lua/phantasmagoria/ghost_types.lua`, los comentarios por tipo. Backend del cheat sheet de tybayn (zero-network.net) | **prosa**, ningún número de parpadeo | datos del juego |
+| **B** | resumen que pasó el autor, generado por Gemini | **los números** | **sin verificar** |
+
+**Lo que dice B, como hipótesis a confirmar:** estándar visible 0,08-0,3 s · invisible 0,1-1,0 s;
+Phantom invisible 1,0-2,0 s; Oni invisible < 0,5 s; Deogen más visible cuanto más cerca; Myling
+parpadeo estándar (lo suyo es el alcance del ruido).
+
+**Dónde coinciden las dos** (lo que se puede dar por bueno): **Phantom** menos visible · **Oni** más
+visible · **Deogen** más visible. Y son **los tres únicos** tipos cuyos comentarios de la fuente A
+mencionan visibilidad.
+
+> ⚠ **El «Yokai rápido» de §5.2 no tiene respaldo y queda marcado como INVENTADO.** Los comentarios
+> del Yokai hablan de voz, música y distancia de detección; ninguno menciona parpadeo. **Y la
+> ausencia es genuina, no un recorte:** `dev/gen_types.py:104` trunca las notas en `notes[:8]`, y
+> contadas las 30 fichas sólo **banshee** y **shade** llegan al tope. El Yokai trae 5. *Una ausencia
+> sólo vale como dato cuando se sabe que el generador no la produjo.*
+>
+> ⚠ **Y regenerar la tabla NO es una opción hoy: `dev/g2.json` no está en el repo.** El encabezado
+> de `ghost_types.lua` manda «regenerar con dev/gen_types.py» y esa instrucción es, ahora mismo, un
+> callejón sin salida. Además el generador lee `min_speed` / `max_speed` / `alt_speed` /
+> `hunt_sanity` y las notas del wiki: **no hay ningún campo de parpadeo en el esquema**, así que ni
+> con el JSON de vuelta saldría el número.
+
+### 20.6 **DECISIÓN: `blinkRate` no se escribe. Se escriben DOS DURACIONES**
+
+⚠ **La trampa de vocabulario puede invertir la implementación entera.** La fuente A dice del Oni
+*«blinks MORE frequently during hunts, making them more visible»* y la B dice *«parpadea muy poco»*.
+Las dos concluyen **más visible**, por mecanismos opuestos: en Phasmophobia **«blink» es el momento
+en que APARECE**; en castellano «parpadear» se entiende como el momento en que **desaparece**. Con
+el sentido invertido, **el Oni sale invisible y el Phantom visible — y las dos fuentes seguirían
+pareciendo correctas**.
+
+**La decisión no es fijar el sentido por escrito: es elegir un nombre que no se pueda invertir.**
+
+```lua
+-- hunt.blink = { visible = { 0.08, 0.30 }, invisible = { 0.10, 1.00 } }   -- segundos
+```
+
+Una **duración** trae su dirección adentro; una **frecuencia** no. `visible` e `invisible` no
+admiten dos lecturas, y el Oni y el Phantom salen del mismo par de campos sin ningún `if` de tipo:
+el Oni con `invisible` corto, el Phantom con `invisible` largo. **La palabra `blinkRate` queda
+prohibida en el código de este addon**, y `blink` sobrevive sólo como nombre de la tabla.
+
+**Y el dato va en un archivo aparte, `lua/phantasmagoria/ghost_blink.lua`, escrito a mano.** No
+dentro de `ghost_types.lua`, por dos motivos que son el mismo: ese archivo dice **«GENERADO
+AUTOMÁTICAMENTE. No editar a mano»**, así que una edición manual se perdería en la próxima
+regeneración **sin dejar rastro**; y mezclar datos del juego con datos inventados en el mismo
+archivo destruye la única propiedad que hace confiable al primero. *Si es a mano, que se vea que es
+a mano* — y que se vea **desde el nombre del archivo**, no desde un comentario adentro.
+
+Cada entrada lleva su procedencia (`fuente = "B"` / `"derivado"` / `"INVENTADO"`) y el instrumento
+la imprime. Los tipos sin entrada usan el estándar, y el reporte dice *estándar* y no un número
+huérfano.
+
+### 20.7 Las tres trampas que quedan vivas, y qué se hace con cada una
+
+- **① `IsSilentStepping` NO tapa las pisadas** — censados los seis call sites de
+  `MakeFootstepSound`: ninguno de caminar, saltar o aterrizar lo consulta antes de sonar. El
+  silencio de verdad vive en `server_steps.lua` y **ya está cerrado en juego**. *No se duplica.*
+- **② `FL_NOTARGET` sobre NUESTRO fantasma es al revés que la trampa de NEAD.** §19.5 rechazó NEAD
+  porque le pone la bandera **al jugador** y eso lo vuelve invisible para el fantasma. Acá va sobre
+  el **bot**, y hace que otros NPC lo ignoren — **no afecta a que él te vea**. Queda escrito para
+  que nadie lo «corrija».
+- **③ El hueco de 0,25 s (D-2) deja de existir**, y no porque se lo arregle: porque la decisión de
+  §20.2 no pasa nunca por `DoHiding`. La solidez la sigue escribiendo un solo dueño y el hueco era
+  del otro camino.
+
+### 20.8 En qué orden va el código
+
+| | Qué | Depende de | Estado |
+|---|---|---|---|
+| **①** | la ausencia fuera del hunt: la primitiva, la política, el marcador honesto | nada sin verificar | **escrita** — `server_cloak.lua`, planilla `phantasmagoria-ausencia-r19` |
+| **②** | el parpadeo del hunt | los números de la fuente **B**, sin verificar, y la fila de red de §20.3 | diseñada, sin escribir |
+| **③** | los estados estéticos de los eventos | §7 y los materiales | otro bloque |

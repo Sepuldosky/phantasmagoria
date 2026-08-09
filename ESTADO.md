@@ -13,7 +13,105 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-08): la r15b CORRIÓ — 6 de 6. La TAJADA A queda CERRADA en juego, y las
+> ⭐ **LO ÚLTIMO (2026-08-08): `speed.base` ENGANCHADO y la INVISIBILIDAD arrancada. Dos bloques
+> ESCRITOS, los dos SIN correr, con una planilla cada uno.**
+>
+> **① `speed.base` (Diseño 5.1) — es una línea y por eso mismo lleva planilla propia: SÍ cambia
+> comportamiento.** `phantom_SetType` escribe ahora `phantom_SpeedMul` con el `speed.base` del tipo, y
+> ese campo gana sobre la convar andamio. El `( NO aplicado todavia )` de `TypeLines` dejó de ser
+> cierto y se actualizó **en la misma edición** que el enganche, que era lo que su propio comentario
+> pedía.
+>
+> - **Va en `phantom_SetType`, la PUERTA ÚNICA, y no en el spawn.** `phantasmagoria_ghost_type <key>`
+>   cambia el tipo de un fantasma **vivo**: colgado del spawn, forzar un tipo en caliente dejaría el
+>   multiplicador del tipo VIEJO con el reporte diciendo `campo phantom_SpeedMul ( tipo )` — **la
+>   fuente correcta con el valor equivocado**, que es el peor modo de falla posible.
+> - **Y BORRA**, que es la mitad que se olvida. Un fantasma que pierde el tipo vuelve al andamio, y si
+>   quedara residuo el reporte diría `( tipo )` sobre un `SIN TIPO`. Hay una línea `!!` que lo caza.
+> - ⚠ **El A/B necesitaba una perilla que no existía, y el motivo es del propio enganche:** desde que
+>   el campo se escribe, **la convar andamio ya no se puede mover**. Entró
+>   `phantasmagoria_ghost_typespeed` (1, `0` = control). **No es `typeassign 0`**: ese apaga el tipo
+>   entero —threshold, ficha, networkeo— y un rojo ahí tendría cuatro causas. Alcanza a los fantasmas
+>   **vivos** por callback, y lo dice: *una perilla que no llega a los sujetos que ya existen es una
+>   perilla que el operador cree que movió.*
+> - ⚠ **Un check que pruebe un Spirit NO PUEDE FALLAR**, y el comando ahora lo cuenta solo:
+>   **19 de los 30 tipos traen `speed.base` exactamente 1.000**, que es el default de la convar. Los
+>   sujetos salen de los **11 que discriminan** — la última línea de `phantasmagoria_ghost_type lista`
+>   los lista. Los elegidos: **Deogen 0.235 · Revenant 0.588**.
+> - `speed.top`, `isRange`, `alt` y `losSpeedUp` **no** se toman (13 de los 30 traen segunda
+>   velocidad): se imprimen marcados como no usados, igual que los 12 rangos de threshold.
+>
+> Planilla `dev/checks/phantasmagoria-speedbase-r18.html`, **8 filas, sin correr**.
+>
+> ---
+>
+> **② LA INVISIBILIDAD — diseño primero (Diseño §20, nuevo) y después la tajada ①.**
+>
+> ⚠ **Y la decisión de diseño REVIRTIÓ la recomendación de `PHANTOM_Referencia.md` §11.2, que decía
+> «usar `ENT.IsWraith = true`». Queda APAGADO, y no por los cooldowns.** Medido sobre las 202 líneas
+> de `wraithcloaking.lua`:
+>
+> - **El reloj que parecía el bloqueante tiene UN SOLO LECTOR** (`:128`, en la misma función que lo
+>   escribe; grep sobre los 71 archivos + HIM: cero consumidores más). Pisarlo sería seguro. *La duda
+>   que el plan dejaba abierta queda cerrada, y la respuesta es que no era el problema.*
+> - **Lo que sí bloquea es que el módulo ACOPLA EL INVISIBLE A LA NO-SOLIDEZ, en dos lugares
+>   distintos y ninguno documentado:** su material de verdad se difiere a un timer que arranca con
+>   `if self:IsSolid() then return end` (`:99`) —o sea que **un bot sólido y «cloakeado» queda
+>   permanentemente a medio ver, sin error**—, y su `unhide` escribe `SetSolidMask` y
+>   `SetCollisionGroup` **sin consultar `NotSolidWhenCloaked`** (`:172-173`), mientras el `hide` sí lo
+>   consulta (`:131`). **Apagar la bandera no apaga la escritura.**
+> - Y eso **pelea contra `server_doors.lua`**, que es el dueño único de la solidez del fantasma y
+>   tiene un vigilante que llama imposible a lo que esto produciría. *Dos escritores de la misma
+>   máscara sin árbitro: gana el último, en silencio.*
+>
+> **La decisión: `ENT:phantom_SetVisible()`, propia, que cambia SÓLO el render y no toca la solidez
+> nunca.** No son 202 líneas reimplementadas: lo que queríamos del módulo eran cinco cosas de una
+> línea cada una. ⚠ **El costo, escrito para que no sorprenda: el fantasma ausente SIGUE SIENDO
+> SÓLIDO** — se lo puede chocar sin verlo. Es una diferencia deliberada con Phasmophobia a cambio del
+> dueño único.
+>
+> ⚠ **Y el reconciliador NO va en `MyClassTask`, que era lo obvio.** `BehaveUpdatePriority` y `Think`
+> viven los dos dentro del coroutine de prioridad (`behaviouroverrides.lua:694-695`), que **no corre
+> mientras un jugador maneja al bot** — el propio autor de la base lo dice en la línea de al lado del
+> cloak. La primera rama de la política es justamente *«manejado por un jugador se ve siempre»*, así
+> que ahí no se habría aplicado nunca y el síntoma sería **un bot invisible imposible de pilotear, sin
+> un solo error**. Va en `ENT:BehaveUpdate`, y su prueba de vida es un contador de ticks y no un
+> nombre en una lista — *m_TaskList dice que existe, un contador dice que corrió.*
+>
+> ⭐ **EL MARCADOR DE DEBUG PASÓ A CORROMPER LO QUE MIDE, y ahora tiene tres valores.**
+> `phantasmagoria_debug_ghost` dibuja con `IgnoreZ`: **es lo único que te dice dónde está algo que el
+> diseño quiere invisible**. El `2` (honesto) no dibuja al fantasma invisible — y como *«no lo veo»* y
+> *«no lo dibujé»* se ven igual, en ese modo hay **una línea de HUD que sigue contando los que
+> ocultó**. Entra en una captura, que es lo que una pantalla vacía no hace. El cliente además imprime
+> el estado leyendo `GetNoDraw()` —**el destino**— al lado de lo que el servidor *cree*, así que una
+> divergencia se ve en vez de deducirse.
+>
+> ⭐ **`blinkRate` NO SE ESCRIBE: se escriben DOS DURACIONES.** La fuente A dice del Oni *«blinks more
+> frequently… making them more visible»* y la B dice *«parpadea muy poco»*: las dos concluyen **más
+> visible**, por mecanismos opuestos, porque en Phasmophobia *blink* es el momento en que **aparece**.
+> Con el sentido invertido **el Oni sale invisible y el Phantom visible, y las dos fuentes seguirían
+> pareciendo correctas**. La decisión no es fijar el sentido por escrito sino **elegir un nombre que
+> no se pueda invertir**: `hunt.blink = { visible = {…}, invisible = {…} }`, en segundos. *Una
+> duración trae su dirección adentro; una frecuencia no.*
+>
+> ⚠ **Y el dato va a mano, en `lua/phantasmagoria/ghost_blink.lua`, porque no hay otra opción:
+> `dev/g2.json` NO ESTÁ EN EL REPO.** El encabezado de `ghost_types.lua` manda «regenerar con
+> `dev/gen_types.py`» y esa instrucción es hoy un callejón sin salida; además el esquema del generador
+> (`min_speed`/`max_speed`/`alt_speed`/`hunt_sanity` + notas del wiki) **no tiene ningún campo de
+> parpadeo**. Ni con el JSON de vuelta saldría el número.
+>
+> ⚠ **El «Yokai rápido» de §5.2 queda marcado como INVENTADO, y la ausencia está verificada:**
+> `gen_types.py:104` trunca las notas en `notes[:8]`, y contadas las 30 fichas **sólo banshee y shade
+> llegan al tope**. El Yokai trae 5, así que su silencio sobre el parpadeo es real y no un recorte.
+> *Una ausencia sólo vale como dato cuando se sabe que el generador no la produjo.*
+>
+> Planilla `dev/checks/phantasmagoria-ausencia-r19.html`, **9 filas, sin correr**. La ② (el parpadeo)
+> está **diseñada y sin escribir** a propósito: sus números vienen de la fuente B sin verificar, y su
+> riesgo real es la **red** y no el render — con un pulso visible de 0,08 s y snapshots a ~20-30 Hz el
+> cliente se lo puede tragar (Diseño §20.3).
+
+
+> **LO ANTERIOR (2026-08-08): la r15b CORRIÓ — 6 de 6. La TAJADA A queda CERRADA en juego, y las
 > masas de los 66 propios también.**
 >
 > **Lo que cerró con evidencia dura:** `84 modelos ( 66 propios )` en la línea del cargador —el
