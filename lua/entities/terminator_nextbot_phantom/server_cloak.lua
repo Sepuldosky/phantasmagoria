@@ -247,7 +247,7 @@ end
 ---------------------------------------------------------------------------
 -- El reconciliador -- y es EL UNICO que aplica la politica
 ---------------------------------------------------------------------------
--- Corre cada tick sobre la tarea de clase. NO se engancha a phantom_SetHunting
+-- Corre cada tick desde ENT:BehaveUpdate. NO se engancha a phantom_SetHunting
 -- aunque esa sea la puerta unica del hunt, y la decision es deliberada:
 --
 --   ( a ) enganchado a la puerta, el invariante "se ve <=> la politica lo pide"
@@ -314,6 +314,40 @@ function ENT:phantom_ReconcileVisibility( myTbl )
     myTbl.phantom_SetVisible( self, quiere, motivo )
 
 end
+
+-- LA CONVAR ALCANZA A LOS VIVOS EN EL ACTO, y esto entro por la r18b sin que
+-- ninguna fila de la ausencia lo pidiera: alla, la mitad de las filas leyo un
+-- valor de hace un tick porque los dos comandos iban encadenados en la misma
+-- linea. El reconciliador corre igual en el tick siguiente -- o sea que la
+-- convar SIEMPRE funciono --, pero la primera lectura discrepaba y eso se lee
+-- como un rojo.
+--
+-- ⚠ NO cubre al override de flags ( phantasmagoria_ghost_flag ausencia 0 ):
+-- ese comando vive en server.lua y escribe una tabla, sin gancho donde
+-- colgarse. Para esa fila la separacion la hace el instrumento, con las dos
+-- causas de arriba. *Cuando no se puede arreglar el hueco, el instrumento tiene
+-- que nombrarlo.*
+function PHANTASMAGORIA.ReconcileAllVisibility( porque )
+    if not PHANTASMAGORIA.EachGhost then return 0 end
+
+    return PHANTASMAGORIA.EachGhost( function( ghost )
+        if not ghost.phantom_ReconcileVisibility then return end
+
+        ghost:phantom_ReconcileVisibility()
+
+    end )
+end
+
+cvars.AddChangeCallback( "phantasmagoria_ghost_absence", function( _, old, new )
+    local n = PHANTASMAGORIA.ReconcileAllVisibility( "la convar cambio de " .. tostring( old ) .. " a " .. tostring( new ) )
+
+    -- Dice el numero siempre, incluido el 0: "no habia fantasmas" y "no se
+    -- re-aplico" se ven igual en una consola muda, y la primera es una
+    -- precondicion sin cumplir mientras la segunda es un defecto.
+    PHANTASMAGORIA.Print( "phantasmagoria_ghost_absence ", tostring( old ), " -> ", tostring( new ),
+        ": reconciliados ", n, " fantasma(s) vivo(s).\n" )
+
+end, "phantasmagoria_absence_vivos" )
 
 ---------------------------------------------------------------------------
 -- ⚠ EL CADAVER, Y ES UNA MEDICION DISFRAZADA DE POLIZA
@@ -417,9 +451,27 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
         say( "    la entidad " .. ( real and "SE DIBUJA ( GetNoDraw false )" or "NO SE DIBUJA ( GetNoDraw true )" ) ..
             "   FL_NOTARGET " .. ( ghost:IsFlagSet( FL_NOTARGET ) and "SI" or "NO" ) )
 
+        -- ⚠ LAS DOS CAUSAS DE UNA DISCREPANCIA, SEPARADAS POR LO QUE PASA EN LA
+        -- LECTURA SIGUIENTE. Es la leccion de la r18b, aplicada antes de correr:
+        -- alla el reporte imprimia `convertidas run 165` al lado de
+        -- `deseada 280` y las dos eran ciertas -- una recien calculada y la otra
+        -- escrita por el TICK, que en el frame de un cambio todavia no corrio.
+        --
+        -- Aca pasa lo mismo con cualquier comando encadenado
+        -- ( `..._absence 0; ..._ghost_vis` ): la politica se lee EN VIVO y el
+        -- render lo escribe el reconciliador en el tick siguiente. **La primera
+        -- lectura despues de un cambio va a discrepar, y eso es correcto.**
+        --
+        -- *Un instrumento que solo dice "no coinciden" convierte lo normal en un
+        -- rojo; el que dice como distinguirlo convierte dos lecturas en un
+        -- veredicto.*
         if quiere ~= real then
-            say( "    !! LO QUE PIDE Y LO QUE HAY NO COINCIDEN. Con el reconciliador corriendo esto no dura " ..
-                "un tick: si se lee asi dos veces seguidas, la tarea de clase NO esta activa." )
+            say( "    !! LO QUE PIDE Y LO QUE HAY NO COINCIDEN. Dos causas, y se separan volviendo a leer:" )
+            say( "       ( a ) acabas de cambiar algo en ESTE frame ( convar, flag, hunt ). La politica se lee en vivo" )
+            say( "             y el render lo escribe el reconciliador en el TICK: es normal y dura un tick." )
+            say( "             Volve a tipear el comando SOLO, sin encadenarlo." )
+            say( "       ( b ) si se lee igual TIPEADO SOLO dos veces, el reconciliador no esta corriendo:" )
+            say( "             mirar la linea 'reconcil.' de arriba, que es la que lo mide." )
 
         end
 

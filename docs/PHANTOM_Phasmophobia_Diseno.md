@@ -2275,6 +2275,6 @@ huérfano.
 
 | | Qué | Depende de | Estado |
 |---|---|---|---|
-| **①** | la ausencia fuera del hunt: la primitiva, la política, el marcador honesto | nada sin verificar | **escrita** — `server_cloak.lua`, planilla `phantasmagoria-ausencia-r19` |
+| **①** | la ausencia fuera del hunt: la primitiva, la política, el marcador honesto | nada sin verificar | **escrita** — `server_cloak.lua`, planilla `phantasmagoria-ausencia-r20` |
 | **②** | el parpadeo del hunt | los números de la fuente **B**, sin verificar, y la fila de red de §20.3 | diseñada, sin escribir |
 | **③** | los estados estéticos de los eventos | §7 y los materiales | otro bloque |

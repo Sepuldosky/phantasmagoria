@@ -13,6 +13,42 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ⭐ **TRASPASO (2026-08-09): el bloque siguiente es la INVISIBILIDAD, y arranca por un
+> BLOQUEANTE.** Prompt autocontenido en
+> [`dev/PROMPT_phantasmagoria_invisibilidad_2.txt`](../dev/PROMPT_phantasmagoria_invisibilidad_2.txt).
+>
+> **Lo primero, y manda sobre media planilla: con `absence 1` el marcador NO SE DIBUJA NI EN MODO 1**
+> — y el modo 1 es el que delata a propósito atravesando paredes, así que no es el modo honesto
+> funcionando. Dos causas, idénticas desde la pantalla:
+>
+> - **(a)** el cliente **no tiene la entidad** — `EF_NODRAW` se la lleva puesta. Entonces **ningún
+>   marcador clientside puede dibujar un fantasma invisible**: se cae §20.4 entero y la salida es
+>   networkear la posición por otro lado.
+> - **(b)** el cliente la tiene y el marcador la saltea — defecto nuestro.
+>
+> **El instrumento ya está escrito y es un comando.** `phantasmagoria_ghost_cl` imprime los **dos
+> conteos del cliente** —por clase (`ents.FindByClass`, lo que usa el marcador) y por campo
+> (`ents.GetAll` + `IsPhantasmagoriaGhost`, lo que usa el comando)— y con `ghost_where` al lado, una
+> corrida decide. Si los dos dan 0 con el servidor diciendo 1, es (a). Si dan distinto entre sí, es
+> una tercera causa que nadie había nombrado: **el marcador y el comando estarían midiendo cosas
+> distintas desde siempre.**
+>
+> ⚠ **Y si sale (a), NO improvisar el reemplazo en la misma ronda.** Cambiar cómo se vuelve invisible
+> el fantasma es cambiar la mecánica que se estaba midiendo — es lo que costó las rondas 5 y 6.
+>
+> **Entraron dos cosas más, y las dos son la r18b aplicada antes de correr:** la convar
+> `phantasmagoria_ghost_absence` **reconcilia a los vivos ella misma** y dice el número; y el reporte
+> separa las **dos causas de una discrepancia** entre lo que la política pide y lo que la entidad
+> tiene — (a) cambiaste algo en este frame y el reconciliador corre en el tick, volvé a tipearlo solo;
+> (b) si se lee igual tipeado solo dos veces, el reconciliador no corre. ⚠ El override de flags
+> (`phantasmagoria_ghost_flag ausencia 0`) **no tiene gancho** —vive en `server.lua`, que ahora mismo
+> tiene trabajo ajeno sin commitear— así que para esa fila la segunda lectura no es opcional.
+>
+> ⚠ **La planilla de la ausencia pasó de r19 a r20**: la sesión paralela tomó el número r19 para su
+> propia ronda (el crash de `TranslateActivity` leyendo el global `ENT` en runtime). *Dos sesiones
+> numerando rondas sobre el mismo repo es una colisión que sólo se ve leyendo el trabajo del otro.*
+
+
 > ⭐ **LO ÚLTIMO (2026-08-09): la r18b CORRIÓ — 5 de 5. `speed.base` queda CERRADO en juego, la foto
 > vieja está arreglada, y el arreglo destapó el SEGUNDO lector viejo sin que ninguna fila lo pidiera.**
 >
@@ -214,7 +250,7 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 > llegan al tope**. El Yokai trae 5, así que su silencio sobre el parpadeo es real y no un recorte.
 > *Una ausencia sólo vale como dato cuando se sabe que el generador no la produjo.*
 >
-> Planilla `dev/checks/phantasmagoria-ausencia-r19.html`, **9 filas, sin correr**. La ② (el parpadeo)
+> Planilla `dev/checks/phantasmagoria-ausencia-r20.html`, **10 filas, sin correr** — la 01 es el bloqueante del marcador y manda sobre otras dos. La ② (el parpadeo)
 > está **diseñada y sin escribir** a propósito: sus números vienen de la fuente B sin verificar, y su
 > riesgo real es la **red** y no el render — con un pulso visible de 0,08 s y snapshots a ~20-30 Hz el
 > cliente se lo puede tragar (Diseño §20.3).
