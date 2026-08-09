@@ -99,7 +99,7 @@ estado más difícil de Phasmophobia —la cacería— porque *es* un cazador.
 | Roaming entre puntos | Pathing + navmesh de la base | **gratis** |
 | ~~No salir del área de investigación~~ | ~~`ENT.hazardousAreas`~~ | **REFUTADO — §18.1** |
 | Abrir/golpear puertas | `terminator_doorbash.lua` + `GhostInteractWithDoor()` | **gratis** |
-| Tirar objetos (Poltergeist) | `FlingNearbyPhysicsProps(self)` de paranormal | **gratis** |
+| Tirar objetos (Poltergeist) | ~~`FlingNearbyPhysicsProps(self)` de paranormal~~ **escrito propio**: `server_events.lua` (§21) | **escrito, sin correr en juego** |
 | Pasos audibles a 20 m | `ProcessFootsteps` + `IsSilentStepping()` | **gratis** |
 | Silencio del Myling | `function ENT:IsSilentStepping() return true end` | **gratis** |
 | Manifestación (ghost event) | `CreateShadowFigure(pos)` + partículas gmpa | **gratis** |
@@ -612,7 +612,7 @@ Sus funciones son globales y se llaman directo:
 ```lua
 CreateShadowFigure( pos )         -- manifestación tipo "shadow" (la sana; respeta el argumento)
 GhostInteractWithDoor()           -- puerta que se abre sola y se cierra en 3-15 s
-FlingNearbyPhysicsProps( self )   -- el Poltergeist... pero NUNCA CORRIÓ. Ver abajo
+FlingNearbyPhysicsProps( self )   -- el Poltergeist. CORRE ( 3 call sites, 2 vivos ). Ver §11.2
 BreakNearbyProps( self )          -- NO rompe props. El nombre miente. Ver abajo
 ParticleEffectAttach( "gmpa_shadow_figure_clouds", PATTACH_POINT_FOLLOW, self, 0 )
 table.Random( ghostwhispers )     -- 14 susurros: voc_comehere_01, voc_followme, voc_overhere
@@ -621,13 +621,36 @@ table.Random( ghostwhispers )     -- 14 susurros: voc_comehere_01, voc_followme,
 > **Corrección de las dos últimas (2026-08-02, leyendo el archivo entero).** Este bloque decía «el
 > Poltergeist, literalmente» y «versión brutal, para el Oni/Demon». Ninguna de las dos se sostiene:
 >
-> - **`FlingNearbyPhysicsProps` no se llama nunca.** Su único call site (línea ~608) es
->   `if IsValid(ghost) then FlingNearbyPhysicsProps(ghost) end`, y `ghost` ahí es un **global que no
->   se declara en ninguna parte** — sólo existe como local dentro de `CreateGhostApparition`. O sea:
->   `IsValid(nil)` es false y la rama es inalcanzable. La función **se lee sana** (radio 500,
->   tope de 10 props, límite de masa 10 kg, `ApplyForceCenter` random, sonido), pero **nadie la
->   ejerció jamás**. Es código sin probar, no código probado — la distinción importa porque la
->   estábamos contando como «gratis».
+> - ~~**`FlingNearbyPhysicsProps` no se llama nunca.**~~ **REFUTADO EL 2026-08-09, y por el mismo
+>   error de método que este bloque existe para denunciar.** El párrafo decía: *«su **único** call
+>   site (línea ~608) es `if IsValid(ghost) then FlingNearbyPhysicsProps(ghost) end`, y `ghost` ahí
+>   es un global que no se declara en ninguna parte […] **nadie la ejerció jamás**»*.
+>
+>   **Son TRES call sites, no uno**, y dos están vivos:
+>
+>   | línea | call site | ¿corre? |
+>   |---|---|---|
+>   | `:612` | `if IsValid(ghost) then …` dentro de `RandomParanormalEvents` | **no** — `ghost` ahí sí es el global inexistente |
+>   | `:1040` | `for _, ghost in ipairs(activeGhosts) do` — `ParanormalEventTimer` | **sí** |
+>   | `:1055` | `for _, ghost in ipairs(activeGhosts) do` — `ParanormalGhostTimer` | **sí** |
+>
+>   `activeGhosts` se llena en `:946` (`table.insert`), dentro del `if SERVER` de `:915`. O sea que
+>   **en el servidor, con una aparición viva, la función corre** — el `ghost` de los dos bucles es la
+>   variable del `for`, no el global.
+>
+>   Lo que sí sobrevive del párrafo: la función **se lee sana** (radio 500, tope de 10 props, límite
+>   de masa 10 kg, `ApplyForceCenter` random, sonido). Y una consecuencia que cambia de signo: el
+>   `massLimit = 10` **sí** fue una tapa a algo que ocurría de verdad, porque la fuerza de gmpa
+>   **no se escala por masa** (`:490`) y con impulso fijo la velocidad resultante es inversamente
+>   proporcional a la masa.
+>
+>   ⚠ **La lección es la del propio bloque, cometida por quien lo escribió.** El párrafo original
+>   decía «se leen los N o se declara cuáles no» tres secciones más arriba, y después escribió
+>   **«su único call site»** habiendo leído uno. Un `grep FlingNearbyPhysicsProps` sobre el archivo
+>   devuelve cuatro líneas —la definición y tres llamadas— y las tres llamadas estuvieron impresas
+>   en pantalla todo el tiempo. *Declarar muerta una función es una afirmación sobre TODOS sus call
+>   sites, así que exige contarlos; y es exactamente el tipo de afirmación que después se cita como
+>   cerrada.* Esta entrada estuvo siete días en el documento y llegó a la memoria del proyecto.
 > - **`BreakNearbyProps` no rompe props físicos.** Sólo a `func_breakable` le dispara `Fire("Break")`;
 >   a un `prop_physics` le aplica **la misma fuerza random que Fling**, sin el límite de masa y sin
 >   sonido. No es una versión brutal: es Fling con menos guardas y peor nombre.
@@ -726,7 +749,9 @@ el primero cambia cómo se siente el mod más que los otros cinco juntos:
    rota + botón + sonido + sangre del techo + fling + parpadeo + susurro + una aparición, todo en el
    mismo frame. No es «un evento cada 120 s»: es una lotería donde a veces pasa **todo junto**. La
    forma que el autor claramente quiso —una tabla de pesos— es la que hay que copiar, no el código.
-5. **`FlingNearbyPhysicsProps` es inalcanzable** y **`BreakNearbyProps` no rompe props físicos** —
+5. ~~**`FlingNearbyPhysicsProps` es inalcanzable**~~ **REFUTADO ( ver §11.2 ): tiene tres call
+   sites y dos corren.** Lo que sí sobrevive de este punto: **`BreakNearbyProps` no rompe props
+   físicos** —
    ver la corrección al bloque de §9.
 6. **Fuga de timers a 33 Hz.** `timer.Create("GhostDistort_"..EntIndex(), 0.03, 0, ...)` y
    **`timer.Remove` no aparece nunca** para ese nombre. Cuando la aparición muere, el callback hace
@@ -759,7 +784,7 @@ el primero cambia cómo se siente el mod más que los otros cinco juntos:
   |---|---|
   | `GhostInteractWithDoor()` | **Sirve.** Su contabilidad de 60 s está muerta, pero el `Fire("Use")` + cierre diferido es lo que queremos |
   | `CreateShadowFigure(pos)` | **Sirve.** Es la que respeta el argumento |
-  | `FlingNearbyPhysicsProps(self)` | **Se lee sana pero nunca corrió** — su call site es inalcanzable. Probarla antes de contarla |
+  | `FlingNearbyPhysicsProps(self)` | ~~Se lee sana pero nunca corrió~~ **CORRE** — tiene **tres** call sites (`:612` muerto, `:1040` y `:1055` vivos vía `activeGhosts`). Ver la corrección de §11.2 |
   | `BreakNearbyProps(self)` | **No hace lo que el nombre dice.** Si querés romper `prop_physics`, hay que escribirlo |
 
 - **Los orbes los reimplementamos** en dos líneas, esquivando el bug:
@@ -2349,3 +2374,190 @@ huérfano.
 | **①** | la ausencia fuera del hunt: la primitiva, la política, el marcador honesto | nada sin verificar | **escrita** — `server_cloak.lua`, planilla `phantasmagoria-ausencia-r20` |
 | **②** | el parpadeo del hunt | los números de la fuente **B**, sin verificar, y la fila de red de §20.3 | diseñada, sin escribir |
 | **③** | los estados estéticos de los eventos | §7 y los materiales | otro bloque |
+
+---
+
+## 21. Los eventos paranormales — **ESCRITO, sin correr en juego** [2026-08-09]
+
+**Pedido del autor, literal:** *«ver como lo hace el mod GM Paranormal Events para realizar los
+eventos paranormales como flicking de luces, lanzar objetos y demas, y agregar esas funcionalidades a
+phantasmagoria para que la entidad use eso, y que lo use **cercano a la entidad** con cvars propias y
+flag para desactivar cada uno de esos sucesos paranormales (que son en parte el gameplay normal de
+phasmophobia, el fantasma suele tirar cosas o hacer parpadear las luces en estado de Calma). Los
+Flags son para hacer que algunos boten objetos otros los hagan con mayor intensidad y asi, nos puede
+servir para eventos como **HUNTS** y cosas asi.»*
+
+Motor en `lua/entities/terminator_nextbot_phantom/server_events.lua`; rasgos por tipo en
+`lua/phantasmagoria/ghost_flags.lua`. Planilla `dev/checks/phantasmagoria-eventos-r1.html`.
+
+### 21.1 La diferencia de fondo con gmpa es **una sola palabra: cerca de quién**
+
+gmpa elige **un jugador al azar** y busca una navarea a ≤2048 u *de él*
+(`GetRandomNavAroundPlayer`, `:295-327`). El fantasma no participa en la elección. Por eso su
+actividad se siente como un generador de sustos ambiental y no como una presencia — y por eso su
+*favourite room* tuvo que ser un `Vector` hardcodeado (`:93`): no había nadie a quien preguntarle.
+
+Acá **el radio cuelga del fantasma**. Todo evento pasa a menos de `phantasmagoria_ghost_evradius`
+(450 u ≈ 8,5 m) de él, lo que convierte la actividad paranormal en un **instrumento de
+localización** — que es lo que es en el juego: la actividad te dice dónde está la habitación, y la
+habitación te dice dónde poner las cámaras.
+
+**La consecuencia hay que aceptarla de frente, y la fila 08 de la planilla la mide:** si el fantasma
+está lejos, no pasa nada, y eso es *correcto*. Un jugador en la otra punta del mapa no tiene que oír
+nada.
+
+### 21.2 Las ocho categorías
+
+| categoría | qué hace | banco de sonido |
+|---|---|---|
+| `throw` | tira props físicos cercanos | `event/throw` |
+| `knock` | golpea una puerta o una pared | `event/knock` (puerta) · `event/impact` (pared) |
+| `creak` | hace crujir el piso | `event/creak` |
+| `door` | abre o cierra una puerta, delegando en `server_doors.lua` | `door/` |
+| `light` | parpadeo o estallido de luces cercanas | `light/` · `event/impact/lightbulb_smash` |
+| `sound` | susurra, respira o tararea | `ghost/paranormal_voice` · `breathing` · `humming` |
+| `prop` | hace sonar un trasto de la casa | `prop/` |
+| `furniture` | abre un armario o un cajón | `furniture/` |
+
+**Los 152 clips citados existen en disco, 152 de 152** (verificado por script, no por inventario a
+ojo). El catálogo ya estaba organizado *por evento* desde el cierre de audio del 2026-08-03: `event/`
+con sus cuatro sub-bancos existía antes que el motor.
+
+**Cero assets de gmpa.** Montar `sound/gm_paranormal/` sería la colisión de rutas que
+`phantasmagoria_assetcheck.lua` existe para detectar.
+
+Y **la voz es una y se sortea una sola vez por fantasma**: el catálogo tiene dos (la 1 femenina, la 2
+grave) y *el índice del archivo es la voz*. Sortear clip por clip haría que el mismo fantasma susurre
+con una voz y respire con la otra, que es peor que no tener dos — delata que el sonido es una tabla.
+La fijan los dos tipos que la fuente marca *«Can only be female»*: Banshee y Dayan.
+
+### 21.3 Los cuatro defectos de gmpa que el motor **no** hereda
+
+1. **La escalera no es exclusiva.** gmpa tira `math.random(1,100)` una vez y encadena **nueve
+   `if eventChance <= N` sin un solo `elseif`** (`:562-670`): un tiro de 3 dispara los nueve en el
+   mismo frame. Acá hay **una tabla de pesos** y se sortea **una** categoría por disparo.
+2. **El debounce se comprueba después de actuar.** gmpa mira `doorLastInteraction` en `:761-765`, o
+   sea *después* del `Fire("Use")` de `:758`, y escribe la tabla en `:775`, detrás de un `return` que
+   casi siempre gana.
+3. **El parpadeo son ~90 timers anidados** (`:621-632`). Acá son 2-5 `Fire` con delay, que es la
+   forma de HIM (`terminator_nextbot_homeless/server.lua:373-380`).
+4. **`math.random(1, #tabla)` sin guarda, en nueve lugares.** Toda elección pasa por `elegir()`, que
+   devuelve `nil` sobre una tabla vacía.
+
+### 21.4 Dónde se engancha — y por qué **no** es un `Think`
+
+Las dos ranuras obvias están ocupadas y la tercera es una trampa:
+
+| candidato | por qué no |
+|---|---|
+| `ENT.MyClassTask.Think` | es de `server_doors.lua:1301`. Y `RunTask` **corta en el primer callback que devuelve no-nil** (`taskoverride.lua:47`) |
+| `ENT:AdditionalThink` | es de `server_stuck.lua:990`. Un archivo nuevo que lo declare **no encadena: BORRA**, porque `myTbl.BaseClass` apunta a `terminator_nextbot` y no a la versión anterior |
+| cualquier `Think` de tarea | ⚠ **no corre mientras un jugador maneja al bot** — vive dentro del coroutine de prioridad (`behaviouroverrides.lua:694-695`). El motor se apagaría entero, sin un error |
+
+Va en **un solo `timer.Create` de servidor a 1 Hz** que recorre `PHANTASMAGORIA.EachGhost`. Un evento
+cada 25-90 s no necesita un callback por frame.
+
+**Lo que se pierde y cómo se compensa:** un `Think` de tarea aparece por nombre en
+`phantasmagoria_ghost_where`, y «se enganchó» deja de ser una suposición. Un timer no. Por eso el
+reporte imprime **siempre** el contador de vueltas del scheduler: *una guarda que sólo habla cuando
+falla no puede acreditar que corrió.*
+
+### 21.5 Los rasgos: tres reglas que salvan al Mimic y a los Twins
+
+Los rasgos viven en `ghost_flags.lua` y **no** en `ghost_types.lua`, porque ese archivo lo **pisa
+entero** `dev/gen_types.py:119`. Se fusionan sobre las filas al cargar.
+
+1. **Van en sub-tablas, nunca en la raíz de la fila.** El Mimic imita *«all behaviors … excluding
+   evidence»*: con los rasgos dentro de `events`, imitar es devolver el `events` del imitado. Sueltos
+   al lado de `evidence` haría falta una lista de exclusiones campo por campo — un `if` diferido.
+2. **El motor lee por un getter (`ENT:phantom_EventFlags()`), nunca el campo.** ⚠ El repo hace hoy lo
+   contrario y está medido: `phantom_GetType()` tiene **cero llamadores** y los cuatro consumidores
+   leen `phantom_Type` crudo. El motor de eventos **no copia ese patrón**, a propósito.
+3. **`radius` es un array indexado por la iteración.** Los Twins hacen *«2 interactions at the same
+   time»*, una al radio normal y otra al extendido (8,48/2,12 = **4,00 exacto**, y 16,97/4,24 =
+   4,002: el factor sale de la fuente, no de una elección). Con `count = 1` y `radius = { 1.0 }` el
+   bucle es idéntico al de los otros 29 — no es una rama nueva, es un bucle de largo uno.
+
+**`count` y `burst` son dos ejes y no uno**, y esa separación salió de la revisión: eran el mismo
+campo leído en dos lugares y **se multiplicaban entre sí** (un Poltergeist cazando llegaba a ~32
+props y 32 `EmitSound` en un frame, con techo de 64, y el reporte lo mostraba como «1 disparo»). Hoy
+`count` = categorías simultáneas, `burst` = objetos por tirada. **Y eso es lo que separa al
+Poltergeist de los Twins:** el primero hace *una* interacción con cuatro objetos, los segundos hacen
+*dos* interacciones distintas en dos radios. Con un solo eje los dos colapsaban en «hace más cosas».
+
+Y el hallazgo más fuerte del corte es **el signo**, `dir`: +1 «solo enciende», −1 «solo apaga», 0 las
+dos. Cuatro tipos lo sostienen en la fuente y son los que **ningún peso escalar puede distinguir** —
+Mare *«cannot turn ON lights»* contra Jinn *«cannot directly turn OFF the breaker»*. Con un peso, los
+dos son «el tipo que toca las luces». ⚠ Honestidad sobre el alcance: de los cuatro, **hoy sólo Mare
+tiene destino implementable**; los otros tres piden el breaker y las llamas, que no existen.
+
+### 21.6 Qué se declaró **fuera de alcance**, y por qué se escribe
+
+| eje | sostenedores | por qué no se escribió |
+|---|---|---|
+| **apariciones** | 7 (Oni, Shade, Phantom, Deogen, Goryo, Obake, Wraith) | la visibilidad tiene **dueño único**: `server_cloak.lua` (§20). Entra por `phantom_SetVisible` o no entra |
+| **breaker** | 2 (Hantu, Jinn) — la asimetría mejor sostenida de la tabla | **GMod no tiene cuadro de luces.** Dos sostenedores y **cero destino** |
+| **llamas** | 1 (Onryo) | las velas todavía no son una entidad encendible |
+| **temperatura** | 1 (Hantu) | singleton real. Los 12 tipos con `freezing` son **evidencia**, no evento |
+| **`react.*`** | 4 | es **percepción** (§18), no eventos |
+| **posición doble** | 1 (Twins) | no es un rasgo: es que la entidad tenga dos posiciones |
+| **linterna del jugador** | — | gmpa la tiene, y rota: `weapon_flashlight` **no existe en GMod** (0 SWEPs en 62 addons). No se portó esta ronda |
+| **`func_breakable`** | — | gmpa lo tiene (`:1010`) y es su única rama buena de romper. No se portó esta ronda |
+
+*No se escribe un mecanismo sin destino* — y se anota, para que la próxima sesión no lo «descubra» y
+lo meta como un `if`.
+
+### 21.7 La revisión adversarial, y las cuatro reglas que dejó
+
+Doce agentes en seis ejes (Lua/alcance, semántica, integración, gameplay, rendimiento, instrumento),
+cada hallazgo pasado por un escéptico con el sesgo puesto en **refutar**. **Quince defectos
+confirmados sobre código recién escrito.** Los cuatro que dejan una regla que sobrevive a este
+bloque:
+
+- **Un comentario mentiroso se propaga al lector que lo cita — y esta vez el lector fui yo.**
+  `server.lua:3466-3468` afirmaba que la guarda de `server_cloak.lua` comprueba **tres** claves de
+  `MyClassTask`, *«…y `BehaveUpdatePriority` de este archivo»*. Es falso en las dos mitades: el cloak
+  lista **dos** (`:826`) y **descartó esa clave a propósito** (`:385-386`, con todas las letras).
+  `server_events.lua` copió **la lista del comentario en vez de medir**, y quedó tirando
+  `ErrorNoHalt` determinista **en todos los arranques**, acusándose de pisar una clave que nunca
+  existió. Es el nº 22 del catálogo: *un control que fabrica el síntoma que busca*. Los dos
+  comentarios están corregidos, y el censo real son **tres** asignaciones en todo el addon:
+  `= {}` (`server.lua:3426`), `.Think` y `.ModifyMovementSpeed`.
+- **Un flag que se lee en dos lugares se compone en dos lugares, salvo que alguien lo impida.**
+  `count` estaba documentado como sirviendo a dos ejes; lo que no estaba escrito —ni era cierto— es
+  que fueran **independientes**.
+- **Medir el destino, no enumerar las salidas.** `EV.door` devolvía `true` tras llamar `Use2`, que
+  tiene **cinco salidas silenciosas** — y la cuarta es **nuestra propia convar**
+  `phantasmagoria_ghost_opendoors 0` vía el veto `TerminatorBlockUse`. Con esa convar en 0 el evento
+  sonaba la manija, la hoja no se movía, y el instrumento imprimía `OK -- puerta prop_door_rotating
+  #123`: **verde exacto sobre cero comportamiento.** Enumerar las cinco sería frágil (la segunda se
+  activa porque un tercero *agregue* un campo: `if toUse.GetDriver then return end`); lo que no
+  envejece es leer el estado de la hoja antes y después.
+- **Se leyó el mecanismo de HIM y se salteó su guarda.** El parpadeo copió la forma (2-4 `Fire` con
+  delay) y no la **primera línea** del precedente: `if not ent:GetOn() then return end`. Sin ella,
+  una lámpara ya apagada recibía tres `SetOn(false)`, sonaba el interruptor, y el reporte devolvía
+  «3 conmutaciones» con **cero cambio visible** — justo en la categoría cuyo encabezado promete que
+  el vacío se va a poder distinguir del evento.
+
+Dos más, del eje instrumento, que valen como advertencia general: **`evhunt` declaraba tres estados y
+entregaba dos** (el `2` producía exactamente lo mismo que el `1` mientras el reporte imprimía
+«forzado»), porque se copió la convención de tres estados **sin el mecanismo que la sostiene** — el
+`2` significa «ignorá el flag del NPC» y el hunt no tiene flag por NPC. Y **la guarda de datos corría
+después de la fusión que protege**, o sea que el paso capaz de matarla ocurría primero: *una guarda
+que corre después del paso que puede matarla no es una guarda, es una autopsia que no se hace.*
+
+Y una del arco de lectura, que corrige a este documento: **`FlingNearbyPhysicsProps` sí corre.**
+§11.2 decía «su **único** call site» habiendo leído uno de **tres**. Ver la corrección ahí.
+
+### 21.8 Lo que falta
+
+- **Correrlo en juego.** Nada de este bloque se ejerció en GMod. Lo único verificado fuera del juego
+  es la sintaxis (con cinco archivos de control que ya corren hoy, incluido el `shared.lua` de la
+  base) y que las 152 rutas de sonido existen.
+- **El ritmo.** Los defaults (25-90 s, radio 450 u, masa 60 kg, fuerza 180-320 × masa) son una
+  elección de escritorio. La fila 10 de la planilla es la única que los juzga.
+- **La cordura.** Mientras no exista, los eventos no drenan nada — y §19 dice que el drenaje está
+  **condicionado a que existan eventos**. Este bloque es la mitad que faltaba de ese par.
+- **`deogen.ogg`** está en el catálogo (`ghost/breathing/`) y **sin cablear**: es el clip propio del
+  Deogen, que la fuente describe respirando por el spirit box. Hoy sería un singleton; se anota como
+  asset disponible, no como hueco de diseño.

@@ -3463,11 +3463,35 @@ include( "server_stuck.lua" )
 --
 -- VA ULTIMO, y por dos motivos que son medibles. ( a ) consume
 -- PHANTASMAGORIA.ResolveFlag, que se declara en server_doors.lua. ( b ) su
--- guarda del final comprueba que las TRES claves de MyClassTask sigan siendo
--- funciones -- `Think` de las puertas, `ModifyMovementSpeed` de la velocidad y
--- `BehaveUpdatePriority` de este archivo --, y una guarda de ese tipo solo vale
--- si corre despues de todos los que podrian pisarlas.
+-- guarda del final comprueba que las claves de MyClassTask sigan siendo
+-- funciones, y una guarda de ese tipo solo vale si corre despues de todos los
+-- que podrian pisarlas.
+--
+-- ⚠ ESTE PARRAFO DECIA "las TRES claves ... y `BehaveUpdatePriority` de este
+-- archivo" Y ERA FALSO EN LAS DOS MITADES ( corregido el 2026-08-09 ):
+-- server_cloak.lua:826 lista DOS, y :385-386 dice explicitamente que descarto
+-- esa clave porque cuelga de ENT:BehaveUpdate, que es un metodo y no una clave.
+-- `BehaveUpdatePriority` NO se asigna en ningun archivo del addon.
+--
+-- La frase falsa costo real: server_events.lua copio ESTA lista para su propia
+-- guarda y quedo tirando ErrorNoHalt en todos los arranques, acusandose de
+-- pisar una clave que nunca existio. *Un comentario mentiroso se propaga al
+-- lector que lo cita* -- y en un repo donde los comentarios son la
+-- documentacion, eso lo convierte en un defecto con alcance.
 include( "server_cloak.lua" )
+
+-- Diseno 21: los eventos paranormales ( tirar objetos, parpadear las luces,
+-- golpes, puertas, voces ), CERCA DEL FANTASMA y no cerca de un jugador al azar
+-- como hace [gm] paranormal events.
+--
+-- VA ULTIMO, y por tres motivos medibles. ( a ) consume
+-- PHANTASMAGORIA.ResolveFlag, que se declara en server_doors.lua. ( b ) delega
+-- las puertas en Use2 y en el silenciador de server_doors.lua en vez de
+-- reimplementarlos. ( c ) NO usa ENT.MyClassTask ni ENT:AdditionalThink -- las
+-- dos claves ya tienen dueno y la segunda no se encadena, BORRA -- asi que
+-- hereda la guarda de las tres claves de server_cloak.lua y la repite desde
+-- aca, que ahora es el ultimo lugar donde alguien podria haberlas pisado.
+include( "server_events.lua" )
 
 ---------------------------------------------------------------------------
 -- GUARDA: un campo pisado por un metodo del mismo nombre

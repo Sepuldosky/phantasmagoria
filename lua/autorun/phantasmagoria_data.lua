@@ -63,6 +63,20 @@ PHANTASMAGORIA = PHANTASMAGORIA or {}
 -- columna `propios` de la guarda de abajo mide justamente eso.
 local DATOS = {
     "phantasmagoria/ghost_types.lua",
+
+    -- Diseno 21: los rasgos de evento de los 30 tipos. VA DESPUES de
+    -- ghost_types.lua Y NO ES INDISTINTO -- es el mismo par que prop_data /
+    -- prop_data_eq, con la misma division por procedencia: alla lo GENERADO,
+    -- aca lo DECIDIDO. Este archivo FUSIONA `events` sobre las filas de Types,
+    -- asi que si corriera primero no habria filas sobre las que fusionar. Su
+    -- propia guarda grita en ese caso, pero el orden se declara aca igual.
+    --
+    -- Y la razon de que sea un archivo aparte y no un campo mas en
+    -- ghost_types.lua: ese archivo lo PISA ENTERO dev/gen_types.py:119, asi que
+    -- un rasgo escrito ahi a mano desaparece en la proxima regeneracion, sin
+    -- error y sin rastro.
+    "phantasmagoria/ghost_flags.lua",
+
     "phantasmagoria/prop_data.lua",
 
     -- Los 66 modelos NUESTROS de equipamiento. Aparte de prop_data.lua a
@@ -164,11 +178,32 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
         end
     end
 
+    -- ⚠ LA COLUMNA DE ghost_flags.lua, Y MIDE EL DESTINO POR EL MISMO MOTIVO
+    -- QUE LA DE ARRIBA. Contar PHANTASMAGORIA.GhostFlags diria 25 aunque la
+    -- fusion no hubiera corrido nunca: la tabla de rasgos existiria, intacta y
+    -- sin que nadie la lea, y los 30 tipos se comportarian como neutros. Lo que
+    -- hay que medir es cuantas FILAS DE Types terminaron con su `events`, que es
+    -- lo unico que el motor consulta.
+    --
+    -- Se exige == tipos y no > 0: la fusion escribe `events` en las TREINTA
+    -- filas ( las cinco sin rasgos propios se llevan el neutro ), asi que
+    -- cualquier numero menor significa que la fusion se corto a la mitad.
+    local conEventos = 0
+
+    if istable( PHANTASMAGORIA.Types ) then
+        for _, fila in pairs( PHANTASMAGORIA.Types ) do
+            if istable( fila ) and istable( fila.events ) then conEventos = conEventos + 1 end
+
+        end
+    end
+
     if tipos and tipos > 0 and props and props > 0 and acts and acts > 0 and pushOk
-        and propios and propios > 0 and propiosVivos == propios then
+        and propios and propios > 0 and propiosVivos == propios
+        and conEventos == tipos then
 
         MsgC( Color( 190, 120, 255 ), "[Phantasmagoria] ", color_white,
-            "datos cargados en ", realm, ": ", tipos, " tipos · ", props, " modelos ( ",
+            "datos cargados en ", realm, ": ", tipos, " tipos ( ", conEventos,
+            " con rasgos de evento ) · ", props, " modelos ( ",
             propios, " propios ) · ", acts, " actividades vigiladas.\n" )
 
         return
@@ -177,6 +212,7 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
 
     ErrorNoHalt( "[Phantasmagoria] LOS DATOS NO CARGARON BIEN en " .. realm .. ": " ..
         "Types " .. ( tipos and ( tipos .. " tipos" ) or "NO EXISTE" ) ..
+        " · rasgos de evento " .. ( tipos and ( conEventos .. " de " .. tipos .. " filas con `events`" ) or "SIN TIPOS" ) ..
         " · PropData " .. ( props and ( props .. " modelos" ) or "NO EXISTE" ) ..
         " · propios " .. ( propios and ( propiosVivos .. " de " .. propios .. " vivos en PropData" ) or "NO EXISTE" ) ..
         " · ActUniverse " .. ( acts and ( acts .. " actividades" ) or "NO EXISTE" ) ..
@@ -184,6 +220,8 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
         ".  Los tipos los necesita la cordura ( threshold por tipo ), PropData corrige la masa " ..
         "de los props, y el actlog es el instrumento de la pose T." ..
         ( ( propios and propiosVivos < propios ) and
-            "  ⚠ 'propios' por debajo del total significa que prop_data.lua corrio DESPUES y piso la tabla: mirar el orden de DATOS." or "" ) .. "\n" )
+            "  ⚠ 'propios' por debajo del total significa que prop_data.lua corrio DESPUES y piso la tabla: mirar el orden de DATOS." or "" ) ..
+        ( ( tipos and conEventos < tipos ) and
+            "  ⚠ 'rasgos de evento' por debajo del total significa que ghost_flags.lua no fusiono ( o corrio ANTES que ghost_types.lua ): los tipos se comportan como neutros y ninguno se diferencia." or "" ) .. "\n" )
 
 end )

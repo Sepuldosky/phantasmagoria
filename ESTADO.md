@@ -13,7 +13,55 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-09): la r23 corrió y el veredicto real es 1 pasa · 3 SIN CORRER. La única
+> ⭐ **LO ÚLTIMO (2026-08-09): LOS EVENTOS PARANORMALES ESTÁN ESCRITOS Y NO CORRIERON. Diseño §21.**
+> Es un bloque **paralelo** al del hijo/ausencia — lo escribió otra sesión, sobre archivos nuevos, y
+> no toca `server_cloak.lua` ni la planilla de la r23b.
+>
+> **Qué hay:** `server_events.lua` (el motor, último include de `server.lua`) y `ghost_flags.lua`
+> (los rasgos de **25 de los 30 tipos**, en un archivo aparte porque `gen_types.py` **pisa
+> `ghost_types.lua` entero**). **Ocho categorías** — `throw`, `knock`, `creak`, `door`, `light`,
+> `sound`, `prop`, `furniture` — con **una convar por categoría** (`0` control · `1` el rasgo del
+> tipo decide · `2` forzado) y **una tabla de pesos** en lugar de la cascada de nueve `if` sin
+> `elseif` de gmpa.
+>
+> **La tesis, y es la diferencia entera con `[gm] paranormal events`: el radio cuelga del FANTASMA,
+> no de un jugador al azar.** Eso convierte la actividad en un instrumento de localización — y trae
+> una consecuencia que hay que aceptar de frente: **si el fantasma está lejos, no pasa nada, y eso es
+> correcto.** La fila 08 de la planilla es la que lo mide.
+>
+> **Dónde se enganchó, y por qué NO es un `Think`:** `MyClassTask.Think` es de las puertas,
+> `ENT:AdditionalThink` es de los atascos (y un archivo nuevo que lo declare **no encadena: BORRA**),
+> y **ningún `Think` de tarea corre mientras un jugador maneja al bot** — el motor se apagaría entero
+> sin un error. Va en **un `timer.Create` de servidor a 1 Hz**. Lo que se pierde es aparecer en la
+> lista de tareas de `ghost_where`; se compensa imprimiendo **siempre** el contador de vueltas del
+> scheduler, porque *una guarda que sólo habla cuando falla no puede acreditar que corrió*.
+>
+> ⚠⚠ **LA REVISIÓN ADVERSARIAL ENCONTRÓ QUINCE DEFECTOS EN CÓDIGO RECIÉN ESCRITO, Y ESTÁN
+> ARREGLADOS.** Los cuatro que dejan regla, en el CHANGELOG y en §21.7. El peor para este documento:
+> **`server.lua:3466-3468` afirmaba que la guarda de `server_cloak.lua` comprueba TRES claves de
+> `MyClassTask` — y son DOS.** El archivo nuevo **copió la lista del comentario en vez de medir** y
+> quedó gritando `ErrorNoHalt` en todos los arranques por una clave que nunca existió. *Un comentario
+> mentiroso se propaga al lector que lo cita.* Los dos comentarios están corregidos; el censo real
+> son tres asignaciones en todo el addon (`= {}`, `.Think`, `.ModifyMovementSpeed`).
+>
+> **Lo verificado fuera del juego, y nada más que eso:** la sintaxis (con **cinco archivos de control
+> que ya corren hoy**, incluido el `shared.lua` de la base — `luaparser` rechaza el `continue` de
+> GMod, así que sin controles su rojo no vale) y que **las 152 rutas de sonido citadas existen en
+> disco, 152 de 152**.
+>
+> **Lo siguiente:** `dev/checks/phantasmagoria-eventos-r1.html` — 11 filas, las **cuatro primeras por
+> consola** (sin sorteo). La 06 es el corazón del pedido del autor: un Poltergeist y un Shade **no se
+> comportan igual**. ⚠ El pie de la hoja anota tres trampas del instrumento *antes* de correrlo, y la
+> primera es que **el disparo forzado corrompe la pasada** (`phantasmagoria_ghost_events reset` antes
+> de cualquier fila que mida ritmo).
+>
+> ⚠ **Y una corrección al diseño que salió de este arco:** **`FlingNearbyPhysicsProps` de gmpa SÍ
+> corre.** §11.2 decía «su **único** call site» habiendo leído uno de **tres**. Estuvo siete días en
+> el documento. *Declarar muerta una función es una afirmación sobre TODOS sus call sites.*
+>
+> ---
+>
+> **LO ANTERIOR (2026-08-09): la r23 corrió y el veredicto real es 1 pasa · 3 SIN CORRER. La única
 > que midió cerró con evidencia dura; las otras tres fueron una hoja mal pensada — mía.**
 >
 > **La 04 PASA, y hay que releerla porque el autor la dejó en *sin correr* pidiendo que la mirara

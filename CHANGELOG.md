@@ -7,6 +7,106 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-09 (33) — **Los eventos paranormales: el motor ESCRITO, y quince defectos propios agarrados antes de que llegaran al juego**
+
+Pedido del autor: portar los eventos de `[gm] paranormal events` —parpadeo de luces, tirar objetos y
+lo demás— **cerca de la entidad**, con convar por evento, flag para desactivarlos uno por uno, y
+rasgos por tipo *«para que algunos boten objetos, otros los hagan con mayor intensidad, y nos pueda
+servir para HUNTS»*.
+
+**Nada de esto corrió en GMod.** Lo verificado fuera del juego es la sintaxis (con cinco archivos de
+control que ya corren hoy, incluido el `shared.lua` de la base) y que **las 152 rutas de sonido
+citadas existen en disco, 152 de 152**. La planilla es `dev/checks/phantasmagoria-eventos-r1.html`,
+11 filas, las cuatro primeras medibles por consola.
+
+### Lo que entró
+
+- `lua/entities/terminator_nextbot_phantom/server_events.lua` — el motor. **Ocho categorías**
+  (`throw`, `knock`, `creak`, `door`, `light`, `sound`, `prop`, `furniture`), una **tabla de pesos**
+  en vez de la cascada de nueve `if` sin `elseif` de gmpa, y **una convar por categoría** con la
+  convención de tres estados del repo (`0` control · `1` el rasgo del tipo decide · `2` forzado).
+- `lua/phantasmagoria/ghost_flags.lua` — los rasgos de **25 de los 30 tipos**, sacados de los
+  comentarios «Comportamiento del juego» de `ghost_types.lua`, con la línea citada al lado de cada
+  uno. Va en un archivo aparte porque `dev/gen_types.py:119` **pisa `ghost_types.lua` entero**.
+- Tres instrumentos: `phantasmagoria_ghost_events` (reporte), `phantasmagoria_ghost_event <cat>`
+  (disparo forzado — sin él la planilla no se puede correr, porque cada categoría depende de un
+  sorteo) y `phantasmagoria_ghost_evflag` (el andamio de los ocho flags).
+
+### La tesis: **cerca de quién**
+
+gmpa elige un jugador al azar y hace pasar las cosas a ≤2048 u *de él*. El fantasma no participa —
+por eso su *favourite room* tuvo que ser un `Vector` hardcodeado. Acá **el radio cuelga del
+fantasma**, lo que convierte la actividad en un instrumento de localización. Consecuencia aceptada de
+frente: **si el fantasma está lejos, no pasa nada, y eso es correcto.**
+
+### ⚠ La revisión adversarial encontró QUINCE defectos en código recién escrito
+
+Doce agentes en seis ejes, cada hallazgo pasado por un escéptico con el sesgo puesto en **refutar**.
+Los cuatro que dejan una regla:
+
+**① Un comentario mentiroso se propaga al lector que lo cita — y el lector fui yo.**
+`server.lua:3466-3468` afirmaba que la guarda de `server_cloak.lua` comprueba **tres** claves de
+`MyClassTask`, *«…y `BehaveUpdatePriority` de este archivo»*. Falso en las dos mitades: el cloak lista
+**dos** (`:826`) y **descartó esa clave a propósito** (`:385-386`). Copié la lista del comentario en
+vez de medir, y la guarda nueva quedaba tirando `ErrorNoHalt` **en todos los arranques**, acusando al
+archivo nuevo de pisar una clave que nunca existió — el nº 22 del catálogo, *un control que fabrica
+el síntoma que busca*. Los dos comentarios corregidos; el censo real son tres asignaciones en todo el
+addon.
+
+**② Un flag que se lee en dos lugares se compone en dos lugares.** `count` mandaba el bucle del
+despachador **y** entraba como tope de props del evento de tirar: **se multiplicaba consigo mismo**.
+Un Poltergeist cazando llegaba a ~32 props y 32 `EmitSound` en un frame (techo 64), y el reporte lo
+mostraba como «1 disparo». Partido en `count` (categorías simultáneas) y `burst` (objetos por
+tirada) — que además es lo que separa al Poltergeist de los Twins.
+
+**③ Medir el destino, no enumerar las salidas.** `EV.door` devolvía `true` después de llamar `Use2`,
+que tiene **cinco salidas silenciosas**, y la cuarta es **nuestra propia convar**
+(`phantasmagoria_ghost_opendoors 0` → veto `TerminatorBlockUse`). Con esa convar en 0: sonaba la
+manija, la hoja no se movía, y el instrumento imprimía `OK -- puerta prop_door_rotating #123`.
+**Verde exacto sobre cero comportamiento.** Ahora se lee el estado de la hoja antes y después, y la
+bitácora dice `efecto CONFIRMADO` o `SIN EFECTO`. (Enumerar las cinco sería frágil: una se activa
+porque un tercero *agregue* un campo.)
+
+**④ Se leyó el mecanismo de HIM y se salteó su guarda.** El parpadeo copió la forma (2-4 `Fire` con
+delay, contra los ~90 timers anidados de gmpa) y no la **primera línea** del precedente:
+`if not ent:GetOn() then return end`. Sin ella, una lámpara **ya apagada** recibía tres
+`SetOn(false)`, sonaba el interruptor, y el reporte devolvía «3 conmutaciones» con cero cambio
+visible — justo en la categoría cuyo encabezado promete distinguir el vacío del evento.
+
+Y dos que valen como advertencia sobre copiar convenciones:
+
+- **`evhunt` declaraba tres estados y entregaba dos.** El `2` producía *exactamente* lo mismo que el
+  `1` mientras el reporte imprimía «forzado». Se copió la convención de tres estados **sin el
+  mecanismo que la sostiene**: el `2` significa «ignorá el flag del NPC», y el hunt no tiene flag por
+  NPC. Hoy la convar declara dos y dice por qué.
+- **La guarda de datos corría DESPUÉS de la fusión que protege.** El paso capaz de matarla ocurría
+  primero, y si moría, la única línea que habría dicho cuál era el campo no llegaba a correr. *Una
+  guarda que corre después del paso que puede matarla no es una guarda: es una autopsia que no se
+  hace.*
+
+Los otros nueve: el estallido de luz ignoraba `soloEnciende` (o sea que el Jinn, cuyo único rasgo es
+*«cannot turn off»*, apagaba luces); `point_spotlight` recibía `TurnOff`, un input que no tiene, y en
+el parpadeo perdía la dirección; el signo se aplicaba a **cada paso** en vez de al **estado final**,
+con lo cual los dos tipos de luces del juego eran justo los dos que **no parpadeaban**; `Sparks` iba
+sin `Magnitude`/`Scale`/`Radius`, que los cuatro precedentes del árbol sí setean; la cuarentena de
+puertas se escribía antes de saber si se iba a actuar (fabricando la escasez que después reportaba);
+el reporte no tenía la guarda `isfunction` que sí tienen el scheduler y el disparo forzado, así que
+moría entero en el único caso que existe para diagnosticar; `dir` y `soundBanks` —el primero es *el*
+hallazgo del corte— no salían en ninguna salida; dos cuentas distintas se llamaban `disparos`; y un
+mensaje de error imprimía «habia 0 candidato(s)» en una rama a la que sólo se llega habiendo tenido
+al menos uno.
+
+### Y una corrección al diseño, del arco de lectura
+
+**`FlingNearbyPhysicsProps` de gmpa SÍ corre.** §11.2 decía *«su **único** call site»* habiendo leído
+uno de **tres** (`:612` muerto, `:1040` y `:1055` vivos vía `activeGhosts`). Estuvo siete días en el
+documento y llegó a la memoria del proyecto. Corregido en §9, §11.2, §11.3 y §2 del diseño, con una
+nota fechada en la entrada vieja de este changelog — **la entrada no se reescribe**: es el registro
+de lo que se midió aquel día. *Declarar muerta una función es una afirmación sobre TODOS sus call
+sites, así que exige contarlos.*
+
+---
+
 ## 2026-08-09 (32) — **La r23: 1 pasa · 3 sin correr. El índice reciclado queda CERRADO; el hijo no tuvo sujeto**
 
 **Lo que sí midió (fila 04, que el autor dejó en *sin correr* para que la revisara alguien):** con más
@@ -2910,6 +3010,11 @@ la escalera se reemplaza por una tabla de pesos.
 - **`BreakNearbyProps` no rompe props físicos.** Sólo `func_breakable` recibe `Fire("Break")`; a un
   `prop_physics` le aplica la misma fuerza random que Fling, sin límite de masa y sin sonido. No es
   «la versión brutal»: es Fling con menos guardas.
+
+  > ⚠ **REFUTADO el 2026-08-09** (ver §11.2 del diseño y la entrada de eventos paranormales).
+  > Son **tres** call sites, no uno: `:612` está muerto, pero `:1040` y `:1055` iteran `activeGhosts`
+  > y **corren en el servidor**. Esta entrada se deja como estaba porque es el registro de lo que se
+  > midió aquel día; la corrección va acá abajo y no encima.
 
 **La regla:** el nombre de una función miente igual que un comentario, y «la llama el propio mod» es
 una suposición hasta que se busca el call site.
