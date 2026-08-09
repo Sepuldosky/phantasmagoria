@@ -7,6 +7,50 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-09 (31) — **La r22 CERRÓ la ausencia (8/8), y dos de esos verdes traían un hallazgo adentro**
+
+`saltos del Draw 4493` y subiendo, el marcador siguiendo a un fantasma que no se ve, `ESCRITORES
+AJENOS 0`, la bitácora con una línea por transición real. **§20 ① queda cerrada en juego.**
+
+### ⚠ La alarma escrita en la r22 disparó en su primera corrida
+
+`!! HIJO TOCADO con la tecnica vieja ( SetNoDraw ): base_gmodentity`, con `( 1 hijos )`. La r20 había
+dado `hijos máximo visto 0` en toda su corrida y §20.2 lo tomó como confirmación de que el bot no
+lleva nada parenteado: **ese 0 era una ausencia no medida** — decía *«en esta corrida no pasó»* y se
+leyó como *«no puede pasar»*.
+
+Y el bucle destapó un agujero propio, invisible mientras nunca corría: **el reconciliador es
+idempotente**, así que un hijo que nace *con el fantasma ya invisible* no pasaba por la primitiva
+nunca — un objeto dibujado colgando de un fantasma que no se ve. Entró un **tercer motivo de
+re-aplicación** (cambió la cantidad de hijos), consultado sólo cuando queremos ocultar, y rotulado en
+la bitácora como `[ re-aplicado: cambio la cantidad de hijos ]` — *dos causas que escriben la misma
+línea necesitan que la línea diga cuál fue*.
+
+`base_gmodentity` es la clase base genérica y no identifica a nadie, así que el instrumento imprime
+ahora **modelo e índice** de cada hijo, y `phantasmagoria_ghost_vis` los lista. *No se acusa a un
+tercero sin un dato que lo señale; se agranda el instrumento hasta que lo señale.*
+
+### ⚠ La bitácora se contradijo sola dentro de una misma pantalla
+
+El reporte de un fantasma con `serie 4` y **30 ticks de vida** decía `hijos máximo visto 0 · tocados
+0` mientras la bitácora, dos líneas más abajo, mostraba un `!! HIJO TOCADO` para `#1310` y
+transiciones repartidas en cien segundos. Las dos eran ciertas: **el `EntIndex` se recicla**, y ese
+log tenía al menos dos fantasmas escribiendo bajo el mismo número — ya se había visto sin entenderlo,
+dos `spawn #1327` seguidos con series 10 y 11. Cada línea lleva ahora `#idx/sN`, con nuestra serie,
+que no se recicla. *Un identificador que el engine reusa no puede ser la clave de un registro que
+sobrevive al sujeto.*
+
+### La barra de vida tiene dueño
+
+Es el elemento `npcid` de DGL4 (`holohud2/elements/npcid.lua`): un elemento de HUD del **cliente**,
+no una entidad — así que **no tiene relación con el `base_gmodentity`**, eran dos hallazgos distintos.
+Se apaga en la config de HOLOHUD2. ⚠ Perilla de otro addon y por jugador: sirve para correr las
+filas, no como garantía del diseño.
+
+Planilla: `dev/checks/phantasmagoria-hijo-r23.html` (4 filas, hoja de acecho).
+
+---
+
 ## 2026-08-09 (30) — **La ausencia se muda al `ENT:Draw` del cliente: la técnica de HIM**
 
 Diagnóstico cerrado por el autor: `SetNoDraw` no sirve para esto. `EF_NODRAW` en el servidor manda la

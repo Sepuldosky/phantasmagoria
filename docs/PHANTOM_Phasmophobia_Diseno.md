@@ -2156,6 +2156,19 @@ del hunt se agrega **en `server_doors.lua`**, que es el que ya sabe manejarla, y
 > lleva ninguna (`DefaultWeapon = false` + `CanPickupWeapon` en false desde la r17). **Si el conteo
 > da 0, `SetNoDraw` solo alcanza; si da distinto de 0, hay que recorrerlos** — y por eso el
 > instrumento lo imprime en vez de que este documento lo dé por sentado.
+>
+> ⚠⚠ **MEDIDO, Y DIO LAS DOS COSAS. La r20 dio `hijos máximo visto 0` en toda su corrida; la r22
+> imprimió `!! HIJO TOCADO … base_gmodentity` con `( 1 hijos )`.** O sea que **el 0 de la r20 era una
+> ausencia no medida y no una ausencia**: decía *«en esta corrida no pasó»* y se leyó como *«no puede
+> pasar»*. El bot no lleva arma, pero **algo de fuera le parentea una entidad** — la clase impresa era
+> la base genérica, así que no identifica a nadie, y por eso el instrumento imprime ahora también el
+> modelo y el índice.
+>
+> Y el bucle destapó un agujero propio, que no se veía mientras nunca corría: **el reconciliador es
+> idempotente**, así que un hijo que nace *mientras el fantasma ya está invisible* no pasaba por la
+> primitiva nunca — quedaba un objeto dibujado colgando de un fantasma que no se ve. Hay un tercer
+> motivo de re-aplicación (cambió la cantidad de hijos), y la bitácora lo rotula para que no se
+> confunda con una transición. Lo cierra `phantasmagoria-hijo-r23`.
 
 ### 20.3 Cuál de las tres invisibilidades de Source, y para qué
 

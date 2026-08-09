@@ -146,6 +146,23 @@ end
 -- y la bitacora taparia el dato. Misma decision que en server_steps.lua.
 local BITACORA_MAX = 40
 
+-- ⚠ CADA LINEA LLEVA LA SERIE Y NO SOLO EL EntIndex, Y ESTO ENTRO PORQUE LA
+-- BITACORA YA SE CONTRADIJO SOLA. En la r22, el reporte de un fantasma con
+-- `serie 4` y 30 ticks de vida ( medio segundo ) decia `hijos maximo visto 0 ·
+-- tocados 0` mientras la bitacora, DOS LINEAS MAS ABAJO, mostraba un
+-- `!! HIJO TOCADO` para "#1310" y transiciones repartidas en 100 segundos. Las
+-- dos cosas eran ciertas: **el EntIndex se recicla**, y ese log tenia por lo
+-- menos dos fantasmas distintos escribiendo bajo el mismo numero. Ya se habia
+-- visto sin entenderlo -- dos `spawn #1327` seguidos con series 10 y 11.
+--
+-- `phantom_Serial` es NUESTRO y no se recicla, asi que es el que desempata.
+-- *Un identificador que el engine reusa no puede ser la clave de un registro
+-- que sobrevive al sujeto.*
+local function quien( ghost )
+    return "#" .. ghost:EntIndex() .. "/s" .. tostring( ghost.phantom_Serial or "?" )
+
+end
+
 PHANTASMAGORIA.VisLog = PHANTASMAGORIA.VisLog or {}
 
 local function anotar( texto )
@@ -238,23 +255,27 @@ function ENT:phantom_SetVisible( visible, motivo )
 
     -- LOS HIJOS, con el mismo filtro que usa el wraith y por el mismo motivo:
     -- GetChildren() puede traer al jugador que lo espectatea, y entidades cuyo
-    -- padre ya no es este bot. Se MIDE cuantos hay: la r20 dio `maximo visto 0`
-    -- en toda la corrida, asi que la suposicion de Diseno 20.2 quedo confirmada
-    -- y este bucle es una poliza que no se ejecuto nunca.
+    -- padre ya no es este bot.
     --
-    -- ⚠ Y POR ESO SIGUE USANDO SetNoDraw, QUE ES LA TECNICA QUE ACABAMOS DE
-    -- RETIRAR. No es un olvido y no se puede arreglar en el aire: un hijo es
-    -- OTRA entidad y de OTRA clase -- no pasa por nuestro ENT:Draw --, asi que la
-    -- salida de la r22 no le llega. Sobre un hijo, SetNoDraw ademas no es lo
-    -- mismo que sobre el bot: una entidad con padre no cae en la misma rama de
-    -- transmision.
+    -- ⚠⚠ LA POLIZA DEJO DE SER POLIZA: EN LA r22 ESTE BUCLE CORRIO. La r20 habia
+    -- dado `hijosMax 0` en toda su corrida y §20.2 lo tomo como confirmacion de
+    -- que el bot no lleva nada parenteado. La r22 imprimio
+    -- `!! HIJO TOCADO ... base_gmodentity` con `( 1 hijos )`, o sea que el 0 de
+    -- la r20 era **una ausencia no medida y no una ausencia**: en esa corrida no
+    -- paso, y eso no es lo mismo que no puede pasar.
     --
-    -- **La regla, escrita para el dia que `hijosMax` deje de dar 0:** ese dia
-    -- este bucle NO alcanza y hay que darle a cada hijo su propio no-dibujado
-    -- ( su Draw, o un RenderOverride ), midiendolo aparte. *Una poliza que
-    -- quedo escrita con la tecnica vieja es una trampa con fecha: el dia que se
-    -- ejecute va a fallar del modo que ya conocemos y nadie va a estar
-    -- mirandola.*
+    -- ⚠ Y SIGUE USANDO SetNoDraw, QUE ES LA TECNICA RETIRADA. Sobre el bot esa
+    -- bandera lo saca de la transmision; sobre un hijo NO cae en la misma rama
+    -- ( una entidad con padre se transmite por FULLCHECK ), y ademas es lo unico
+    -- que tenemos: un hijo es OTRA entidad, de OTRA clase y de OTRO addon -- no
+    -- pasa por nuestro ENT:Draw y no le podemos escribir el suyo. **Que esto
+    -- efectivamente lo esconda NO esta medido**, y esa es su fila.
+    --
+    -- `base_gmodentity` no identifica a nadie: es la clase base generica, o sea
+    -- que el que lo creo uso `ents.Create( "base_gmodentity" )`. Por eso la
+    -- linea imprime tambien el MODELO, que es lo que suele nombrar al addon.
+    -- *No se acusa a un tercero sin un dato que lo señale; se agranda el
+    -- instrumento hasta que lo señale.*
     local kids = self:GetChildren()
 
     if #kids > st.hijosMax then st.hijosMax = #kids end
@@ -269,14 +290,25 @@ function ENT:phantom_SetVisible( visible, motivo )
 
         st.hijosTocados = st.hijosTocados + 1
 
-        -- Ruidoso a proposito: si esto llega a correr, la corrida tiene que
-        -- enterarse en el momento y no dos rondas despues.
-        anotar( "#" .. self:EntIndex() .. "  !! HIJO TOCADO con la tecnica vieja ( SetNoDraw ): " ..
-            tostring( child:GetClass() ) .. ". Ver el comentario del bucle." )
+        -- Ruidoso a proposito: si esto corre, la corrida tiene que enterarse en
+        -- el momento y no dos rondas despues -- que es exactamente lo que paso.
+        anotar( quien( self ) .. "  !! HIJO " .. ( visible and "MOSTRADO" or "OCULTADO" ) ..
+            " con la tecnica vieja ( SetNoDraw ), y que funcione NO esta medido: clase '" ..
+            tostring( child:GetClass() ) .. "'  modelo '" .. tostring( child:GetModel() ) ..
+            "'  ent #" .. child:EntIndex() )
 
     end
 
-    anotar( "#" .. self:EntIndex() .. "  " .. ( visible and "SE VE   " or "INVISIBLE" ) ..
+    -- ⚠ CUANTOS HIJOS QUEDARON APLICADOS. Lo lee el reconciliador, y tapa un
+    -- agujero que se abrio en el mismo momento en que el bucle de arriba dejo de
+    -- ser hipotetico: **un hijo que nace mientras el fantasma YA esta invisible
+    -- no pasa por aca nunca**, porque el reconciliador es idempotente y no
+    -- vuelve a llamar a esta funcion si el estado no cambio. El sintoma seria un
+    -- objeto flotando, dibujado, pegado a un fantasma que no se ve -- o sea un
+    -- delator, que es lo contrario de lo que este bloque existe para hacer.
+    self.phantom_visKids = #kids
+
+    anotar( quien( self ) .. "  " .. ( visible and "SE VE   " or "INVISIBLE" ) ..
         "   " .. tostring( motivo ) ..
         ( #kids > 0 and ( "   ( " .. #kids .. " hijos )" ) or "" ) )
 
@@ -364,14 +396,33 @@ function ENT:phantom_ReconcileVisibility( myTbl )
         local st = stats( self )
         st.ajenos = st.ajenos + 1
 
-        anotar( "#" .. self:EntIndex() .. "  !! ESCRITOR AJENO: la entidad tiene EF_NODRAW puesto y " ..
+        anotar( quien( self ) .. "  !! ESCRITOR AJENO: la entidad tiene EF_NODRAW puesto y " ..
             "la ausencia ya no usa SetNoDraw. Con eso el cliente deja de recibirla." )
 
     end
 
-    if quiere == real and myTbl.phantom_Visible ~= nil then return end
+    -- ⚠ EL TERCER MOTIVO PARA VOLVER A APLICAR, Y ENTRO POR LA r22: que haya
+    -- cambiado la cantidad de HIJOS. Sin esto, un hijo que nace mientras el
+    -- fantasma ya esta invisible **no se oculta nunca** -- el estado no cambio,
+    -- asi que la primitiva no vuelve a correr -- y queda un objeto dibujado
+    -- pegado a un fantasma que no se ve. La r22 probo que los hijos existen.
+    --
+    -- Se consulta SOLO cuando queremos ocultar, y por dos motivos que son el
+    -- mismo: `GetChildren()` arma una tabla nueva cada vez y esto corre cada
+    -- tick, y con el fantasma visible no hay nada que hacer -- un hijo nuevo ya
+    -- nace dibujado. *Una comprobacion por tick se paga; conviene que se pague
+    -- solo en el caso en que puede encontrar algo.*
+    local hijosCambiaron = not quiere and #self:GetChildren() ~= ( myTbl.phantom_visKids or 0 )
 
-    myTbl.phantom_SetVisible( self, quiere, motivo )
+    if quiere == real and myTbl.phantom_Visible ~= nil and not hijosCambiaron then return end
+
+    -- El motivo dice CUAL de los tres caminos trajo la llamada. Sin esto, una
+    -- re-aplicacion por hijos se leeria en la bitacora como una transicion mas
+    -- -- y varias seguidas se leerian como el reconciliador reescribiendo cada
+    -- tick, que es justo el modo de falla que la fila 06 vigila. *Dos causas que
+    -- escriben la misma linea necesitan que la linea diga cual fue.*
+    myTbl.phantom_SetVisible( self, quiere,
+        hijosCambiaron and ( motivo .. "   [ re-aplicado: cambio la cantidad de hijos ]" ) or motivo )
 
 end
 
@@ -451,7 +502,7 @@ function ENT:AdditionalRagdollDeathEffects( ragdoll )
         PHANTASMAGORIA.Print( "#", self:EntIndex(), " murio invisible y el ragdoll NACIO con EF_NODRAW: ",
             "BecomeRagdoll SI hereda la bandera. Se lo hace visible.\n" )
 
-        anotar( "#" .. self:EntIndex() .. "  el RAGDOLL nacio invisible -- corregido" )
+        anotar( quien( self ) .. "  el RAGDOLL nacio invisible -- corregido" )
 
     end
 
@@ -574,9 +625,27 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
         -- bucle sobre los hijos es una poliza y SetNoDraw sobre la entidad
         -- alcanza. Si da distinto de 0, hay entidades pegadas al bot que se
         -- dibujan aparte y el bucle es imprescindible.
-        say( "    hijos     " .. #ghost:GetChildren() .. " ahora · maximo visto " .. st.hijosMax ..
+        local kidsAhora = ghost:GetChildren()
+
+        say( "    hijos     " .. #kidsAhora .. " ahora · maximo visto " .. st.hijosMax ..
             " · tocados " .. st.hijosTocados ..
-            "   ( si el maximo es 0, esconder la ENTIDAD alcanza y el bucle es poliza )" )
+            ( st.hijosMax > 0 and "   !! YA NO ES POLIZA: este bot SI llega a tener hijos"
+            or "   ( 0 en ESTA vida del bot, que no es lo mismo que no puede pasar )" ) )
+
+        -- ⚠ QUIENES SON, Y ESTO FALTABA. La r22 imprimio `!! HIJO TOCADO ...
+        -- base_gmodentity` -- la clase base generica, que no identifica a nadie
+        -- -- y el reporte de al lado decia `hijos 0 ahora` porque el EntIndex se
+        -- habia reciclado y eran dos fantasmas distintos. Con clase, modelo e
+        -- indice se puede ir a buscar al dueño en vez de sospechar.
+        for _, child in ipairs( kidsAhora ) do
+            if not IsValid( child ) then continue end
+
+            say( "              #" .. child:EntIndex() .. "  clase '" .. tostring( child:GetClass() ) ..
+                "'  modelo '" .. tostring( child:GetModel() ) .. "'" ..
+                ( child:IsPlayer() and "   ( es un JUGADOR: lo saltea el filtro )" or "" ) ..
+                ( child:GetNoDraw() and "   nodraw SI" or "   nodraw no" ) )
+
+        end
 
         -- QUE EL RECONCILIADOR CORRE, medido y no deducido de una lista. Es lo
         -- que reemplaza al `<clase>_handler ACTIVA` de las tareas: aquello dice

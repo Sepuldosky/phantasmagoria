@@ -13,7 +13,54 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐⭐ **LO ÚLTIMO (2026-08-09): DIAGNÓSTICO CERRADO POR EL AUTOR — `SetNoDraw` no sirve, y la ausencia
+> ⭐⭐ **LO ÚLTIMO (2026-08-09): la r22 CORRIÓ — 8 de 8. LA AUSENCIA (§20 ①) QUEDA CERRADA EN JUEGO.**
+>
+> El fantasma no se ve **y el marcador lo sigue**, que es lo que la r20 no podía dar:
+> `saltos del Draw 4493` y subiendo · `NW INVISIBLE · GetNoDraw false · IsEffectActive false ·
+> IsDormant no` · `pos EN EL CLIENTE … 0.1 s desde el último cambio · 2457 movimientos vistos` ·
+> `ESCRITORES AJENOS 0` · la bitácora con una línea por transición real. La técnica de HIM anduvo, y
+> el `Draw` del cliente es ahora el dueño del render.
+>
+> ⚠⚠ **Y DOS DE ESOS OCHO VERDES TRAEN UN HALLAZGO ADENTRO. Los dos están en las notas, no en los
+> veredictos.**
+>
+> **① La alarma que se escribió en la r22 disparó en su primera corrida:**
+> `!! HIJO TOCADO con la tecnica vieja ( SetNoDraw ): base_gmodentity`, con `( 1 hijos )`. La r20
+> había dado `hijos máximo visto 0` y §20.2 lo tomó como confirmación de que el bot no lleva nada
+> parenteado: **ese 0 era una ausencia no medida** — decía *«en esta corrida no pasó»* y se leyó como
+> *«no puede pasar»*. Quedan tres preguntas sin contestar: **quién** es ese hijo (`base_gmodentity` es
+> la clase base genérica y no identifica a nadie), si **`SetNoDraw` lo esconde de verdad** (sobre un
+> hijo no cae en la misma rama de transmisión, y es lo único que tenemos: es otra entidad, de otro
+> addon, y no le podemos escribir su `Draw`), y qué pasa con uno que nace **con el fantasma ya
+> invisible**.
+>
+> ⭐ **Ese tercer caso era un agujero abierto y ya está tapado, sin correrlo:** el reconciliador es
+> idempotente, así que un hijo nacido durante la invisibilidad **no se ocultaba nunca** — un objeto
+> dibujado colgando de un fantasma que no se ve, o sea un delator. Entró un tercer motivo de
+> re-aplicación, rotulado en la bitácora como `[ re-aplicado: cambio la cantidad de hijos ]` para que
+> no se lea como una transición.
+>
+> **② La bitácora se contradijo sola dentro de una misma pantalla.** El reporte de un fantasma con
+> `serie 4` y **30 ticks de vida** decía `hijos máximo visto 0 · tocados 0` mientras la bitácora, dos
+> líneas más abajo, mostraba un `!! HIJO TOCADO` para `#1310` y transiciones repartidas en cien
+> segundos. Las dos cosas eran ciertas: **el `EntIndex` se recicla**, y ese log tenía por lo menos dos
+> fantasmas escribiendo bajo el mismo número. Ya se había visto sin entenderlo — dos `spawn #1327`
+> seguidos, series 10 y 11. Cada línea lleva ahora `#idx/sN`. *Un identificador que el engine reusa no
+> puede ser la clave de un registro que sobrevive al sujeto.*
+>
+> **La barra de vida de la fila 05 tiene dueño y perilla:** es el elemento `npcid` de DGL4
+> (`holohud2/elements/npcid.lua`), un elemento de HUD del **cliente** — no una entidad, así que **no
+> tiene nada que ver con el `base_gmodentity`**. Se apaga en la config de HOLOHUD2. ⚠ Pero es una
+> perilla **de otro addon y por jugador**: sirve para correr las filas, no como garantía del diseño.
+>
+> **Lo siguiente:** `dev/checks/phantasmagoria-hijo-r23.html` (4 filas, hoja de acecho — su *«sin
+> correr»* vale tanto como un verde). Y **el parpadeo ② quedó destrabado** por la r22: con el render
+> decidiéndose en el cliente, lo que viaja es el NW var y no un dibujo, así que networkear *el
+> horario* vuelve a estar disponible.
+>
+> ---
+>
+> **LO ANTERIOR (2026-08-09): DIAGNÓSTICO CERRADO POR EL AUTOR — `SetNoDraw` no sirve, y la ausencia
 > pasa a hacerse EN EL CLIENTE, con la técnica de HIM. Planilla `phantasmagoria-draw-r22` (8 filas).**
 >
 > **Lo que se cayó:** `EF_NODRAW` en el servidor manda la entidad a `FL_EDICT_DONTSEND` — el cliente
