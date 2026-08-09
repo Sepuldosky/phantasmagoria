@@ -5,9 +5,16 @@
     Sin esto, un modelo negro sin ojos en un mapa oscuro es indistinguible de
     "no spawneo nada".
 
-    NO se toca el dibujado de la entidad. La base ya tiene su propio Draw y
-    su propio material de wraith; esto es un hook aparte que dibuja encima y
-    no puede romperle el render a nadie.
+    ⚠ Y DESDE LA r22 ESTE ARCHIVO TAMBIEN ES LA MECANICA, no solo el
+    instrumento: la ausencia ( Diseno 20 ① ) la hace el ENT:Draw de aca abajo.
+    Hasta la r21 el encabezado decia *"NO se toca el dibujado de la entidad"* y
+    eso ya no es cierto -- porque esconder al fantasma desde el SERVIDOR con
+    SetNoDraw se cayo en juego: la entidad se dejaba de transmitir y el cliente
+    se quedaba con una copia congelada. La salida es la de HIM
+    ( PHANTOM_Referencia.md §6 ), y el detalle esta en el bloque del Draw.
+
+    El marcador sigue siendo un hook aparte que dibuja encima y no le puede
+    romper el render a nadie.
 
     La base ademas trae visualizadores propios que NO hay que reescribir:
       term_debugpath      dibuja el path. PIDE sv_cheats 1 ( base/init.lua:92 )
@@ -43,6 +50,84 @@
 -- refuto, y la respuesta no es creerle a otra sino imprimir las cuatro.*
 local cvMarker = CreateClientConVar( "phantasmagoria_debug_ghost", "1", true, false,
     "Marcador de desarrollo sobre los fantasmas. 0 = nada · 1 = siempre, atravesando paredes ( tapa la invisibilidad de Diseno 20 ) · 2 = HONESTO: no dibuja al fantasma invisible, y cuenta cuantos oculto en una linea de HUD.", 0, 2 )
+
+---------------------------------------------------------------------------
+-- ⚠⚠ LA AUSENCIA SE DIBUJA (O NO SE DIBUJA) ACA -- LA TECNICA DE HIM
+---------------------------------------------------------------------------
+-- Diseno 20 ①, tercera vuelta. La r20 y la r21 cerraron el diagnostico:
+-- **`SetNoDraw` en el servidor no sirve para esto**. La entidad se dejaba de
+-- transmitir, el cliente se quedaba con una copia congelada -- posicion vieja y
+-- la bandera sin llegar, por eso `GetNoDraw()` daba `false` -- y el marcador
+-- dibujaba donde el fantasma ESTABA. Tres sintomas que se veian como uno solo:
+-- "no se ve el fantasma" ( bien ), "no se ve el marcador" ( mal ) y "el physgun
+-- lo agarra en la posicion original" ( el mismo dato, desde otro testigo ).
+--
+-- LA SALIDA ES LA DE HIM, y estaba escrita en PHANTOM_Referencia.md §6 desde
+-- antes de empezar el bloque: *"la invisibilidad de HIM no es un material:
+-- SetHidden hace SetNotSolid + DrawShadow(false) + FL_NOTARGET, y el Draw del
+-- cliente literalmente no dibuja"*. Medido en su fuente
+-- ( terminator_nextbot_homeless/client.lua:54 ):
+--
+--     if not plsDraw and not self:IsSolid() then return end
+--
+-- **La entidad se sigue transmitiendo entera.** El cliente conserva la
+-- posicion, el marcador puede seguirla, y lo unico que cambia es que el modelo
+-- no se dibuja. Es exactamente lo que `SetNoDraw` NO podia dar.
+--
+-- ⚠ PERO LA SEÑAL DE HIM NO SE PORTA, Y ESA ES LA MITAD QUE HAY QUE MIRAR. HIM
+-- pregunta `self:IsSolid()`, o sea que **su invisibilidad y su no-solidez son la
+-- misma cosa** -- el mismo acoplamiento por el que Diseno 20.1 rechazo el cloak
+-- de la base, ahora del otro lado. Nuestro fantasma ausente **sigue siendo
+-- solido a proposito** ( la solidez tiene un dueno unico y es server_doors.lua ),
+-- asi que con la señal de HIM esto no ocultaria a nadie NUNCA.
+--
+-- La señal nuestra es el NW var, que es **la unica lectura del cliente que la
+-- r20 vio llegar bien**. *Se porta la tecnica, no el cableado: dos addons pueden
+-- necesitar el mismo dibujo y distintas razones para dibujarlo.*
+--
+-- ⚠ Y LO QUE ESTO CUESTA, ESCRITO ANTES DE CORRERLO: con `SetNoDraw` la entidad
+-- desaparecia del cliente y con ella **todo** lo que otros addons dibujen encima.
+-- Ahora la entidad esta ahi, asi que un HUD de terceros que dibuje barras de
+-- vida sobre lo que apuntas **puede delatar al fantasma invisible**. No es
+-- hipotetico: en las capturas de la r20 hay una barra `Phantasmagoria Ghost
+-- 900|900` flotando sobre el bot. `FL_NOTARGET` no la tapa -- esa bandera es
+-- para los NPC. Tiene su fila en la planilla, y si sale roja la salida no es
+-- volver a SetNoDraw: es mirar de donde sale esa barra.
+
+-- Cuantas veces el Draw NO dibujo. Es LA acreditacion de esta mecanica y no un
+-- adorno: solo lo puede tocar la rama que se saltea el dibujado, o sea que un
+-- numero que sube prueba que **el codigo del render corrio y decidio no
+-- dibujar**. Es lo que reemplaza a `GetNoDraw()` como "estado real", y es mejor
+-- que aquello por el motivo que costo dos rondas: aquella era una bandera que
+-- alguien mas podia escribir y que podia no llegar; esto es el camino del render
+-- contandose a si mismo.
+local saltosDeDraw = 0
+
+-- El chunk de client.lua es OTRO chunk que el de shared.lua, asi que el
+-- `BaseClass` que aquel declaro no se ve desde aca. Se vuelve a declarar por lo
+-- mismo que se duplica la guarda de AddCommand mas abajo.
+DEFINE_BASECLASS( ENT.Base )
+
+function ENT:Draw()
+    -- Se lee el NW var y NO `GetNoDraw()`, que es el cambio entero del bloque.
+    if self:GetNWBool( "phantasmagoria_invisible", false ) then
+        saltosDeDraw = saltosDeDraw + 1
+        return
+
+    end
+
+    -- Se encadena en vez de llamar a DrawModel directo. Hoy el Draw de la base
+    -- ES un DrawModel ( terminator_nextbot_base/cl_init.lua:25 ), asi que las
+    -- dos ramas hacen lo mismo -- pero el dia que la base dibuje algo mas, la
+    -- version que llama a DrawModel se lo comeria en silencio.
+    if BaseClass and isfunction( BaseClass.Draw ) then
+        BaseClass.Draw( self )
+
+    else
+        self:DrawModel()
+
+    end
+end
 
 -- Diseno 1: 1 u = 1,905 cm, o sea 1 m ~ 52,5 u.
 local UNITS_PER_METER = 52.5
@@ -214,14 +299,24 @@ local function renderState( ghost )
         "  ·  IsDormant " .. ( dormida and "SI" or "no" ) ..
         ( ( mat and mat ~= "" ) and ( "  ·  material '" .. mat .. "'" ) or "" )
 
-    if nodraw ~= efecto then
-        txt = txt .. "\n                           !! LAS DOS LECTURAS DE LA MISMA BANDERA DIFIEREN: " ..
-            "GetNoDraw no sirve para decidir en este realm."
+    -- ⚠ LAS TRES DE LA DERECHA CAMBIARON DE PAPEL Y NINGUNA SE BORRA. Desde que
+    -- la ausencia la hace el Draw ( arriba ), **nosotros ya no escribimos
+    -- EF_NODRAW nunca**: lo esperado es `GetNoDraw false · EF false · IsDormant
+    -- no` SIEMPRE, invisible o no. O sea que dejaron de ser el mecanismo y
+    -- pasaron a ser el CONTROL: si alguna se enciende, hay un escritor ajeno o
+    -- la entidad se dejo de transmitir, y en los dos casos vuelve el defecto que
+    -- costo la r20 -- el marcador dibujando en el lugar equivocado.
+    --
+    -- *Una lectura que se cae como mecanismo no se borra: se queda como
+    -- alarma, porque ahora se sabe exactamente qué significa que se encienda.*
+    if nodraw or efecto then
+        txt = txt .. "\n                           !! ALGUIEN PUSO EF_NODRAW SOBRE EL FANTASMA Y NO FUIMOS NOSOTROS: " ..
+            "la ausencia ya no usa SetNoDraw. Con esa bandera puesta el cliente deja de recibir la entidad " ..
+            "y el marcador vuelve a dibujar la posicion vieja."
 
-    elseif nodraw ~= dice then
-        txt = txt .. "\n                           !! LA BANDERA Y EL NW VAR NO COINCIDEN. " ..
-            ( dormida and "IsDormant SI lo explica: el cliente dejo de recibir la entidad y esa bandera quedo vieja."
-            or "IsDormant dice que no, asi que NO es que dejo de recibirla: es un hallazgo de red." )
+    elseif dormida then
+        txt = txt .. "\n                           !! IsDormant SI sin EF_NODRAW: el cliente dejo de recibir la entidad " ..
+            "por otro motivo. La posicion de abajo puede estar vieja."
 
     end
 
@@ -345,6 +440,15 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cl", function()
         if IsValid( e ) and e.IsPhantasmagoriaGhost then porCampo = porCampo + 1 end
 
     end
+
+    -- ⚠ EL CONTADOR DEL DRAW, Y ES LA ACREDITACION DE LA MECANICA ENTERA. Solo
+    -- lo toca la rama que se saltea el dibujado, asi que un numero que SUBE
+    -- prueba que el camino del render corrio y decidio no dibujar -- que es
+    -- justo lo que ninguna bandera podia probar. Se imprime siempre, tambien en
+    -- 0: con el fantasma visible, 0 es lo correcto, y con uno invisible delante,
+    -- 0 es el defecto. Los dos casos se leen distinto **si el numero esta**.
+    say( "saltos del Draw ( veces que NO se dibujo un fantasma ): " .. saltosDeDraw ..
+        "   -- tipear el comando dos veces: con un fantasma invisible a la vista tiene que SUBIR." )
 
     say( "en el CLIENTE:  por clase ( lo que usa el marcador ) " .. porClase ..
         "   ·  por campo ( lo que usa este comando ) " .. porCampo ..

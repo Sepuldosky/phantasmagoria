@@ -13,7 +13,59 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-09): la r20 CORRIÓ — 7 pasa · 2 falla · 1 sin correr. LA AUSENCIA ANDA. Las
+> ⭐⭐ **LO ÚLTIMO (2026-08-09): DIAGNÓSTICO CERRADO POR EL AUTOR — `SetNoDraw` no sirve, y la ausencia
+> pasa a hacerse EN EL CLIENTE, con la técnica de HIM. Planilla `phantasmagoria-draw-r22` (8 filas).**
+>
+> **Lo que se cayó:** `EF_NODRAW` en el servidor manda la entidad a `FL_EDICT_DONTSEND` — el cliente
+> deja de **recibirla** y se queda con una copia congelada. Los tres síntomas de la r20 eran **uno
+> solo**: el fantasma no se veía (bien), el marcador tampoco (mal), y el physgun lo agarraba en la
+> posición original (el mismo dato con un testigo que no escribimos nosotros).
+>
+> **La salida estaba escrita en `PHANTOM_Referencia.md` §6 desde antes de empezar el bloque:** *«la
+> invisibilidad de HIM no es un material: `SetHidden` hace `SetNotSolid` + `DrawShadow(false)` +
+> `FL_NOTARGET`, y el `Draw` del cliente literalmente no dibuja»*
+> (`terminator_nextbot_homeless/client.lua:54`). **La entidad se sigue transmitiendo entera**, así que
+> el cliente conserva la posición y el marcador puede seguirla.
+>
+> ⚠ **De HIM se porta la TÉCNICA y no el cableado.** Su `Draw` pregunta `self:IsSolid()`: su
+> invisibilidad *es* su no-solidez — el mismo acoplamiento por el que §20.1 rechazó el cloak de la
+> base, ahora del otro lado. Nuestro fantasma ausente **es sólido a propósito**, así que con esa señal
+> no escondería a nadie. La señal nuestra es el **NW var**, la única lectura del cliente que la r20
+> vio llegar bien. *Dos addons pueden necesitar el mismo dibujo y distintas razones para dibujarlo.*
+>
+> ⭐ **La acreditación cambia de lugar, y es la mitad que la r20 no tenía.** Ya no hay bandera que
+> preguntar: el que decide no dibujar es el camino del render, así que es él el que se cuenta.
+> `phantasmagoria_ghost_cl` imprime **`saltos del Draw`**, que sólo puede tocar la rama que se saltea
+> el dibujado. *Un contador que sólo puede escribir el mecanismo prueba que el mecanismo corrió; una
+> bandera sólo prueba que alguien la escribió.*
+>
+> ⚠⚠ **Lo que la técnica nueva cuesta, escrito antes de correrla (fila 05):** con `SetNoDraw` la
+> entidad desaparecía del cliente y con ella **todo** lo que otros addons dibujen encima. Ahora está
+> ahí, así que **un HUD de terceros puede delatar al fantasma invisible** — en las capturas de la r20
+> hay una barra `Phantasmagoria Ghost 900|900` flotando sobre el bot, y `FL_NOTARGET` no la tapa (esa
+> bandera es para los NPC). Si esa fila sale roja, **la salida no es volver a `SetNoDraw`**.
+>
+> ⚠ **Tres cosas cambiaron de sujeto sin cambiar de nombre, y ninguna se borró:**
+> `ESCRITORES AJENOS` ya no cuenta un segundo escritor de `SetNoDraw` sino **cualquiera** que la
+> escriba (nosotros ya no) — sigue teniendo que dar 0 y ahora significa *«volvió el defecto de la
+> r20»*. El reconciliador compara contra el NW var y no contra la bandera: dejarlo como estaba habría
+> hecho **66 llamadas por segundo** a la primitiva, sin un solo error de Lua. Y la guarda del cadáver,
+> que en la r20 **midió** que `BecomeRagdoll` hereda la bandera, pasa a ser una **predicción falsable**
+> — ahora tiene que dejar de hablar. *Cuando se cambia el mecanismo hay que preguntarse contra qué
+> estaba comparando el que lo vigilaba.*
+>
+> ⚠ Y queda una trampa con fecha, escrita en su lugar: el bucle sobre los hijos sigue usando
+> `SetNoDraw` porque un hijo es **otra entidad** y no pasa por nuestro `Draw`. `hijosMax` dio **0** en
+> la r20, así que hoy no corre nunca; si alguna vez imprime `!! HIJO TOCADO`, ese bucle deja de ser
+> póliza y hay que darle a cada hijo su propio no-dibujado.
+>
+> ⭐ **Y el parpadeo ② se destraba de rebote:** la objeción de §20.3 era que un pulso de 0,08 s cabe en
+> un solo snapshot. Con el render en el cliente lo que viaja es el NW var y no un dibujo, y la salida
+> escrita —networkear **el horario**— vuelve a estar disponible, porque la entidad se transmite.
+>
+> ---
+>
+> **LO ANTERIOR (2026-08-09): la r20 CORRIÓ — 7 pasa · 2 falla · 1 sin correr. LA AUSENCIA ANDA. Las
 > dos rojas son del INSTRUMENTO, y las dos son la misma.**
 >
 > **La mecánica de §20 ① queda medida en juego y no se re-discute:** invisible en calma y visible en

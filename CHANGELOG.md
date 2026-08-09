@@ -7,6 +7,60 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-09 (30) — **La ausencia se muda al `ENT:Draw` del cliente: la técnica de HIM**
+
+Diagnóstico cerrado por el autor: `SetNoDraw` no sirve para esto. `EF_NODRAW` en el servidor manda la
+entidad a `FL_EDICT_DONTSEND` — el cliente deja de **recibirla** y se queda con una copia congelada.
+Los tres síntomas de la r20 eran **uno solo**: el fantasma no se veía (bien), el marcador tampoco
+(mal), y el physgun lo agarraba en la posición original.
+
+**La salida estaba escrita en `PHANTOM_Referencia.md` §6 desde antes de empezar el bloque:** *«la
+invisibilidad de HIM no es un material: el `Draw` del cliente literalmente no dibuja»*
+(`terminator_nextbot_homeless/client.lua:54`). La entidad se sigue transmitiendo entera.
+
+**De HIM se porta la técnica y NO el cableado.** Su `Draw` pregunta `self:IsSolid()`: su invisibilidad
+*es* su no-solidez — el mismo acoplamiento por el que §20.1 rechazó el cloak de la base, ahora del
+otro lado. Nuestro fantasma ausente es sólido a propósito. La señal nuestra es el **NW var**, la única
+lectura del cliente que la r20 vio llegar bien. *Dos addons pueden necesitar el mismo dibujo y
+distintas razones para dibujarlo.*
+
+### La acreditación cambia de lugar
+
+Ya no hay bandera que preguntar, así que se cuenta **el camino del render**: `saltos del Draw`, en
+`phantasmagoria_ghost_cl`, sólo lo puede tocar la rama que se saltea el dibujado. *Un contador que
+sólo puede escribir el mecanismo prueba que el mecanismo corrió; una bandera sólo prueba que alguien
+la escribió.* ⚠ Y trae su precondición adentro: el `Draw` sólo corre para lo que está en pantalla, así
+que un 0 con el fantasma fuera del PVS no es un rojo, es una fila que no midió.
+
+### Tres cosas cambiaron de sujeto sin cambiar de nombre, y ninguna se borró
+
+- **`ESCRITORES AJENOS`** medía un segundo escritor de `SetNoDraw`. Como nosotros ya no la
+  escribimos, esa bandera pasa a tener un valor esperado fijo y el contador vigila a **cualquiera**
+  que la ponga — con el mismo `0` de antes y un significado nuevo: *volvió el defecto de la r20*.
+  *Un detector cuyo sujeto se apaga no queda en cero: queda midiendo otra cosa, y hay que decir cuál
+  — o se vuelve un verde que nadie puede mover.*
+- **El reconciliador** compara contra el NW var. Dejarlo leyendo `GetNoDraw()` habría hecho `real`
+  siempre `true`: sobre un fantasma que la política quiere invisible, el `return` de idempotencia no
+  cortaría nunca — **66 llamadas por segundo a la primitiva, la bitácora tapada y `se oculto`
+  subiendo solo, sin un error de Lua**. *Cuando se cambia el mecanismo hay que preguntarse contra qué
+  estaba comparando el que lo vigilaba.*
+- **La guarda del cadáver**, que en la r20 midió que `BecomeRagdoll` hereda la bandera, pasa a ser una
+  **predicción falsable**: ahora tiene que dejar de hablar. *Una póliza que no dice si hizo falta se
+  queda para siempre; una que hace una predicción se puede sacar.*
+
+⚠ **Lo que la técnica nueva cuesta, escrito antes de correrla:** la entidad ya no desaparece del
+cliente, así que **un HUD de terceros puede delatar al fantasma invisible** — en las capturas de la
+r20 hay una barra `Phantasmagoria Ghost 900|900` sobre el bot, y `FL_NOTARGET` no la tapa. Es la fila
+05 de la r22, y si sale roja la salida **no** es volver a `SetNoDraw`.
+
+⚠ **Trampa con fecha, escrita en su lugar:** el bucle sobre los hijos sigue usando `SetNoDraw` porque
+un hijo es otra entidad y no pasa por nuestro `Draw`. `hijosMax` dio 0 en la r20, así que hoy no corre
+nunca; si imprime `!! HIJO TOCADO`, deja de ser póliza.
+
+Planilla: `dev/checks/phantasmagoria-draw-r22.html` (8 filas).
+
+---
+
 ## 2026-08-09 (29) — **La ausencia ANDA (r20: 7/2/1). Las dos rojas son del instrumento, y la frase que se cayó estaba en el diseño**
 
 Diseño §20 ①. La r20 corrió sobre `server_cloak.lua`, escrito la sesión anterior y sin una sola

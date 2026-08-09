@@ -161,17 +161,37 @@ end
 ---------------------------------------------------------------------------
 -- Diseno 20.2 y 20.3. Cuatro efectos y ni uno mas:
 --
---   SetNoDraw        el que hace el trabajo. Es una bandera de ENTIDAD y viaja
---                    networkeada, o sea que el CLIENTE puede leer GetNoDraw() y
---                    decir el estado REAL en vez de nuestra creencia. Eso es lo
---                    que hace medible al marcador honesto ( Diseno 20.4 ).
---   DrawShadow       una sombra sin cuerpo es un delator gratis.
+--   el NW var        ⚠ ES EL QUE HACE EL TRABAJO, DESDE LA r22. Antes lo hacia
+--                    SetNoDraw y ESO SE CAYO EN JUEGO ( r20 + r21 ): esa bandera
+--                    manda la entidad a FL_EDICT_DONTSEND, o sea que el cliente
+--                    DEJA DE RECIBIRLA -- se queda con una copia congelada, con
+--                    la posicion vieja y con la bandera sin llegar ( por eso
+--                    GetNoDraw() daba false del lado cliente ), y el marcador
+--                    dibujaba donde el fantasma ESTABA.
+--                    La salida es la de HIM ( Referencia §6, y estaba escrita
+--                    desde antes del bloque ): **la entidad se sigue
+--                    transmitiendo entera y el que no dibuja es el ENT:Draw del
+--                    cliente**. De HIM se porta la tecnica y NO el cableado: el
+--                    suyo pregunta self:IsSolid(), o sea que acopla invisible a
+--                    no-solido -- el mismo acoplamiento por el que §20.1 rechazo
+--                    el cloak de la base -- y nuestro fantasma ausente es solido
+--                    a proposito.
+--   DrawShadow       una sombra sin cuerpo es un delator gratis. Y ahora es
+--                    IMPRESCINDIBLE, no una prolijidad: sin SetNoDraw, el engine
+--                    no se lleva la sombra de arriba: se la lleva esta linea o
+--                    no se la lleva nadie.
 --   FL_NOTARGET      que los otros NPC lo ignoren mientras no se ve.
 --                    ⚠ Va sobre EL BOT y no sobre el jugador, que es al reves
 --                    que la trampa de NEAD ( Diseno 19.5 ): NO afecta a que el
 --                    fantasma te vea a vos. Escrito para que nadie lo
 --                    "corrija".
 --   RemoveAllDecals  sangre flotando en el aire, idem.
+--
+-- ⚠ Y LO QUE YA NO ESTA: **SetNoDraw no se llama mas, en ningun camino**. Si
+-- alguna vez vuelve a aparecer sobre este bot, el sintoma no va a ser "no se
+-- ve" ( eso ya funciona ) sino "el marcador miente y el physgun lo agarra en
+-- otro lado", que es un sintoma con la causa muy lejos del efecto. Por eso el
+-- detector de abajo pasa a vigilar esa bandera en vez de escribirla.
 --
 -- ⚠ LO QUE NO HACE, y es la decision del bloque: no toca SetSolidMask, ni
 -- SetCollisionGroup, ni SetNotSolid. La solidez tiene UN dueno y es
@@ -190,15 +210,15 @@ function ENT:phantom_SetVisible( visible, motivo )
     self.phantom_VisWhy  = motivo or "( sin motivo declarado )"
     self.phantom_VisAt   = CurTime()
 
-    self:SetNoDraw( not visible )
     self:DrawShadow( visible )
 
-    -- ⚠ EL NW VAR NO ES REDUNDANTE CON SetNoDraw, Y ESA ES LA GRACIA. La bandera
-    -- viaja por el sistema de entidades y esto por el de NW vars: son dos
-    -- caminos distintos. El cliente imprime LOS DOS al lado ( client.lua,
-    -- renderState ), asi que una divergencia se ve en vez de tener que
-    -- deducirse. Sin esto, "el fantasma se ve y no deberia" no distingue "la
-    -- politica esta al reves" de "la bandera no llego a este cliente".
+    -- ⚠ ESTA LINEA ERA EL TESTIGO Y AHORA ES EL MECANISMO. Entro para poder ver
+    -- una divergencia contra SetNoDraw -- dos sistemas de red distintos,
+    -- impresos juntos -- y termino ganando la discusion: **de las cuatro
+    -- lecturas del cliente fue la unica que llego bien** ( r20 ), asi que es la
+    -- que decide el ENT:Draw ( client.lua ) y la que decide el marcador honesto.
+    -- *El repuesto que se puso al lado para poder comparar puede terminar siendo
+    -- la pieza.*
     --
     -- SetNWBool y no SetupDataTables, por lo mismo que el hunt y el tipo: la
     -- base networkea con slots hardcodeados y el Bool 0 ya es Crouching
@@ -218,8 +238,23 @@ function ENT:phantom_SetVisible( visible, motivo )
 
     -- LOS HIJOS, con el mismo filtro que usa el wraith y por el mismo motivo:
     -- GetChildren() puede traer al jugador que lo espectatea, y entidades cuyo
-    -- padre ya no es este bot. Se MIDE cuantos hay: si siempre da 0, la
-    -- suposicion de Diseno 20.2 queda confirmada y este bucle es una poliza.
+    -- padre ya no es este bot. Se MIDE cuantos hay: la r20 dio `maximo visto 0`
+    -- en toda la corrida, asi que la suposicion de Diseno 20.2 quedo confirmada
+    -- y este bucle es una poliza que no se ejecuto nunca.
+    --
+    -- ⚠ Y POR ESO SIGUE USANDO SetNoDraw, QUE ES LA TECNICA QUE ACABAMOS DE
+    -- RETIRAR. No es un olvido y no se puede arreglar en el aire: un hijo es
+    -- OTRA entidad y de OTRA clase -- no pasa por nuestro ENT:Draw --, asi que la
+    -- salida de la r22 no le llega. Sobre un hijo, SetNoDraw ademas no es lo
+    -- mismo que sobre el bot: una entidad con padre no cae en la misma rama de
+    -- transmision.
+    --
+    -- **La regla, escrita para el dia que `hijosMax` deje de dar 0:** ese dia
+    -- este bucle NO alcanza y hay que darle a cada hijo su propio no-dibujado
+    -- ( su Draw, o un RenderOverride ), midiendolo aparte. *Una poliza que
+    -- quedo escrita con la tecnica vieja es una trampa con fecha: el dia que se
+    -- ejecute va a fallar del modo que ya conocemos y nadie va a estar
+    -- mirandola.*
     local kids = self:GetChildren()
 
     if #kids > st.hijosMax then st.hijosMax = #kids end
@@ -233,6 +268,11 @@ function ENT:phantom_SetVisible( visible, motivo )
         child:DrawShadow( visible )
 
         st.hijosTocados = st.hijosTocados + 1
+
+        -- Ruidoso a proposito: si esto llega a correr, la corrida tiene que
+        -- enterarse en el momento y no dos rondas despues.
+        anotar( "#" .. self:EntIndex() .. "  !! HIJO TOCADO con la tecnica vieja ( SetNoDraw ): " ..
+            tostring( child:GetClass() ) .. ". Ver el comentario del bucle." )
 
     end
 
@@ -294,18 +334,38 @@ function ENT:phantom_ReconcileVisibility( myTbl )
     myTbl.phantom_visLastTick = CurTime()
 
     local quiere, motivo = myTbl.phantom_WantsVisible( self, myTbl )
-    local real = not self:GetNoDraw()
 
-    -- EL DETECTOR VA ANTES DE ESCRIBIR, por el mismo motivo que el seguimiento
-    -- de la mirada en BehaveUpdate: puesto despues estaria comparando contra lo
-    -- que acabamos de escribir nosotros.
-    if myTbl.phantom_Visible ~= nil and real ~= myTbl.phantom_Visible then
+    -- ⚠ CONTRA QUE SE RECONCILIA, Y CAMBIO EN LA r22. Era `not self:GetNoDraw()`
+    -- porque esa bandera ERA el mecanismo. Ahora el mecanismo es el NW var, asi
+    -- que se lee el NW var: sigue siendo *lo que quedo escrito* y no *lo que
+    -- creemos haber escrito* -- son dos almacenamientos distintos y el campo
+    -- phantom_Visible de al lado lo prueba.
+    --
+    -- Dejarlo apuntando a GetNoDraw habria sido peor que un rojo: con la bandera
+    -- ya sin escribir, `real` daria SIEMPRE true, y sobre un fantasma que la
+    -- politica quiere invisible el `return` de abajo no cortaria nunca -- 66
+    -- llamadas por segundo a la primitiva, la bitacora tapada y el contador
+    -- `se oculto` subiendo solo. *Cuando se cambia el mecanismo hay que
+    -- preguntarse contra qué estaba comparando el que lo vigilaba.*
+    local real = not self:GetNWBool( "phantasmagoria_invisible", false )
+
+    -- ⚠ EL DETECTOR TAMBIEN CAMBIO DE SUJETO, Y NO SE BORRA. Medía a un segundo
+    -- escritor de SetNoDraw; como nosotros ya no la escribimos, esa bandera pasa
+    -- a tener un valor esperado FIJO -- false, siempre, invisible o no -- y
+    -- cualquier otro valor es un tercero escribiendo. Ese tercero devolveria
+    -- exactamente el defecto de la r20: la entidad deja de transmitirse, el
+    -- cliente se congela y el marcador dibuja la posicion vieja.
+    --
+    -- *Un detector cuyo sujeto se apaga no queda en cero: queda midiendo otra
+    -- cosa, y hay que decir cuál -- o se vuelve un verde que nadie puede mover.*
+    -- Va ANTES de escribir, por el mismo motivo que el seguimiento de la mirada
+    -- en BehaveUpdate: puesto despues compararia contra lo nuestro.
+    if self:GetNoDraw() then
         local st = stats( self )
         st.ajenos = st.ajenos + 1
 
-        anotar( "#" .. self:EntIndex() .. "  !! ESCRITOR AJENO: nosotros dejamos " ..
-            ( myTbl.phantom_Visible and "VISIBLE" or "INVISIBLE" ) .. " y la entidad esta " ..
-            ( real and "VISIBLE" or "INVISIBLE" ) )
+        anotar( "#" .. self:EntIndex() .. "  !! ESCRITOR AJENO: la entidad tiene EF_NODRAW puesto y " ..
+            "la ausencia ya no usa SetNoDraw. Con eso el cliente deja de recibirla." )
 
     end
 
@@ -357,6 +417,20 @@ end, "phantasmagoria_absence_vivos" )
 -- self:SetNoDraw( true ) sobre el bot. O sea que el ragdoll nace mientras el
 -- bot todavia esta con NUESTRO EF_NODRAW puesto.
 --
+-- ⚠ MEDIDO EN LA r20, Y LA RESPUESTA FUE QUE SI: salio el print, o sea que
+-- BecomeRagdoll hereda la bandera y esta guarda no era decorativa. **Y desde la
+-- r22 tiene que dejar de salir**, porque el bot ya no lleva EF_NODRAW puesto
+-- nunca: la ausencia la hace el ENT:Draw del cliente, que es de ESTA entidad y
+-- no del ragdoll, asi que un fantasma que muere invisible deja un cadaver
+-- visible sin que nadie lo corrija.
+--
+-- Eso convierte a la guarda en una prediccion falsable, que es mejor que una
+-- poliza: si el print vuelve a salir, alguien puso EF_NODRAW sobre el bot -- el
+-- mismo tercero que cuenta `ESCRITORES AJENOS` -- y este es el segundo testigo,
+-- en otro momento y por otro camino. *No se saca hasta que una corrida entera
+-- diga que no hizo falta.*
+--
+-- ( Lo de abajo es el texto original, de cuando esto no estaba medido. )
 -- NO ESTA MEDIDO si BecomeRagdoll hereda esa bandera. Si la hereda, un fantasma
 -- que muere invisible deja un cadaver invisible -- que se leeria como "el
 -- fantasma desaparecio al morir", un sintoma con causa muy lejos de su efecto.
@@ -430,7 +504,7 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
     local found = PHANTASMAGORIA.EachGhost( function( ghost )
         local st = stats( ghost )
         local quiere, motivo = ghost:phantom_WantsVisible()
-        local real = not ghost:GetNoDraw()
+        local real = not ghost:GetNWBool( "phantasmagoria_invisible", false )
 
         say( "#" .. ghost:EntIndex() .. "  serie " .. tostring( ghost.phantom_Serial or "?" ) ..
             "   hunt " .. ( ghost.phantom_Hunting and "SI" or "NO" ) )
@@ -448,8 +522,26 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
         -- getter, asi que imprimir "sombra si/no" seria repetir lo que acabamos
         -- de pedir y no lo que hay. Un dato que solo puede confirmar tu propia
         -- escritura no mide: la sombra se juzga mirando el piso, o no se juzga.
-        say( "    la entidad " .. ( real and "SE DIBUJA ( GetNoDraw false )" or "NO SE DIBUJA ( GetNoDraw true )" ) ..
-            "   FL_NOTARGET " .. ( ghost:IsFlagSet( FL_NOTARGET ) and "SI" or "NO" ) )
+        -- ⚠ ESTA LINEA DICE LO QUE SE MANDO, NO LO QUE SE DIBUJO -- y decirlo es
+        -- parte del reporte. Desde la r22 el que no dibuja es el ENT:Draw del
+        -- CLIENTE, y desde el servidor eso no se puede leer: lo unico
+        -- comprobable aca es que el NW var salio con el valor correcto. La otra
+        -- mitad -- que el Draw haya corrido y se haya salteado -- la acredita el
+        -- contador `saltos del Draw` de phantasmagoria_ghost_cl, y hacen falta
+        -- las dos. *Un comando que no puede medir la mitad que importa tiene que
+        -- nombrar al que sí puede.*
+        say( "    networkeado " .. ( real and "VISIBLE" or "INVISIBLE ( el NW var salio )" ) ..
+            "   FL_NOTARGET " .. ( ghost:IsFlagSet( FL_NOTARGET ) and "SI" or "NO" ) ..
+            "   -- que el cliente lo OBEDEZCA se mide con phantasmagoria_ghost_cl ( saltos del Draw )" )
+
+        -- El control de la bandera vieja. Tiene que decir NO siempre: la ausencia
+        -- ya no la escribe, y si esta puesta el cliente deja de recibir la
+        -- entidad y vuelve el defecto de la r20.
+        if ghost:GetNoDraw() then
+            say( "    !! EF_NODRAW PUESTO, y no fuimos nosotros ( la ausencia ya no usa SetNoDraw ). " ..
+                "Con esa bandera la entidad deja de transmitirse: el marcador va a dibujar la posicion vieja." )
+
+        end
 
         -- ⚠ LAS DOS CAUSAS DE UNA DISCREPANCIA, SEPARADAS POR LO QUE PASA EN LA
         -- LECTURA SIGUIENTE. Es la leccion de la r18b, aplicada antes de correr:
@@ -476,7 +568,7 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
         end
 
         say( "    contados  se oculto " .. st.ocultadas .. " · se mostro " .. st.mostradas ..
-            " · ESCRITORES AJENOS " .. st.ajenos .. " ( tiene que ser 0 )" )
+            " · ESCRITORES AJENOS " .. st.ajenos .. " ( tiene que ser 0: cuenta ticks con EF_NODRAW puesto por un tercero )" )
 
         -- LA MEDICION DE DISENO 20.2, y no una curiosidad: si esto da 0, el
         -- bucle sobre los hijos es una poliza y SetNoDraw sobre la entidad
@@ -484,7 +576,7 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
         -- dibujan aparte y el bucle es imprescindible.
         say( "    hijos     " .. #ghost:GetChildren() .. " ahora · maximo visto " .. st.hijosMax ..
             " · tocados " .. st.hijosTocados ..
-            "   ( si el maximo es 0, SetNoDraw sobre la entidad alcanza )" )
+            "   ( si el maximo es 0, esconder la ENTIDAD alcanza y el bucle es poliza )" )
 
         -- QUE EL RECONCILIADOR CORRE, medido y no deducido de una lista. Es lo
         -- que reemplaza al `<clase>_handler ACTIVA` de las tareas: aquello dice

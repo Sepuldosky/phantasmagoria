@@ -2165,24 +2165,51 @@ del hunt se agrega **en `server_doors.lua`**, que es el que ya sabe manejarla, y
 | `SetMaterial( mat )` | se dibuja con otro material | **③** | es lo único que da **silueta translúcida** y **sombra opaca** |
 | `SetRenderMode` + alpha | el clásico | ninguna, por ahora | ⚠ la lección ya pagada en este taller: **`$alpha` no vuelve translúcido a nada, es `$translucent`**, y un material sin la flag se dibuja opaco sin un solo error |
 
+> ⚠⚠⚠ **DECISIÓN REVERTIDA (r22, 2026-08-09, decisión del autor): `SetNoDraw` NO se usa para ①, y la
+> fila de arriba queda como historia.** El diagnóstico se cerró en juego: **la ausencia se hace en el
+> `ENT:Draw` del cliente, con la técnica de HIM**, y la entidad se sigue transmitiendo entera.
+>
+> | | Qué hace | Dónde va |
+> |---|---|---|
+> | **el `Draw` del cliente no dibuja** | el modelo no se dibuja y **la entidad sigue viajando**: el cliente conserva la posición y el marcador puede seguirla | **① y (probablemente) ②** |
+>
+> **De HIM se porta la técnica y no el cableado.** Su `Draw` pregunta `self:IsSolid()`
+> (`terminator_nextbot_homeless/client.lua:54`), o sea que **su invisibilidad es su no-solidez** — el
+> mismo acoplamiento por el que §20.1 rechazó el cloak de la base, ahora del otro lado. Nuestro
+> fantasma ausente **es sólido a propósito**, así que con esa señal no escondería a nadie nunca: la
+> señal nuestra es el **NW var**. *Dos addons pueden necesitar el mismo dibujo y distintas razones
+> para dibujarlo.*
+>
+> **Y la acreditación cambia de lugar, que es la mitad que faltaba:** ya no hay bandera que preguntar,
+> así que se cuenta **el camino del render**. `saltos del Draw` sólo lo puede tocar la rama que se
+> saltea el dibujado. *Un contador que sólo puede escribir el mecanismo prueba que el mecanismo
+> corrió; una bandera sólo prueba que alguien la escribió.*
+>
+> ⚠ **Lo que cuesta, y tiene su fila:** con `SetNoDraw` la entidad desaparecía del cliente y con ella
+> todo lo que otros addons dibujen encima. Ahora está ahí, así que **un HUD de terceros puede delatar
+> al fantasma invisible** (en las capturas de la r20 hay una barra `Phantasmagoria Ghost 900|900`
+> flotando sobre el bot). `FL_NOTARGET` no la tapa: esa bandera es para los NPC.
+>
 > ⚠⚠ **REFUTADO EN JUEGO (r20, 2026-08-09): «el cliente puede leer `GetNoDraw()` y decir el estado
-> REAL» es falso.** Con el fantasma invisible y **fuera de la pantalla**, el cliente imprimió
+> REAL» es falso** — y esto es lo que llevó a la reversión de arriba. Con el fantasma invisible y **fuera de la pantalla**, el cliente imprimió
 > `render: se dibuja · el server dice INVISIBLE`. La lectura que esta tabla daba por buena devolvió
 > `false` sobre una entidad que el engine no estaba dibujando — y de esa frase colgaban **las dos
 > mitades de §20.4**: el modo honesto nunca salteó a nadie y la línea de HUD contó `0 invisibles` con
 > uno delante. *Una propiedad de la red que nadie midió sostuvo el instrumento entero de un bloque.*
 >
-> La causa **todavía no está cerrada** y la decide la planilla `phantasmagoria-render-r21`: la
-> hipótesis es que `EF_NODRAW` manda la entidad a `FL_EDICT_DONTSEND`, o sea que el cliente **deja de
+> La causa: `EF_NODRAW` manda la entidad a `FL_EDICT_DONTSEND`, o sea que el cliente **deja de
 > recibirla** — la copia sigue en la lista (los dos conteos de la r20 dieron 1) pero congelada, con la
-> posición vieja y la bandera sin llegar. Si eso se confirma, **`SetNoDraw` deja de servir para ① y
-> para ②**, y la salida escrita más abajo —networkear el horario del parpadeo— cae con ella, porque
-> una entidad que no se transmite tampoco puede recibir nada por la entidad.
+> posición vieja y la bandera sin llegar. **Diagnóstico cerrado por el autor el 2026-08-09**, con tres
+> testigos que decían lo mismo por caminos distintos: el marcador que no aparecía, la posición vieja,
+> y el physgun agarrando al fantasma donde había estado.
 >
-> Dato ya en disco para esa decisión: **`wraithcloaking.lua` nunca usa `SetNoDraw`** — se esconde con
-> `SetMaterial` (`:94`, `:110`) y `SetRenderMode` (`:136`), que es la familia que *no* deja de
-> transmitir. §20.1 rechazó ese módulo por cómo acopla la solidez, y eso sigue en pie: **la técnica de
-> render y el módulo son dos decisiones distintas, y sólo una de las dos se había medido.**
+> Y el dato que estaba en disco desde el principio: **ni `wraithcloaking.lua` ni HIM usan
+> `SetNoDraw`** — el wraith se esconde con `SetMaterial` (`:94`, `:110`) y `SetRenderMode` (`:136`),
+> HIM directamente no dibuja en su `Draw`. Las dos son la familia que *no* deja de transmitir.
+> §20.1 rechazó el módulo del wraith por cómo acopla la solidez, y eso sigue en pie: **la técnica de
+> render y el módulo son dos decisiones distintas, y sólo una de las dos se había medido.** *Dos
+> terceros independientes evitaban la misma primitiva y ninguno de los dos documentos lo dijo como una
+> advertencia — se leyó como estilo.*
 
 ⚠ **El riesgo abierto de ② es la RED, no el render.** `SetNoDraw` es una bandera de entidad que
 viaja en el snapshot. Con un ciclo visible de **0,08 s** y snapshots a ~20-30 Hz, un pulso corto
