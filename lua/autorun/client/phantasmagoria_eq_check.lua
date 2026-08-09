@@ -11,7 +11,7 @@
     bien: eso lo contesta mirar, y va en los checks visuales de la planilla.
 
     CADA BARRIDO LLEVA SU CONTROL NEGATIVO
-    Un barrido que devuelve "66/66 OK" no distingue "estan todos" de
+    Un barrido que devuelve "73/73 OK" no distingue "estan todos" de
     "la funcion dice que si siempre". Por eso cada comando corre ademas una
     ruta deliberadamente inexistente y publica su resultado. Si el control
     negativo no falla, el resultado del barrido NO VALE y el check va SIN
@@ -29,6 +29,7 @@
 if not CLIENT then return end
 
 local MODELOS = {
+  "bone",
   "crucifix_i",
   "crucifix_ii",
   "crucifix_iii",
@@ -71,6 +72,12 @@ local MODELOS = {
   "salt_i",
   "salt_ii",
   "salt_iii",
+  "salt_mark_i_pile",
+  "salt_mark_i_step",
+  "salt_mark_ii_pile",
+  "salt_mark_ii_step",
+  "salt_mark_iii_pile",
+  "salt_mark_iii_step",
   "sanity_medication_i",
   "sanity_medication_ii",
   "sanity_medication_iii",
@@ -98,6 +105,7 @@ local MODELOS = {
 }
 
 local MATERIALES = {
+  "bone_0",
   "crucifix_i_0",
   "crucifix_i_1",
   "crucifix_i_2",
@@ -242,6 +250,12 @@ local MATERIALES = {
   "salt_iii_5",
   "salt_iii_6",
   "salt_iii_7",
+  "salt_mark_i_pile_0",
+  "salt_mark_i_step_0",
+  "salt_mark_ii_pile_0",
+  "salt_mark_ii_step_0",
+  "salt_mark_iii_pile_0",
+  "salt_mark_iii_step_0",
   "sanity_medication_i_0",
   "sanity_medication_i_1",
   "sanity_medication_i_2",
@@ -420,8 +434,8 @@ local BLANCOS = {
 -- constante, dos objetos que difieren varias veces en tamano lo delatan.
 local ESCALA = {
   { "igniter_iii", 3.42 },
-  { "motion_sensor_iii", 8.28 },
-  { "tripod_ii", 47.71 },
+  { "repellent_ii", 9.71 },
+  { "salt_mark_iii_pile", 64.80 },
 }
 
 -- Los que esta ronda paso a `$translucent 1`: { slot, % opaco predicho, material,
@@ -1339,3 +1353,174 @@ linea("[phantasmagoria] eqp_check cargado: ph_eq_todo | _rutas | _modelos | " ..
       " con blanco, " .. #TRANSLUCIDOS .. " translucidos, " .. #EMITEN ..
       " emisivos, " .. #ADITIVOS .. " aditivos, " .. #LEDS ..
       " con bodygroups de LED)")
+
+-- ===== BLOQUE r8 (eqpcheck_r8.py) =====
+-- GENERADO por dev/phastools/eqpcheck_r8.py -- NO editar a mano.
+--
+-- Ronda 8 del lote de equipamiento de Phasmophobia:
+--   * las 3 de "cutout" de §5.1, de las que solo DOS lo son
+--   * las 6 marcas de sal y el hueso de §5.5, recien portados
+--
+-- Cada barrido corre con SUS DOS CONTROLES. Uno solo no alcanza: un lector
+-- clavado en `true` lo ataja el negativo (un archivo que no existe) y uno
+-- clavado en `false` lo ataja el positivo (un sujeto medido como el caso
+-- contrario). En la ronda 2 los dos barridos tenian solo el negativo y los dos
+-- lo pasaron estando clavados en false.
+
+local function linea(s) print(s) end
+
+-- El VMT leido como ARCHIVO, con "GAME" como fuente: es la unica via que dice
+-- a la vez que la clave esta declarada y CUAL archivo monto el juego. Si otro
+-- addon montara la misma ruta, esto lo ve y el codigo fuente no.
+local function vmt_declara(nombre, clave)
+  local t = file.Read("materials/models/phantasmagoria/eq/" .. nombre .. ".vmt", "GAME")
+  if not t then return nil end
+  return string.find(t, clave, 1, true) ~= nil
+end
+
+-- CON MASCARA: alfa del albedo de Unity medido DENTRO de la isla UV rasterizada
+-- y confirmado por una segunda via (triangulos que la mascara corta).
+local CUTOUT = {
+  { "repellent_i_1", 96.84 },
+  { "repellent_ii_0", 17.73 },
+}
+
+local MARCAS = {
+  "salt_mark_i_pile",
+  "salt_mark_i_step",
+  "salt_mark_ii_pile",
+  "salt_mark_ii_step",
+  "salt_mark_iii_pile",
+  "salt_mark_iii_step",
+}
+
+local NUEVOS = {
+  "salt_mark_i_pile",
+  "salt_mark_i_step",
+  "salt_mark_ii_pile",
+  "salt_mark_ii_step",
+  "salt_mark_iii_pile",
+  "salt_mark_iii_step",
+  "bone",
+}
+
+concommand.Add("ph_eq_cutout", function()
+  linea("=== eq r8: CUTOUT -- " .. #CUTOUT .. " materiales con mascara de silueta")
+  linea("  Que se declare NO es que se vea. Lo que se ve va en los checks visuales;")
+  linea("  esto mide que el motor este montando la declaracion correcta.")
+
+  linea("  --- 1. $alphatest 1 ---")
+  local si, no, ileg = 0, {}, {}
+  for _, r in ipairs(CUTOUT) do
+    local d = vmt_declara(r[1], '"$alphatest" 1')
+    if d == nil then ileg[#ileg + 1] = r[1]
+    elseif d then si = si + 1
+      linea(("      %s  (recorta el %.2f %% de los texeles de su isla)"):format(r[1], r[2]))
+    else no[#no + 1] = r[1] end
+  end
+  linea(("    declaran: %d de %d   no declaran: %d   ilegibles: %d"):format(
+    si, #CUTOUT, #no, #ileg))
+  for _, m in ipairs(no) do linea("      NO DECLARA: " .. m) end
+  for _, m in ipairs(ileg) do linea("      NO SE PUDO LEER: " .. m) end
+
+  local cn = vmt_declara("no_existe_este_material", '"$alphatest" 1')
+  linea("    CONTROL NEGATIVO (vmt inexistente): " ..
+        (cn == nil and "no se pudo leer, correcto"
+         or "DEVOLVIO " .. tostring(cn) .. " -> el lector NO MIDE NADA"))
+  local cp = vmt_declara("repellent_i_0", '"$alphatest" 1')
+  linea("    CONTROL POSITIVO (repellent_i_0: su alfa recorta 0.00 % y 0 de sus")
+  linea("      8194 triangulos; NO es cutout aunque la tabla de §5.1 lo dijera): " ..
+        (cp == false and "no declara, correcto"
+         or cp == nil and "NO SE PUDO LEER -> el barrido NO MIDE NADA"
+         or "DIO true -> el lector no discrimina, dice que si a todo"))
+
+  linea("  --- 2. $nocull 1 (el pass de Unity trae Cull Off literal) ---")
+  local si2, no2 = 0, {}
+  for _, r in ipairs(CUTOUT) do
+    local d = vmt_declara(r[1], '"$nocull" 1')
+    if d then si2 = si2 + 1 else no2[#no2 + 1] = r[1] end
+  end
+  linea(("    declaran: %d de %d"):format(si2, #CUTOUT))
+  for _, m in ipairs(no2) do linea("      NO DECLARA: " .. m) end
+  local cn2 = vmt_declara("no_existe_este_material", '"$nocull" 1')
+  linea("    CONTROL NEGATIVO (vmt inexistente): " ..
+        (cn2 == nil and "no se pudo leer, correcto"
+         or "DEVOLVIO " .. tostring(cn2) .. " -> el lector NO MIDE NADA"))
+  local cp2 = vmt_declara("repellent_i_0", '"$nocull" 1')
+  linea("    CONTROL POSITIVO (repellent_i_0, que no lleva ninguna de las dos): " ..
+        (cp2 == false and "no declara, correcto"
+         or cp2 == nil and "NO SE PUDO LEER -> el barrido NO MIDE NADA"
+         or "DIO true -> el lector no discrimina"))
+end)
+
+concommand.Add("ph_eq_marcas", function()
+  linea("=== eq r8: MARCAS DE SAL Y HUESO -- " .. #NUEVOS .. " modelos nuevos")
+
+  -- EL CRITERIO ES `file.Exists`, NO `util.IsValidModel`.
+  --
+  -- La primera version de este barrido preguntaba por `util.IsValidModel`, que
+  -- este proyecto tiene REFUTADO desde la r2b: no contesta por la validez sino
+  -- por el estado de CARGA. En la corrida de la r8b dio `0 de 7` -- y su control
+  -- positivo (`crucifix_i`, de los 66 cerrados y en juego desde hace ocho
+  -- rondas) tambien dio false, o sea que el barrido se auto-invalido. En la
+  -- MISMA corrida `ph_eq_modelos` daba `file.Exists: 73 de 73`.
+  --
+  -- El propio `.lua` lleva ocho rondas explicando esto en `ph_eq_modelos`, y
+  -- aun asi el lector retirado volvio a entrar por una herramienta nueva.
+  -- *Un lector refutado no queda refutado para el que escribe la proxima
+  -- herramienta: hay que sacarlo del alcance, no recordarlo.*
+  linea("  --- 1. el motor ENTREGA los .mdl nuevos (file.Exists, el criterio) ---")
+  local ok, mal = 0, {}
+  for _, m in ipairs(NUEVOS) do
+    if file.Exists("models/phantasmagoria/eq/" .. m .. ".mdl", "GAME") then ok = ok + 1
+    else mal[#mal + 1] = m end
+  end
+  linea(("    entrega: %d de %d"):format(ok, #NUEVOS))
+  for _, m in ipairs(mal) do linea("      NO ENTREGA: " .. m) end
+  local vn = file.Exists("models/phantasmagoria/eq/no_existe_este_modelo.mdl", "GAME")
+  linea("    CONTROL NEGATIVO (ruta inventada): " ..
+        (vn == false and "no existe, correcto"
+         or "DIO true -> file.Exists dice que si a todo, el barrido NO MIDE NADA"))
+  local vp = file.Exists("models/phantasmagoria/eq/crucifix_i.mdl", "GAME")
+  linea("    CONTROL POSITIVO (crucifix_i, de los 66 ya cerrados): " ..
+        (vp == true and "entrega, correcto"
+         or "DIO false -> el arbol no esta montado, nada de esto mide"))
+
+  -- Se publica AL LADO, como hace `ph_eq_modelos`, y NO decide nada.
+  local cargados = 0
+  for _, m in ipairs(NUEVOS) do
+    if util.IsValidModel("models/phantasmagoria/eq/" .. m .. ".mdl") then
+      cargados = cargados + 1
+    end
+  end
+  linea(("    (al lado, y NO es el criterio) util.IsValidModel: %d de %d"):format(
+    cargados, #NUEVOS))
+  linea("      Ese lector esta REFUTADO desde la r2b: informa el estado de CARGA,")
+  linea("      no la validez, y cambia de respuesta entre dos corridas sin que")
+  linea("      cambie un byte en disco. Si da bajo, no dice nada sobre el port.")
+
+  linea("  --- 2. las " .. #MARCAS .. " marcas declaran $translucent ---")
+  local si, no, ileg = 0, {}, {}
+  for _, m in ipairs(MARCAS) do
+    local d = vmt_declara(m .. "_0", '"$translucent" 1')
+    if d == nil then ileg[#ileg + 1] = m
+    elseif d then si = si + 1
+    else no[#no + 1] = m end
+  end
+  linea(("    declaran: %d de %d   no declaran: %d   ilegibles: %d"):format(
+    si, #MARCAS, #no, #ileg))
+  for _, m in ipairs(no) do linea("      NO DECLARA: " .. m) end
+  for _, m in ipairs(ileg) do linea("      NO SE PUDO LEER: " .. m) end
+  local tn = vmt_declara("no_existe_este_material", '"$translucent" 1')
+  linea("    CONTROL NEGATIVO (vmt inexistente): " ..
+        (tn == nil and "no se pudo leer, correcto"
+         or "DEVOLVIO " .. tostring(tn) .. " -> el lector NO MIDE NADA"))
+  local tp = vmt_declara("bone_0", '"$translucent" 1')
+  linea("    CONTROL POSITIVO (bone_0: su shader da One Zero con _Surface=0 y")
+  linea("      su albedo tiene el alfa en 255 constante, o sea OPACO medido): " ..
+        (tp == false and "no declara, correcto"
+         or tp == nil and "NO SE PUDO LEER -> el barrido NO MIDE NADA"
+         or "DIO true -> el lector no discrimina, dice que si a todo"))
+end)
+
+linea("[phantasmagoria] eqp_check r8 cargado: ph_eq_cutout | ph_eq_marcas")
