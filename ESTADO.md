@@ -44,10 +44,37 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 > mentiroso se propaga al lector que lo cita.* Los dos comentarios están corregidos; el censo real
 > son tres asignaciones en todo el addon (`= {}`, `.Think`, `.ModifyMovementSpeed`).
 >
-> **Lo verificado fuera del juego, y nada más que eso:** la sintaxis (con **cinco archivos de control
-> que ya corren hoy**, incluido el `shared.lua` de la base — `luaparser` rechaza el `continue` de
-> GMod, así que sin controles su rojo no vale) y que **las 152 rutas de sonido citadas existen en
-> disco, 152 de 152**.
+> ⚠⚠ **CORRIÓ EN GMOD Y NO CARGÓ — ARREGLADO, PERO LO IMPORTANTE ES POR QUÉ (r24b, commit `95049c5`).**
+> `ghost_flags.lua:749` tenía un **salto de línea CRUDO dentro de un string corto** (un `\n` que
+> atravesó dos capas de escape: shell → Python → Lua). El archivo **entero** no cargaba:
+> `rasgos de evento 0 de 30 filas con events`.
+>
+> **Y el verificador de sintaxis había dicho OK.** Esa acreditación era falsa y está medida:
+> `luaparser` **acepta** un salto crudo dentro de un string corto y GMod lo rechaza. El taller ya
+> sabía que da falsos **rojos** (rechaza `continue`); lo que no estaba medido es que da un falso
+> **VERDE**. *Un falso rojo se descubre la primera vez que se usa; un falso verde se descubre en el
+> juego, y mientras tanto ACREDITA.* Entra **`dev/luacheck_gmod.py`** — dos instrumentos, con **sus
+> dos controles versionados** — y los **32 `.lua` del addon pasan**. Catálogo nº 42.
+>
+> **Lo que la corrida SÍ acreditó:** el `NEUTRO` de emergencia del motor (que salió de la revisión
+> adversarial, justamente por si este archivo no carga) **mantuvo los eventos andando** con los
+> rasgos caídos — sonaron teléfono, crujido, golpes y mueble. Sin él, un error de Lua por segundo.
+> Y los tres instrumentos nombraron la causa: la ficha del fantasma, la guarda del motor y el
+> cargador. `vueltas 364 del scheduler` hizo lo que existe para hacer.
+>
+> **LO QUE FALTA, Y ES LO PRIMERO DEL CHAT SIGUIENTE:** con la fusión caída **los 30 tipos se
+> comportaron como el neutro** (el Shade de la corrida: `rate x1.00 count 1 burst 1`), así que **la
+> fila 06 de la planilla —Poltergeist contra Shade, el corazón del pedido— todavía NO se ejerció.**
+> Al arrancar, mirar la línea del cargador:
+> - `30 tipos ( 30 con rasgos de evento )` → la fusión corrió, la 06 tiene sentido.
+> - `0 de 30` otra vez → mirar **cuál `ErrorNoHalt` salió arriba**: ahora hay **dos** causas con el
+>   mismo síntoma, el archivo que no carga y **la guarda que se niega a fusionar** por un rasgo mal
+>   formado. Simulado fuera del juego, `auditarNeutro` da **0 mal formados** — pero es una
+>   simulación, no una corrida.
+>
+> **Lo verificado fuera del juego, y nada más que eso:** la sintaxis **con el verificador nuevo**
+> (el viejo dio el falso verde de arriba) y que **las 152 rutas de sonido citadas existen en disco,
+> 152 de 152**.
 >
 > **Lo siguiente:** `dev/checks/phantasmagoria-eventos-r1.html` — 11 filas, las **cuatro primeras por
 > consola** (sin sorteo). La 06 es el corazón del pedido del autor: un Poltergeist y un Shade **no se
