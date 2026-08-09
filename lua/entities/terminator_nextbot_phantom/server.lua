@@ -1868,8 +1868,38 @@ function ENT:TranslateActivity( act )
     -- linea empieza a aparecer con la convar en 0, el -1 viene de otro lado y eso
     -- hay que saberlo. *Un arreglo que tapa el sintoma sin dejar rastro se lleva
     -- puesta la unica evidencia de que el problema sigue.*
+    --[[
+        ⚠ SE LEE DE `self`, NO DE `ENT`, Y ESA LINEA CRASHEABA. La r19 la
+        provoco por primera vez:
+
+            server.lua:1872: attempt to index global 'ENT' (a nil value)
+              1. TranslateActivity - server.lua:1872
+              2. base - motionoverrides.lua:3456        <- el DoGesture( ACT_LAND )
+              3. unknown - server.lua:2162              <- OnLandOnGround
+
+        `ENT` es un global que existe MIENTRAS EL ARCHIVO SE CARGA; despues del
+        `scripted_ents.Register` no esta. Todo lo que este archivo escribe en
+        `ENT` durante la carga se lee en runtime por `self`, que lo encuentra por
+        la cadena de metatablas -- y ademas respeta a quien lo haya sobreescrito.
+
+        Y esto es peor que un crash cualquiera: la linea ES la guarda en
+        profundidad que la r17 puso para que un -1 no saliera de aca. O sea que
+        **la guarda estuvo rota desde que se escribio y nunca corrio**, porque el
+        unico camino que la alcanza -- un arma devolviendo -1 en un aterrizaje --
+        no se provoco hasta la r19. Cuando por fin se provoco, en vez de corregir
+        el -1 tiro un error de Lua ADENTRO de `OnLandOnGround`, que se lleva
+        puesto el resto del aterrizaje de la base.
+
+        *Una guarda que solo se ejecuta en el caso que nunca pasa es codigo sin
+        estrenar, y el dia que estrena falla.*
+
+        El arnes no podia verlo: define `ENT` como global y lo deja puesto para
+        siempre, asi que ahi la linea anda. Arreglado tambien alla -- el global se
+        pone en nil despues de la carga, como en GMod.
+    ]]
     if salidaMala and esNuestroModelo then
-        local nuestra = ENT.IdleActivityTranslations and ENT.IdleActivityTranslations[ act ]
+        local tabla = self.IdleActivityTranslations
+        local nuestra = istable( tabla ) and tabla[ act ] or nil
 
         anotar( self, "Translate", {
             pedida = act,
@@ -1883,7 +1913,14 @@ function ENT:TranslateActivity( act )
 
         -- Sin traduccion nuestra, se devuelve la idle: es lo que hace la base en
         -- su propio fallback, y es infinitamente mejor que un -1.
-        return ENT.IdleActivity or salida, false
+        --
+        -- ⚠ `self.IdleActivity` y no `ENT.IdleActivity`, por lo de arriba. Y con
+        -- un ultimo respaldo literal: si ni la instancia lo tiene, devolver el -1
+        -- seria dejar pasar exactamente lo que esta rama existe para cortar.
+        local idle = self.IdleActivity
+        if isfunction( idle ) then idle = idle( self ) end
+
+        return isnumber( idle ) and idle or ACT_HL2MP_IDLE, false
 
     end
 

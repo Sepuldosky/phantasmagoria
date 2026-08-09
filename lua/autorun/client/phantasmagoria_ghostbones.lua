@@ -395,6 +395,326 @@ end
 concommand.Add( "ph_ghost_land", cmd_land, nil,
 	"Muestrea 3 s la animacion del fantasma EN EL CLIENTE. Correrlo y despues tirarlo con el physgun." )
 
+--------------------------------------------------------- el cuerpo dibujado
+
+--[[
+	ph_ghost_facing   -- ¿hacia donde apunta el CUERPO mientras se mueve?
+
+	⚠ POR QUE HACE FALTA OTRO INSTRUMENTO: LOS METADATOS NO SON LA POSE.
+
+	La r19 dejó esto, con el bot corriendo de frente:
+
+	    MEDIDO  move_x +1.00  move_y +0.00  -> celda N
+	    MARCHA  vel 280 u/s   adelante +1.00  derecha +0.00  -> celda N
+	    >> CONCUERDAN: 0.0 grados
+
+	...y el autor mandó la foto: **sigue corriendo de lado**. Y en la fila de al
+	lado, los dos realms informaron secuencia viva y ciclo avanzando mientras él
+	veía la pose T. O sea que TODO lo que este bloque venía midiendo son
+	metadatos de la animación —qué actividad, qué secuencia, qué celda de la
+	mezcla— y ninguno de ellos es **la pose que se dibuja**.
+
+	*Un instrumento que mide los metadatos de una animación puede dar verde en
+	los dos realms mientras la pantalla dibuja otra cosa. La pose hay que medirla
+	en los HUESOS.*
+
+	LO QUE MIDE, y las tres son geométricas y sin convención:
+
+	  eje de CADERAS vs MARCHA        corriendo de frente tiene que dar ~90°.
+	                                  Si da ~0° o ~180°, el cuerpo va de costado
+	                                  y eso ya no es una impresión.
+	  ORIENTACION de la entidad
+	    vs MARCHA                     ~0° con facewalk puesto.
+	  eje de CADERAS vs ORIENTACION   ~90°. Si ésta se rompe y la anterior no,
+	                                  el cuerpo DIBUJADO está girado respecto de
+	                                  su propia entidad — o sea el modelo, no la IA.
+
+	Las tres juntas nombran al culpable; una sola no.
+
+	⚠ LA MARCHA SE MIDE POR DIFERENCIA DE POSICION y no con `GetVelocity()`: del
+	lado del cliente, la velocidad de un NextBot es lo que el motor haya
+	interpolado, y acá justamente se está auditando si el cliente y el servidor
+	dicen lo mismo. Una posición se puede ver en la pantalla; una velocidad
+	networkeada no.
+
+	⚠ Y NO SE DERIVA EL "FRENTE" DEL CUERPO A PARTIR DE LAS CADERAS. Eso pedría
+	una convención sobre qué lado del eje es el frente, y este arco ya pagó tres
+	suposiciones de ese tipo. Perpendicular-vs-paralelo es un hecho físico sobre
+	correr de frente y no necesita saber para qué lado se mira.
+]]
+
+--[[
+	LA POSE DE REFERENCIA, MEDIDA — no recordada.
+
+	Salen de componer la cadena de huesos del PRIMER cuadro de
+	`creepygirl_ref.smd`, que es literalmente el archivo que studiomdl usa como
+	pose de reposo del modelo (`$body studioprop "creepygirl_ref.smd"`). O sea
+	que son los números que se dibujan cuando NO hay animación, que es lo que el
+	autor llama "pose T".
+
+	    brazo izq ( hombro -> mano ) a  46.5°  de la vertical
+	    manos separadas              25.23 u
+	    eje de caderas ( R - L )     (-7.468, -0.081, 0)  -> sobre el eje X
+
+	Una idle real mantiene las manos MUCHO más juntas, así que la separación es
+	el discriminante barato. Se imprimen los dos y el comando no elige por el
+	lector: dice el valor de reposo al lado del medido.
+
+	⚠ Y LA TERCERA LÍNEA ES UN HALLAZGO QUE ESTA MEDICIÓN DESTAPÓ, no un dato de
+	contexto. En la pose de REPOSO las caderas van sobre **X**, o sea PARALELAS
+	al frente de la entidad; en cualquier pose animada van sobre Y, o sea
+	perpendiculares. Se comprobó que **`m_anm.mdl` —el ValveBiped canónico de
+	HL2MP— tiene exactamente lo mismo** (180,0° contra nuestros 179,4°): no es un
+	defecto de nuestro rig, es la convención, y las animaciones son las que
+	giran el cuerpo a su sitio.
+
+	La consecuencia es la que importa: **un cuerpo dibujado en la pose de reposo
+	se ve girado 90° Y en pose T al mismo tiempo.** Los dos síntomas que el autor
+	viene reportando por separado —«corre de lado» y «queda en T»— pueden ser
+	**un solo defecto**, y este comando es el que puede decirlo, porque mide las
+	dos cosas en la misma muestra. (No sería la primera vez en este arco: la r17
+	ya juntó otros dos que se habían reportado como distintos.)
+]]
+local REPOSO_BRAZO, REPOSO_MANOS = 46.5, 25.23
+
+local MUESTRAS_FACING, PASO_FACING = 50, 0.05
+
+local function horiz( v )
+	return Vector( v.x, v.y, 0 )
+end
+
+--- Angulo en grados entre dos vectores horizontales. nil si alguno es corto.
+local function angHoriz( a, b )
+	local la, lb = a:Length2D(), b:Length2D()
+	if la < 0.01 or lb < 0.01 then return nil end
+
+	local cos = ( a.x * b.x + a.y * b.y ) / ( la * lb )
+
+	return math.deg( math.acos( math.Clamp( cos, -1, 1 ) ) )
+end
+
+local function cmd_facing()
+	local sujeto
+	for _, e in ipairs( ents.GetAll() ) do
+		local mdl = IsValid( e ) and e:GetModel() or nil
+
+		if isstring( mdl ) and string.find( mdl, "ghost_girl", 1, true )
+			and not CLASES_EXCLUIDAS[ e:GetClass() ] then
+			sujeto = e
+			break
+		end
+	end
+
+	if not sujeto then
+		print( "[ph_facing] SIN CORRER: no hay ninguna entidad con 'ghost_girl' en el modelo, " ..
+			"de las " .. #ents.GetAll() .. " que existen en el cliente." )
+		return
+	end
+
+	local HUESOS = { "ValveBiped.Bip01_L_Thigh", "ValveBiped.Bip01_R_Thigh",
+	                 "ValveBiped.Bip01_L_UpperArm", "ValveBiped.Bip01_L_Hand",
+	                 "ValveBiped.Bip01_R_Hand" }
+	local id = {}
+	for _, n in ipairs( HUESOS ) do
+		local b = sujeto:LookupBone( n )
+
+		if not b then
+			-- Un hueso ausente NO se rodea: sin él la medición no existe, y
+			-- seguir con los que sí están daría un número que parece uno bueno.
+			print( "[ph_facing] SIN CORRER: al modelo le falta el hueso " .. n ..
+				". Sin ese hueso no hay eje de caderas ni brazo que medir." )
+			return
+		end
+		id[ n ] = b
+	end
+
+	print( string.format( "[ph_facing] %s  [%s]   muestreando %.1f s cada %.2f s.",
+		tostring( sujeto ), sujeto:GetClass(), MUESTRAS_FACING * PASO_FACING, PASO_FACING ) )
+	print( "[ph_facing] AHORA: que camine o corra. Las filas que comparan contra la MARCHA " ..
+		"necesitan que se mueva." )
+
+	local n, prevPos = 0, nil
+	local movidas, sumaCadMar, peorCadMar = 0, 0, nil
+	local sumaEntMar, peorEntMar = 0, nil
+	local sumaCadEnt, peorCadEnt, nCadEnt = 0, nil, 0
+	local brazoMax, manosMax = nil, nil
+	local sinLectura = 0
+
+	timer.Create( "ph_ghost_facing", PASO_FACING, MUESTRAS_FACING, function()
+		if not IsValid( sujeto ) then
+			timer.Remove( "ph_ghost_facing" )
+			print( "[ph_facing] el sujeto dejo de ser valido a las " .. n .. " muestras." )
+			return
+		end
+
+		n = n + 1
+
+		-- La pose hay que forzarla a evaluar en CADA muestra: sin esto se leen
+		-- los huesos del cuadro anterior, que es una medición vieja con cara de
+		-- nueva. (Lo mismo que ya costó una ronda en ph_ghost_costura.)
+		sujeto:InvalidateBoneCache()
+		sujeto:SetupBones()
+
+		local mL = sujeto:GetBoneMatrix( id[ "ValveBiped.Bip01_L_Thigh" ] )
+		local mR = sujeto:GetBoneMatrix( id[ "ValveBiped.Bip01_R_Thigh" ] )
+		local mA = sujeto:GetBoneMatrix( id[ "ValveBiped.Bip01_L_UpperArm" ] )
+		local mLH = sujeto:GetBoneMatrix( id[ "ValveBiped.Bip01_L_Hand" ] )
+		local mRH = sujeto:GetBoneMatrix( id[ "ValveBiped.Bip01_R_Hand" ] )
+
+		if not ( mL and mR and mA and mLH and mRH ) then
+			sinLectura = sinLectura + 1
+
+		else
+			local pL, pR = mL:GetTranslation(), mR:GetTranslation()
+			local caderas = horiz( pR - pL )
+			local frente = sujeto:GetAngles():Forward()
+
+			local pos = sujeto:GetPos()
+			local marcha = prevPos and horiz( pos - prevPos ) or nil
+			prevPos = pos
+
+			-- El brazo y las manos, que son la pose T medida en geometria.
+			local pA, pLH, pRH = mA:GetTranslation(), mLH:GetTranslation(), mRH:GetTranslation()
+			local brazo = pLH - pA
+			-- `* -1` y no `-v`: la negacion unaria de un Vector depende de que la
+			-- metatabla traiga `__unm`, y eso no esta garantizado en todo lo que
+			-- ejecuta este archivo. Multiplicar por -1 es la misma cuenta y no
+			-- depende de un metametodo.
+			local abajo = sujeto:GetAngles():Up() * -1
+			local cosB = brazo:GetNormalized():Dot( abajo:GetNormalized() )
+			local angB = math.deg( math.acos( math.Clamp( cosB, -1, 1 ) ) )
+			local manos = pLH:Distance( pRH )
+
+			if not brazoMax or angB > brazoMax then brazoMax = angB end
+			if not manosMax or manos > manosMax then manosMax = manos end
+
+			local cadEnt = angHoriz( caderas, frente )
+			if cadEnt then
+				nCadEnt = nCadEnt + 1
+				sumaCadEnt = sumaCadEnt + cadEnt
+				-- "Peor" es el que MAS se aleja de los 90 esperados.
+				if not peorCadEnt or math.abs( cadEnt - 90 ) > math.abs( peorCadEnt - 90 ) then
+					peorCadEnt = cadEnt
+				end
+			end
+
+			-- 0,4 u por muestra a 0,05 s son 8 u/s: por debajo de eso el delta es
+			-- ruido de interpolacion y no marcha.
+			if marcha and marcha:Length2D() > 0.4 then
+				local a1 = angHoriz( caderas, marcha )
+				local a2 = angHoriz( frente, marcha )
+
+				if a1 and a2 then
+					movidas = movidas + 1
+					sumaCadMar = sumaCadMar + a1
+					sumaEntMar = sumaEntMar + a2
+
+					if not peorCadMar or math.abs( a1 - 90 ) > math.abs( peorCadMar - 90 ) then
+						peorCadMar = a1
+					end
+					if not peorEntMar or a2 > peorEntMar then peorEntMar = a2 end
+				end
+			end
+		end
+
+		if n < MUESTRAS_FACING then return end
+
+		print( string.format( "[ph_facing] %d muestras: %d con el bot en marcha, %d sin lectura " ..
+			"de hueso.", n, movidas, sinLectura ) )
+
+		if sinLectura >= n then
+			print( "[ph_facing] >> SIN CORRER: ninguna muestra devolvio una matriz de hueso. " ..
+				"No se midio nada; esto NO dice que el cuerpo este bien." )
+			return
+		end
+
+		-- LA POSE, que se mide siempre (no necesita que camine).
+		print( string.format( "[ph_facing]   brazo izq, MAXIMO de la ventana  %5.1f gr de la " ..
+			"vertical   ( la pose de reposo del .smd da %.1f )", brazoMax or -1, REPOSO_BRAZO ) )
+		print( string.format( "[ph_facing]   manos, separacion MAXIMA         %5.2f u" ..
+			"                 ( la pose de reposo da %.2f )", manosMax or -1, REPOSO_MANOS ) )
+
+		local pareceReposo = manosMax and manosMax > REPOSO_MANOS * 0.9
+		if pareceReposo then
+			print( "[ph_facing]   >> ⚠ LAS MANOS LLEGARON A LA SEPARACION DE LA POSE DE REPOSO. " ..
+				"Eso es la pose T MEDIDA, no una impresion." )
+		end
+
+		local mediaCadEnt = nCadEnt > 0 and sumaCadEnt / nCadEnt or -1
+		print( string.format( "[ph_facing]   caderas vs ORIENTACION   media %5.1f gr   peor %5.1f " ..
+			"gr   ( esperado 90 animado / 180 en reposo )", mediaCadEnt, peorCadEnt or -1 ) )
+
+		local cadEntMal = nCadEnt > 0 and math.abs( mediaCadEnt - 90 ) > 30
+
+		--[[
+			⚠ LA FIRMA DE LA POSE DE REPOSO, Y VA ANTES QUE TODO LO DEMAS.
+
+			Caderas PARALELAS al frente ( ~0 o ~180 en vez de 90 ) mas las manos a
+			la separacion del reposo son, las dos juntas, el cuerpo dibujado sin
+			animacion encima -- que se ve girado 90 grados Y en pose T a la vez.
+
+			Va aca arriba, ANTES de la guarda de `movidas`, porque **esta firma no
+			necesita que el bot camine**: se lee de la pose sola. Estaba abajo y la
+			ventana con el bot quieto -- que es justo cuando el autor lo mira con
+			el physgun en la mano -- salia por el `return` de arriba sin decirlo.
+		]]
+		if cadEntMal and pareceReposo then
+			print( "[ph_facing] >> ⭐ EL CUERPO ESTA DIBUJADO EN LA POSE DE REPOSO. Las caderas van " ..
+				"PARALELAS al frente ( reposo ) en vez de perpendiculares ( animado ), y las manos " ..
+				"estan a la separacion del reposo." )
+			print( "[ph_facing] >> Eso es 'corre de lado' y 'queda en T' AL MISMO TIEMPO, y es UN " ..
+				"solo defecto: no hay animacion aplicandose sobre el cuerpo." )
+			return
+
+		end
+
+		if movidas == 0 then
+			print( "[ph_facing] >> SIN CORRER las dos filas de la MARCHA: el bot no se movio en " ..
+				"toda la ventana. La pose si se midio; la orientacion contra el andar no." )
+			return
+		end
+
+		local cadMar, entMar = sumaCadMar / movidas, sumaEntMar / movidas
+		print( string.format( "[ph_facing]   caderas vs MARCHA        media %5.1f gr   peor %5.1f " ..
+			"gr   ( esperado 90 )", cadMar, peorCadMar ) )
+		print( string.format( "[ph_facing]   orientacion vs MARCHA    media %5.1f gr   peor %5.1f " ..
+			"gr   ( esperado 0 )", entMar, peorEntMar ) )
+
+		-- EL VEREDICTO NOMBRA, y para eso están las tres. Los cortes son anchos a
+		-- propósito: lo que separa "de frente" de "de costado" son 90 grados, no
+		-- 10, y un corte fino sólo agregaría zona gris donde no hay duda.
+		local cadMarMal = math.abs( cadMar - 90 ) > 30
+		local entMarMal = entMar > 30
+
+		if not cadMarMal and not cadEntMal and not entMarMal then
+			print( "[ph_facing] >> el cuerpo va de frente: caderas perpendiculares a la marcha y " ..
+				"a la orientacion, y la entidad avanza hacia donde mira." )
+			print( "[ph_facing] >> Si en esta ventana se vio correr de lado, NO es la orientacion " ..
+				"del cuerpo: hay que buscar en la MALLA ( skin ) o en cómo se dibuja." )
+
+		elseif cadMarMal and cadEntMal and not entMarMal then
+			print( "[ph_facing] >> ⚠ EL CUERPO DIBUJADO ESTA GIRADO RESPECTO DE SU PROPIA ENTIDAD. " ..
+				"La entidad avanza hacia donde mira, y el cuerpo no la acompana: es el MODELO " ..
+				"o la animacion, no la IA." )
+
+		elseif cadMarMal and not cadEntMal then
+			print( "[ph_facing] >> ⚠ LA ENTIDAD SE MUEVE DE COSTADO. El cuerpo esta bien puesto " ..
+				"sobre su entidad; la que va de lado es la entidad: eso es la IA / el pathing, " ..
+				"y la animacion correcta seria una lateral." )
+
+		else
+			print( "[ph_facing] >> ⚠ MEZCLA: caderas-marcha " .. math.Round( cadMar ) ..
+				", caderas-orientacion " .. math.Round( nCadEnt > 0 and sumaCadEnt / nCadEnt or -1 ) ..
+				", orientacion-marcha " .. math.Round( entMar ) ..
+				". Anotar los tres: la combinacion es la que nombra al culpable." )
+
+		end
+	end )
+end
+
+concommand.Add( "ph_ghost_facing", cmd_facing, nil,
+	"Mide, EN LOS HUESOS, hacia donde apunta el cuerpo del fantasma mientras se mueve." )
+
 --------------------------------------------------------------- la costura
 
 --[[
