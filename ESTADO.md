@@ -49,6 +49,11 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 >   del primer segundo después de que el bot frene, o sea una ventana más corta que el trámite de
 >   tipear. Va con muestreador, no con una fila más.
 >
+> **De la sesión paralela, confirmado en juego por el autor:** el fantasma **ya no levanta armas**
+> (`ENT:CanPickupWeapon` en false — la causa de la pose T de la r17), y `ghost_girl.mdl` es el cuerpo.
+> *«Ahora el ghost no toma armas como un terminator.»* Y se está trabajando un modelo rippeado que
+> **por ahora corre de costado**.
+>
 > **Residual menor, sin ronda propia:** la 02 volvió a traer **un solo fantasma** en la salida (el
 > primero se borró antes de spawnear el segundo), así que *«al vivo no se le borra el tipo»* sigue sin
 > medirse. Ahora es lectura de tres líneas —la convar sólo se lee en `phantom_ResolveType`, que corre
@@ -1572,8 +1577,27 @@ cuándo** empieza, y reemplaza al andamio `phantasmagoria_hunt` (que queda de te
 2. **Enganchar `speed.base` (§5)**, que es una línea y ya tiene los dos lados: el campo
    `phantom_SpeedMul` gana sobre la convar andamio y el instrumento de velocidad ya imprime **de
    dónde salió el multiplicador**. Con su planilla, porque **sí** cambia comportamiento.
-3. **La tajada B**, la cordura por jugador.
-4. **Las masas y los materiales de los 66 modelos propios** — bloque nuevo, abierto por la fila 02.
+3. **La INVISIBILIDAD** — pedido del autor (2026-08-08): que el fantasma aparezca sólo en hunt y en
+   eventos. Prompt escrito y autocontenido en
+   [`dev/PROMPT_phantasmagoria_invisibilidad_y_speed.txt`](../dev/PROMPT_phantasmagoria_invisibilidad_y_speed.txt),
+   que lleva también el punto 2. Lo esencial, para que no se pierda si el prompt se traspapela:
+
+   > **Son DOS mecánicas y no una.** ① **La ausencia** fuera del hunt (invisible, puede ser no sólido,
+   > dura minutos) es lo que la base regala con `ENT.IsWraith = true`. ② **El parpadeo** durante el
+   > hunt (décimas de segundo) **no es cloak: es sólo render**, porque en hunt el fantasma tiene que
+   > seguir siendo **sólido** — uno que se vuelve intangible cada 0,2 s no puede alcanzarte.
+   >
+   > ⚠ **Y el módulo de la base NO puede hacer ②:** `DoHiding` pone `+ math.Rand( 2.5, 3.5 )` al
+   > materializarse (`wraithcloaking.lua:164`), y el ciclo entero de Phasmophobia —visible 0,08-0,3 s,
+   > invisible 0,1-1,0 s— **dura menos que ese cooldown solo**. Encima se niega en silencio con un
+   > `return` pelado (`:128`). *No es un parámetro a considerar: es una incompatibilidad en el único
+   > rango que importa*, y la Referencia §5.3 —que decía «tener en cuenta»— quedó corregida.
+   >
+   > ⚠ **El marcador de debug pasa a ser un wallhack.** `phantasmagoria_debug_ghost` está en **1** por
+   > default y dibuja con `IgnoreZ`: desde este bloque es lo único que te dice dónde está un fantasma
+   > que el diseño quiere invisible. Cualquier corrida con eso en 1 **no mide la mecánica, la tapa.**
+4. **La tajada B**, la cordura por jugador.
+5. **Las masas y los materiales de las otras 19 familias** — la r15b probó cinco modelos de tres.
 
 ### 4 · Los 66 modelos propios pesan todos lo mismo y suenan a chapa **[medido, 2026-08-08]**
 

@@ -293,13 +293,26 @@ end
 |---|---|---|
 | `hunt.threshold` | % de cordura que habilita el hunt (default 50) | Demon 70, Shade 35 |
 | `hunt.durationMul` | Cuánto dura | Moroi, Demon |
-| `hunt.blinkRate` | Frecuencia del parpadeo (fingerprint visual del tipo) | Deogen lento, Yokai rápido |
+| `hunt.blinkRate` | Frecuencia del parpadeo (fingerprint visual del tipo) | ⚠ ver abajo |
 | `hunt.rangeMul` | Radio de interferencia (default 525 u) | Raiju 787 u |
 | `hunt.canOpenDoors` | Si abre puertas persiguiendo | casi todos |
 | `hunt.crucifixRange` | Radio del crucifijo (default 157 u) | Demon 262 u |
 | `hunt.hearsOnly` | Sólo detecta por sonido, no por vista | Deogen (te encuentra siempre) |
 | `hunt.deafRadius` | Sordo salvo muy cerca | Yokai |
 | `hunt.targetsOne` | Fija un solo objetivo | Banshee |
+
+> ⚠ **`hunt.blinkRate` no existe en la tabla, y su ejemplo de esta tabla no tiene respaldo**
+> [2026-08-08]. Los 30 tipos traen `hunt.threshold` y `thresholdLow`/`High`, **y nada más**: el
+> parpadeo hay que agregarlo. Y el *«Deogen lento, Yokai rápido»* que decía esta fila salió de algún
+> lado que no es la fuente generada — los comentarios del **Yokai** hablan de voz, música y distancia
+> de detección, y **ninguno menciona visibilidad ni parpadeo**. Los que sí lo mencionan son
+> **Phantom** (*«less visible during hunts»*), **Oni** (*«blinks more frequently … making them more
+> visible»*) y **Deogen** (*«is more visible during hunts»*).
+>
+> ⚠ **Y ojo con la palabra:** en Phasmophobia *blink* es el momento en que **aparece**, no el momento
+> en que desaparece. Con el sentido invertido, el Oni sale invisible y el Phantom visible — y las dos
+> fuentes seguirían pareciendo correctas. Fijar el sentido por escrito antes del primer número.
+> Detalle en `dev/PROMPT_phantasmagoria_invisibilidad_y_speed.txt`.
 
 ### 5.3 Rasgos de habilidad
 

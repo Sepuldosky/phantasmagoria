@@ -311,14 +311,29 @@ end
 
 Look: `ENT.FlickerBarelyVisibleMat` / `ENT.FlickerInvisibleMat` (default: pared de escudo combine).
 Sonidos: `ENT:PlayHideFX()` / `ENT:PlayUnhideFX()`.
-Silencio: `function ENT:IsSilentStepping() return self.wraithTerm_IsCloaked end` — se consume en 10
-puntos y mata pasos, golpes metálicos y sonidos de caída.
+Silencio: `function ENT:IsSilentStepping() return self.wraithTerm_IsCloaked end`.
+
+> ⚠ **ESTE PÁRRAFO DECÍA ALGO FALSO Y SE CORRIGE ACÁ (2026-08-08), porque el bloque de la
+> invisibilidad va a leerlo.** Decía que `IsSilentStepping` *«se consume en 10 puntos y mata pasos,
+> golpes metálicos y sonidos de caída»*. **Se censaron los seis call sites de `MakeFootstepSound` en
+> el bloque de las pisadas y es al revés: no tapa NINGUNA pisada.** Ni la de caminar
+> (`ProcessFootsteps`, `behaviouroverrides.lua:141`, no lo consulta), ni la del salto
+> (`motionoverrides.lua:2997`, con el chequeo en :2999 — o sea *después*), ni las tres del aterrizaje
+> (`:3459`, `:3474`, `:3485`, cada una con su chequeo en la línea siguiente). El único que sí tapa es
+> el de la caída letal (`:3599`), y de rebote. **Un fantasma «cloakeado» sigue sonando**, y hacen
+> falta las dos palancas: `AdditionalFootstep` para la pisada e `IsSilentStepping` para lo que la
+> rodea. Ver ESTADO.md, bloque de las pisadas.
 
 > **Dos defectos del módulo** [verificado, por refutación]: (a) los cooldowns son **asimétricos al
-> revés de lo que parece** — esconderse deja 0,25-0,75 s, aparecer deja **2,5-3,5 s**, o sea que tras
-> materializarse no puede volver a desaparecer por más de dos segundos; (b) la restauración de
-> solidez ocurre dentro de un `timer.Simple(0.25)`, así que **hay un cuarto de segundo en que el bot
-> se declara visible pero sigue atravesable**.
+> revés de lo que parece** — esconderse deja 0,25-0,75 s (`wraithcloaking.lua:138`), aparecer deja
+> **2,5-3,5 s** (`:164`), o sea que tras materializarse no puede volver a desaparecer por más de dos
+> segundos; (b) la restauración de solidez ocurre dentro de un `timer.Simple(0.25)`, así que **hay un
+> cuarto de segundo en que el bot se declara visible pero sigue atravesable**.
+>
+> ⚠ **Y (a) no es un detalle a «tener en cuenta»: es un BLOQUEANTE para el parpadeo de Phasmophobia**,
+> donde el ciclo entero —visible 0,08-0,3 s, invisible 0,1-1,0 s— dura **menos que el cooldown solo**.
+> Encima `DoHiding` **se niega en silencio** cuando el reloj no venció (`:128`, un `return` pelado):
+> el pedido se pierde sin dejar rastro. Ver §5.3 del prompt de la invisibilidad.
 
 ### 5.4 Otras piezas listas **[verificado]**
 
