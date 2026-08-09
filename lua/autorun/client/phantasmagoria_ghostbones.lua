@@ -938,26 +938,57 @@ local function cmd_anm()
 		return
 	end
 
-	local total = sujeto:GetSequenceCount()
-	print( string.format( "[ph_anm]   el fantasma declara %d secuencias visibles", total ) )
-	print( string.format( "[ph_anm]     43 propias + %d de %s = %d",
-		anm.seqs, anm.modelo, 43 + anm.seqs ) )
+	--[[
+		⚠ LA DIFERENCIA NO ES UN DEFECTO: ES EL MECANISMO, Y LA r21 ME CORRIGIO.
 
-	-- LA RESTA SE HACE ACA. Un criterio que exige restar a mano invita a un
-	-- veredicto inferido, y ademas esta resta es la que nadie hizo tres rondas.
-	if total ~= 43 + anm.seqs then
-		print( string.format( "[ph_anm] >> ⚠ LA SUMA NO CIERRA: el fantasma ve %d y el m_anm que " ..
-			"mide este comando aporta %d. Sobran %d.", total, anm.seqs, total - 43 - anm.seqs ) )
-		print( "[ph_anm] >> O sea que hay MAS de un modelo aportando secuencias, o el que se " ..
-			"midio aca no es el que el fantasma resolvio al compilar/montar." )
+		La version anterior hacia `43 + las del m_anm` y, si no daba el total,
+		anunciaba «LA SUMA NO CIERRA». En juego dio 43 + 1723 = 1766 contra 1725
+		vistas, y el comando lo denuncio -- pero **faltan** 41, no sobran, y esos
+		41 son exactamente las secuencias NUESTRAS cuyo nombre coincide con una
+		prestada. El `$includemodel` **descarta la prestada homonima**, y ese
+		descarte por nombre es TODO EL MECANISMO por el que la nina no se estira:
+		nuestras `walk_all`, `run_all_01`, `idle_all_01`... se llaman igual a
+		proposito.
+
+		O sea que la version anterior gritaba sobre la unica prueba de que el
+		mecanismo funciona. *Un control que no conoce el mecanismo que audita
+		convierte su exito en una alarma.*
+
+		Ahora la cuenta se lee al revés: la diferencia ES el numero de
+		secuencias nuestras que estan SOMBREANDO a una prestada, y lo que hay que
+		vigilar es que no sea CERO.
+	]]
+	local total = sujeto:GetSequenceCount()
+	local PROPIAS = 43
+	local sombreadas = PROPIAS + anm.seqs - total
+
+	print( string.format( "[ph_anm]   el fantasma declara %d secuencias visibles", total ) )
+	print( string.format( "[ph_anm]     %d propias + %d de %s - %d sombreadas = %d",
+		PROPIAS, anm.seqs, anm.modelo, sombreadas, total ) )
+
+	if sombreadas <= 0 then
+		print( "[ph_anm] >> ⚠ NINGUNA de nuestras secuencias esta sombreando a una prestada. " ..
+			"El descarte por nombre del $includemodel es TODO el mecanismo por el que el " ..
+			"modelo no se estira: si no ocurre, se estira." )
+
+	elseif sombreadas > PROPIAS then
+		print( string.format( "[ph_anm] >> ⚠ %d sombreadas es MAS que las %d propias: la cuenta " ..
+			"no puede cerrar asi, o hay un tercer modelo aportando secuencias.",
+			sombreadas, PROPIAS ) )
 
 	else
-		print( "[ph_anm] >> la suma cierra: el fantasma esta viendo exactamente este m_anm." )
+		print( string.format( "[ph_anm] >> %d de nuestras %d secuencias estan sombreando a una " ..
+			"prestada homonima. Eso es el descarte por nombre OCURRIENDO, que es lo que " ..
+			"queremos.", sombreadas, PROPIAS ) )
 
 	end
 
-	print( "[ph_anm]   ( medido fuera del juego: HL2 1563 seq / 56 huesos · WOS 1 seq / 60 " ..
-		"huesos · nuestro 43 )" )
+	-- ⚠ Y EL NUMERO DE WOS DE ESTA LINEA ESTABA MAL. Se midio sobre la copia que
+	-- hay en `dev/other/`, que declara UNA secuencia -- y el que el motor sirve
+	-- declara 1723. O sea que la copia del arbol NO es la que esta montada:
+	-- medir un archivo del disco no dice que sea el que gana.
+	print( "[ph_anm]   ( fuera del juego: HL2 1563 seq / 56 huesos · nuestro 43. La copia de " ..
+		"WOS en dev/other declara 1 sola: NO es la montada, que declara " .. anm.seqs .. " )" )
 end
 
 concommand.Add( "ph_ghost_anm", cmd_anm, nil,
