@@ -277,8 +277,20 @@ function PHANTASMAGORIA.ActLogLine( ev )
 
     -- La flecha solo cuando la actividad CAMBIO. Un "X -> X" en cada linea es
     -- ruido que tapa las dos o tres lineas donde de verdad cambio.
-    if ev.salida and ev.salida ~= ev.pedida then
+    --
+    -- ⚠ PERO EL "NO CAMBIO" HAY QUE DECIRLO, Y EN LA r18 NO SE DIJO. El dump
+    -- trajo cuatro veces
+    --     1370.67  Translate  ACT_LAND (33)  [en el piso 0 u/s]
+    -- una linea PELADA, que se lee igual que un evento al que no se le anoto
+    -- salida. Son cosas distintas: "la base devolvio la misma actividad" es una
+    -- medicion, "no hay dato de salida" es la ausencia de una. *Un formato que
+    -- borra la diferencia entre un dato y su ausencia deja que el lector elija,
+    -- y el lector elige el que esperaba.*
+    if ev.salida ~= nil and ev.salida ~= ev.pedida then
         partes[ #partes + 1 ] = "-> " .. PHANTASMAGORIA.ActName( ev.salida )
+
+    elseif ev.salida ~= nil then
+        partes[ #partes + 1 ] = "( sin traducir: sale la misma )"
 
     end
 
@@ -356,5 +368,82 @@ function PHANTASMAGORIA.ActLogNoData()
     end
 
     return out
+
+end
+
+--[[
+    ⚠ QUE PASO EN LA VENTANA -- O SEA SI EL SINTOMA LLEGO A PROVOCARSE.
+
+    ESTA FUNCION EXISTE POR LA r18, Y POR LA FILA QUE DECIDIA. La 03 exigia que
+    los DOS defectos del arma volvieran juntos con `pickup 1`; volvio uno
+    ( las traducciones `*_AR2` ) y el otro no. Leido de frente eso refuta el
+    diagnostico. Pero el dump, mirado con la hora en la mano, dice otra cosa:
+
+        1370.67 .. 1377.96   cuatro ACT_LAND      <- SIN arma
+        1393.45 .. 1393.89   las lineas *_AR2     <- CON arma, y sin caidas
+        1409.13 en adelante  vuelven sin sufijo   <- ya la solto
+
+    o sea que en toda la ventana NO HUBO NI UN ATERRIZAJE CON EL ARMA EN LA
+    MANO: el segundo defecto no se refuto, no se PROVOCO. Y el comando dijo
+    «ninguna actividad quedo SIN RESOLVER», que se lee como un descarte.
+
+    *Un instrumento que no puede decir si el sujeto paso por el punto de medida
+    convierte "no lo provoque" en "no pasa".* Es el mismo defecto de familia que
+    contar los ausentes como aprobados, del otro lado: contar los ausentes como
+    REFUTADOS.
+
+    Devuelve una tabla con la cuenta de lo que la ventana contiene, no con lo
+    que se buscaba. El veredicto lo arma quien la lee.
+]]
+function PHANTASMAGORIA.ActLogCenso( eventos )
+    eventos = eventos or PHANTASMAGORIA.ActLogEvents()
+
+    -- Por NOMBRE y en runtime, como todo lo de este archivo: en el arnes los
+    -- numeros de los ACT_ son arbitrarios a proposito, y una tabla indexada por
+    -- la constante no cargaria.
+    local land = PHANTASMAGORIA.ActNumber( "ACT_LAND" )
+
+    local c = {
+        eventos = #eventos,
+        aterrizajes = 0,          -- eventos con ACT_LAND como actividad pedida
+        aterrizajesConArma = 0,   -- ... y con un arma en la mano en ese instante
+        conArma = 0,
+        sinResolver = 0,
+        sinDato = 0,
+        armas = {},               -- los nombres, para que "con arma" sea comprobable
+        landConocida = land ~= nil,
+    }
+
+    local vistas = {}
+
+    for _, ev in ipairs( eventos ) do
+        local armado = isstring( ev.arma ) and ev.arma ~= ""
+
+        if armado then
+            c.conArma = c.conArma + 1
+
+            if not vistas[ ev.arma ] then
+                vistas[ ev.arma ] = true
+                c.armas[ #c.armas + 1 ] = ev.arma
+
+            end
+        end
+
+        if land and ev.pedida == land then
+            c.aterrizajes = c.aterrizajes + 1
+            if armado then c.aterrizajesConArma = c.aterrizajesConArma + 1 end
+
+        end
+
+        if ev.resolvio == false then
+            c.sinResolver = c.sinResolver + 1
+
+        elseif ev.resolvio == nil and ev.seqName ~= nil then
+            c.sinDato = c.sinDato + 1
+
+        end
+    end
+
+    return c
 
 end

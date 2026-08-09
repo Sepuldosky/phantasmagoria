@@ -241,6 +241,160 @@ end
 concommand.Add( "ph_ghost_bones", cmd,
 	nil, "Mide los largos de hueso del fantasma, del lado del CLIENTE." )
 
+--------------------------------------------------------- la pose T, del lado que la dibuja
+
+--[[
+	ph_ghost_land   -- muestrea 3 s y dice si el CLIENTE se quedo sin animacion
+
+	POR QUE DE CLIENTE, Y POR QUE ES OTRA MEDICION Y NO LA MISMA.
+
+	`phantasmagoria_ghost_landwatch` muestrea el mismo instante en el SERVIDOR.
+	Los dos son necesarios y no son redundantes: la pose T es lo que se DIBUJA, y
+	quien dibuja es el cliente. Un servidor con `run_all_01` puesta y un cliente
+	sin secuencia se ven, desde el servidor, exactamente igual que todo bien --
+	y ese modo de falla ya se cobro un arco entero en este proyecto ( el hook de
+	arranque que no dispara en el realm cliente y sobrevivio dos arranques por no
+	tener instrumento ahi ).
+
+	Y encaja con lo que reporto el autor: *"algo parecido he notado en otros
+	player models que cuando saltan y caen quedan en posicion T o la animacion
+	queda desfasada"*. "Desfasado" es una palabra sobre el cliente.
+
+	QUE MIDE, y los tres estados se separan porque se arreglan en lugares
+	distintos:
+
+	  SIN SECUENCIA    GetSequence() < 0 o nombre vacio -> se dibuja el esqueleto
+	                   de reposo. ESTA es la pose T.
+	  CICLO CONGELADO  hay secuencia y el ciclo no se mueve. Se ve como una
+	                   estatua en una pose real, no en la T.
+	  SANO             el ciclo avanza.
+
+	⚠ NO ESPERA EL ATERRIZAJE: muestrea desde que se corre. Es a proposito --
+	engancharlo a un evento de caida en el cliente seria un tercer mecanismo sin
+	medir, y el trato es simple: se corre el comando y despues se lo tira con el
+	physgun. La ventana de 3 s cubre el tramite.
+]]
+
+local MUESTRAS_LAND, PASO_LAND = 60, 0.05
+
+local function cmd_land()
+	-- El mismo criterio de sujeto que ph_ghost_bones: por MODELO, no por clase.
+	local sujeto
+	for _, e in ipairs( ents.GetAll() ) do
+		local mdl = IsValid( e ) and e:GetModel() or nil
+
+		if isstring( mdl ) and string.find( mdl, "ghost_girl", 1, true )
+			and not CLASES_EXCLUIDAS[ e:GetClass() ] then
+			sujeto = e
+			break
+		end
+	end
+
+	if not sujeto then
+		print( "[ph_land] SIN CORRER: no hay ninguna entidad con 'ghost_girl' en el modelo, " ..
+			"de las " .. #ents.GetAll() .. " que existen en el cliente." )
+		return
+	end
+
+	print( string.format( "[ph_land] %s  [%s]   muestreando %.1f s cada %.2f s.",
+		tostring( sujeto ), sujeto:GetClass(), MUESTRAS_LAND * PASO_LAND, PASO_LAND ) )
+	print( "[ph_land] AHORA: levantalo con el physgun y soltalo desde alto. Al terminar imprime solo." )
+
+	local n, previo = 0, nil
+	local sinSeq, congelados, sanas, nils = 0, 0, 0, 0
+	local vistas, ordenVistas = {}, {}
+	local primerDefecto = nil
+
+	timer.Create( "ph_ghost_land", PASO_LAND, MUESTRAS_LAND, function()
+		if not IsValid( sujeto ) then
+			timer.Remove( "ph_ghost_land" )
+			print( "[ph_land] el sujeto dejo de ser valido a las " .. n .. " muestras. " ..
+				"Lo que sigue es sobre las que SI se tomaron." )
+			return
+		end
+
+		n = n + 1
+
+		local seq = sujeto:GetSequence()
+
+		-- ⚠ El nombre se guarda en un LOCAL antes de tostring: el mismo defecto
+		-- que revento este archivo en la r17 vive en cualquier getter que pueda
+		-- devolver CERO valores en vez de nil.
+		local nombre = isnumber( seq ) and seq >= 0 and sujeto:GetSequenceName( seq ) or nil
+		nombre = isstring( nombre ) and nombre or ""
+
+		local ciclo = sujeto:GetCycle()
+
+		if not isnumber( ciclo ) then
+			nils = nils + 1
+
+		elseif not isnumber( seq ) or seq < 0 or nombre == "" then
+			sinSeq = sinSeq + 1
+			primerDefecto = primerDefecto or string.format(
+				"a los %.2f s: SIN SECUENCIA ( seq %s ) -- pose de referencia",
+				n * PASO_LAND, tostring( seq ) )
+
+		else
+			if not vistas[ nombre ] then
+				vistas[ nombre ] = true
+				ordenVistas[ #ordenVistas + 1 ] = nombre
+			end
+
+			local avanza = previo == nil or math.abs( ciclo - previo ) > 0.0005
+
+			if avanza then
+				sanas = sanas + 1
+
+			else
+				congelados = congelados + 1
+				primerDefecto = primerDefecto or string.format(
+					"a los %.2f s: CICLO CONGELADO en %s ( ciclo %.3f )",
+					n * PASO_LAND, nombre, ciclo )
+			end
+
+			previo = ciclo
+		end
+
+		if n < MUESTRAS_LAND then return end
+
+		print( string.format( "[ph_land] %d muestras: %d sanas, %d SIN SECUENCIA, %d con el " ..
+			"ciclo congelado, %d sin lectura.", n, sanas, sinSeq, congelados, nils ) )
+		print( "[ph_land] secuencias vistas: " ..
+			( #ordenVistas > 0 and table.concat( ordenVistas, ", " ) or "NINGUNA" ) )
+
+		if primerDefecto then
+			print( "[ph_land]   primer defecto  " .. primerDefecto )
+		end
+
+		-- EL VEREDICTO RESTA LO QUE NO SE PUDO MEDIR. Un `nils` alto no es un
+		-- verde: es una ventana que no midio, y contarla como sana es el defecto
+		-- que este proyecto ya arreglo dos veces en dos archivos distintos.
+		if nils >= n then
+			print( "[ph_land] >> SIN CORRER: ninguna muestra devolvio un ciclo. No se midio " ..
+				"nada; esto NO dice que el cliente este bien." )
+
+		elseif sinSeq > 0 then
+			print( "[ph_land] >> LA POSE T ES DEL CLIENTE: " .. sinSeq .. " muestra(s) sin " ..
+				"secuencia. El servidor puede tener la actividad puesta igual -- comparar " ..
+				"con phantasmagoria_ghost_actlog_dump." )
+
+		elseif congelados > 0 then
+			print( "[ph_land] >> NO ES LA POSE T, es una ANIMACION DETENIDA: " .. congelados ..
+				" muestra(s) con el ciclo quieto sobre una secuencia real. Se arregla en otro " ..
+				"lado que una actividad que falta." )
+
+		else
+			print( "[ph_land] >> el cliente tuvo secuencia y ciclo vivo en las " .. sanas ..
+				" muestras. Si la T se vio DENTRO de esta ventana, no fue por esto." )
+			print( "[ph_land] >> ⚠ y si no se llego a tirar el bot dentro de la ventana, esto " ..
+				"es SIN CORRER y no un descarte." )
+		end
+	end )
+end
+
+concommand.Add( "ph_ghost_land", cmd_land, nil,
+	"Muestrea 3 s la animacion del fantasma EN EL CLIENTE. Correrlo y despues tirarlo con el physgun." )
+
 --------------------------------------------------------------- la costura
 
 --[[

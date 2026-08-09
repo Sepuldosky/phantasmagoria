@@ -1258,6 +1258,149 @@ local ACTS_QUE_PIDE_LA_BASE = {
     { act = ACT_LAND,                nuestra = "jump_land",    cuando = "al aterrizar ( gesto )" },
 }
 
+---------------------------------------------------------------------------
+-- QUE DEVUELVE GetPoseParameter EN ESTE BUILD: MEDIDO, NO SUPUESTO
+---------------------------------------------------------------------------
+--[[
+    ⚠ ESTA FUNCION EXISTE PORQUE LA SUPOSICION QUE REEMPLAZA FABRICO UN SINTOMA.
+
+    El bloque de abajo afirmaba, en un comentario, que `GetPoseParameter`
+    devuelve 0..1 normalizado, y convertia con `v * 2 - 1`. La r18 midio, con el
+    bot corriendo DE FRENTE:
+
+        pose  CRUDO  move_x +1.000   move_y +0.005   vel 196 u/s
+        pose  -1..1  move_x +1.00    move_y -0.99    -> celda NW
+        pose  ⚠ EL BOT SE MUEVE Y LA CELDA NO ES 'N' ... Es el sintoma de 'corre de lado'.
+
+    El `move_y -0.99` sale de `0.005 * 2 - 1`. O sea que el aviso que "confirmaba"
+    el reporte del autor lo produjo LA CONVERSION, sobre un crudo que ya decia
+    move_y ~ 0 -- que es exactamente ir derecho. Y la misma corrida imprimio, en
+    otra pasada, `move_x -0.999`: fuera de 0..1, imposible bajo la suposicion.
+
+    *Un control que no puede equivocarse en voz alta no confirma un sintoma: lo
+    fabrica.* Y este fabrico uno que YA TENIA un reporte del autor esperandolo,
+    asi que corroboro una historia falsa durante dos rondas.
+
+    Ahora no se supone: se SONDEA. Se escribe un valor conocido y se lee de
+    vuelta. La sonda va al MINIMO del rango y no al maximo, porque con un rango
+    -1..1 el maximo vale 1 en las dos convenciones ( crudo 1, normalizado 1 ) y
+    no discrimina nada; el minimo vale -1 crudo y 0 normalizado.
+
+    El sondeo pisa el parametro por menos de un tick y despues lo restaura --
+    y mientras el bot se mueve el motor lo reescribe solo en el BodyUpdate
+    siguiente ( BodyMoveXY, motion.lua:353 ).
+]]
+local function sondearPose( ent, nombre )
+    local out = { nombre = nombre }
+
+    local okId, id = pcall( ent.LookupPoseParameter, ent, nombre )
+    if not okId or not isnumber( id ) or id < 0 then
+        out.modo = "NO EXISTE"
+        return out
+
+    end
+    out.id = id
+
+    local okR, mini, maxi = pcall( ent.GetPoseParameterRange, ent, id )
+    if not okR or not isnumber( mini ) or not isnumber( maxi ) or mini == maxi then
+        out.modo = "SIN RANGO"
+        return out
+
+    end
+    out.min, out.max = mini, maxi
+
+    local okA, antes = pcall( ent.GetPoseParameter, ent, nombre )
+    if not okA or not isnumber( antes ) then
+        out.modo = "NO SE PUDO LEER"
+        return out
+
+    end
+    out.antes = antes
+
+    local okS = pcall( ent.SetPoseParameter, ent, nombre, mini )
+    local okL, leido = pcall( ent.GetPoseParameter, ent, nombre )
+
+    if not okS or not okL or not isnumber( leido ) then
+        out.modo = "NO SE PUDO SONDEAR"
+        return out
+
+    end
+
+    out.puesta, out.leida = mini, leido
+
+    local pareceCrudo = math.abs( leido - mini ) < 0.01
+    local pareceNorm  = math.abs( leido ) < 0.01
+
+    if pareceCrudo and pareceNorm then
+        -- Pasa si el minimo del rango ES cero. No es un empate para desempatar a
+        -- ojo: las dos convenciones dan el mismo numero y la sonda no separa.
+        out.modo = "AMBIGUO"
+
+    elseif pareceCrudo then
+        out.modo = "CRUDO"
+
+    elseif pareceNorm then
+        out.modo = "NORMALIZADO"
+
+    else
+        out.modo = "NINGUNA DE LAS DOS"
+
+    end
+
+    -- Restaurar EN LA CONVENCION QUE SE ACABA DE MEDIR. Con la lectura
+    -- normalizada, `antes` no es un valor que SetPoseParameter entienda.
+    if out.modo == "NORMALIZADO" then
+        pcall( ent.SetPoseParameter, ent, nombre, mini + antes * ( maxi - mini ) )
+
+    else
+        pcall( ent.SetPoseParameter, ent, nombre, antes )
+
+    end
+
+    return out
+
+end
+
+--- El valor en -1..1 para ubicarlo en la grilla, o nil si el sondeo no alcanza.
+--- La normalizacion usa el rango MEDIDO, no un -1..1 supuesto.
+local function poseEnGrilla( s )
+    if not s or not isnumber( s.antes ) or not isnumber( s.min ) then return nil end
+    if s.modo ~= "CRUDO" and s.modo ~= "NORMALIZADO" and s.modo ~= "AMBIGUO" then return nil end
+
+    local crudo = s.antes
+    if s.modo == "NORMALIZADO" then crudo = s.min + s.antes * ( s.max - s.min ) end
+
+    return ( crudo - s.min ) / ( s.max - s.min ) * 2 - 1, crudo
+
+end
+
+-- Grilla leida del .mdl: eje X = move_y, eje Y = move_x. N es ir de frente.
+local CELDAS = {
+    { "SW", "S", "SE" },
+    { "W",  "C", "E"  },
+    { "NW", "N", "NE" },
+}
+
+local function celda( tx, ty )
+    local col = ty < -0.34 and 1 or ( ty > 0.34 and 3 or 2 )
+    local fil = tx < -0.34 and 1 or ( tx > 0.34 and 3 or 2 )
+
+    return CELDAS[ fil ][ col ]
+
+end
+
+--- El angulo entre dos direcciones 2D, en grados. nil si alguna es nula.
+local function anguloEntre( ax, ay, bx, by )
+    local la = math.sqrt( ax * ax + ay * ay )
+    local lb = math.sqrt( bx * bx + by * by )
+    if la < 0.05 or lb < 0.05 then return nil end
+
+    local cos = ( ax * bx + ay * by ) / ( la * lb )
+
+    return math.deg( math.acos( math.Clamp( cos, -1, 1 ) ) )
+
+end
+
 PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_acts", function( ply )
     local say = makeSay( ply )
 
@@ -1335,82 +1478,99 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_acts", function( ply )
         -- Con ella es un numero: yendo derecho hacia vos move_x se va a un
         -- extremo y move_y se queda al medio; en un paso lateral se invierte.
         --
-        -- ⚠ GetPoseParameter DEVUELVE 0..1 NORMALIZADO, no el rango declarado.
-        -- Se imprimen las dos columnas -- el crudo y el remapeado a -1..1 -- para
-        -- que no haya que acordarse: un 0.5 crudo y un 0.0 real son el mismo
-        -- numero y el segundo es el que se compara contra la grilla.
-        local px = ghost:GetPoseParameter( "move_x" )
-        local py = ghost:GetPoseParameter( "move_y" )
+        -- ⚠ LO QUE DEVUELVE GetPoseParameter SE SONDEA, NO SE SUPONE, y la
+        -- version que lo suponia fabricaba el sintoma que buscaba. Ver
+        -- `sondearPose`.
+        --
+        -- ⚠ Y LO ESPERADO SE MIDE TAMBIEN. La version vieja exigia la celda `N`
+        -- con el bot en movimiento, o sea daba por sentado que el bot camina
+        -- hacia donde mira. Eso es cierto con `facewalk` puesto y falso en
+        -- cuanto la base decide retroceder ( movement_backthehellup ) -- y
+        -- entonces la fila reprobaria una mezcla CORRECTA. Ahora lo esperado
+        -- sale del vector de velocidad contra la orientacion del bot, y el
+        -- veredicto compara dos mediciones en vez de una medicion contra una
+        -- creencia.
+        local sx, sy = sondearPose( ghost, "move_x" ), sondearPose( ghost, "move_y" )
+        local tx, cx = poseEnGrilla( sx )
+        local ty, cy = poseEnGrilla( sy )
 
-        if px and py then
-            --[[
-                ⚠ LA SUPOSICION DE ABAJO NO ESTABA MEDIDA, Y LA r16 IMPRIMIO UN
-                NUMERO IMPOSIBLE SIN QUE NADIE LO MIRARA.
-
-                El comentario de arriba afirma que GetPoseParameter devuelve
-                0..1 normalizado, y sobre eso se hace `v * 2 - 1`. Pero la nota
-                de la r16 dice «move_y entre -1.04 y -1.00»: si el crudo fuera
-                normalizado, -1.04 remapeado exige un crudo de -0.02, que esta
-                FUERA de 0..1 y por lo tanto no es un normalizado.
-
-                O sea que una de las dos cosas es falsa -- o el rango, o la
-                lectura -- y la linea las mezclaba en una sola columna con cara
-                de dato. *Una conversion que no se puede equivocar en voz alta no
-                es una conversion: es una suposicion con formato.*
-
-                Ahora el comando NO elige: imprime el crudo, imprime las dos
-                interpretaciones, y **se niega a decir la celda** cuando el crudo
-                cae fuera de 0..1, que es la prueba de que la suposicion no vale.
-            ]]
-            local fuera = px < 0 or px > 1 or py < 0 or py > 1
-
-            say( string.format( "    pose  CRUDO  move_x %+.3f   move_y %+.3f   vel %d u/s",
-                px, py, math.Round( ghost:GetCurrentSpeed() ) ) )
-
-            if fuera then
-                say( "    pose  ⚠ EL CRUDO CAE FUERA DE 0..1, asi que NO es el normalizado que " ..
-                    "este comando supone. La columna -1..1 seria falsa y no se imprime." )
-                say( "    pose  Si estos valores ya estan en -1..1, entonces move_x " ..
-                    string.format( "%+.2f", px ) .. " / move_y " .. string.format( "%+.2f", py ) ..
-                    " se leen directo, y la conversion de este comando estaba de mas." )
+        for _, s in ipairs( { sx, sy } ) do
+            if s.modo == "CRUDO" or s.modo == "NORMALIZADO" or s.modo == "AMBIGUO" then
+                say( string.format(
+                    "    pose  param %-6s id %d  rango %+.2f .. %+.2f   sonda: puse %+.2f y " ..
+                    "lei %+.2f  -> LECTURA %s",
+                    s.nombre, s.id, s.min, s.max, s.puesta, s.leida, s.modo ) )
 
             else
-                local rx, ry = px * 2 - 1, py * 2 - 1
+                say( "    pose  param " .. s.nombre .. "  -> " .. s.modo ..
+                    "  ( sin esto no hay medicion de la mezcla, y el numero de abajo no sale )" )
 
-                -- LA CELDA DE LA GRILLA, que es lo que ata el numero con lo que
-                -- se ve. Sin esto, «move_y -1.00» es un numero; con esto es
-                -- «esta reproduciendo la animacion de ir en diagonal».
-                -- Grilla leida del .mdl: eje X = move_y, eje Y = move_x.
-                local col = ry < -0.34 and 1 or ( ry > 0.34 and 3 or 2 )
-                local fil = rx < -0.34 and 1 or ( rx > 0.34 and 3 or 2 )
-                local NOMBRES = {
-                    { "SW", "S", "SE" },
-                    { "W",  "C", "E"  },
-                    { "NW", "N", "NE" },
-                }
+            end
+        end
 
-                say( string.format(
-                    "    pose  -1..1  move_x %+.2f ( adelante/atras )   move_y %+.2f ( der/izq )" ..
-                    "   -> celda %s", rx, ry, NOMBRES[ fil ][ col ] ) )
+        if tx and ty then
+            local vel = ghost.loco and ghost.loco:GetVelocity() or ghost:GetVelocity()
+            local rapidez = vel and vel:Length2D() or 0
+            local ang = ghost:GetAngles()
+            local adelante = rapidez > 1 and vel:Dot( ang:Forward() ) / rapidez or 0
+            local derecha  = rapidez > 1 and vel:Dot( ang:Right() ) / rapidez or 0
 
-                -- Y el discriminante del sintoma que reporto el autor
-                -- ( «sigue corriendo de lado» ): yendo derecho, la celda tiene
-                -- que ser N. Cualquier diagonal con el bot yendo al frente es el
-                -- defecto, y se dice en vez de dejarlo a la vista.
-                if ghost:GetCurrentSpeed() > 50 and NOMBRES[ fil ][ col ] ~= "N" then
-                    say( "    pose  ⚠ EL BOT SE MUEVE Y LA CELDA NO ES 'N': va a reproducir un " ..
-                        "paso en diagonal mientras avanza de frente. Es el sintoma de " ..
-                        "'corre de lado'." )
+            say( string.format( "    pose  MEDIDO  move_x %+.2f  move_y %+.2f   -> celda %s" ..
+                "   ( crudo %+.3f / %+.3f )", tx, ty, celda( tx, ty ), cx, cy ) )
+            say( string.format( "    pose  MARCHA  vel %d u/s   adelante %+.2f  derecha %+.2f" ..
+                "   -> celda %s si move_y es 'derecha', %s si es 'izquierda'",
+                math.Round( rapidez ), adelante, derecha,
+                celda( adelante, derecha ), celda( adelante, -derecha ) ) )
+
+            -- ⚠ EL VEREDICTO NECESITA QUE EL BOT SE ESTE MOVIENDO, y no porque
+            -- sea mas comodo: `BodyMoveXY` se llama SOLO dentro de
+            -- `if self:IsMoving()` ( motion.lua:351 ), asi que con el bot quieto
+            -- estos dos parametros son los del ULTIMO movimiento y no describen
+            -- nada de ahora. La r18 leyo `move_x +0.999` con `vel 0 u/s` dos
+            -- veces y las dos lineas parecian datos.
+            if rapidez <= 50 then
+                say( "    pose  >> SIN CORRER: el bot esta quieto ( " .. math.Round( rapidez ) ..
+                    " u/s ). BodyMoveXY solo escribe estos parametros MIENTRAS se mueve, " ..
+                    "asi que esto es el ultimo movimiento, no el estado actual." )
+
+            else
+                local aDer = anguloEntre( tx, ty, adelante, derecha )
+                local aIzq = anguloEntre( tx, ty, adelante, -derecha )
+                local mejor = math.min( aDer or 999, aIzq or 999 )
+
+                if not aDer or not aIzq then
+                    say( "    pose  >> SIN CORRER: uno de los dos vectores es nulo y el angulo " ..
+                        "no esta definido." )
+
+                elseif mejor < 25 then
+                    say( string.format( "    pose  >> CONCUERDAN: %.1f grados entre la mezcla y " ..
+                        "la marcha ( convencion move_y = %s ). La mezcla reproduce el paso que " ..
+                        "el bot esta dando.", mejor, aDer <= aIzq and "derecha" or "izquierda" ) )
+
+                else
+                    say( string.format( "    pose  >> ⚠ NO CONCUERDAN: %.1f grados con move_y = " ..
+                        "derecha y %.1f con move_y = izquierda. La mezcla esta en %s y la marcha " ..
+                        "va a %s: ESTE es 'corre de lado', y ahora es un numero que no depende " ..
+                        "de que el bot camine hacia donde mira.",
+                        aDer, aIzq, celda( tx, ty ), celda( adelante, derecha ) ) )
 
                 end
             end
 
-        else
-            -- Un nil se DICE. Si el modelo no declara move_x/move_y, la mezcla no
-            -- se puede mover y siempre se ve el centro -- que es un defecto real
-            -- y no la ausencia de un dato de debug.
-            say( "    pose  move_x/move_y NO EXISTEN en este modelo: la mezcla queda " ..
+        elseif sx.modo == "NO EXISTE" or sy.modo == "NO EXISTE" then
+            -- Un ausente se DICE. Si el modelo no declara move_x/move_y, la
+            -- mezcla no se puede mover y siempre se ve el centro -- que es un
+            -- defecto real y no la ausencia de un dato de debug.
+            say( "    pose  >> move_x/move_y NO EXISTEN en este modelo: la mezcla queda " ..
                 "clavada en el centro y el fantasma camina siempre igual." )
+
+        else
+            -- El tercer estado: los parametros existen y la lectura no se pudo
+            -- caracterizar. No es "esta bien" ni "esta mal": es que este comando
+            -- no midio, y la fila que dependa de esto va SIN CORRER.
+            say( "    pose  >> SIN CORRER: los parametros existen pero el sondeo no pudo " ..
+                "caracterizar la lectura ( " .. sx.modo .. " / " .. sy.modo .. " ). " ..
+                "Sin eso, cualquier celda que imprimiera seria una suposicion con formato." )
 
         end
 
@@ -1464,7 +1624,30 @@ local cvActLog = CreateConVar( "phantasmagoria_ghost_actlog", "0", FCVAR_ARCHIVE
 -- TranslateActivity corre en CADA BodyUpdate; sin este filtro el anillo de 64 se
 -- llena en un segundo y el evento de la pose T se cae por el borde antes de que
 -- el autor suelte el physgun.
+--
+-- ⚠ Y GUARDA EL INSTANTE, NO SOLO LA HUELLA. Ver `VENTANA_REPETIDO`.
 local ultimoPorPunto = {}
+
+--[[
+    CADA CUANTO SE VUELVE A ANOTAR UN EVENTO IDENTICO.
+
+    ⚠ ESTE NUMERO NO ESTABA Y LA r18 LO PAGO. El filtro era "distinto del
+    anterior de su mismo punto", sin tiempo: un episodio que se repite igual --
+    el autor levantando el fantasma con el physgun y soltandolo CUATRO VECES
+    seguidas -- se anotaba UNA sola vez, la primera, y esa se cayo por el borde
+    del anillo antes del dump. Las cuatro caidas quedaron representadas por cero
+    eventos de `Gesture`, y el dump se leyo como que el gesto de aterrizaje no
+    se pidio nunca.
+
+    *Un filtro de repetidos sin ventana de tiempo no comprime un episodio: lo
+    borra, y borra justo el que se repite -- que es el que uno estaba
+    reproduciendo a proposito.*
+
+    0.75 s deja el anillo en ~1,3 eventos por segundo y por punto en el peor
+    caso ( TranslateActivity corre en cada BodyUpdate ), y no pierde ninguna
+    repeticion que un humano pueda provocar a mano.
+]]
+local VENTANA_REPETIDO = 0.75
 
 local function estadoAhora( self )
     local partes = {}
@@ -1484,7 +1667,18 @@ local function estadoAhora( self )
 
     end
 
-    return table.concat( partes, " " )
+    -- ⚠ EL ARMA VA EN LA LINEA, Y EN LA r18 HABIA QUE DEDUCIRLA DEL SUFIJO.
+    -- Que el bot tuviera un arma en la mano se leia del `_AR2` al final de la
+    -- actividad traducida -- o sea del EFECTO que la fila estaba tratando de
+    -- medir. Con eso, una ventana sin traducciones de arma es indistinguible de
+    -- una ventana sin arma, que es exactamente la ambiguedad que dejo a la fila
+    -- 03 medio medida. La causa se anota aparte del efecto.
+    local okW, wep = pcall( self.GetActiveWeapon, self )
+    local arma = ( okW and IsValid( wep ) ) and wep:GetClass() or nil
+
+    partes[ #partes + 1 ] = arma and ( "ARMA " .. arma ) or "sin arma"
+
+    return table.concat( partes, " " ), arma
 
 end
 
@@ -1500,12 +1694,25 @@ local function anotar( self, punto, ev )
     local huella = tostring( ev.pedida ) .. "|" .. tostring( ev.salida ) ..
         "|" .. tostring( ev.seq ) .. "|" .. tostring( ev.resolvio )
 
-    if ultimoPorPunto[ punto ] == huella then return end
-    ultimoPorPunto[ punto ] = huella
+    local ahora = CurTime()
+    local visto = ultimoPorPunto[ punto ]
+
+    -- ⚠ `forzar` SALTEA EL FILTRO, y esta puesto donde el filtro estorba: el
+    -- muestreo de la caida emite dos eventos por aterrizaje cuya huella es
+    -- identica a proposito ( misma actividad, mismo estado ), y el filtro los
+    -- comeria justo cuando el autor esta reproduciendo el sintoma a mano. Es una
+    -- excepcion NOMBRADA en el evento y no una regla implicita en el filtro.
+    if not ev.forzar
+        and visto and visto.huella == huella and ( ahora - visto.t ) < VENTANA_REPETIDO then
+        return
+
+    end
+
+    ultimoPorPunto[ punto ] = { huella = huella, t = ahora }
 
     ev.punto = punto
-    ev.t = CurTime()
-    ev.estado = estadoAhora( self )
+    ev.t = ahora
+    ev.estado, ev.arma = estadoAhora( self )
 
     return PHANTASMAGORIA.PushActLog( ev )
 
@@ -1770,6 +1977,169 @@ do
 end
 
 ---------------------------------------------------------------------------
+-- EL ATERRIZAJE, MUESTREADO -- porque el instante no se puede tipear
+---------------------------------------------------------------------------
+--[[
+    ⚠ LO QUE FALTABA NO ERA UN DATO MAS: ERA EL INSTANTE.
+
+    Las seis envolturas de arriba anotan cuando ALGO PIDE una actividad. La pose T
+    del physgun no es una peticion: es lo que se DIBUJA en el medio segundo
+    siguiente a la caida, y en ese medio segundo el autor tiene las dos manos en
+    el physgun. La r18 lo dijo con todas las letras -- «la posicion T ocurre
+    cuando tomo al ghost con el physgun y lo suelto a cierta altura» -- y el dump
+    de esa misma corrida, con las cuatro caidas adentro, no tenia una sola linea
+    que describiera el estado del CUERPO despues de ninguna de ellas.
+
+    Esto engancha `OnLandOnGround` y muestrea 1,2 s a 0,05 s: que secuencia esta
+    puesta, si el ciclo AVANZA, y a que velocidad se reproduce.
+
+    LO QUE DISCRIMINA. Una pose de referencia es "no hay animacion", y eso tiene
+    dos formas medibles y distintas:
+
+      secuencia INVALIDA   GetSequence() < 0, o su nombre vacio -> no hay nada
+                           que reproducir, y lo que se dibuja es el esqueleto de
+                           reposo. Se marca `resolvio = false`.
+      ciclo CONGELADO      la secuencia existe pero el ciclo no se mueve entre
+                           muestras con playback > 0: la animacion esta puesta y
+                           no corre.
+
+    Los dos se ven igual en la pantalla y se arreglan en lugares distintos, que
+    es el motivo de separarlos aca en vez de en la lectura del dump.
+
+    ⚠ Y ESTO ES EL SERVIDOR. Si las muestras salen todas sanas y el autor igual
+    vio la T, el defecto esta del lado del CLIENTE -- que es donde el modelo se
+    dibuja -- y ahi mide `ph_ghost_land`. Este arco ya pago una vez el creer que
+    medir en un realm dice algo del otro.
+]]
+local cvLandWatch = CreateConVar( "phantasmagoria_ghost_landwatch", "0", FCVAR_ARCHIVE,
+    "Muestrea el cuerpo del fantasma durante 1,2 s DESPUES de cada aterrizaje y lo anota en el " ..
+    "anillo del actlog. Es el instante de la pose T del physgun, que no se puede tipear. " ..
+    "Necesita phantasmagoria_ghost_actlog 1 para que el anillo guarde.", 0, 1 )
+
+local MUESTRAS_CAIDA, PASO_CAIDA = 24, 0.05
+
+--[[
+    ⚠ 24 MUESTRAS NO SON 24 EVENTOS, Y ESA CUENTA IMPORTA. El anillo guarda 64;
+    cuatro caidas a 24 muestras serian 96 y se llevarian puestos exactamente los
+    eventos de actividad que hay que leer al lado. Asi que el muestreo es fino y
+    el REGISTRO es grueso: se anota la PRIMERA muestra que ve la pose de
+    referencia -- que es el instante, con hora -- y un resumen al cerrar la
+    ventana. Dos eventos por caida.
+
+    *Un instrumento que para verse bien tiene que tapar al de al lado no midio
+    mas: midio otra cosa.*
+]]
+local function muestrearCaida( self, alto )
+    local id = "phantasmagoria_caida_" .. self:EntIndex()
+    local previo, congelados, poses, vistas, n = nil, 0, 0, {}, 0
+    local avisada, terminado = false, false
+
+    timer.Create( id, PASO_CAIDA, MUESTRAS_CAIDA, function()
+        -- ⚠ LA PARADA ES UNA BANDERA Y NO SOLO EL timer.Remove. Quitar el timer
+        -- por nombre confia en que nadie mas tenga una referencia a esta funcion
+        -- -- y el arnes justamente la tiene. Una ventana que puede emitir dos
+        -- resumenes emite dos veredictos sobre la misma caida.
+        if terminado then return end
+
+        -- El bot puede morir o ser borrado en el medio, y un timer que le
+        -- pregunta a una entidad invalida es un error de Lua en la consola del
+        -- autor justo cuando estaba mirando el fantasma.
+        if not IsValid( self ) then terminado = true timer.Remove( id ) return end
+
+        local seq = self:GetSequence()
+        local nombre = isnumber( seq ) and seq >= 0 and tostring( self:GetSequenceName( seq ) ) or ""
+        local ciclo = self:GetCycle()
+        local rate = self:GetPlaybackRate()
+
+        -- Una secuencia invalida O sin nombre es la pose de referencia, y se
+        -- marca con la misma columna que ya tiene el anillo para eso.
+        local pose = ( not isnumber( seq ) or seq < 0 or nombre == "" or nombre == "nil" )
+
+        -- El ciclo VUELVE A CERO al terminar un loop, y eso no es congelado. Se
+        -- mide el cambio, no la direccion.
+        local avanza = previo == nil or math.abs( ciclo - previo ) > 0.0005
+        if not avanza and rate > 0 then congelados = congelados + 1 end
+        previo = ciclo
+
+        n = n + 1
+        if pose then poses = poses + 1 end
+        if nombre ~= "" and not vistas[ nombre ] then
+            vistas[ nombre ] = true
+            vistas[ #vistas + 1 ] = nombre
+
+        end
+
+        -- EL INSTANTE, y una sola vez por caida: con hora, para poder cruzarlo
+        -- con las lineas de actividad de arriba.
+        if pose and not avisada then
+            avisada = true
+
+            anotar( self, "Caida", {
+                pedida = -1,
+                seq = isnumber( seq ) and seq or nil,
+                seqName = "POSE DE REFERENCIA ( T ) a los " ..
+                    string.format( "%.2f", n * PASO_CAIDA ) .. " s del aterrizaje" ..
+                    ( alto and ", caida de " .. alto .. " u" or "" ) ..
+                    " -- el SERVIDOR no tiene secuencia puesta",
+                resolvio = false,
+                forzar = true,
+            } )
+
+        end
+
+        if n >= MUESTRAS_CAIDA then
+            anotar( self, "Caida", {
+                pedida = -1,
+                seq = nil,
+                seqName = string.format(
+                    "resumen: %d muestras en %.1f s%s -- %d sin secuencia, %d con el ciclo " ..
+                    "congelado, secuencias vistas: %s",
+                    n, n * PASO_CAIDA, alto and ( ", caida de " .. alto .. " u" ) or "",
+                    poses, congelados,
+                    #vistas > 0 and table.concat( vistas, ", " ) or "NINGUNA" ),
+                -- El resumen de una ventana sana NO se marca: es el control de que
+                -- el muestreo corrio. Una ventana sin ninguna muestra sana si.
+                resolvio = poses == 0 and congelados == 0,
+                forzar = true,
+            } )
+
+            -- ⚠ Y SE APAGA SOLO. El `timer.Create` de arriba pide 24
+            -- repeticiones, pero el que decide cuando termina la ventana es esta
+            -- funcion y no el contador del timer: si alguna vez corre de mas
+            -- --otro addon reiniciando el timer, un arnes que lo llama a mano--
+            -- emitiria un resumen por cada llamada extra y los resumenes se
+            -- comerian el anillo. La condicion de parada vive donde esta el
+            -- estado que la define.
+            terminado = true
+            timer.Remove( id )
+
+        end
+    end )
+end
+
+--- El aterrizaje de la base, con el muestreo colgado atras.
+function ENT:OnLandOnGround( ent )
+    local base = self.BaseClass and self.BaseClass.OnLandOnGround
+    local ret
+
+    -- La base PRIMERO: es la que hace el DoGesture( ACT_LAND ) y la que pone la
+    -- actividad. Muestrear antes seria muestrear el estado que la caida todavia
+    -- no toco -- que es el modo de falla de medir en el momento equivocado, y en
+    -- este arco ya se pago con un timer.Simple( 0 ).
+    if isfunction( base ) then ret = base( self, ent ) end
+
+    if cvLandWatch:GetBool() then
+        local okH, alto = pcall( self.FallHeight, self )
+
+        muestrearCaida( self, okH and isnumber( alto ) and math.Round( alto ) or nil )
+
+    end
+
+    return ret
+
+end
+
+---------------------------------------------------------------------------
 -- El censo: que actividades NO resuelven, sin esperar el sintoma
 ---------------------------------------------------------------------------
 -- ⚠ ESTE ES EL COMANDO QUE PUEDE CONTESTAR LA PREGUNTA SIN QUE EL SINTOMA
@@ -1956,12 +2326,60 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_actlog_dump", function( ply )
 
     end
 
-    if #malos == 0 and #sinDato == 0 then
+    --[[
+        ⚠ QUE CONTIENE LA VENTANA, ANTES DE DECIR QUE NO CONTIENE EL DEFECTO.
+
+        En la r18 este comando cerro con «ninguna actividad quedo SIN RESOLVER en
+        esta ventana» sobre un dump donde el bot NUNCA aterrizo con el arma en la
+        mano: las cuatro caidas fueron desarmado y los diecisiete segundos con el
+        AR2 fueron sin caerse. O sea que la frase era cierta y no significaba
+        nada -- y la fila que dependia de ella se marco roja.
+
+        *Cuando un check puede salir vacio, el vacio tiene que ser una medicion.*
+        Aca la medicion es la cuenta de VECES QUE EL SUJETO PASO POR EL PUNTO.
+    ]]
+    local censo = PHANTASMAGORIA.ActLogCenso and PHANTASMAGORIA.ActLogCenso( eventos )
+
+    if censo then
+        say( "    -- la ventana contiene: " .. censo.eventos .. " evento(s), " ..
+            censo.conArma .. " con arma en la mano" ..
+            ( #censo.armas > 0 and " ( " .. table.concat( censo.armas, ", " ) .. " )" or "" ) ..
+            ", " .. censo.aterrizajes .. " con ACT_LAND, de ellos " ..
+            censo.aterrizajesConArma .. " CON ARMA." )
+
+        if not censo.landConocida then
+            say( "    -- ⚠ este build no define ACT_LAND, asi que la cuenta de aterrizajes " ..
+                "es 0 por no haber podido mirar, no por no haber habido." )
+
+        end
+    end
+
+    -- LA PRECONDICION DE LA POSE T DEL ARMA, dicha ANTES del veredicto: el
+    -- defecto necesita las dos cosas EN EL MISMO INSTANTE, y la ausencia de una
+    -- de ellas no es un resultado sobre la otra.
+    local provocado = censo and censo.aterrizajesConArma > 0
+
+    if censo and not provocado then
+        say( "    >> ⚠ PRECONDICION NO CUMPLIDA para la pose T del arma: hacen falta un " ..
+            "aterrizaje y un arma AL MISMO TIEMPO, y en esta ventana hubo " ..
+            censo.aterrizajes .. " aterrizaje(s) y " .. censo.conArma ..
+            " evento(s) armado(s), pero 0 solapados." )
+        say( "    >> Lo que siga NO descarta el defecto: dice que no se provoco. Para " ..
+            "provocarlo hay que TIRARLO CON EL PHYSGUN mientras tiene el arma en la mano." )
+
+    end
+
+    if #malos == 0 and #sinDato == 0 and provocado then
         say( "    >> ninguna actividad quedo SIN RESOLVER en esta ventana, y de las " ..
-            #eventos .. " se pudo preguntar por todas." )
-        say( "    >> Si la pose T se vio en esta ventana, NO la causo una actividad sin " ..
-            "secuencia: hay que buscar en otro lado ( una capa de gesto con peso, un " ..
-            "SetSequence de otro addon )." )
+            #eventos .. " se pudo preguntar por todas. Y la precondicion SI se cumplio: " ..
+            censo.aterrizajesConArma .. " aterrizaje(s) con arma." )
+        say( "    >> O sea que aca el descarte VALE: si la pose T se vio en esta ventana, " ..
+            "no la causo una actividad sin secuencia -- hay que buscar en otro lado " ..
+            "( una capa de gesto con peso, un SetSequence de otro addon, o el CLIENTE )." )
+
+    elseif #malos == 0 and #sinDato == 0 then
+        say( "    >> ninguna actividad quedo SIN RESOLVER, pero por lo de arriba eso NO es " ..
+            "un descarte. Correr ph_ghost_land en el cliente y repetir provocandolo." )
 
     elseif #malos == 0 then
         say( "    >> NINGUN evento marcado como fallado, pero " .. #sinDato .. " sin dato: " ..
