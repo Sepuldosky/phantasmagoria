@@ -205,6 +205,42 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cl", function()
         or modoTxt == 1 and "SIEMPRE -- atraviesa paredes y DELATA al fantasma invisible: las filas de Diseno 20 no se pueden medir asi"
         or "HONESTO -- no dibuja al fantasma invisible" ) .. " )" )
 
+    -- ⚠ LAS DOS BUSQUEDAS, Y NO SON LA MISMA. Reportado en juego el 2026-08-08:
+    -- con `absence 1` el marcador NO se dibuja NI EN MODO 1, que es el modo que
+    -- delata a proposito. Hay dos causas posibles y se ven exactamente igual
+    -- desde la pantalla:
+    --
+    --   ( a ) el cliente NO TIENE la entidad -- o sea que EF_NODRAW se la lleva
+    --         puesta del lado cliente, y entonces NINGUN marcador clientside
+    --         puede dibujar un fantasma invisible: cae Diseno 20.4 entero y hay
+    --         que networkear la posicion aparte.
+    --   ( b ) el cliente la tiene y el marcador la saltea -- defecto nuestro,
+    --         en el hook o en la busqueda.
+    --
+    -- El marcador busca por CLASE ( ents.FindByClass ) y este comando por CAMPO
+    -- ( ents.GetAll + IsPhantasmagoriaGhost ). Imprimir los dos numeros separa
+    -- ademas una tercera causa que nadie habia nombrado: que las dos busquedas
+    -- no encuentren lo mismo.
+    local porClase = #ents.FindByClass( "terminator_nextbot_phantom" )
+    local porCampo = 0
+
+    for _, e in ipairs( ents.GetAll() ) do
+        if IsValid( e ) and e.IsPhantasmagoriaGhost then porCampo = porCampo + 1 end
+
+    end
+
+    say( "en el CLIENTE:  por clase ( lo que usa el marcador ) " .. porClase ..
+        "   ·  por campo ( lo que usa este comando ) " .. porCampo ..
+        ( porClase ~= porCampo and "   !! NO COINCIDEN: el marcador y este comando no ven lo mismo" or "" ) )
+
+    if porClase <= 0 and porCampo <= 0 then
+        say( "    NINGUNA de las dos encuentra nada. Si el servidor dice que hay un fantasma cerca" )
+        say( "    ( phantasmagoria_ghost_where ), entonces EF_NODRAW se lleva la entidad del lado" )
+        say( "    cliente y NINGUN marcador clientside puede dibujar un fantasma invisible: eso" )
+        say( "    tumba Diseno 20.4 y hay que networkear la posicion por otro lado." )
+
+    end
+
     local vistos = 0
 
     for _, ghost in ipairs( ents.GetAll() ) do

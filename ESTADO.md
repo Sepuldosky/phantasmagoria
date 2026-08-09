@@ -13,7 +13,68 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-08): `speed.base` ENGANCHADO y la INVISIBILIDAD arrancada. Dos bloques
+> ⭐ **LO ÚLTIMO (2026-08-08): la r18 CORRIÓ — 8 de 8, y TRES de esos verdes imprimieron el número
+> del tipo ANTERIOR. El mecanismo está bien; el instrumento mintió.**
+>
+> **Lo que quedó cerrado con evidencia limpia, y no se re-discute:** la **01** (`SON 11 DE 30` con la
+> lista de los que discriminan), la **03** (el campo le ganó a un andamio puesto en 2 — lectura
+> fresca), la **07** (`speed.base x0.235 APLICADO` y los rasgos de §5.1 marcados como no usados) y la
+> **08** (`SIN TIPO` **sin** la línea `!!` de residuo). El enganche funciona.
+>
+> ⚠ **LAS TRES QUE NO MIDIERON, y las tres por el mismo defecto — mío, y del instrumento:**
+>
+> | | Pedía | Trajo |
+> |---|---|---|
+> | **02** | `x0.235` · `objetivo 66` | `x1.000` · `280`, con `campo x0.235 COINCIDEN` tres líneas arriba |
+> | **04** | `x0.588` · `165` (Revenant) | `x0.235` · `66` — el Deogen anterior |
+> | **05** | `x2.000 de convar` · `560` | **`x0.588 de campo phantom_SpeedMul ( tipo )` con `campo VACIO` DOS LÍNEAS ABAJO** |
+>
+> **La causa: `phantom_ApplyTypeSpeed` invalidaba el caché del FACTOR y el reporte no lee el factor.**
+> Ponía `phantom_speedNext = 0` para que el próximo tick recalculara — y recalcula, pero lo que el
+> comando imprime es `phantom_speedDbg`, **que sólo se reescribe en ese recalculo**. Y **dos
+> concommands en la misma línea corren en el MISMO FRAME**, sin tick en el medio: `speed.base campo`
+> (leído en vivo) salía nuevo y `multiplic. / objetivo / factor / convertidas / AHORA` salían viejos.
+> *Invalidar un caché no actualiza lo que ya se calculó de él: marca que hay que recalcular, y el que
+> imprime no es el que recalcula.*
+>
+> ⭐ **La 06 fue, sin que nadie lo pidiera, el control que lo prueba.** El comando se corrió **dos
+> veces sobre el mismo estado**: encadenado dio `x1.000 / 280`, y solo, 16 s después, `x0.235 / 66`.
+> *Dos lecturas del mismo estado que no coinciden acusan al instrumento* — y acá además dicen cuál de
+> las dos es la buena. Esa segunda lectura es la que cierra la 06 en verde de verdad.
+>
+> ⭐ **Y las notas del autor concuerdan con los valores VERDADEROS y no con los impresos.** *«Vi que
+> se puso más rápido»* en la 04 y *«va más rápido aún»* en la 05: con el reporte diciendo 66 en las
+> dos. Es evidencia independiente de que el mecanismo hacía lo correcto mientras el reporte decía
+> otra cosa — y de que **la impresión del operador puede ser mejor instrumento que la consola cuando
+> la consola tiene un caché adentro**.
+>
+> ⚠ **Y la 03 pasó por casualidad.** El andamio no pasa por `phantom_ApplyTypeSpeed`, así que tampoco
+> refrescaba nada; salió bien porque entre ese comando y el anterior habían pasado 0,6 s y el tick ya
+> había recalculado. *Una fila que pasa porque el operador tardó en tipear no midió nada.*
+>
+> **Tres arreglos, y el tercero es el que faltaba:** `phantom_ApplyTypeSpeed` **recalcula en el acto**
+> —sólo si ya había foto, porque `phantom_speedDbg == nil` es la única prueba de que el callback nunca
+> corrió—; `phantasmagoria_ghost_speedmul` ganó su propio callback; y **la foto lleva ahora sello de
+> tiempo y se compara contra el estado en vivo**, con un `!!` que dice *«esta foto ya no vale»* y qué
+> valdría ahora. *El reporte ya comparaba el campo contra la tabla y esa comparación funcionó — nadie
+> estaba comparando el campo contra el multiplicador impreso tres líneas arriba.*
+>
+> Planilla `dev/checks/phantasmagoria-speedbase-r18b.html`, **5 filas, sin correr**: el detector nuevo
+> primero, las tres re-corridas, y la mitad de la 08 que se cerró con `ghost_where` en vez de con
+> `ghost_speed`.
+>
+> ⚠ **REPORTADO EN JUEGO Y SIN DIAGNOSTICAR: con `absence 1` el marcador NO SE DIBUJA NI EN MODO 1.**
+> El modo 1 es el que delata a propósito, así que esto no es el modo honesto funcionando. Hay dos
+> causas y **desde la pantalla se ven idénticas**: (a) el cliente **no tiene la entidad** —o sea que
+> `EF_NODRAW` se la lleva puesta del lado cliente, y entonces **ningún marcador clientside puede
+> dibujar un fantasma invisible**: cae §20.4 entero y hay que networkear la posición aparte—; o (b)
+> el cliente la tiene y el marcador la saltea, que sería defecto nuestro. **`phantasmagoria_ghost_cl`
+> ahora imprime los DOS conteos** —por clase (lo que usa el marcador) y por campo (lo que usa el
+> comando)— y una sola corrida decide. La r18 corrió con `absence 0`, así que **no está contaminada**
+> por esto.
+
+
+> **LO ANTERIOR (2026-08-08): `speed.base` ENGANCHADO y la INVISIBILIDAD arrancada. Dos bloques
 > ESCRITOS, los dos SIN correr, con una planilla cada uno.**
 >
 > **① `speed.base` (Diseño 5.1) — es una línea y por eso mismo lleva planilla propia: SÍ cambia

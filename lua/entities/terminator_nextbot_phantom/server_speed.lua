@@ -200,6 +200,12 @@ function ENT:phantom_RefreshSpeed()
     self.phantom_speedFactor = factor
     self.phantom_speedNext   = CurTime() + RECALC_EVERY
     self.phantom_speedDbg    = {
+        -- CUANDO SE SACO ESTA FOTO, y es lo que faltaba en la r18. Todo lo que
+        -- el reporte imprime de esta tabla es una FOTO de hasta medio segundo
+        -- de antiguedad; sin el sello, una linea vieja y una recien calculada
+        -- se ven exactamente igual -- que es como tres filas de la r18 pasaron
+        -- en verde imprimiendo el multiplicador del tipo anterior.
+        at        = CurTime(),
         ref       = IsValid( ref ) and ref:Nick() or "( ninguno )",
         base      = base,
         fuente    = fuente,
@@ -287,8 +293,33 @@ function ENT:phantom_ApplyTypeSpeed( porque )
     self.phantom_SpeedMulAt  = CurTime()
     self.phantom_SpeedMulHow = porque or "( sin motivo declarado )"
 
-    -- El cache muere aca, no en el proximo tick.
+    -- ⚠ INVALIDAR EL CACHE NO ALCANZA, Y LA r18 LO PROBO CON TRES FILAS VERDES.
+    -- Esto decia solo `self.phantom_speedNext = 0`, o sea "que el proximo tick
+    -- recalcule". Y el proximo tick recalcula -- pero **el reporte no lee el
+    -- factor, lee `phantom_speedDbg`**, que solo se reescribe en ese recalculo.
+    --
+    -- Dos concommands en la misma linea ( `..._type deogen; ..._speed` ) corren
+    -- en EL MISMO FRAME, antes de que haya un tick en el medio. Resultado
+    -- medido en la r18: `speed.base campo x0.588 COINCIDEN` -- leido en vivo --
+    -- tres lineas arriba de `multiplic. x0.235 de campo phantom_SpeedMul
+    -- ( tipo )` y `objetivo 66 u/s`, que eran del tipo ANTERIOR. La fila 05 fue
+    -- todavia peor: imprimio `x0.588 de campo phantom_SpeedMul` con
+    -- `campo VACIO` DOS LINEAS ABAJO.
+    --
+    -- *Invalidar un cache no actualiza lo que ya se calculo de el: marca que
+    -- hay que recalcular, y el que imprime no es el que recalcula.*
+    --
+    -- Se recalcula ACA MISMO, en la escritura. Pero **solo si ya habia foto**:
+    -- al spawnear, `phantom_ApplyTypeSpeed` corre desde AdditionalInitialize y
+    -- ahi todavia no hay enemigo ni tick, y ademas `phantom_speedDbg == nil` es
+    -- la unica prueba que tiene el reporte de que el callback NO corrio nunca
+    -- ( "todavia no calculo nada" ). Refrescar en el spawn la borraria.
     self.phantom_speedNext = 0
+
+    if self.phantom_speedDbg then
+        self:phantom_RefreshSpeed()
+
+    end
 
     return self.phantom_SpeedMul, antes
 
@@ -316,6 +347,25 @@ cvars.AddChangeCallback( "phantasmagoria_ghost_typespeed", function( _, old, new
         ": re-aplicado a ", n, " fantasma(s) vivo(s).\n" )
 
 end, "phantasmagoria_typespeed_vivos" )
+
+-- Y EL ANDAMIO TAMBIEN REFRESCA, por el mismo motivo que la de arriba y con la
+-- misma trampa. `phantasmagoria_ghost_speedmul` no pasa por
+-- phantom_ApplyTypeSpeed -- la lee phantom_RefreshSpeed directo --, asi que
+-- moverla dejaba la foto vieja hasta medio segundo.
+--
+-- En la r18 la fila 03 salio bien por casualidad: entre el comando anterior y
+-- ese habian pasado 0,6 s, o sea que el tick ya habia refrescado. *Una fila que
+-- pasa porque el operador tardo en tipear no midio nada.*
+cvars.AddChangeCallback( "phantasmagoria_ghost_speedmul", function( _, old, new )
+    if not PHANTASMAGORIA.EachGhost then return end
+
+    PHANTASMAGORIA.EachGhost( function( ghost )
+        -- Solo si ya habia foto: ver el comentario de phantom_ApplyTypeSpeed.
+        if ghost.phantom_speedDbg and ghost.phantom_RefreshSpeed then ghost:phantom_RefreshSpeed() end
+
+    end )
+
+end, "phantasmagoria_speedmul_vivos" )
 
 -- Lo que el tipo trae y este bloque NO usa. Se imprime para que este a la vista
 -- sin parecer implementado -- el precedente es `phantasmagoria_ghost_type lista`
@@ -598,8 +648,34 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_speed", function( ply )
 
         end
 
+        -- ⚠ LA FOTO TIENE EDAD, Y HASTA LA r18 NO LO DECIA. Todo lo que sale de
+        -- `dbg` -- multiplicador, objetivo, factor, marchas convertidas -- es un
+        -- calculo de hasta RECALC_EVERY segundos atras. Las lineas de abajo que
+        -- se leen EN VIVO ( `speed.base campo`, el tipo ) pueden estar diciendo
+        -- otra cosa, y en la r18 la dijeron: tres filas en verde con el
+        -- multiplicador del tipo anterior al lado del campo nuevo.
+        local edad = dbg.at and ( CurTime() - dbg.at ) or nil
+
+        -- LO QUE EL MULTIPLICADOR DEBERIA SER AHORA MISMO, calculado con la
+        -- misma precedencia que phantom_RefreshSpeed. Es el detector: comparar
+        -- la foto contra el estado en vivo es lo unico que separa "el mecanismo
+        -- esta mal" de "estas leyendo una foto vieja", y son dos veredictos
+        -- opuestos sobre la misma pantalla.
+        local mulAhora = isnumber( ghost.phantom_SpeedMul ) and ghost.phantom_SpeedMul or cvMul:GetFloat()
+        local vieja    = math.abs( mulAhora - dbg.mul ) > 0.0005
+
         say( "    referencia  " .. dbg.ref .. "   base " .. math.Round( dbg.base ) .. " u/s   de " .. dbg.fuente )
-        say( "    multiplic.  x" .. string.format( "%.3f", dbg.mul ) .. "   de " .. dbg.mulFuente )
+        say( "    multiplic.  x" .. string.format( "%.3f", dbg.mul ) .. "   de " .. dbg.mulFuente ..
+            ( edad and ( "   [ foto de hace " .. string.format( "%.2f", edad ) .. " s ]" ) or "   [ sin sello: foto vieja de antes de la r18b ]" ) )
+
+        if vieja then
+            say( "    !! ESTA FOTO YA NO VALE: ahora el multiplicador seria x" .. string.format( "%.3f", mulAhora ) ..
+                " ( " .. ( isnumber( ghost.phantom_SpeedMul ) and "campo phantom_SpeedMul" or "convar andamio" ) .. " )." )
+            say( "       Las cuatro lineas de abajo -- objetivo, factor, convertidas y AHORA -- son del calculo VIEJO." )
+            say( "       Volve a tipear el comando SOLO ( sin encadenarlo con otro ): dos concommands en la misma" )
+            say( "       linea corren en el mismo frame y no hay tick en el medio que recalcule." )
+
+        end
 
         -- EL ENGANCHE DE speed.base, Y SE MIDE CONTRA LA TABLA -- no se cree.
         -- La linea de arriba dice de donde salio el multiplicador; esta dice si
