@@ -1909,7 +1909,38 @@ function ENT:TranslateActivity( act )
             seqName = nuestra and "corregida a nuestra tabla" or "y NUESTRA tabla tampoco la tiene",
         } )
 
-        if nuestra then return nuestra, true end
+        --[[
+            ⚠ UN SOLO VALOR, Y EL `, true` QUE ESTABA ACA CRASHEABA LA BASE.
+
+            La r20 lo provoco, una linea despues de arreglar el crash anterior:
+
+                motion.lua:315: bad argument #2 to 'SetLayerPlaybackRate'
+                                ( number expected, got boolean )
+                  2. SetupGesturePosture - motion.lua:315
+                  3. BehaveUpdate - behaviouroverrides.lua:118
+
+            Porque el sitio de llamada es
+
+                self:DoGesture( self:TranslateActivity( ACT_LAND ) )   ( :3456 )
+
+            y `DoGesture( act, speed, wait )` recibe **los dos valores de retorno
+            desparramados en su lista de argumentos**. O sea que el segundo valor
+            de esta funcion no es "un booleano de encontre": ES EL `speed` DE
+            DoGesture. La base hace `{ act, speed or 1, wait }`, y `true or 1` da
+            `true`, que llega a `SetLayerPlaybackRate` como booleano.
+
+            La base nunca devuelve `true`: devuelve UN valor cuando encontro
+            traduccion ( `return translated` ) y `( activity, false )` en su
+            fallback -- y `false or 1` si da 1. Devolver `true` estaba fuera del
+            contrato.
+
+            *Yo tenia escrito, dos rondas antes y en este mismo archivo, que «el
+            segundo valor decide» -- razonando sobre el `if not isAnim then
+            return end` de `:3011`. El mismo valor tiene DOS sitios de llamada con
+            dos significados, y el que no mire es el que rompe.* Un valor de
+            retorno no tiene un tipo: tiene un tipo POR SITIO DE LLAMADA.
+        ]]
+        if nuestra then return nuestra end
 
         -- Sin traduccion nuestra, se devuelve la idle: es lo que hace la base en
         -- su propio fallback, y es infinitamente mejor que un -1.
@@ -1920,6 +1951,8 @@ function ENT:TranslateActivity( act )
         local idle = self.IdleActivity
         if isfunction( idle ) then idle = idle( self ) end
 
+        -- El `false` si es del contrato ( es lo que devuelve el fallback de la
+        -- base ) y ademas es lo que corta el DoGesture de `:3011`.
         return isnumber( idle ) and idle or ACT_HL2MP_IDLE, false
 
     end
@@ -1933,6 +1966,33 @@ function ENT:TranslateActivity( act )
         resolvio = salidaMala and false or nil,
         cayoAlFallback = ( encontrada == false ) or nil,
     } )
+
+    --[[
+        ⚠ Y EL SEGUNDO VALOR SE SANEA ANTES DE PASARLO, aunque venga de la base.
+
+        En `motionoverrides.lua:3456` el segundo valor de retorno cae como `speed`
+        de `DoGesture`, y de ahi a `SetLayerPlaybackRate`, que exige un numero.
+        Hoy la base solo devuelve `nil` o `false` ahi, asi que reenviarla tal cual
+        anda. Pero *hoy* es una medicion sobre la version que tengo montada, y el
+        precio de que un dia devuelva otra cosa es un error de Lua adentro de
+        `BehaveUpdate` -- que es lo que acaba de pasar por mi propio `true`.
+
+        Un numero SI se reenvia: seria un `speed` legitimo y comerselo cambiaria
+        la velocidad del gesto en silencio.
+    ]]
+    if encontrada ~= nil and encontrada ~= false and not isnumber( encontrada ) then
+        if not self.phantom_avisoSegundoValor then
+            self.phantom_avisoSegundoValor = true
+            ghostPrint( "TranslateActivity de la base devolvio " .. type( encontrada ) ..
+                " como segundo valor. Ese valor cae como `speed` de DoGesture y ahi tiene " ..
+                "que ser un numero: se lo reemplaza por false para no romper " ..
+                "SetLayerPlaybackRate.\n" )
+
+        end
+
+        return salida, false
+
+    end
 
     return salida, encontrada
 

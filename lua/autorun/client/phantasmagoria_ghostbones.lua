@@ -493,22 +493,86 @@ local function angHoriz( a, b )
 	return math.deg( math.acos( math.Clamp( cos, -1, 1 ) ) )
 end
 
-local function cmd_facing()
-	local sujeto
+--[[
+	⚠ EL SUJETO ES EL NEXTBOT, Y LA r20 MIDIO UN CADAVER.
+
+	La version anterior tomaba **la primera** entidad con `ghost_girl` en el
+	modelo. Las cuatro corridas de la r20 informaron
+	`Entity [388][prop_ragdoll]`: un fantasma muerto que quedo tirado en el mapa,
+	con el mismo modelo y un `EntIndex` mas bajo que el bot vivo. Tres filas de la
+	planilla se llenaron con la pose de un cadaver.
+
+	`ph_ghost_bones` no tiene el problema porque **mide todas** las que encuentra
+	--y por eso su salida de la r20 muestra las DOS, el ragdoll y el NextBot, una
+	debajo de la otra-- pero este comando muestrea en el tiempo y no puede
+	perseguir a varias: tiene que ELEGIR, y entonces tiene que elegir bien y
+	**decir a quien descarto**.
+
+	El criterio no es la clase del bot ( eso vuelve a romperse con los 30 tipos
+	del Diseno 12.2 ): es tener `loco`, que es lo que hace que una entidad se
+	MUEVA por si misma. Un ragdoll no lo tiene y un NextBot si, se llame como se
+	llame.
+
+	*Y lo unico que dejo verlo fue que el comando imprimiera con QUE esta
+	midiendo. Un instrumento que no nombra a su sujeto no tiene forma de estar
+	equivocado en voz alta.*
+]]
+local function elegirSujeto()
+	local candidatos, descartados = {}, {}
+
 	for _, e in ipairs( ents.GetAll() ) do
 		local mdl = IsValid( e ) and e:GetModel() or nil
 
 		if isstring( mdl ) and string.find( mdl, "ghost_girl", 1, true )
 			and not CLASES_EXCLUIDAS[ e:GetClass() ] then
-			sujeto = e
-			break
+			candidatos[ #candidatos + 1 ] = e
+
 		end
 	end
+
+	-- El que se mueve solo gana. `loco` es del servidor, pero la entidad
+	-- replicada del NextBot igual responde a `GetClass`; se prueban los dos
+	-- caminos y se dice cual eligio.
+	local elegido, motivo
+	for _, e in ipairs( candidatos ) do
+		local esBot = e.loco ~= nil or string.find( tostring( e ), "NextBot", 1, true ) ~= nil
+
+		if esBot and not elegido then
+			elegido, motivo = e, "es el que se mueve solo ( NextBot )"
+
+		elseif elegido ~= e then
+			descartados[ #descartados + 1 ] = tostring( e ) .. " [" .. e:GetClass() .. "]"
+
+		end
+	end
+
+	-- Sin NextBot se mide lo que haya, PERO diciendolo: un ragdoll es un sujeto
+	-- legitimo para otra pregunta y no para esta.
+	if not elegido and candidatos[ 1 ] then
+		elegido = candidatos[ 1 ]
+		motivo = "⚠ NO HAY NINGUN NEXTBOT: esto es " .. elegido:GetClass() ..
+			", y su pose no dice nada sobre como corre el bot"
+
+	end
+
+	return elegido, motivo, descartados, #candidatos
+end
+
+local function cmd_facing()
+	local sujeto, motivo, descartados, nCand = elegirSujeto()
 
 	if not sujeto then
 		print( "[ph_facing] SIN CORRER: no hay ninguna entidad con 'ghost_girl' en el modelo, " ..
 			"de las " .. #ents.GetAll() .. " que existen en el cliente." )
 		return
+	end
+
+	print( "[ph_facing] sujeto: " .. tostring( sujeto ) .. " [" .. sujeto:GetClass() .. "]  -- " ..
+		motivo .. "   ( " .. nCand .. " candidata(s) con el modelo )" )
+
+	for _, d in ipairs( descartados ) do
+		print( "[ph_facing]   descartada: " .. d )
+
 	end
 
 	local HUESOS = { "ValveBiped.Bip01_L_Thigh", "ValveBiped.Bip01_R_Thigh",
@@ -561,7 +625,34 @@ local function cmd_facing()
 		local mLH = sujeto:GetBoneMatrix( id[ "ValveBiped.Bip01_L_Hand" ] )
 		local mRH = sujeto:GetBoneMatrix( id[ "ValveBiped.Bip01_R_Hand" ] )
 
-		if not ( mL and mR and mA and mLH and mRH ) then
+		--[[
+			⚠ UNA MATRIZ QUE EXISTE Y DEVUELVE CERO NO ES UNA LECTURA, Y LA r20
+			IMPRIMIO CUATRO FILAS DE NUMEROS SACADOS DE ESO.
+
+			Sobre el `prop_ragdoll` que midio por error, las cinco matrices
+			existian y **las cinco devolvieron la misma traduccion** ( se vio en
+			`ph_ghost_bones`: los cuatro pares dieron `0.00` ). O sea vectores
+			nulos. Y un vector nulo no da un error: da
+
+			    manos separadas   0.00 u
+			    brazo             90.0 gr   ( acos(0) -- justo el valor "en T" )
+			    caderas           -1.0 gr   ( mi centinela, impreso en una
+			                                  columna de grados como si fuera uno )
+
+			tres numeros con cara de medicion. *Un dato ausente que llega como cero
+			es peor que uno que llega como nil: el nil se ve, el cero se promedia.*
+
+			El piso no es arbitrario: la cadera del modelo mide 7,47 u de lado a
+			lado y el brazo 12,4, medidos del `.smd` de reposo. Cualquier cosa por
+			debajo de 1 u es geometria imposible para este esqueleto.
+		]]
+		local nulo = false
+		if mL and mR then
+			local d = mL:GetTranslation():Distance( mR:GetTranslation() )
+			nulo = d < 1
+		end
+
+		if not ( mL and mR and mA and mLH and mRH ) or nulo then
 			sinLectura = sinLectura + 1
 
 		else
@@ -622,27 +713,41 @@ local function cmd_facing()
 		print( string.format( "[ph_facing] %d muestras: %d con el bot en marcha, %d sin lectura " ..
 			"de hueso.", n, movidas, sinLectura ) )
 
-		if sinLectura >= n then
-			print( "[ph_facing] >> SIN CORRER: ninguna muestra devolvio una matriz de hueso. " ..
-				"No se midio nada; esto NO dice que el cuerpo este bien." )
+		-- ⚠ EL UMBRAL ES **CUALQUIERA**, no "todas". Una ventana con la mitad de
+		-- las muestras sin leer no promedia nada util, y la r20 mostro que el
+		-- caso degenerado no viene solo: viene con numeros plausibles al lado.
+		if sinLectura > 0 then
+			print( "[ph_facing] >> SIN CORRER: " .. sinLectura .. " de " .. n .. " muestras no " ..
+				"dieron una pose leible ( matriz ausente, o los huesos de cadera a menos de 1 u " ..
+				"uno del otro, que es geometria imposible )." )
+			print( "[ph_facing] >> No se emite ningun numero: un vector nulo da acos(0) = 90 " ..
+				"grados, que es exactamente el valor SANO. Ese verde ya se imprimio una vez." )
 			return
 		end
 
-		-- LA POSE, que se mide siempre (no necesita que camine).
+		-- LA POSE, que se mide siempre (no necesita que camine). Los `or -1` de
+		-- antes eran centinelas impresos en columnas de grados y de unidades: con
+		-- la guarda de arriba no pueden llegar, y si llegaran ahora es un bug.
 		print( string.format( "[ph_facing]   brazo izq, MAXIMO de la ventana  %5.1f gr de la " ..
-			"vertical   ( la pose de reposo del .smd da %.1f )", brazoMax or -1, REPOSO_BRAZO ) )
+			"vertical   ( la pose de reposo del .smd da %.1f )", brazoMax, REPOSO_BRAZO ) )
 		print( string.format( "[ph_facing]   manos, separacion MAXIMA         %5.2f u" ..
-			"                 ( la pose de reposo da %.2f )", manosMax or -1, REPOSO_MANOS ) )
+			"                 ( la pose de reposo da %.2f )", manosMax, REPOSO_MANOS ) )
 
-		local pareceReposo = manosMax and manosMax > REPOSO_MANOS * 0.9
+		local pareceReposo = manosMax > REPOSO_MANOS * 0.9
 		if pareceReposo then
 			print( "[ph_facing]   >> ⚠ LAS MANOS LLEGARON A LA SEPARACION DE LA POSE DE REPOSO. " ..
 				"Eso es la pose T MEDIDA, no una impresion." )
 		end
 
-		local mediaCadEnt = nCadEnt > 0 and sumaCadEnt / nCadEnt or -1
+		if nCadEnt == 0 then
+			print( "[ph_facing] >> SIN CORRER: no se pudo medir el eje de caderas contra la " ..
+				"orientacion en ninguna muestra." )
+			return
+		end
+
+		local mediaCadEnt = sumaCadEnt / nCadEnt
 		print( string.format( "[ph_facing]   caderas vs ORIENTACION   media %5.1f gr   peor %5.1f " ..
-			"gr   ( esperado 90 animado / 180 en reposo )", mediaCadEnt, peorCadEnt or -1 ) )
+			"gr   ( esperado 90 animado / 180 en reposo )", mediaCadEnt, peorCadEnt ) )
 
 		local cadEntMal = nCadEnt > 0 and math.abs( mediaCadEnt - 90 ) > 30
 
@@ -714,6 +819,149 @@ end
 
 concommand.Add( "ph_ghost_facing", cmd_facing, nil,
 	"Mide, EN LOS HUESOS, hacia donde apunta el cuerpo del fantasma mientras se mueve." )
+
+--------------------------------------------------------- quien contesta m_anm
+
+--[[
+	ph_ghost_anm   -- QUE archivo esta sirviendo `models/m_anm.mdl`
+
+	⚠ EL DATO QUE ABRE ESTO ESTUVO IMPRESO TRES RONDAS Y NADIE LO COMPARO.
+
+	`phantasmagoria_ghost_acts` informa las secuencias visibles, que con el
+	`$includemodel` resuelto son las nuestras MAS las del m_anm que el motor
+	sirva. Los tres valores medidos:
+
+	    r18   2171
+	    r19   1725      <- 446 menos
+	    r20   1725
+
+	La fila de la r19 pedia literalmente `secuencias visibles: 2171` en su
+	criterio, salio 1725, y se marco PASA porque la otra mitad de la linea
+	--el 8/8-- estaba bien. *Un criterio con dos condiciones se cumple a medias y
+	se lee como cumplido.*
+
+	Y 446 secuencias de diferencia no es ruido: es OTRO archivo. Hay al menos dos
+	`models/m_anm.mdl` en el arbol, medidos fuera del juego:
+
+	    HL2, con el que se portaron las animaciones   1563 secuencias, 56 huesos
+	    WOS DynaBase                                     1 secuencia,  60 huesos
+
+	El de WOS pesa 24 KB, declara una sola secuencia llamada
+	`a_dynamic_wiltos_enabled` y tiene **cuatro huesos mas**. El nuestro declara
+	43. Ninguna suma da 2171 ni 1725, asi que el que gana es un TERCERO --
+	seguramente el de un juego montado-- y **cambio entre la r18 y la r19**.
+
+	El autor lo dijo primero, y desde el juego: *«el terminator usa las
+	animaciones del playermodel, porque tengo animaciones de counter-strike del
+	mod WOS que permite cambiar las animaciones del jugador»*.
+
+	Esto no adivina: pide el modelo al motor y lo mide. La identidad se lee en
+	runtime, no se recuerda -- un numero esperado escrito a mano envejece, y en
+	este arco ya hizo anunciar un problema de montaje que no existia.
+]]
+
+local ANM = "models/m_anm.mdl"
+
+local function huella( mdl )
+	if not file.Exists( mdl, "GAME" ) then
+		return nil, "file.Exists dice que no esta montado"
+	end
+
+	-- Un ClientsideModel es la unica forma de preguntarle al motor por las
+	-- secuencias de un modelo que no tiene entidad. Y ojo: con una ruta no
+	-- montada NO falla, devuelve el modelo de ERROR -- por eso la ruta se
+	-- comprueba antes y el resultado se contrasta con el nombre que devuelve.
+	local e = ClientsideModel( mdl, RENDERGROUP_OPAQUE )
+	if not IsValid( e ) then return nil, "ClientsideModel no lo pudo crear" end
+
+	e:SetNoDraw( true )
+
+	local out = {
+		modelo = tostring( e:GetModel() ),
+		seqs = e:GetSequenceCount(),
+		huesos = e:GetBoneCount(),
+		poses = e:GetNumPoseParameters(),
+		primera = tostring( e:GetSequenceName( 0 ) ),
+	}
+
+	-- Los nombres de las primeras secuencias son lo que delata de que juego es.
+	local nombres = {}
+	for i = 0, math.min( 5, out.seqs - 1 ) do
+		nombres[ #nombres + 1 ] = tostring( e:GetSequenceName( i ) )
+	end
+	out.nombres = nombres
+
+	e:Remove()
+
+	return out
+end
+
+local function cmd_anm()
+	print( "[ph_anm] QUIEN contesta " .. ANM .. ", medido en runtime." )
+
+	local anm, err = huella( ANM )
+	if not anm then
+		print( "[ph_anm] >> " .. ANM .. " NO SE PUDO MEDIR: " .. err )
+		print( "[ph_anm] >> Si no esta montado, nuestro $includemodel no resuelve y el fantasma " ..
+			"solo tiene sus 43 secuencias propias." )
+		return
+	end
+
+	print( string.format( "[ph_anm]   %-42s %5d secuencias   %d huesos   %d pose params",
+		anm.modelo, anm.seqs, anm.huesos, anm.poses ) )
+	print( "[ph_anm]     primeras: " .. table.concat( anm.nombres, ", " ) )
+
+	-- ⚠ EL DISCRIMINANTE ES EL NOMBRE DE LA PRIMERA SECUENCIA, no el conteo. El
+	-- de WOS declara UNA sola y se llama `a_dynamic_wiltos_enabled`: eso no se
+	-- confunde con nada, y no depende de que addons haya montados hoy.
+	if string.find( anm.primera, "wiltos", 1, true ) or string.find( anm.primera, "dynamic", 1, true ) then
+		print( "[ph_anm] >> ⚠ EL QUE GANA ES EL DE WOS DYNABASE ( '" .. anm.primera .. "' ). " ..
+			"Nuestras animaciones se portaron contra el m_anm de HL2, que declara 1563 " ..
+			"secuencias y 56 huesos; este declara " .. anm.seqs .. " y " .. anm.huesos .. "." )
+		print( "[ph_anm] >> Dos addons montando la MISMA ruta. El $includemodel resuelve contra " ..
+			"este, y el merge del esqueleto es POR NOMBRE DE HUESO." )
+
+	elseif anm.huesos ~= 56 then
+		print( "[ph_anm] >> ⚠ NO ES EL m_anm CONTRA EL QUE SE PORTO: ese tiene 56 huesos y este " ..
+			"tiene " .. anm.huesos .. ". Es otro archivo en la misma ruta." )
+
+	else
+		print( "[ph_anm] >> los 56 huesos coinciden con el m_anm de HL2, el que se uso para " ..
+			"portar las 39 animaciones." )
+
+	end
+
+	-- Y el fantasma al lado, que es donde se ve la suma.
+	local sujeto = elegirSujeto()
+	if not sujeto then
+		print( "[ph_anm]   ( sin fantasma en el mapa no se puede ver la SUMA; spawnear uno )" )
+		return
+	end
+
+	local total = sujeto:GetSequenceCount()
+	print( string.format( "[ph_anm]   el fantasma declara %d secuencias visibles", total ) )
+	print( string.format( "[ph_anm]     43 propias + %d de %s = %d",
+		anm.seqs, anm.modelo, 43 + anm.seqs ) )
+
+	-- LA RESTA SE HACE ACA. Un criterio que exige restar a mano invita a un
+	-- veredicto inferido, y ademas esta resta es la que nadie hizo tres rondas.
+	if total ~= 43 + anm.seqs then
+		print( string.format( "[ph_anm] >> ⚠ LA SUMA NO CIERRA: el fantasma ve %d y el m_anm que " ..
+			"mide este comando aporta %d. Sobran %d.", total, anm.seqs, total - 43 - anm.seqs ) )
+		print( "[ph_anm] >> O sea que hay MAS de un modelo aportando secuencias, o el que se " ..
+			"midio aca no es el que el fantasma resolvio al compilar/montar." )
+
+	else
+		print( "[ph_anm] >> la suma cierra: el fantasma esta viendo exactamente este m_anm." )
+
+	end
+
+	print( "[ph_anm]   ( medido fuera del juego: HL2 1563 seq / 56 huesos · WOS 1 seq / 60 " ..
+		"huesos · nuestro 43 )" )
+end
+
+concommand.Add( "ph_ghost_anm", cmd_anm, nil,
+	"Mide QUE archivo esta sirviendo models/m_anm.mdl y si la suma de secuencias cierra." )
 
 --------------------------------------------------------------- la costura
 
