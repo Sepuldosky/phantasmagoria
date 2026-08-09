@@ -183,6 +183,41 @@ sites, así que exige contarlos.*
 
 ---
 
+## 2026-08-09 (33) — **La r23b: 3 pasa · 1 sin correr. La roja era de la planilla, y la bitácora se llenó de spawns**
+
+**01 pasa:** el censo imprimió `NINGUNO todavia` con sus tres líneas de ceguera — nadie parenteó nada
+en toda la sesión, dicho *con* el aviso de que un hijo de menos de 0,25 s puede no aparecer.
+
+**02 estaba verde por su propio criterio** y se marcó roja porque **la fila no explicaba qué es un
+hijo**: pedía juzgar si el vacío estaba bien declarado y nunca dijo que un *hijo* es otra entidad que
+un tercero pega al fantasma con `SetParent`, que se mueve con él y se dibuja por su cuenta — o sea que
+nuestro `ENT:Draw` no la alcanza. *Una fila que usa un término del código sin traducirlo mide la
+jerga, no el mecanismo.*
+
+**04 pasa otra vez**, sobre datos nuevos: `#1332` con las series `s29`, `s36` y `s39` (tres fantasmas
+bajo el mismo `EntIndex`) y `#1323` de `s10` a `s38`. Ninguna línea con `s?`.
+
+### ⚠ Lo que ninguna fila marcó: la ventana de la bitácora se la comieron los spawns
+
+Entre t=421 y t=451, **28 líneas** `SE VE … absence 0`, una por segundo, series 5→37, alternando dos
+`EntIndex`: una racha de spawns, cada bot nuevo escribiendo su primer estado. De 40 renglones, 28 se
+fueron ahí y el tramo que la corrida quería mirar quedó en 12.
+
+El síntoma es idéntico al que la fila 06 de la r22 vigila (*la bitácora inundada* = el reconciliador
+reescribiendo cada tick) y la causa es la contraria. Ahora la primera escritura de cada bot va
+rotulada `[ INICIAL: primer estado del spawn, no es una transición ]` y el reporte dice cuántas de
+las que se ven son spawns, con un `!!` si pasan de la mitad. *Una ventana que se llena tiene que
+decir con qué se llenó, o el que lee cree que vio todo.*
+
+### Dos preguntas del autor
+
+`SetNoDraw` ya no rige **para el fantasma** (r22), pero el bucle de hijos lo sigue usando **sobre un
+hijo**, porque un hijo es de otro addon y no le podemos escribir su `Draw`. Y el marcador que «se
+pega» al cruzar un **areaportal** es la limitación conocida del PVS, no una regresión — y ahora se
+delata solo, con el `!! POS CONGELADA` de la r21.
+
+---
+
 ## 2026-08-09 (32) — **La r23: 1 pasa · 3 sin correr. El índice reciclado queda CERRADO; el hijo no tuvo sujeto**
 
 **Lo que sí midió (fila 04, que el autor dejó en *sin correr* para que la revisara alguien):** con más

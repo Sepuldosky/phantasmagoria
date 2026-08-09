@@ -270,6 +270,21 @@ function ENT:phantom_SetVisible( visible, motivo )
 
     local st = stats( self )
 
+    -- ⚠ SI ES LA PRIMERA ESCRITURA, ESTO NO ES UNA TRANSICION -- Y HAY QUE
+    -- DECIRLO EN LA LINEA. Medido en la r23b: la bitacora trajo 28 lineas
+    -- `SE VE ... absence 0` entre t=421 y t=451, una por segundo, con series 5 a
+    -- 37 y alternando dos EntIndex. No era el reconciliador reescribiendo -- era
+    -- **una racha de spawns**, y cada fantasma nuevo escribe su primer estado.
+    -- Con 40 lineas de ventana, esa racha se comio 28 y dejo el tramo que
+    -- importaba en 12.
+    --
+    -- El sintoma es identico al que la fila 06 de la r22 vigila ( "la bitacora
+    -- inundada" ) y la causa es la contraria: alla seria un defecto nuestro, aca
+    -- es que spawnearon 33 fantasmas. *Dos causas que escriben la misma linea
+    -- necesitan que la linea diga cual fue* -- otra vez, y ahora del lado del
+    -- spawn.
+    local primera = self.phantom_Visible == nil
+
     self.phantom_Visible = visible
     self.phantom_VisWhy  = motivo or "( sin motivo declarado )"
     self.phantom_VisAt   = CurTime()
@@ -359,7 +374,8 @@ function ENT:phantom_SetVisible( visible, motivo )
 
     anotar( quien( self ) .. "  " .. ( visible and "SE VE   " or "INVISIBLE" ) ..
         "   " .. tostring( motivo ) ..
-        ( #kids > 0 and ( "   ( " .. #kids .. " hijos )" ) or "" ) )
+        ( #kids > 0 and ( "   ( " .. #kids .. " hijos )" ) or "" ) ..
+        ( primera and "   [ INICIAL: primer estado del spawn, no es una transicion ]" or "" ) )
 
     return visible
 
@@ -810,6 +826,27 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
             or "significa que phantom_SetVisible no corrio NUNCA: mirar la linea 'tarea' de arriba." ) )
 
     else
+        -- ⚠ CUANTAS DE LAS QUE SE VEN SON SPAWNS. Sin este numero, una racha de
+        -- spawns y el reconciliador reescribiendo cada tick **se leen igual**:
+        -- las dos llenan la ventana de lineas parecidas y muy juntas. La r23b
+        -- perdio 28 de sus 40 renglones asi, y el tramo que la corrida queria
+        -- mirar quedo en 12. *Una ventana que se llena tiene que decir con qué
+        -- se llenó, o el que lee cree que vio todo.*
+        local iniciales = 0
+
+        for _, linea in ipairs( log ) do
+            if string.find( linea, "[ INICIAL", 1, true ) then iniciales = iniciales + 1 end
+
+        end
+
+        if iniciales > 0 then
+            say( "    ( de estas " .. #log .. ", " .. iniciales .. " son PRIMERAS aplicaciones de spawn y no transiciones." ..
+                ( iniciales >= BITACORA_MAX * 0.5
+                and "  !! mas de la mitad: hubo una racha de spawns y esta ventana NO alcanza para juzgar lo demas."
+                or "" ) .. " )" )
+
+        end
+
         for _, linea in ipairs( log ) do say( "    " .. linea ) end
 
     end

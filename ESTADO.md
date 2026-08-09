@@ -61,6 +61,42 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 >
 > ---
 >
+> ⭐ **LA r23b CORRIÓ (2026-08-09) — 3 pasa · 1 sin correr, y la roja no era del código.**
+>
+> - **01 PASA.** El censo imprimió `NINGUNO todavia` con sus tres líneas de ceguera. Es un resultado
+>   legítimo: nadie parenteó nada en toda la sesión, dicho *con* el aviso de que un hijo de menos de
+>   0,25 s puede no aparecer nunca.
+> - **02 estaba VERDE por su propio criterio**, y se marcó roja porque **la fila no explicaba qué es
+>   un hijo**. Defecto de la planilla, no del código: pedía juzgar si el vacío estaba bien declarado y
+>   nunca dijo que un *hijo* es **otra entidad que un tercero pega al fantasma con `SetParent`**, que
+>   se mueve con él y **se dibuja por su cuenta** — o sea que nuestro `ENT:Draw` no la alcanza y
+>   quedaría flotando a la vista, delatándolo. *Una fila que usa un término del código sin traducirlo
+>   mide la jerga, no el mecanismo.* Ya está escrito en la hoja.
+> - **04 PASA otra vez, y el autor pidió que lo revisara alguien.** En esos datos: **`#1332` con las
+>   series `s29`, `s36` y `s39`** — tres fantasmas distintos bajo el mismo `EntIndex` — y `#1323`
+>   desde `s10` hasta `s38`. Ninguna línea con `s?`.
+>
+> ⚠⚠ **Y HAY UN DATO QUE NINGUNA FILA MARCÓ: la bitácora se llenó de spawns.** Entre t=421 y t=451
+> hay **28 líneas** `SE VE … absence 0`, una por segundo, series 5→37, alternando dos `EntIndex`: una
+> **racha de spawns**, cada fantasma nuevo escribiendo su primer estado. De los 40 renglones de
+> ventana, 28 se fueron en eso y el tramo que la corrida quería mirar quedó en 12.
+>
+> El síntoma es **idéntico** al que la fila 06 de la r22 vigila (*«la bitácora inundada»* = el
+> reconciliador reescribiendo cada tick) y la causa es la contraria: spawnearon 33 fantasmas. Desde
+> ahora la primera escritura de cada bot va rotulada `[ INICIAL: primer estado del spawn, no es una
+> transición ]`, y el reporte dice **cuántas de las que se ven son spawns**, con un `!!` si pasan de
+> la mitad. *Una ventana que se llena tiene que decir con qué se llenó, o el que lee cree que vio
+> todo.*
+>
+> **Dos preguntas del autor, contestadas:** (a) `SetNoDraw` ya no rige **para el fantasma** —eso es la
+> r22— pero el bucle de hijos lo sigue usando **sobre un hijo**, porque un hijo es de otro addon y no
+> le podemos escribir su `Draw`; las dos cosas conviven a propósito. (b) El marcador que «se pega» al
+> cruzar un **areaportal** es la limitación conocida del PVS, no una regresión: el cliente deja de
+> recibir la entidad y el marcador se queda con la última posición — y **ahora eso se delata solo**,
+> con el `!! POS CONGELADA` que entró en la r21.
+>
+> ---
+>
 > **LO ANTERIOR (2026-08-09): la r23 corrió y el veredicto real es 1 pasa · 3 SIN CORRER. La única
 > que midió cerró con evidencia dura; las otras tres fueron una hoja mal pensada — mía.**
 >
