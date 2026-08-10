@@ -9,6 +9,22 @@ reencodeados a ogg q4. Esto trae los del juego, sacados con
 `dev/phastools/araudio.py` del propio Phasmophobia: son el Vorbis ORIGINAL, asi
 que se copian tal cual — reencodear ya-comprimido solo pierde.
 
+!! Y ESA FRASE, TAL COMO ESTABA, DEJO 268 ARCHIVOS QUE SOURCE NO REPRODUCE.
+Es cierta sobre la CALIDAD y falsa sobre la COMPATIBILIDAD: copiar tal cual se
+trae tambien el sample rate nativo de Unity, que es 48000, y el engine de Source
+solo acepta 44100, 22050 y 11025. Un .ogg a 48000 no suena: escribe
+`Invalid sample rate (48000) for sound '...'` en la consola y sigue de largo.
+
+Medido el 2026-08-09: de los 826 .ogg del arbol, 270 estaban fuera de rango, y
+el banco de VOZ del fantasma — el que mas se escucha — estaba roto entero
+(39 de 39). El sample rate NO es calidad: es compatibilidad, y es lo unico que
+hay que tocar aunque no se quiera reencodear nada mas.
+
+Este script NO resamplea todavia: su unico ffprobe es `dur()`, que pide
+`format=duration` y nada mas. Si se vuelve a correr sobre una tanda nueva, hay
+que agregarle el chequeo de sample rate — o correr el resample despues y
+verificarlo, que es lo que se hizo esta vez.
+
 =============================================================================
 POR QUE EL INDICE DE VOZ ES CONFIABLE
 =============================================================================

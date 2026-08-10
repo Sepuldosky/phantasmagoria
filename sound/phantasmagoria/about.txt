@@ -14,6 +14,33 @@ Phantasmagoria: sonidos. Origen: Phasmophobia (Kinetic Games). 656 archivos,
        De esos, 196 son EQUIPAMIENTO POR TIER y las 7 posesiones malditas,
        y 8 mas son lineas del encargado que al rip de terceros le faltaban.
 
+       !! ESA DECISION LE FALTABA UNA CONDICION, Y COSTO 268 ARCHIVOS MUDOS.
+       "Copiar tal cual" conserva la calidad Y TAMBIEN el sample rate nativo de
+       Unity, que es 48000 -- y SOURCE NO LO ACEPTA. El engine escribe
+       "Invalid sample rate (48000) for sound '...', must be 44100, 22050 or
+       11025" y NO REPRODUCE EL ARCHIVO. La tanda de 265 no lo sufrio porque el
+       resample vino gratis con la conversion .wav -> .ogg; la que se salteo la
+       conversion se lo perdio.
+
+       Medido el 2026-08-09 sobre los 826 .ogg del arbol: 270 invalidos
+       (264 a 48000 y 6 a 32000), y el banco de VOZ del fantasma estaba roto
+       ENTERO -- 39 de 39 clips, las dos voces. Reconvertidos a 44100 con
+       dev/resample_44100.py (ffmpeg, calidad elegida POR ARCHIVO para no bajar
+       del bitrate de origen), backup verificado por sha256.
+
+       El backup NO esta en el repo ni debajo de el: vive al lado del checkout,
+       en <la carpeta que contiene este repo>/dev/other/OLD/phantasmagoria_sound
+       (BACKUP BEFORE RESAMPLE 44100)/, que es la convencion del taller para
+       copias sin git. Ojo con leer esa ruta como relativa al repo: aca dev/ es
+       phantasmagoria/dev/ y son dos carpetas distintas.
+
+       REGLA, para el que traiga la proxima tanda: un .ogg que entra a este
+       arbol tiene que estar en {44100, 22050, 11025}. No alcanza con que suene
+       bien en un reproductor -- Source lo rechaza en silencio para el que juega
+       y con una linea en la consola que nadie mira. Y no alcanza con no
+       reencodear "para no perder": el sample rate no es calidad, es
+       compatibilidad.
+
 Los 46 que quedaron sin identificar se cerraron el 2026-08-03: el autor los
 escucho uno por uno y los describio. _sin_identificar/ ya no existe.
 

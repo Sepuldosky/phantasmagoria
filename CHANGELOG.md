@@ -7,6 +7,200 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-09 (35) — **La r1 de eventos corrió: 8 · 0 · 3. El motor anduvo; el que mintió fue el audio, y el instrumento lo acreditó.**
+
+Primera corrida en juego del bloque de eventos paranormales (Diseño §21). El autor: las ocho
+categorías dispararon, la perilla por categoría apagó sólo la suya, el A/B por tipo salió —*«un
+Poltergeist se comporta más agresivo con los props, rompió hasta una ventana»*—, el hunt subió la
+intensidad y la tesis se confirmó: *«no sonó nada estando lejos»*.
+
+**Pero cuatro de esos ocho verdes podían salir verdes con el defecto adentro, y uno lo tenía.**
+
+### ⚠⚠ El banco de VOZ estaba mudo entero, y el reporte decía `OK`
+
+Entre las notas de la fila 10, dos líneas del **mismo disparo**:
+
+```
+    #442  sound -> 2 disparo(s)
+        OK -- voz 1 / banco voice a 221 u
+*** Invalid sample rate (48000) for sound 'phantasmagoria\ghost\paranormal_voice\voice_1_why_01.ogg'
+```
+
+Censados los **826 `.ogg`** del árbol con dos instrumentos independientes (parseo del header Vorbis y
+`ffprobe`, mismo resultado): **270 con un sample rate que Source rechaza** — 264 a 48000 y 6 a 32000.
+**El banco `voice` roto al 100 %: 39 de 39 clips, las dos voces.**
+
+**La causa raíz estaba escrita como una decisión correcta** en `sound/phantasmagoria/about.txt`: los
+391 clips extraídos del juego *«son el Vorbis ORIGINAL de Unity, copiados tal cual: reencodear
+ya-comprimido sólo pierde»*. Cierto sobre la **calidad**, falso sobre la **compatibilidad**. La
+partición por vendor string del Ogg lo prueba con denominador: los **265** que pasaron por ffmpeg dan
+**0 inválidos**; los **391** que se saltearon la conversión dan **268**.
+
+> *El sample rate no es calidad, es compatibilidad. Una decisión puede ser correcta en el eje que la
+> motivó y desastrosa en un eje que nadie nombró.*
+
+**Reparados los 270 a 44100** con **`dev/resample_44100.py`**, con la calidad elegida **por archivo**
+contra el bitrate de origen para no perder además ancho de banda. Tres reglas, y las tres son
+lecciones ya pagadas acá: backup **verificado por sha256** antes de tocar nada (`sound/` está
+gitignoreado, así que **git no era la red de contención**), conversión a temporal **medida** —sample
+rate, canales y duración— antes de reemplazar, y **re-medición del árbol entero** al final, no sólo
+de lo que se tocó. Resultado: 270/270 OK, 0 rechazados, **0 inválidos restantes**. El backup vive
+**al lado del checkout**, no adentro: `dev/other/OLD/phantasmagoria_sound (BACKUP BEFORE RESAMPLE
+44100)/` de la carpeta que contiene el repo.
+
+⚠ **El script se versiona, y ese es el punto.** Hizo un cambio irreversible sobre assets que **no
+están en git**: sin él en el repo, la única forma de auditar qué se hizo sería creerle a esta entrada.
+*Un cambio destructivo cuyo instrumento no queda versionado es un cambio que nadie puede revisar.* Es
+idempotente — corrido de nuevo sobre el árbol ya reparado dice `sujetos: 0 · nada que hacer`.
+
+**Y el instrumento lo acreditó:** `EV.sound` hacía `sound.Play` y devolvía `true` **literal** en la
+línea siguiente — el mismo archivo documenta que `sound.Play` no devuelve nada. **El autor ya había
+arreglado este exacto modo de falla para `door` ochenta líneas más arriba**, con la lección escrita.
+*Una lección aprendida en una función no se aplica sola a la de al lado.* Ahora el detalle **nombra
+el archivo elegido**, que es lo que permite aparear nuestra línea con la del engine.
+
+### Las luces: se midió el BSP, y el recuerdo del autor era correcto
+
+Pedido sobre la fila 04: *«el mod GM paranormal podía tocar luces horneadas en el mapa»*. Se sacó
+`maps/gm_funkis_night.bsp` del `.gma` del Workshop y se parseó el `LUMP_ENTITIES` (VBSP v20, 1224
+bloques): el mapa tiene **322 luces escritas en el BSP y 43 con `targetname` y lightstyle conmutable,
+en 12 grupos**. gmpa **no tocaba lo horneado** — tocaba las que sobreviven por tener nombre. Y en
+cobertura de clase **somos más amplios**: gmpa mira sólo `light` y pierde los 17 `light_spot` (el baño
+entero); nosotros miramos siete clases.
+
+La diferencia es el **radio**, y eso es la tesis. Las 43 nombradas caben en **862 × 1056 u** mientras
+**37 de las 65 puertas y 14 de los 15 `prop_physics` no tienen ninguna luz nombrada a 450 u** — por
+eso `throw` y `door` pueden tener sujeto cuando `light` no, y **por eso ese cruce no diagnostica
+nada** (se intentó usarlo como prueba y la medición lo refutó).
+
+**Dos cambios**, ninguno toca el radio: `lucesCerca` pasa de `ents.FindInSphere` a `ents.FindByClass`
+con filtro de distancia a mano —una `light` es un point entity sin modelo ni colisión y no está
+medido que la partición espacial la indexe; gmpa usaba FindByClass y le funcionaba—, y **el mensaje
+de vacío deja de medir su propio método**: imprime cuántas hay en todo el mapa, la distancia a la más
+cercana y dónde está el fantasma. ⚠ Además decía **«alcanzables»** y en esa función no hay **un solo
+trace**.
+
+> *Un vacío que sólo describe su propio método no es una medición del mundo: tres causas distintas
+> escriben la misma línea.*
+
+### El veto de sandbox nombraba dos campos que no existen
+
+`propVetado` decía `ent.CargoItem or ent.cargo_ItemID`. Un grep sobre **todo el workspace** devuelve
+una sola aparición de cada uno: **esa línea**. El veto de inventario **nunca vetó nada**. Los
+marcadores reales son `CargoContainer` y `CargoEntry`.
+
+⚠ **Y cambiar el nombre no lo hizo alcanzable**: hoy ningún escritor de esos dos campos produce una
+entidad de las dos clases de `THROW_CLASSES`. Se cambió un campo **inexistente** por uno **real que
+tampoco alcanza al sujeto**; queda como póliza y **ninguna fila lo acredita**.
+
+> *Un veto que nombra un campo inexistente se lee igual que uno que anda: el código está escrito, el
+> comentario es correcto, y la guarda no existe. Y uno que nombra el campo correcto sobre un sujeto
+> que nunca llega se lee todavía mejor.*
+
+Entraron además **constraints** (sin él, veinte tablas soldadas de 5 kg pasan el tope de masa una por
+una), **parenteado**, y `IsMoveable` junto a `IsMotionEnabled` — el precedente que el propio
+comentario citaba usa **las dos** y estaba copiada la mitad. El contador de vetados pasó a **desglose
+por motivo** y se imprime **también en el éxito**: antes salía sólo en la rama de fracaso, o sea en la
+única escena que la fila 09 excluye por precondición.
+
+### Dos pedidos del autor, aplicados
+
+- **Las voces salen del fantasma** (`ghost:EmitSound`, así la voz lo **sigue** al caminar). La regla
+  que lo impedía defendía tres mecánicas —spirit box, parabólica, caja musical— que tienen **cero
+  líneas de código**. *Una regla sostenida por código que no existe no se puede falsar, y por eso
+  sobrevive a la evidencia.* Las otras siete categorías siguen sonando lejos; la tesis no se toca.
+- **Los sonidos de auto necesitan un auto.** `EV.prop` sorteaba de una tabla plana sin mirar el mundo
+  (cero `ents.*` en su cuerpo). `car_alarm` y `car_lock` pasan a `PROP_CONSUJETO` y suenan **desde**
+  el vehículo. Un solo test cubre HL2 y Glide: **Glide pisa `Entity:IsVehicle()` en el metatable**
+  (`sh_glide.lua:326-330`).
+
+### El instrumento: cinco defectos, y dos son reincidencias del propio repo
+
+- **La acreditación del scheduler no podía darse.** El disparo forzado escribía **los mismos
+  contadores** que el timer. La planilla pedía un `reset` antes de medir ritmo: *le pedía al operador
+  que no ensuciara el instrumento en vez de que el instrumento separara.* Ahora son dos cuentas y la
+  bitácora rotula `[FORZADO]`.
+- **La bitácora sin serie**: `#442` pelado, y GMod recicla el EntIndex — en la r1 hay un `#442` con
+  números de Poltergeist y otro que la ficha declara Shade. **Ya estaba cerrado en `server_cloak.lua`
+  y en `server_steps.lua`.** *Que una lección esté cerrada en el repo no la aplica al archivo que se
+  escribe mañana: lo que se hereda es el texto, no la práctica.*
+- **El intervalo sorteado se tiraba.** Decidir si el `rate` del hunt dividía el intervalo obligó a
+  restar timestamps a mano; la respuesta fue que **sí dividía** — el código estaba bien y **la duda la
+  fabricó el instrumento**.
+- **`bitacora ( 60 / 60 )`** decía lo mismo con 60 renglones que con 600. Ahora cuenta las descartadas
+  y cuántos fantasmas escribieron.
+- **El `reset` nileaba `phantom_ev` entera**, que guarda contadores **pero también** la cuarentena de
+  puertas y el reloj — y dejaba `next = 0`, que el scheduler lee como «recién nacido» y reprograma a
+  4-12 s. *Un botón que existe para limpiar el instrumento no puede fabricarle el primer dato a la
+  medición que viene.*
+
+### La alarma de `EF_NODRAW` acusaba a un inocente
+
+El autor preguntó por una ráfaga de `!! ESCRITOR AJENO` sobre `#452/s10` mientras veía bien a
+`#442/s11`. **No es código nuestro: el escritor es la base, en la muerte del bot**
+(`damageandhealth.lua:826`). `#452/s10` era un **cadáver**. El defecto era de **alcance** — el
+reconciliador sigue corriendo sobre el cadáver los ~10 s que sobrevive a su muerte — y ahora la alarma
+exige `not self.term_Dead`, que la base escribe en `OnKilled` (`:677`) **antes** del `:826`.
+
+> *Una alarma que no acota su sujeto no mide de menos: mide de más, y el falso positivo cuesta lo
+> mismo que el defecto que buscaba.*
+
+### La fila 02 se cerró **fuera del juego**, y el número del handoff estaba mal por partida doble
+
+Ejecutando `ghost_types.lua` + `ghost_flags.lua` en un intérprete Lua real: **30 de 30 filas con
+`events`, 61 de 61 campos de delta, cero `ErrorNoHalt`** — con control negativo (anulando la fusión da
+`0 de 30` y `0 de 61`, o sea que la medición discrimina). Los «25 de 30» del handoff no envejecieron,
+pero **`the_mimic` es idéntico al neutro**: las que de verdad se diferencian son **24**. Y `conRasgos`
+se computa y **se tira**: el número que separa «25 con rasgos propios» de «0» no sale por ninguna
+salida.
+
+### ⚠⚠ La revisión adversarial mató CUARENTA defectos del código de esta misma sesión
+
+Cinco lentes independientes sobre el diff, con verificación adversarial de cada hallazgo: **40
+confirmados, 11 refutados**. Los tres peores **los introdujo esta tanda**, y los tres son *un arreglo
+correcto en su eje que rompe algo en un eje que nadie nombró*.
+
+- **Un veto por `GetCreator` habría apagado `throw` entero.** En GMod **todo prop del spawnmenu lleva
+  creator**, así que en un servidor sandbox real la categoría insignia se queda muda **con un motivo
+  que suena razonable** — y corría antes que la masa y que los constraints, tapando a los dos filtros
+  que sí distinguen. Lo encontraron cuatro lentes por separado. La distinción que faltaba es
+  **spawnear contra construir**: lo que protege el trabajo del jugador es `HasConstraints`.
+  *Un veto que no distingue «es de alguien» de «alguien lo armó» no protege al jugador: le apaga el
+  juego.* Y de paso: **`GetCreator()` y `GetOwner()` no devuelven `nil` cuando no hay nadie, devuelven
+  `NULL`, que es truthy** — la cadena `a or b or c` cortaba en el primero y `GetOwner()` era código
+  muerto.
+- **El `EmitSound` de las voces le voló el audio al cadáver.** El scheduler disparaba sobre fantasmas
+  muertos y eso era un defecto **benigno**: con `sound.Play` en un punto el susurro sonaba. Con
+  `EmitSound` el canal cuelga de la entidad, y la base ya le puso `EF_NODRAW` al morir — el cliente
+  deja de recibirla. Es el mecanismo de la r22 aplicado en contra. *Un cambio correcto puede volver
+  grave un defecto que ya estaba y era benigno.*
+- **El sonido con sujeto agarraba la silla en la que estás sentado**, y el auto que estás manejando.
+
+**Y el arreglo del cadáver era la mitad del arreglo:** la guarda entró en el **contador** y no en **la
+línea que el operador lee**. *Arreglar el contador y dejar el texto es arreglar la mitad que nadie
+mira.*
+
+**El `reset` se contradecía en tres frentes, los tres escritos en la misma edición:** el comentario
+decía *«el reloj NO se toca»* y dos líneas abajo lo reprogramaba; ponía `vueltas` en 0 mientras el
+reporte dice al lado que **un 0 significa que el timer no corre**; y era el único de los cuatro
+recorridos que llamaba al método sin comprobar que existiera. *Un comentario y su código pueden
+contradecirse en dos líneas consecutivas sin que ninguna prueba lo note.*
+
+**Y la peor, porque el propio prompt de revisión la pidió:** el rótulo *«INCLUYE el multiplicador del
+hunt»* se decidía leyendo `phantom_Hunting` **al imprimir** con el número calculado **al sortear** —
+la familia «la foto vieja», reaparecida en el instrumento escrito para cerrar otra.
+
+Detalle completo en Diseño §21.9.9.
+
+### Aviso de método, y toca a todo el repo
+
+Un agente midió que **la herramienta Grep del harness truncó en silencio y sub-reportó el universo
+14×** sobre este workspace. Cualquier afirmación del tipo «el único sitio que hace X» hecha con un
+Grep de árbol entero **está sin denominador** hasta rehacerla con `rg --no-ignore` acotado y el total
+impreso.
+
+---
+
 ## 2026-08-09 (34) — **El motor no cargó en juego: un salto de línea CRUDO dentro de un string. Y el verificador de sintaxis había dicho OK.**
 
 Primera corrida en GMod del bloque de eventos. `ghost_flags.lua:749` tiraba

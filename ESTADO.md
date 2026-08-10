@@ -13,7 +13,85 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-09): LOS EVENTOS PARANORMALES ESTÁN ESCRITOS Y NO CORRIERON. Diseño §21.**
+> ⭐ **LO ÚLTIMO (2026-08-09): LA r1 DE EVENTOS CORRIÓ — 8 pasa · 0 falla · 3 sin correr. EL MOTOR
+> ANDUVO. El que mintió fue el AUDIO, y el instrumento lo acreditó.**
+>
+> **Lo que quedó cerrado con evidencia del autor y no se re-discute:** las ocho categorías disparan,
+> la perilla por categoría apaga sólo la suya, el A/B por tipo salió —*«un Poltergeist se comporta
+> más agresivo con los props, rompió hasta una ventana»*, contra un Shade que *«no hizo casi nada
+> como corresponde»*—, el hunt sube la intensidad, y **la tesis de §21.1 se confirmó en juego**:
+> *«no sonó nada estando lejos»*. El ritmo también: *«si no es muy seguido se siente bien»*.
+>
+> ⚠⚠ **PERO CUATRO DE ESOS OCHO VERDES PODÍAN SALIR VERDES CON EL DEFECTO ADENTRO, Y UNO LO TENÍA.**
+>
+> **① EL BANCO DE VOZ ESTABA MUDO ENTERO Y EL REPORTE DECÍA `OK`.** Las dos líneas son del mismo
+> disparo: `OK -- voz 1 / banco voice a 221 u` y, abajo,
+> `*** Invalid sample rate (48000) for sound '...voice_1_why_01.ogg'`. Censados los **826 `.ogg`**:
+> **270 con un rate que Source rechaza**, y **`voice` roto al 100 % — 39 de 39 clips**. La causa raíz
+> estaba escrita como una decisión correcta en `about.txt` (*«reencodear ya-comprimido sólo
+> pierde»*): cierto sobre la calidad, falso sobre la compatibilidad. **Reparados los 270 a 44100**,
+> con backup verificado por sha256 y el árbol entero re-medido → **0 inválidos**. ⚠ `sound/` está
+> **gitignoreado**: git no era la red de contención, el backup está en
+> `dev/other/OLD/phantasmagoria_sound (BACKUP BEFORE RESAMPLE 44100)`.
+>
+> **② LAS LUCES: SE MIDIÓ EL BSP Y EL AUTOR TENÍA RAZÓN.** Se sacó `gm_funkis_night.bsp` del `.gma`
+> del Workshop y se parseó el lump de entidades: **322 luces en el BSP, 43 con `targetname` y
+> lightstyle conmutable, en 12 grupos**. gmpa **no tocaba lo horneado** y **buscaba la misma clase que
+> nosotros** — de hecho somos más amplios (él pierde los 17 `light_spot`). La diferencia es el
+> **radio**, y eso es la tesis. ⚠ **El cruce «si `throw` y `door` salieron, el fantasma estaba en la
+> casa» está REFUTADO por medición**: 37 de 65 puertas y 14 de 15 props no tienen ninguna luz nombrada
+> a 450 u.
+>
+> **③ EL VETO DE SANDBOX NOMBRABA DOS CAMPOS QUE NO EXISTEN.** `ent.CargoItem or ent.cargo_ItemID`:
+> un grep sobre todo el workspace devuelve **una sola aparición de cada uno — esa línea**. El veto
+> nunca vetó nada. ⚠ **Y cambiarle el nombre NO lo hizo alcanzable**: ningún escritor de
+> `CargoContainer`/`CargoEntry` produce hoy una entidad de las dos clases de `THROW_CLASSES`. Queda
+> como póliza y **ninguna fila lo acredita**.
+>
+> **④ LA ALARMA DE `EF_NODRAW` ACUSABA A UN INOCENTE.** La pregunta del autor tiene respuesta: **no es
+> código nuestro**, el escritor es **la base, en la muerte del bot** (`damageandhealth.lua:826`).
+> `#452/s10` era un **cadáver** y el reconciliador le seguía corriendo encima los ~10 s que sobrevive.
+>
+> **LO QUE ENTRÓ (r2, sin correr):** los 270 `.ogg` reparados · el veto de Cargo real
+> (`CargoContainer`/`CargoEntry`) + constraints + parenteado + `IsMoveable` · desglose de vetados por
+> motivo, también en el éxito · `lucesCerca` por `ents.FindByClass` y el mensaje de vacío midiendo el
+> mapa · **las voces salen del fantasma** (pedido del autor) · **los sonidos de auto exigen un auto**
+> (pedido del autor) · bitácora con serie `/sN` y rótulo `[FORZADO]` · dos cuentas separadas
+> (espontáneas / forzadas) · el intervalo **sorteado** impreso · el `reset` que ya no borra
+> comportamiento · la alarma acotada por `term_Dead`.
+>
+> ⚠⚠ **Y LA REVISIÓN ADVERSARIAL MATÓ CUARENTA DEFECTOS DE ESE MISMO CÓDIGO — los tres peores los
+> introdujo esta tanda, y los tres son *un arreglo correcto en su eje que rompe algo en un eje que
+> nadie nombró*.** (a) Un veto por `GetCreator` **habría apagado `throw` entero en sandbox**, porque
+> todo prop del spawnmenu lleva creator — lo encontraron cuatro lentes por separado, y de paso:
+> **`GetCreator()`/`GetOwner()` devuelven `NULL`, que es truthy**, así que la cadena `or` dejaba a
+> `GetOwner` como código muerto. (b) El `EmitSound` de las voces **le voló el audio al cadáver**: el
+> scheduler disparaba sobre muertos y con `sound.Play` eso sonaba, con `EmitSound` no, porque la base
+> ya le puso `EF_NODRAW`. (c) El sonido con sujeto **agarraba la silla en la que estás sentado**.
+> Además: mi arreglo del cadáver era **la mitad** (la guarda entró en el contador y no en la línea que
+> el operador lee), el `reset` **se contradecía en tres frentes**, y el rótulo del hunt era **la foto
+> vieja otra vez**. Todo arreglado; detalle en §21.9.9.
+>
+> **LO PRIMERO DEL CHAT SIGUIENTE:** correr `dev/checks/phantasmagoria-eventos-r2.html`. ⚠ **La fila
+> de las luces es la que decide**: en `gm_funkis_night`, parado **dentro de la casa**, el mensaje de
+> vacío ahora imprime el conteo global — si dice «0 en todo el mapa» con 43 medidas en el BSP, el
+> defecto era el método de búsqueda y queda probado en una corrida.
+>
+> **Lo que quedó DISEÑADO Y SIN ESCRIBIR (§21.9.8), con lo ya medido:** la **radio** —los 10 `.ogg`
+> están en disco y ninguna línea los cita, pero duran **19 a 160 s** y `sound.Play` no se puede
+> parar: necesita categoría propia con sujeto y `ent:StopSound`—; el **canto que te mira** —parar al
+> fantasma hoy **le congela la cara**, porque el único escritor de la mirada se sale por debajo de
+> 30 u/s—; y el **sexo del fantasma** —la mitad del sonido **ya existe y se llama `voice`**; lo que
+> falta es la de los modelos, y `ENT.Models` es un campo **de clase**—.
+>
+> ⚠ **Aviso de método que toca a todo el repo:** se midió que **el Grep del harness truncó en silencio
+> y sub-reportó el universo 14×** sobre este workspace. Toda afirmación del tipo *«el único sitio que
+> hace X»* hecha con un Grep de árbol entero **está sin denominador** hasta rehacerla con
+> `rg --no-ignore` acotado y el total impreso.
+>
+> ---
+>
+> **LO ANTERIOR (2026-08-09): LOS EVENTOS PARANORMALES ESTÁN ESCRITOS Y NO CORRIERON. Diseño §21.**
 > Es un bloque **paralelo** al del hijo/ausencia — lo escribió otra sesión, sobre archivos nuevos, y
 > no toca `server_cloak.lua` ni la planilla de la r23b.
 >

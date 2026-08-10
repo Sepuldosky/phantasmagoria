@@ -457,7 +457,25 @@ function ENT:phantom_ReconcileVisibility( myTbl )
     -- cosa, y hay que decir cuál -- o se vuelve un verde que nadie puede mover.*
     -- Va ANTES de escribir, por el mismo motivo que el seguimiento de la mirada
     -- en BehaveUpdate: puesto despues compararia contra lo nuestro.
-    if self:GetNoDraw() then
+    --
+    -- ⚠⚠ Y EL DETECTOR ACUSABA A UN INOCENTE, medido en la r1 de eventos. El
+    -- autor vio una rafaga de ~38 lineas `!! ESCRITOR AJENO` sobre `#452/s10`
+    -- mientras miraba a `#442/s11` perfectamente visible, y pregunto si no
+    -- quedaba codigo nuestro aplicando la bandera. NO: el escritor es LA BASE, y
+    -- lo hace **en la muerte del bot** --
+    -- `terminator_nextbot/damageandhealth.lua:826  self:SetNoDraw( true )`,
+    -- ademas de :823 sobre cada hijo. Es correcto y es de ellos.
+    --
+    -- El defecto era nuestro y es de ALCANCE: el reconciliador sigue corriendo
+    -- sobre el cadaver los ~10 s que la entidad sobrevive a su muerte, asi que
+    -- la alarma disparaba a tick rate sobre un sujeto al que la ausencia ya no
+    -- le rige. `term_Dead` lo escribe la propia base en `OnKilled`
+    -- ( damageandhealth.lua:677 ) ANTES de llegar al :826, o sea que ya es true
+    -- cuando aparece la bandera: la guarda no tiene carrera.
+    --
+    -- *Una alarma que no acota su sujeto no mide de menos: mide de mas, y el
+    -- falso positivo cuesta lo mismo que el defecto que buscaba.*
+    if self:GetNoDraw() and not self.term_Dead then
         local st = stats( self )
         st.ajenos = st.ajenos + 1
 
@@ -702,7 +720,27 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
         -- El control de la bandera vieja. Tiene que decir NO siempre: la ausencia
         -- ya no la escribe, y si esta puesta el cliente deja de recibir la
         -- entidad y vuelve el defecto de la r20.
-        if ghost:GetNoDraw() then
+        --
+        -- ⚠⚠ Y HAY UN CASO EN QUE ESTAR PUESTA ES LO CORRECTO: EL CADAVER. La
+        -- base hace `self:SetNoDraw( true )` al morir el bot
+        -- ( terminator_nextbot/damageandhealth.lua ), y la entidad sobrevive
+        -- ~10 s a su muerte. En la r1 de eventos esto le grito ESCRITOR AJENO a
+        -- un fantasma muerto mientras el autor miraba a otro vivo, y hubo que
+        -- salir a buscar un remanente de codigo que no existia.
+        --
+        -- ⚠ La guarda se puso PRIMERO en el contador ( en el tick ) y NO aca,
+        -- que es la mitad que el operador lee: el comando siguio acusando al
+        -- inocente aunque el numero ya no subiera. *Arreglar el contador y
+        -- dejar el texto es arreglar la mitad que nadie mira.*
+        --
+        -- No se calla: se dice la verdad. Un cadaver con la bandera puesta y sin
+        -- ninguna linea que lo explique deja al que ya vio la alarma pensando
+        -- que se la ocultaron.
+        if ghost:GetNoDraw() and ghost.term_Dead then
+            say( "    EF_NODRAW puesto POR LA BASE: este bot esta MUERTO " ..
+                "( damageandhealth.lua, al morir ). Es lo esperado y NO es un escritor ajeno." )
+
+        elseif ghost:GetNoDraw() then
             say( "    !! EF_NODRAW PUESTO, y no fuimos nosotros ( la ausencia ya no usa SetNoDraw ). " ..
                 "Con esa bandera la entidad deja de transmitirse: el marcador va a dibujar la posicion vieja." )
 
@@ -732,8 +770,14 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
 
         end
 
+        -- ⚠ LA ETIQUETA CAMBIO DE SUJETO CON LA GUARDA DEL CADAVER Y HAY QUE
+        -- DECIRLO. Antes contaba todos los ticks con la bandera puesta; ahora
+        -- cuenta sólo los que ocurren CON EL BOT VIVO, porque los del cadáver
+        -- los pone la base y son correctos. Este repo ya pagó la lección "tres
+        -- cosas cambiaron de sujeto sin cambiar de nombre".
         say( "    contados  se oculto " .. st.ocultadas .. " · se mostro " .. st.mostradas ..
-            " · ESCRITORES AJENOS " .. st.ajenos .. " ( tiene que ser 0: cuenta ticks con EF_NODRAW puesto por un tercero )" )
+            " · ESCRITORES AJENOS " .. st.ajenos ..
+            " ( tiene que ser 0: cuenta ticks con EF_NODRAW puesto por un tercero, CON EL BOT VIVO )" )
 
         -- LA MEDICION DE DISENO 20.2, y no una curiosidad: si esto da 0, el
         -- bucle sobre los hijos es una poliza y SetNoDraw sobre la entidad

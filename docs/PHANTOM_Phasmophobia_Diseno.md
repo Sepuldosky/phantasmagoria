@@ -2377,7 +2377,7 @@ huérfano.
 
 ---
 
-## 21. Los eventos paranormales — **ESCRITO, sin correr en juego** [2026-08-09]
+## 21. Los eventos paranormales — **CORRIÓ EN JUEGO (r1), y la r2 está escrita sin correr** [2026-08-09]
 
 **Pedido del autor, literal:** *«ver como lo hace el mod GM Paranormal Events para realizar los
 eventos paranormales como flicking de luces, lanzar objetos y demas, y agregar esas funcionalidades a
@@ -2551,13 +2551,304 @@ Y una del arco de lectura, que corrige a este documento: **`FlingNearbyPhysicsPr
 
 ### 21.8 Lo que falta
 
-- **Correrlo en juego.** Nada de este bloque se ejerció en GMod. Lo único verificado fuera del juego
-  es la sintaxis (con cinco archivos de control que ya corren hoy, incluido el `shared.lua` de la
-  base) y que las 152 rutas de sonido existen.
 - **El ritmo.** Los defaults (25-90 s, radio 450 u, masa 60 kg, fuerza 180-320 × masa) son una
-  elección de escritorio. La fila 10 de la planilla es la única que los juzga.
+  elección de escritorio. La fila 10 de la planilla es la única que los juzga. → **La r1 lo aprobó**:
+  *«si no es muy seguido se siente bien ese sentido»*.
 - **La cordura.** Mientras no exista, los eventos no drenan nada — y §19 dice que el drenaje está
   **condicionado a que existan eventos**. Este bloque es la mitad que faltaba de ese par.
 - **`deogen.ogg`** está en el catálogo (`ghost/breathing/`) y **sin cablear**: es el clip propio del
   Deogen, que la fuente describe respirando por el spirit box. Hoy sería un singleton; se anota como
   asset disponible, no como hueco de diseño.
+
+---
+
+## 21.9 LA r1 CORRIÓ (2026-08-09) — y su hallazgo más caro no fue del motor
+
+**Reporte del autor: 8 pasa · 0 falla · 3 sin correr.** El motor anduvo: `vueltas 209 del scheduler`,
+las ocho categorías dispararon, la perilla por categoría apagó sólo la suya, el A/B por tipo salió
+—*«si parece que si, un Poltergeist se comporta más agresivo con los props, rompió hasta una
+ventana»*—, el hunt subió la intensidad y la tesis de §21.1 se confirmó: *«no sonó nada estando
+lejos»*.
+
+**Pero cuatro de esos ocho verdes podían salir verdes con el defecto adentro**, y uno de ellos lo
+tenía. Lo que sigue son las cinco correcciones que la corrida forzó.
+
+### 21.9.1 ⚠⚠ El banco de VOZ estaba mudo entero, y el instrumento decía `OK`
+
+El autor pegó, entre las notas de la fila 10:
+
+```
+] phantasmagoria_ghost_event sound
+    #442  sound -> 2 disparo(s)
+        OK -- voz 1 / banco voice a 221 u
+*** Invalid sample rate (48000) for sound 'phantasmagoria\ghost\paranormal_voice\voice_1_why_01.ogg'
+```
+
+Las dos líneas son del mismo disparo: **nosotros dijimos que sonó y el engine dijo que lo rechazó.**
+Censados los 826 `.ogg` del árbol: **270 con un sample rate que Source no acepta**, y **el banco
+`voice` roto al 100 % — 39 de 39 clips, las dos voces**. La categoría que el bloque existe para
+lucir era la única completamente muda.
+
+**La causa raíz estaba escrita como una decisión correcta en `sound/phantasmagoria/about.txt`:** los
+391 clips extraídos del juego *«son el Vorbis ORIGINAL de Unity, copiados tal cual: reencodear
+ya-comprimido sólo pierde»*. Es cierto sobre la **calidad** y falso sobre la **compatibilidad** —
+copiar tal cual se trae el sample rate nativo de Unity, 48000, que Source rechaza. La partición por
+vendor string lo prueba: los 265 que **sí** pasaron por ffmpeg dan **0 inválidos**; los 391 que se
+saltearon la conversión dan **268**.
+
+> *El sample rate no es calidad, es compatibilidad. Una decisión de no reencodear puede ser correcta
+> en el eje que la motivó y desastrosa en un eje que nadie nombró.*
+
+**Y el instrumento lo acreditó.** `EV.sound` hacía `sound.Play` y devolvía `true` **literal** en la
+línea siguiente — el mismo archivo documenta que `sound.Play` no devuelve nada. Peor: **el autor ya
+había arreglado este exacto modo de falla para `door` ochenta líneas más arriba**, y ahí la lección
+está escrita («lo que no envejece es medir la hoja»). *Una lección aprendida en una función no se
+aplica sola a la de al lado.*
+
+### 21.9.2 Las luces del mapa: gmpa no tocaba lo horneado, y nuestra clase era **más** amplia
+
+El autor pidió, sobre la fila 04: *«el mod GM paranormal podía tocar luces horneadas en el mapa […]
+estoy probando en gm_funkis_night donde yo me acuerdo que el mod ese podía hacer eso»*.
+
+**Se midió el mapa, no se opinó.** Se sacó `maps/gm_funkis_night.bsp` del `.gma` del Workshop y se
+parseó el `LUMP_ENTITIES` (VBSP v20, 1224 bloques):
+
+| | |
+|---|---:|
+| luces escritas en el BSP | **322** (268 `light` + 54 `light_spot`) |
+| con `targetname` y lightstyle conmutable (32-43) | **43** |
+| grupos distintos (targetnames) | **12** |
+
+O sea que **el recuerdo del autor es correcto y la premisa de gmpa también**: no tocaba el lightmap,
+tocaba las que sobreviven al compilado por tener nombre. Como los 43 comparten sólo 12 lightstyles,
+apagar una apaga el grupo — **el apagón se ve por habitación**, que es exactamente lo que se
+recordaba.
+
+**Y en cobertura de clase nosotros somos estrictamente más amplios:** gmpa mira sólo `light`
+(`gm_paranormalactivities.lua:570`, `:618`), así que pierde los 17 `light_spot` de ese mapa — el baño
+entero. Nosotros miramos siete clases.
+
+**Lo que nos diferencia es el radio, y eso es §21.1 y no un olvido.** Las 43 nombradas caben en una
+caja de **862 × 1056 u** (la casa); las puertas y los props se reparten por todo el terreno — **37 de
+las 65 puertas y 14 de los 15 `prop_physics` no tienen ninguna luz nombrada a 450 u**. Por eso
+`throw` y `door` pueden tener sujeto en el mismo instante en que `light` no lo tiene, y **por eso ese
+cruce no diagnostica nada** (se intentó usarlo como prueba de que el fantasma estaba en la casa: la
+medición lo refutó).
+
+**Quedan dos causas vivas y el instrumento no las separaba:**
+
+1. el fantasma no estaba a 450 u de la casa, o
+2. `ents.FindInSphere` no devuelve entidades **puntuales y no sólidas** — una `light` no tiene modelo
+   ni colisión, y la partición espacial indexa lo sólido.
+
+**Se cerró la (2) por construcción**, que era lo barato: `lucesCerca` pasa a recorrer
+`ents.FindByClass` por clase con el filtro de distancia a mano. Mismo radio, misma tesis, mismo
+censo — sólo cambia de dónde sale la lista, y es el mecanismo que gmpa usaba y le funcionaba.
+*Cuando dos implementaciones difieren en el resultado y en el mecanismo, primero se iguala el
+mecanismo.*
+
+**Y el mensaje de vacío pasa a medir el mundo y no su propio método.** Decía *«no había luces
+alcanzables a 450 u»* y enumeraba las siete clases; ahora imprime **cuántas hay en TODO el mapa, a
+qué distancia está la más cercana y dónde está parado el fantasma**. ⚠ Además decía **«alcanzables»**
+y en esa función **no hay un solo trace**: la palabra mandaba a buscar un filtro de visibilidad que
+nunca se escribió.
+
+> *Un vacío que sólo describe su propio método no es una medición del mundo: tres causas distintas
+> escriben la misma línea.*
+
+### 21.9.3 El veto de sandbox nombraba dos campos que no existen
+
+`propVetado` decía `if ent.CargoItem or ent.cargo_ItemID then return "es un item de Cargo" end`. Un
+grep sobre **todo el workspace** devuelve una sola aparición de cada uno: **esa línea**. El veto de
+inventario **nunca vetó nada** — `CARGO.Containers.Attach`
+acepta cualquier entidad, incluido un `prop_physics`, que es justo lo que la lista blanca deja pasar.
+Los marcadores reales son `ent.CargoContainer` y `ent.CargoEntry`.
+
+> *Un veto que nombra un campo inexistente se lee igual que uno que anda: el código está escrito, el
+> comentario es correcto, y la guarda no existe.*
+
+⚠⚠ **Y CAMBIAR EL NOMBRE NO LO HIZO ALCANZABLE, que es la mitad que casi se acredita de más.** La
+revisión adversarial lo midió: **hoy ningún escritor de `CargoContainer` ni de `CargoEntry` produce
+una entidad de las dos clases de `THROW_CLASSES`** — `CargoEntry` cae sobre `corpus_cargo_item` y
+`CargoContainer` sobre lo que el servidor decida attachear. Se cambió un campo **inexistente** por
+uno **real que tampoco alcanza al sujeto**. Queda escrito como póliza (la API es pública y se anuncia
+como *«turn any entity into a container»*), pero **ninguna fila puede acreditarlo**, y por eso la
+lección tiene una segunda mitad:
+
+> *Un veto que nombra el campo correcto sobre un sujeto que nunca llega es tan inerte como uno que
+> nombra un campo que no existe — y se lee todavía mejor.*
+
+Entraron además tres vetos que faltaban —**constraints** (sin él, veinte tablas soldadas de 5 kg
+pasan el tope de masa una por una y el fantasma arrastra la casa), **parenteado**, y `IsMoveable`
+junto a `IsMotionEnabled` (el precedente que el propio comentario citaba usa **las dos** y estaba
+copiada la mitad)— y el contador de vetados pasó de un entero a **un desglose por motivo**, que
+además se imprime **también en el éxito**: antes salía sólo en la rama de fracaso, o sea en la única
+escena que la fila 09 excluye por precondición.
+
+### 21.9.9 ⚠⚠ La revisión adversarial mató **cuarenta** defectos en el código de esta misma tanda
+
+Escrito el bloque de arriba, se revisó con cinco lentes independientes y verificación adversarial de
+cada hallazgo: **40 confirmados, 11 refutados**. Los tres peores **los introdujo esta tanda**, y los
+tres son de la misma familia: *un arreglo correcto en su eje que rompe algo en un eje que nadie
+nombró*.
+
+**① El veto por `GetCreator` habría apagado `throw` entero.** El razonamiento era bueno —*«`GetOwner`
+está vacío en los props de sandbox, el que guarda al creador es `GetCreator`»*— y el efecto es que
+**en GMod todo prop del spawnmenu lleva creator**, así que en un servidor sandbox real casi no queda
+sujeto: la categoría insignia del Poltergeist se queda muda **con un motivo que suena razonable**.
+Peor: corría antes que la masa y que los constraints, tapando a los dos filtros que sí distinguen.
+Cuatro lentes lo encontraron por separado.
+
+La distinción que faltaba es **spawnear contra construir**. Lo que hay que proteger es el trabajo del
+jugador, y eso lo mide `HasConstraints`, no el hecho de haber sacado un barril del menú.
+
+> *Un veto que no distingue «es de alguien» de «alguien lo armó» no protege al jugador: le apaga el
+> juego.*
+
+Y trajo un defecto de Lua puro que vale por sí solo: **`GetCreator()` y `GetOwner()` no devuelven
+`nil` cuando no hay nadie — devuelven `NULL`, que es *truthy***. La cadena `a or b or c` cortaba en el
+primero y **`GetOwner()` era código muerto**. La cadena va ahora con `IsValid` paso a paso.
+
+**② El `EmitSound` de las voces le voló el audio al cadáver — y esa regresión la trajo el arreglo del
+autor.** El scheduler disparaba eventos sobre fantasmas muertos (la base deja la entidad viva ~10 s) y
+eso era un defecto **benigno**: con `sound.Play` en un punto, el susurro del cadáver sonaba. Con
+`ghost:EmitSound` el canal cuelga de la **entidad**, y la base ya le puso `EF_NODRAW` al morir — que
+la manda a `FL_EDICT_DONTSEND` y **el cliente deja de recibirla**. Es el mecanismo que la r22 midió,
+aplicado en contra. La guarda va en `phantom_FireEvent` y no en el scheduler, porque el disparo manual
+no pasa por el scheduler.
+
+> *Un cambio correcto puede volver grave un defecto que ya estaba y era benigno: hay que preguntarse
+> a quién más le cambia el piso.*
+
+**③ El sonido con sujeto agarraba la silla en la que estás sentado.** `IsVehicle()` dice `true` sobre
+`prop_vehicle_prisoner_pod`, y una alarma sonando en el auto que estás **manejando** no es un susto:
+es un bug con cara de susto.
+
+**Y el arreglo del cadáver era la mitad del arreglo.** La guarda `term_Dead` entró en el **contador**
+y no en **la línea que el operador lee**: el mismo comando seguía acusando al inocente aunque el
+número ya no subiera. Ahora hay dos ramas y la del cadáver **dice la verdad** en vez de callarse —
+silenciarla dejaría al que ya vio la alarma pensando que se la ocultaron.
+
+> *Arreglar el contador y dejar el texto es arreglar la mitad que nadie mira.*
+
+**El `reset` se contradecía a sí mismo en tres frentes, y los tres los escribí en la misma edición:**
+el comentario decía *«el reloj NO se toca: es comportamiento»* y **dos líneas abajo** lo reprogramaba;
+ponía `vueltas` en 0 mientras la línea de al lado del reporte dice que **un 0 significa que el timer
+no está corriendo** —fabricando el síntoma exacto de un motor muerto, en el comando que se corre justo
+antes de medir—; y era **el único de los cuatro recorridos de fantasmas** que llamaba al método sin
+comprobar que existiera.
+
+> *Un comentario y su código pueden contradecirse en dos líneas consecutivas sin que ninguna prueba lo
+> note.*
+
+**Y la que más duele, porque el propio prompt de revisión la pidió:** el rótulo *«INCLUYE el
+multiplicador del hunt»* se decidía leyendo `phantom_Hunting` **al imprimir** mientras el número que lo
+acompañaba se había calculado **al sortear**. Es la familia «la foto vieja» que este repo ya cerró dos
+veces (r18 y r18b), reaparecida en el instrumento que se escribió para cerrar otra. Ahora se guarda el
+**hecho** (`ultimoMulHunt`) y no la condición — y se guarda el multiplicador y no un booleano, porque
+un tipo cazando con `hunt.rate = 1.0` está en hunt sin que el hunt cambie nada.
+
+**Tres más que valen como regla:**
+
+- **`vueltas` es monótono y no caduca**: `209` se lee igual en un timer sano que en uno que murió hace
+  diez minutos con 209 hechas — y esa línea es *la* acreditación del motor. Lleva la hora de la última
+  vuelta y grita si pasó más del doble del tick.
+- **El contador se partió en espontáneas/forzadas y su vecino `ultimo` no**: colgado del renglón
+  rotulado *«( el scheduler, solo )»*, mostraba el último evento **del operador** como si fuera del
+  motor. Va en su propia línea.
+- **`quien( ghost )` adentro de un `timer.Simple`**: un cuarto de segundo después el fantasma puede no
+  existir, y el renglón del veredicto de puertas —el único que dice si la hoja se movió— salía sin
+  dueño. *La identidad se toma cuando se sabe, no cuando se imprime.*
+
+**Y una del catálogo, sobre un comentario que este archivo ya sabía no copiar:** el input
+`LightToggle` de `point_spotlight` **nunca se midió** — su única fuente es HIM, y los inputs de
+`CPointSpotlight` en Source son `LightOn`/`LightOff`. Como `Fire` con un input inexistente **no tira
+error**, el reporte decía *«N conmutaciones»* sobre algo que podía no haber pasado. No se cambió el
+código sobre memoria (eso sería el mismo pecado del otro lado): el detalle dice ahora **«input(s)
+enviado(s)»** y la medición es una línea en la planilla.
+
+### 21.9.4 Las voces salen del fantasma — y la regla que lo impedía defendía código inexistente
+
+Pedido del autor: *«las voces deberían ser del fantasma, no que las haga sonar donde no debe»*. En la
+r1 salían a **112-450 u** de él (`puntoCerca`), y eso estaba **declarado** en el contrato común:
+emitir en el fantasma *«mata al spirit box, a la parabólica y a la caja musical»*.
+
+**Las tres tienen hoy cero líneas de código.** La regla defendía una decisión presente con tres
+mecánicas futuras.
+
+> *Una regla sostenida por código que no existe no se puede falsar, y por eso sobrevive a la
+> evidencia.*
+
+**`sound` pasa a ser la excepción de las ocho** y se emite con `ghost:EmitSound` —no con `sound.Play`
+en su posición— para que la voz **siga al fantasma** mientras camina: un tarareo que se queda atrás
+delata que el sonido no es de él. Las otras siete siguen sonando lejos. **La tesis no se toca:** el
+radio sigue colgando del fantasma; lo que cambió es de dónde sale *ese* sonido, no hasta dónde llega
+la actividad.
+
+### 21.9.5 Los sonidos que **nombran** un objeto ahora tienen que encontrarlo
+
+Pedido: *«sonidos de auto no deberían sonar a menos que se lo haga a un vehículo de half life 2 o
+Glide»*. `EV.prop` sorteaba de una tabla plana **sin mirar el mundo** — cero `ents.*` en su cuerpo —
+así que sonaba una alarma de auto en una casa vacía.
+
+`car_alarm` y `car_lock` salen del banco ambiente y entran en `PROP_CONSUJETO`: sólo participan del
+sorteo si hay un vehículo en el radio, y cuando salen **suenan desde él**. Un solo test cubre las dos
+familias que el autor nombró, y está medido: **Glide pisa `Entity:IsVehicle()` en el metatable**
+(`sh_glide.lua:326-330`) para que devuelva `true` en los suyos.
+
+> *Un banco plano de sonidos «de objetos» es una lista de objetos que el juego afirma que están ahí.
+> Los que nombran algo identificable tienen que comprobarlo; un crujido de piano puede sonar en
+> cualquier casa.*
+
+### 21.9.6 El instrumento: cinco defectos, y dos son reincidencias del propio repo
+
+| | qué pasaba |
+|---|---|
+| **la acreditación del scheduler** | el disparo forzado escribía **los mismos contadores** que el timer, así que `despertadas: 87` no distinguía «el motor corrió solo» de «yo lo forcé». La planilla pedía un `reset` antes de medir ritmo: *le pedía al operador que no ensuciara el instrumento en vez de que el instrumento separara.* Ahora son dos cuentas y la bitácora rotula `[FORZADO]`. |
+| **la bitácora sin serie** | escribía `#442` pelado, y GMod **recicla el EntIndex**: en la r1 hay un `#442` con números de Poltergeist y, dos pantallas abajo, un `#442` que la ficha declara Shade. **El mismo defecto ya estaba cerrado en `server_cloak.lua` y en `server_steps.lua`.** *Que una lección esté cerrada en el repo no la aplica al archivo que se escribe mañana: lo que se hereda es el texto, no la práctica.* |
+| **el intervalo sorteado** | se calculaba, se devolvía, y el único llamador tiraba el retorno. Para decidir si el `rate` del hunt dividía el intervalo hubo que **restar timestamps de la bitácora a mano**; la respuesta fue que sí dividía, o sea que el código estaba bien y **la duda la fabricó el instrumento**. |
+| **la ventana que se llena** | `bitacora ( 60 / 60 )` decía lo mismo con 60 renglones que con 600. Es la r23b otra vez, donde 28 de 40 renglones eran spawns. Ahora cuenta las descartadas **y** cuántos fantasmas escribieron. |
+| **el `reset`** | nileaba `phantom_ev` **entera** — que guarda contadores **pero también** la cuarentena de puertas y el reloj —, y dejaba `next = 0`, que el scheduler lee como «recién nacido» y reprograma a 4-12 s. *Un botón que existe para limpiar el instrumento no puede fabricarle el primer dato a la medición que viene.* |
+
+### 21.9.7 La alarma de `EF_NODRAW` acusaba a un inocente
+
+El autor preguntó por una ráfaga de `!! ESCRITOR AJENO` sobre `#452/s10` mientras veía a `#442/s11`
+perfectamente. **No es un remanente nuestro: el escritor es la base, en la muerte del bot**
+(`terminator_nextbot/damageandhealth.lua:826`, `self:SetNoDraw( true )`, más `:823` sobre cada hijo).
+`#452/s10` era un **cadáver**.
+
+El defecto era de **alcance**: el reconciliador sigue corriendo sobre el cadáver los ~10 s que la
+entidad sobrevive a su muerte. Ahora la alarma exige `not self.term_Dead`, que la propia base escribe
+en `OnKilled` (`:677`) **antes** de llegar al `:826` — la guarda no tiene carrera.
+
+> *Una alarma que no acota su sujeto no mide de menos: mide de más, y el falso positivo cuesta lo
+> mismo que el defecto que buscaba.*
+
+Y quedan dos cosas dichas y no arregladas, que la r2 tiene que mirar: **`ESCRITORES AJENOS` muere con
+el fantasma**, así que el `0` que se leyó era de otro sujeto; y **la fila 11 habría dado PASA aunque
+el escritor ajeno fuera real**, porque su criterio no mira ni la bitácora ni el contador.
+
+### 21.9.8 Lo que queda diseñado y **sin escribir**
+
+Los dos pedidos que la fila 10 abrió y que **no** entraron en esta tanda, con lo que ya está medido:
+
+**① La radio.** *«Faltan los sonidos de radio creepy, para eso se puede usar los props de radio de
+half life 2 y counter strike.»* — **Los diez `.ogg` ya están en disco** (`sound/phantasmagoria/prop/
+radio/`) y **ninguna línea de Lua los cita**; el pedido estaba escrito en `about.txt` desde antes.
+⚠ Pero **no se pueden cablear al banco `prop` como está**: medidas sus duraciones, van de **19 a 160
+segundos**, y `sound.Play` no devuelve nada que se pueda apagar — es el mismo motivo por el que los
+`_loop` quedaron fuera. La radio necesita **su propia categoría con sujeto real** (un prop de radio),
+emitida con `ent:EmitSound` para poder pararla con `ent:StopSound`, y una guarda de duración.
+
+**② El canto que te mira.** *«El canto se da para asustar al jugador, es un evento donde la aparición
+se queda quieta y te mira, también canta caminando y manifestándose.»* — Hoy `EV.sound` con banco
+`humming` es **sonido y nada más**. Y hay dos obstáculos medidos: **parar al fantasma le congela la
+cara**, porque el único escritor de la mirada se sale por debajo de 30 u/s (es el defecto que §15
+cerró desde el otro lado), y «quedarse quieto» no tiene una pieza limpia — el piso duro es 1 u/s.
+
+**③ El sexo del fantasma.** *«Tal vez hace falta un flag para decir que el fantasma es hombre o mujer
+así poblamos bien los sonidos y aparte usamos los modelos correspondientes según sexo.»* — **La mitad
+del sonido ya existe y se llama `voice`**: el rasgo del tipo la fija (Banshee y Dayan son *«can only
+be female»*) y si no, se sortea una vez por fantasma. Lo que **no** tiene dónde engancharse es la
+mitad de los modelos: `ENT.Models` es un campo **de clase**, no por instancia. Esa es la pieza nueva,
+y va con §12.2.

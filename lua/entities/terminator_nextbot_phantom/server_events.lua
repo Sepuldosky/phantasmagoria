@@ -335,17 +335,65 @@ SND.furniture = {
 -- sound.Play no se pueden parar, porque sound.Play no devuelve nada que se
 -- pueda apagar. Un banco de eventos con un loop adentro es un evento que a veces
 -- no termina.
+-- ⚠⚠ Y SIN LOS DE AUTO, QUE ES OTRA COSA Y SALIO DE LA r1 EN JUEGO. El autor:
+-- *«sonidos de auto no deberian sonar a menos que se lo haga a un vehiculo de
+-- half life 2 o Glide»*. `car_alarm` y `car_lock` estaban en esta tabla, que se
+-- sortea SIN MIRAR EL MUNDO, asi que sonaba una alarma de auto en una casa
+-- vacia. Se mudaron a PROP_CONSUJETO, abajo.
+--
+-- *Un banco plano de sonidos "de objetos" es una lista de objetos que el juego
+-- afirma que estan ahi. Los que nombran un objeto identificable tienen que
+-- comprobarlo; los que no ( un crujido de piano, unas llaves ) pueden sonar en
+-- cualquier casa y por eso se quedan.*
 SND.prop = {
     "phantasmagoria/prop/clock_tick.ogg",     "phantasmagoria/prop/phone_ring.ogg",
     "phantasmagoria/prop/phone_vibrate.ogg",  "phantasmagoria/prop/piano_key_1.ogg",
     "phantasmagoria/prop/piano_key_2.ogg",    "phantasmagoria/prop/piano_key_3.ogg",
     "phantasmagoria/prop/piano_key_4.ogg",    "phantasmagoria/prop/piano_key_5.ogg",
     "phantasmagoria/prop/guitar_string.ogg",  "phantasmagoria/prop/microwave_beep.ogg",
-    "phantasmagoria/prop/car_alarm.ogg",      "phantasmagoria/prop/car_lock.ogg",
     "phantasmagoria/prop/teddy_laugh.ogg",    "phantasmagoria/prop/toilet_flush.ogg",
     "phantasmagoria/prop/tv_on.ogg",          "phantasmagoria/prop/tv_off.ogg",
     "phantasmagoria/prop/tv_noise.ogg",       "phantasmagoria/prop/tv_remote.ogg",
     "phantasmagoria/prop/key_1.ogg",          "phantasmagoria/prop/key_2.ogg",
+}
+
+-- Sonidos que NOMBRAN un objeto, y por eso no se sortean si el objeto no esta.
+-- El sonido sale DE la entidad ( `EmitSound` ), no de un punto: una alarma que
+-- suena a tres metros del auto es peor que no tener alarma.
+--
+-- ⚠ `IsVehicle()` alcanza para las DOS familias que el autor nombro, y esta
+-- medido: Glide **pisa el metodo del metatable de Entity** para que devuelva
+-- true en los suyos ( `glide/lua/autorun/sh_glide.lua:326-330`,
+-- `return tab and tab.IsGlideVehicle or IsVehicle( self )` ). Se comprueba
+-- igual `IsGlideVehicle` a mano por si el orden de carga deja el parche sin
+-- aplicar -- cuesta una comparacion y evita un silencio dificil de diagnosticar.
+local PROP_CONSUJETO = {
+    {
+        que     = "un vehiculo",
+        sonidos = {
+            "phantasmagoria/prop/car_alarm.ogg",
+            "phantasmagoria/prop/car_lock.ogg",
+        },
+        sujeto  = function( ent )
+            if not ( ent:IsVehicle() or ent.IsGlideVehicle == true ) then return false end
+
+            -- ⚠ `IsVehicle()` dice true sobre la SILLA en la que te sentas.
+            -- `prop_vehicle_prisoner_pod` es el asiento de sandbox -- y tambien
+            -- el asiento de pasajero de Glide ( base_glide/init.lua ), cuyo
+            -- chasis lleva `IsGlideVehicle` aparte: excluir la clase no pierde
+            -- ningun auto de verdad.
+            if ent:GetClass() == "prop_vehicle_prisoner_pod" then return false end
+
+            -- Y una alarma que suena en el auto que estas MANEJANDO no es un
+            -- susto: es un bug con cara de susto. `GetDriver` puede no existir
+            -- en una entidad ajena que solo puso el campo `IsGlideVehicle`, asi
+            -- que se pregunta antes de llamarlo.
+            if isfunction( ent.GetDriver ) and IsValid( ent:GetDriver() ) then return false end
+
+            return true
+
+        end,
+    },
 }
 
 SND.door = {
@@ -455,12 +503,42 @@ local BITACORA_MAX = 60
 
 PHANTASMAGORIA.EventLog = PHANTASMAGORIA.EventLog or {}
 
+-- ⚠⚠ EL MISMO DEFECTO YA CERRADO DOS VECES EN ESTE ADDON, Y ENTRO OTRA VEZ POR
+-- UN INSTRUMENTO NUEVO. La bitacora escribia `#442` pelado, y **GMod recicla el
+-- EntIndex**: en la corrida r1 hay un `#442` que tira 4 props con la fuerza de
+-- un Poltergeist y, dos pantallas mas abajo, un `#442` que la ficha declara
+-- Shade. Las dos lineas son ciertas y son de sujetos distintos.
+--
+-- La solucion ya estaba escrita y en produccion en OTROS DOS archivos del mismo
+-- addon -- `server_cloak.lua:163` con `/sN` y `server_steps.lua:430` con `/cN`.
+-- Se usa `/sN` ( `phantom_Serial`, server.lua:841 ) porque es la MISMA serie que
+-- imprimen `ghost_where` y `ghost_vis`, y el valor de un identificador esta en
+-- poder cruzar dos instrumentos.
+--
+-- *Que una leccion este cerrada en el repo no la aplica al archivo que se
+-- escribe mañana: lo que se hereda es el texto, no la practica.*
+local function quien( ghost )
+    if not IsValid( ghost ) then return "#?" end
+
+    return "#" .. ghost:EntIndex() .. "/s" .. tostring( ghost.phantom_Serial or "?" )
+
+end
+
+-- ⚠ LO QUE SE DESCARTA SE CUENTA. El volcado decia `bitacora ( 60 / 60 )` tanto
+-- si hubo 60 renglones como si hubo 600: la ventana llena se lee igual que la
+-- ventana justa, y el que mira cree que vio todo. La r23b ya pago esta leccion
+-- en la bitacora de la ausencia, donde 28 de 40 renglones eran spawns.
+PHANTASMAGORIA.EventLogPerdidas = PHANTASMAGORIA.EventLogPerdidas or 0
+
 local function anotar( texto )
     local log = PHANTASMAGORIA.EventLog
     log[ #log + 1 ] = string.format( "%7.1f  %s", CurTime(), texto )
 
-    while #log > BITACORA_MAX do table.remove( log, 1 ) end
+    while #log > BITACORA_MAX do
+        table.remove( log, 1 )
+        PHANTASMAGORIA.EventLogPerdidas = PHANTASMAGORIA.EventLogPerdidas + 1
 
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -626,7 +704,18 @@ local function estado( ghost )
     ghost.phantom_ev = ghost.phantom_ev or {
         next     = 0,
         vueltas  = 0,
-        disparos = 0,
+        vueltaT  = nil,      -- CurTime de la ultima vuelta: sin esto, `vueltas`
+                             -- no distingue un timer sano de uno que murio
+        disparos = 0,        -- despertadas ESPONTANEAS ( las del scheduler )
+        forzados = 0,        -- despertadas del comando: NO acreditan al motor
+        ultimaEspera = nil,  -- el intervalo SORTEADO, no el rango
+        ultimoRate   = nil,  -- el rate con el que se dividio ESE sorteo
+        ultimoRango  = nil,  -- { lo, hi } ya divididos
+        ultimoMulHunt = nil, -- el multiplicador del hunt que se APLICO al
+                             -- sortear. Se guarda el HECHO y no la condicion:
+                             -- preguntar `phantom_Hunting` al imprimir describe
+                             -- el presente y no el sorteo
+        ultimaFuePrimera = nil,
         ultimo   = nil,
         ultimoT  = 0,
         porCat   = {},
@@ -730,11 +819,24 @@ end
 -- ( ok, detalle ). `ok` false NO es un error: la mayoria de las veces significa
 -- "no habia sujeto", que es informacion. El detalle viaja al instrumento.
 --
--- Ninguno emite sonido EN el fantasma. Esa regla no es estetica: un fantasma
--- que suena en su propia posicion es un localizador gratis, y mata de un saque
--- al spirit box, a la parabolica y a la caja musical, que son tres mecanicas
--- que existen para que ubicarlo cueste. El sonido sale del OBJETO ( el prop que
--- vuela, la puerta que cruje ) o de un PUNTO cercano.
+-- SIETE de los ocho emiten LEJOS del fantasma: el sonido sale del OBJETO ( el
+-- prop que vuela, la puerta que cruje ) o de un PUNTO cercano. La regla no es
+-- estetica -- un ruido que sale de la posicion exacta del fantasma es un
+-- localizador gratis.
+--
+-- ⚠ LA EXCEPCION ES `sound`, Y ES UNA DECISION DEL AUTOR ( r1, en juego ):
+-- *«las voces deberian ser del fantasma, no que las haga sonar donde no debe»*.
+-- Una voz no es un ruido ambiente: es EL que la emite. Lo que quedo de la regla
+-- vieja: el radio sigue colgando del fantasma, asi que la tesis del bloque no se
+-- toca -- lo que cambia es de donde sale ESE sonido, no hasta donde llega la
+-- actividad.
+--
+-- ⚠ Y la justificacion vieja hay que leerla por lo que era: decia que emitir en
+-- el fantasma *«mata al spirit box, a la parabolica y a la caja musical»*, y las
+-- TRES tienen hoy cero lineas de codigo. Defendia una decision presente con tres
+-- mecanicas futuras. Si alguna se escribe y la voz de cerca la rompe, se revisa
+-- ENTONCES, con la mecanica delante. *Una regla sostenida por codigo que no
+-- existe no se puede falsar, y por eso sobrevive a la evidencia.*
 local EV = {}
 
 -- Las tres clases de puerta, con los nombres que usa server_doors.lua:217-221.
@@ -766,6 +868,23 @@ local THROW_CLASSES = {
 -- Lo que NO se toca, y por que cada uno. Es una lista negra CORTA porque la
 -- blanca de arriba ya hace el trabajo grueso; estos son los que pasan la blanca
 -- y aun asi no hay que mover.
+--
+-- ⚠ DEVUELVE DOS VALORES: ( motivo, muestra ). El motivo es CANONICO y sin datos
+-- adentro porque el llamador lo usa de CLAVE para contar; la muestra es el
+-- nombre concreto y va aparte. Metidos en el mismo string, "tiene dueno
+-- ( Player [1][Nick] )" y "tiene dueno ( Player [2][Otro] )" son dos claves
+-- distintas y el desglose se abre en una fila POR ENTIDAD -- que es lo contrario
+-- de agrupar. *Una clave de agregacion con la identidad del sujeto adentro no
+-- agrega: enumera.*
+--
+-- ⚠ TRES DE ESTOS MOTIVOS NO PUEDEN SALIR HOY, y se dice para que ninguna fila
+-- los acredite. No es por falta de escritores: es porque la LISTA BLANCA
+-- ( THROW_CLASSES ) corre antes y deja pasar solo prop_physics y
+-- prop_physics_multiplayer.
+--   "es el fantasma" / "es otro fantasma"  el fantasma no es un prop_physics.
+--   "es inventario de Cargo"               ver el bloque de abajo.
+-- Dejan de ser inalcanzables el dia que THROW_CLASSES crezca, y por eso se
+-- escriben.
 local function propVetado( ent, ghost )
     if ent == ghost then return "es el fantasma" end
     if ent.IsPhantasmagoriaGhost then return "es otro fantasma" end
@@ -774,34 +893,118 @@ local function propVetado( ent, ghost )
     -- gun y el resultado es un tironeo. Los tres precedentes del taller lo
     -- filtran igual ( him/server.lua:526, corpus_cargo_capture.lua:914 ).
     if ent.IsPlayerHolding and ent:IsPlayerHolding() then return "alguien lo tiene agarrado" end
-    if IsValid( ent:GetOwner() ) then return "tiene dueno ( GetOwner )" end
 
-    -- Los items de Cargo son inventario, no decorado. Tirar el inventario de un
-    -- jugador por el piso no es un evento paranormal, es una perdida de datos.
-    if ent.CargoItem or ent.cargo_ItemID then return "es un item de Cargo" end
+    -- ⚠⚠ ACA HUBO UN VETO POR `GetCreator()` Y DURO UNA REVISION. La idea era
+    -- razonable -- "GetOwner esta vacio en los props de sandbox, el que guarda
+    -- al creador es GetCreator" -- y el efecto era APAGAR LA CATEGORIA ENTERA:
+    -- en GMod **todo prop spawneado del spawnmenu lleva creator**, asi que en un
+    -- servidor sandbox real casi no queda sujeto y `throw` -- la categoria
+    -- insignia del Poltergeist -- se queda muda con un motivo que suena
+    -- razonable. Peor: corria ANTES que la masa y que los constraints, o sea que
+    -- tapaba a los dos filtros que si distinguen.
+    --
+    -- La distincion que faltaba es SPAWNEAR contra CONSTRUIR. Lo que hay que
+    -- proteger es el trabajo del jugador, y eso lo mide `HasConstraints` mas
+    -- abajo, no el hecho de haber sacado un barril del menu.
+    --
+    -- *Un veto que no distingue "es de alguien" de "alguien lo armo" no protege
+    -- al jugador: le apaga el juego.*
+    --
+    -- Queda CPPI, que no es lo mismo: cuando hay un prop protection instalado,
+    -- el dueño es una politica EXPLICITA del operador del servidor y no un
+    -- residuo del spawnmenu.
+    --
+    -- ⚠ Y LA CADENA VA CON `IsValid` PASO A PASO, NO CON `or`. `GetCreator()` y
+    -- `GetOwner()` **no devuelven nil cuando no hay nadie: devuelven NULL**, que
+    -- en Lua es TRUTHY. Un `a or b or c` corta en el primero y los de atras son
+    -- codigo muerto -- que es exactamente lo que le paso a `GetOwner()` mientras
+    -- `GetCreator` estuvo en el medio.
+    local dueno = ent.CPPIGetOwner and ent:CPPIGetOwner() or nil
+
+    if not IsValid( dueno ) then dueno = ent:GetOwner() end
+
+    if IsValid( dueno ) then return "tiene dueno", tostring( dueno ) end
+
+    -- ⚠⚠ ESTA LINEA NOMBRABA DOS CAMPOS QUE NO EXISTEN. Decia
+    -- `ent.CargoItem or ent.cargo_ItemID`, y un grep sobre TODO el workspace
+    -- devuelve una sola aparicion de cada uno: ESTA linea. Los marcadores de
+    -- verdad son `CargoContainer` ( corpus_cargo_containers.lua:212 ) y
+    -- `CargoEntry` ( corpus_cargo_inventory.lua:387, :1162 ).
+    --
+    -- ⚠ PERO EL ARREGLO **NO** HIZO ALCANZABLE AL VETO, y decir lo contrario
+    -- seria acreditarlo de mas: HOY ningun escritor de esos dos campos produce
+    -- una entidad de las dos clases de THROW_CLASSES -- `CargoEntry` cae sobre
+    -- `corpus_cargo_item` y `CargoContainer` sobre lo que el servidor decida
+    -- attachear. Se cambio un campo inexistente por uno real que **tampoco**
+    -- alcanza al sujeto. Sigue escrito como poliza porque
+    -- `CARGO.Containers.Attach` es API publica y su propio init la anuncia como
+    -- *«turn any entity into a container»*: el dia que alguien la llame sobre un
+    -- prop_physics, esto ya esta.
+    --
+    -- *Un veto que nombra un campo inexistente se lee igual que uno que anda; y
+    -- uno que nombra el campo correcto sobre un sujeto que no llega, tambien.*
+    if ent.CargoContainer or ent.CargoEntry then return "es inventario de Cargo" end
 
     -- Nuestro propio equipamiento plantado ( tripode, DOTS, sensor ): moverlo
     -- invalidaria una medicion del jugador, que es lo contrario de lo que un
     -- evento tiene que hacer.
+    -- ⚠ HOY NO VETA A NADIE: `IsPhantasmagoriaEquipment` no lo escribe todavia
+    -- ningun archivo del addon. Se deja escrito a proposito porque el equipo es
+    -- Diseno 8, pero NO se puede acreditar en una corrida -- y una fila que lo
+    -- de por probado estaria puntuando codigo sin estrenar.
     if ent.IsPhantasmagoriaEquipment then return "es equipamiento de Phantasmagoria" end
+
+    -- Una construccion del jugador. Sin esto, el tope de masa se burla solo:
+    -- veinte tablas de 5 kg soldadas pasan el filtro una por una y el fantasma
+    -- arrastra la casa entera. Y peor que el efecto es el modo: soltar fuerza
+    -- sobre un contraption puede reventarlo, que es una perdida de trabajo del
+    -- jugador y no un susto.
+    --
+    -- ⭐ ESTE es el veto que protege al jugador, y por eso el de `GetCreator` no
+    -- hacia falta: distingue lo que alguien ARMO de lo que alguien SACO del menu.
+    if constraint.HasConstraints( ent ) then return "es parte de una construccion ( constraints )" end
+
+    -- Un prop parenteado se mueve con su padre; empujarlo no lo mueve y ademas
+    -- puede ser el hijo de OTRO addon colgado de algo -- la familia de entidades
+    -- que la r22 encontro colgando del propio fantasma.
+    if IsValid( ent:GetParent() ) then return "esta parenteado", tostring( ent:GetParent() ) end
 
     return nil
 
 end
 
 EV.throw = function( ghost, radio, fuerza, cuantos )
-    local candidatos, vetos = {}, 0
+    local candidatos = {}
     local masaMax = cvMass:GetFloat()
+
+    -- El desglose, no el total. Ver el encabezado de `propVetado`.
+    --
+    -- `muestras` guarda UN ejemplo por motivo: el nombre concreto no puede ir en
+    -- la clave -- ahi fragmenta la cuenta -- pero perderlo tampoco sirve, porque
+    -- la fila del sandbox pide justamente pegar QUIEN es el dueño.
+    local vetos, muestras, vetosN = {}, {}, 0
+
+    local function vetar( motivo, muestra )
+        vetos[ motivo ] = ( vetos[ motivo ] or 0 ) + 1
+        vetosN = vetosN + 1
+
+        if muestra then muestras[ motivo ] = muestra end
+
+    end
 
     for _, ent in ipairs( ents.FindInSphere( ghost:GetPos(), radio ) ) do
         if not IsValid( ent ) then continue end
         if not THROW_CLASSES[ ent:GetClass() ] then continue end
 
-        local veto = propVetado( ent, ghost )
-        if veto then vetos = vetos + 1 continue end
+        local veto, muestra = propVetado( ent, ghost )
+        if veto then vetar( veto, muestra ) continue end
 
+        -- ⚠ ESTE `continue` NO CONTABA, y el desglose se leia como si contara
+        -- todo lo descartado: `vetosN` no cerraba contra los prop_physics de la
+        -- esfera y no habia forma de darse cuenta. *Un descarte silencioso
+        -- adentro de un bucle que publica su cuenta rompe la cuenta.*
         local phys = ent:GetPhysicsObject()
-        if not IsValid( phys ) then continue end
+        if not IsValid( phys ) then vetar( "sin PhysObj" ) continue end
 
         -- ⚠ UN PROP CONGELADO NO SE MUEVE Y NO AVISA. `ApplyForceCenter` sobre
         -- un physobj con la motion apagada no tira error: no pasa nada. Sin
@@ -809,21 +1012,65 @@ EV.throw = function( ghost, radio, fuerza, cuantos )
         -- "evento disparado" en el reporte y silencio en el juego -- un verde
         -- que no corresponde a nada. El filtro ya existe escrito en la base
         -- ( motionoverrides.lua:182, con la meta cacheada ).
-        if not phys:IsMotionEnabled() then vetos = vetos + 1 continue end
-        if phys:GetMass() > masaMax then vetos = vetos + 1 continue end
+        --
+        -- ⚠ SON DOS PREGUNTAS Y NO UNA, Y EN ESTE ORDEN. `IsMotionEnabled` es la
+        -- del physgun ( lo congelo el jugador ); `IsMoveable` incluye ademas al
+        -- que el motor tiene inmovil por otro motivo. El precedente que este
+        -- comentario citaba -- motionoverrides.lua:182 -- usa LAS DOS, y aca
+        -- estaba copiada la mitad.
+        --
+        -- Preguntadas al reves, TODO lo congelado con el physgun caeria en el
+        -- rotulo del motor, y el desglose diria "el mapa esta trabado" sobre una
+        -- escena que en realidad es "el jugador congelo todo". Son dos escenas
+        -- con dos arreglos distintos: por eso se cuentan aparte y por eso el
+        -- orden no es indiferente.
+        if not phys:IsMotionEnabled() then vetar( "congelado por el jugador" ) continue end
+        if not phys:IsMoveable() then vetar( "inmovil ( el motor )" ) continue end
+        if phys:GetMass() > masaMax then vetar( "pesa mas de " .. math.Round( masaMax ) .. " kg" ) continue end
 
         candidatos[ #candidatos + 1 ] = ent
 
     end
 
+    -- El desglose se arma una vez y lo usan las tres salidas. En la r1 el conteo
+    -- de vetados se imprimia SOLO en la rama de fracaso, o sea en la unica
+    -- escena que la fila del sandbox excluye por precondicion: para probar el
+    -- veto hay que tener un prop lanzable Y uno vetado, y en esa escena el
+    -- numero no salia. *Un contador que solo habla cuando no hay nada no puede
+    -- acreditar el filtro.*
+    --
+    -- ⚠ De las tres salidas, DOS son alcanzables: "no habia candidatos" y el
+    -- exito. La tercera ( ningun candidato sobrevivio al sorteo ) es defensiva y
+    -- no tiene camino conocido -- haria falta que las entidades se invalidaran
+    -- entre el censo y el bucle, en el mismo frame y sin cesion. Lleva el
+    -- desglose por consistencia, no porque se la haya visto.
+    local detalleVetos = ""
+
+    if vetosN > 0 then
+        local partes = {}
+
+        for motivo, n in pairs( vetos ) do
+            partes[ #partes + 1 ] = n .. " " .. motivo ..
+                ( muestras[ motivo ] and ( " ( p.ej. " .. muestras[ motivo ] .. " )" ) or "" )
+
+        end
+
+        -- El orden es lexicografico y por lo tanto estable y reproducible, que
+        -- es lo que hace comparables dos corridas. NO es por cantidad: dos
+        -- pasadas de la misma escena tienen que escribir el mismo renglon.
+        table.sort( partes )
+        detalleVetos = "  ( " .. vetosN .. " vetado(s): " .. table.concat( partes, " · " ) .. " )"
+
+    end
+
     if #candidatos <= 0 then
-        return false, "no habia props fisicos movibles a " .. math.Round( radio ) .. " u ( " ..
-            vetos .. " vetado(s) )"
+        return false, "no habia props fisicos movibles a " .. math.Round( radio ) .. " u" .. detalleVetos
 
     end
 
     local movidos = 0
     local total   = #candidatos
+    local ultimo               -- el ultimo prop tirado, para el detalle
 
     for i = 1, math.min( cuantos, total ) do
         -- Se saca de la lista para no tirar el mismo prop dos veces en el mismo
@@ -859,6 +1106,7 @@ EV.throw = function( ghost, radio, fuerza, cuantos )
         if snd then prop:EmitSound( snd, 75, math.random( 92, 108 ) ) end
 
         movidos = movidos + 1
+        ultimo  = prop
 
     end
 
@@ -869,11 +1117,26 @@ EV.throw = function( ghost, radio, fuerza, cuantos )
         -- literalmente "habia 0 candidato(s)" en una rama a la que solo se llega
         -- habiendo tenido al menos uno. *Un numero imposible al lado de un
         -- veredicto* es del catalogo, y delata el instrumento sin decir cual.
-        return false, "habia " .. total .. " candidato(s) y ninguno sobrevivio al sorteo"
+        return false, "habia " .. total .. " candidato(s) y ninguno sobrevivio al sorteo" .. detalleVetos
 
     end
 
-    return true, movidos .. " prop(s) tirado(s) con fuerza x" .. string.format( "%.2f", fuerza )
+    -- ⚠ LAS OTRAS SIETE CATEGORIAS NOMBRAN SU SUJETO Y SU DISTANCIA; esta era la
+    -- unica que no, y por eso su linea de bitacora ( "4 prop(s) tirado(s) con
+    -- fuerza x1.80" ) es la unica que no se puede cruzar contra nada: no dice
+    -- QUE tiro ni DONDE. Sin eso, dos escenas muy distintas -- el fantasma en el
+    -- cuarto con el jugador, y el fantasma tirando cosas a 600 u en otra
+    -- habitacion -- escriben el mismo renglon.
+    local donde = ""
+
+    if IsValid( ultimo ) then
+        donde = "  ( ultimo " .. ultimo:GetClass() .. " #" .. ultimo:EntIndex() .. " a " ..
+            math.Round( ghost:GetPos():Distance( ultimo:GetPos() ) ) .. " u )"
+
+    end
+
+    return true, movidos .. " prop(s) tirado(s) con fuerza x" ..
+        string.format( "%.2f", fuerza ) .. donde .. detalleVetos
 
 end
 
@@ -1079,6 +1342,14 @@ EV.door = function( ghost, radio )
 
     local dist = math.Round( ghost:GetPos():Distance( door:WorldSpaceCenter() ) )
 
+    -- ⚠ LA IDENTIDAD SE CAPTURA ACA, EN EL FRAME DEL DISPARO, y no adentro del
+    -- callback. Un cuarto de segundo despues el fantasma puede estar muerto o
+    -- borrado, y `quien( ghost )` sobre una entidad invalida devuelve `#?`: el
+    -- renglon del veredicto -- que es el unico que dice si la puerta se movio de
+    -- verdad -- quedaba sin dueño, y el censo de sujetos de la bitacora no lo
+    -- podia contar. *La identidad se toma cuando se sabe, no cuando se imprime.*
+    local yo = quien( ghost )
+
     -- El estado de una puerta cambia en el siguiente tick, no en este, asi que
     -- el veredicto llega diferido. La bitacora lo recibe cuando existe; el
     -- retorno de aca es "se intento", que es lo unico cierto en este frame.
@@ -1088,15 +1359,15 @@ EV.door = function( ghost, radio )
         local despues = leerEstado( door )
 
         if despues == estadoAntes then
-            anotar( string.format( "#%s door SIN EFECTO -- %s #%d no cambio de estado ( %s ). " ..
+            anotar( string.format( "%s door SIN EFECTO -- %s #%d no cambio de estado ( %s ). " ..
                 "Use2 tiene cinco salidas silenciosas; la mas probable es " ..
                 "phantasmagoria_ghost_opendoors en 0 o el veto TerminatorBlockUse",
-                IsValid( ghost ) and ghost:EntIndex() or "?", door:GetClass(), door:EntIndex(),
+                yo, door:GetClass(), door:EntIndex(),
                 tostring( despues ) ) )
 
         else
-            anotar( string.format( "#%s door efecto CONFIRMADO -- %s #%d  estado %s -> %s",
-                IsValid( ghost ) and ghost:EntIndex() or "?", door:GetClass(), door:EntIndex(),
+            anotar( string.format( "%s door efecto CONFIRMADO -- %s #%d  estado %s -> %s",
+                yo, door:GetClass(), door:EntIndex(),
                 tostring( estadoAntes ), tostring( despues ) ) )
 
         end
@@ -1120,29 +1391,110 @@ end
 -- runtime.** Lo que sobrevive son las que tienen targetname, justamente para
 -- que un input las pueda tocar.
 --
--- La evidencia es indirecta y se declara como tal ( no hay un .bsp ni GMod
--- alcanzable desde esta maquina para contarlas ):
+-- ⭐ ESTO YA NO ES EVIDENCIA INDIRECTA: SE MIDIO ( r1, sobre el mapa del autor ).
+-- Se saco `maps/gm_funkis_night.bsp` del .gma del Workshop y se parseo el
+-- LUMP_ENTITIES ( VBSP v20, 1224 bloques ). El mapa trae **322 luces escritas en
+-- el BSP -- 268 `light` + 54 `light_spot` -- y 43 de ellas con `targetname` y
+-- lightstyle conmutable ( 32-43 ), repartidas en 12 grupos** ( cocina, tres
+-- dormitorios, dos baños, hall, lavadero, cuna, sauna, oficina, cobertizo ).
+-- Como los 43 comparten solo 12 lightstyles, tocar UNA apaga el grupo entero:
+-- el apagon se ve por habitacion, que es exactamente lo que el autor recordaba
+-- de gmpa.
 --
---   · StormFox 2, cuyo tema ENTERO es la luz del mapa, tiene una via aparte y
---     explicita para la luz horneada -- `engine.LightStyle` + un net al cliente
---     que hace `render.RedownloadAllLightmaps` ( sh_maplight.lua:34-53, :79-88 ).
---     Si las baked fueran entidades, esa API global no haria falta.
---   · Su propio comentario dice `-- light_environment (SV) Fast, but not all
---     maps have it` ( :104 ): la via por entidad NO SIEMPRE EXISTE.
---   · NEAD, un addon cuyo tema es "¿el jugador esta iluminado?", censa SOLO
---     gmod_lamp y env_projectedtexture. Nunca `light`. Es el negativo mas caro
---     del arbol.
+-- O sea que la premisa se sostiene y la conclusion de gmpa tambien: **gmpa no
+-- tocaba lo horneado**, tocaba las que sobreviven por tener nombre. Y en
+-- cobertura de CLASE nosotros somos estrictamente mas amplios: gmpa mira solo
+-- `light`, asi que pierde los 17 `light_spot` -- el baño entero de ese mapa.
 --
--- Por eso esta categoria busca en CINCO familias y no en una, y por eso cuando
--- no encuentra nada lo DICE con el conteo por familia. *Un evento de luces que
--- no encuentra luces no es un fallo del evento: es un dato sobre el mapa*, y la
--- unica forma de no confundirlos es que el instrumento imprima cual de los dos
--- fue.
+-- ⚠ LO QUE NOS DIFERENCIA DE GMPA NO ES LA CLASE, ES EL RADIO, y eso es la
+-- tesis y no un olvido: gmpa busca en todo el mapa y nosotros a
+-- `phantasmagoria_ghost_evradius` del FANTASMA. En ese mapa las 43 nombradas
+-- caben en una caja de 862 x 1056 u ( la casa ) mientras las puertas y los props
+-- se reparten por todo el terreno -- 37 de las 65 puertas y 14 de los 15
+-- prop_physics no tienen NINGUNA luz nombrada a 450 u. Por eso `throw` y `door`
+-- pueden tener sujeto en el mismo instante en que `light` no lo tiene, y por eso
+-- ese cruce NO sirve para diagnosticar nada.
+--
+-- ⚠⚠ Y SE BUSCA CON `ents.FindByClass` Y NO CON `ents.FindInSphere`. Una `light`
+-- es un point entity sin modelo y sin solidez, y la particion espacial que
+-- alimenta a FindInSphere indexa lo solido: no esta medido que una `light`
+-- aparezca ahi con NINGUN radio. gmpa usa FindByClass y su rama de luces
+-- funcionaba. No se cambio el radio ni la tesis -- se cambio de donde sale la
+-- lista, que es la unica hipotesis que quedaba viva despues de medir el mapa.
+-- *Cuando dos implementaciones difieren en el resultado y en el mecanismo,
+-- primero se iguala el mecanismo.*
+--
+-- Cuando no encuentra nada lo DICE, y ahora dice tambien cuantas hay en TODO el
+-- mapa y a que distancia esta la mas cercana: sin esos dos numeros, "no hay
+-- luces en el mapa", "hay pero lejos" y "las busco mal" escriben LA MISMA LINEA.
+-- *Un vacio que solo describe su propio metodo no es una medicion del mundo.*
 --
 -- El orden va de lo mas probable en sandbox a lo mas probable en un mapa de
--- horror hecho a mano.
+-- horror hecho a mano. Son SIETE clases en CUATRO familias de trato ( `seton`,
+-- `toggle`, `lighttoggle`, `onoff` ) -- decia "cinco familias" y nunca fueron
+-- cinco.
+local LIGHT_CLASSES = {
+    -- ( 1 ) Las lamparas de sandbox. Son SENTs de Lua con getter y setter
+    -- propios, y son las mas probables en un servidor de GMod porque las pone
+    -- el jugador. HIM las trata igual ( server.lua:494-495 ).
+    { clase = "gmod_light",           como = "seton" },
+    { clase = "gmod_lamp",            como = "seton" },
+
+    -- ( 2 ) Las del mapa que sobrevivieron al compilado por tener targetname.
+    { clase = "light",                como = "toggle" },
+    { clase = "light_spot",           como = "toggle" },
+
+    -- ( 3 ) ⚠ Esta NO responde a `Toggle`: su input se llama `LightToggle`.
+    -- Es una asimetria del engine y HIM la trata aparte ( server.lua:500 ).
+    --
+    -- ⚠⚠ EL NOMBRE DEL INPUT NO ESTA MEDIDO, Y SU UNICA FUENTE ES HIM. Grep de
+    -- `LightToggle` sobre todo el workspace: cuatro apariciones, tres de HIM y
+    -- esta. Cero apariciones de `LightOn` / `LightOff`, que es como se llaman
+    -- los inputs de CPointSpotlight en Source. O sea que este renglon es un
+    -- comentario de un tercero COPIADO, que es el pecado que este mismo archivo
+    -- documenta ochenta lineas mas abajo.
+    --
+    -- No se cambia sobre memoria -- eso seria el mismo pecado del otro lado --
+    -- pero el reporte deja de afirmar que conmuto: `Entity:Fire` con un input
+    -- que la clase no acepta **no tira error**, `AcceptInput` devuelve false en
+    -- silencio. Se mide con una linea en juego, y esta anotado en la planilla.
+    { clase = "point_spotlight",      como = "lighttoggle" },
+
+    -- ( 4 ) Las dinamicas y los proyectores, que si o si existen en runtime
+    -- porque no se pueden hornear.
+    { clase = "light_dynamic",        como = "onoff" },
+    { clase = "env_projectedtexture", como = "onoff" },
+}
+
+-- El censo GLOBAL, con el MISMO recorrido de clases que la busqueda de al lado.
+-- Que compartan la tabla no es prolijidad: si el mensaje de vacio contara sobre
+-- otra lista que la busqueda, podria decir "0 en todo el mapa" con luces que la
+-- busqueda si mira, o al reves. *Un instrumento que mide una lista distinta de
+-- la que usa el sujeto no lo esta midiendo a el.*
+local function lucesEnElMapa( ghost )
+    local n, mejor = 0, nil
+    local pos = ghost:GetPos()
+
+    for _, fam in ipairs( LIGHT_CLASSES ) do
+        for _, ent in ipairs( ents.FindByClass( fam.clase ) ) do
+            if not IsValid( ent ) then continue end
+
+            n = n + 1
+
+            local d = ent:GetPos():Distance( pos )
+            if not mejor or d < mejor then mejor = d end
+
+        end
+    end
+
+    return n, mejor
+
+end
+
 local function lucesCerca( ghost, radio )
     local halladas, censo = {}, {}
+    local origen = ghost:GetPos()
+    local radio2 = radio * radio
 
     local function sumar( clase, ent, como )
         censo[ clase ] = ( censo[ clase ] or 0 ) + 1
@@ -1150,33 +1502,21 @@ local function lucesCerca( ghost, radio )
 
     end
 
-    for _, ent in ipairs( ents.FindInSphere( ghost:GetPos(), radio ) ) do
-        if not IsValid( ent ) then continue end
+    for _, fam in ipairs( LIGHT_CLASSES ) do
+        for _, ent in ipairs( ents.FindByClass( fam.clase ) ) do
+            if not IsValid( ent ) then continue end
+            if ent:GetPos():DistToSqr( origen ) > radio2 then continue end
 
-        local clase = ent:GetClass()
-
-        -- ( 1 ) Las lamparas de sandbox. Son SENTs de Lua con getter y setter
-        -- propios, y son las mas probables en un servidor de GMod porque las
-        -- pone el jugador. HIM las trata igual ( server.lua:494-495 ).
-        if clase == "gmod_light" or clase == "gmod_lamp" then
-            if isfunction( ent.SetOn ) and isfunction( ent.GetOn ) then
-                sumar( clase, ent, "seton" )
+            -- Las de sandbox son SENTs de Lua: si no traen su getter y su
+            -- setter no se las puede ni leer ni tocar, asi que no son sujeto.
+            -- Las otras cinco clases se manejan por input del engine y no
+            -- necesitan nada.
+            if fam.como == "seton" and not ( isfunction( ent.SetOn ) and isfunction( ent.GetOn ) ) then
+                continue
 
             end
 
-        -- ( 2 ) Las del mapa que sobrevivieron. `Toggle` para las dos.
-        elseif clase == "light" or clase == "light_spot" then
-            sumar( clase, ent, "toggle" )
-
-        -- ( 3 ) ⚠ Esta NO responde a `Toggle`: su input se llama `LightToggle`.
-        -- Es una asimetria del engine y HIM la trata aparte ( server.lua:500 ).
-        elseif clase == "point_spotlight" then
-            sumar( clase, ent, "lighttoggle" )
-
-        -- ( 4 ) Las dinamicas y los proyectores, que si o si existen en runtime
-        -- porque no se pueden hornear.
-        elseif clase == "light_dynamic" or clase == "env_projectedtexture" then
-            sumar( clase, ent, "onoff" )
+            sumar( fam.clase, ent, fam.como )
 
         end
     end
@@ -1190,9 +1530,25 @@ EV.light = function( ghost, radio, _fuerza, _cuantos, dir )
 
     if #halladas <= 0 then
         -- El vacio MEDIDO, no el vacio silencioso. Ver el bloque de arriba.
-        return false, "no habia luces alcanzables a " .. math.Round( radio ) .. " u " ..
-            "( se buscaron gmod_light, gmod_lamp, light, light_spot, point_spotlight, " ..
-            "light_dynamic y env_projectedtexture -- las estaticas horneadas NO son entidades )"
+        --
+        -- ⚠ DECIA "alcanzables" Y NO HAY NINGUN FILTRO DE ALCANCE: en esta
+        -- funcion no hay un solo trace. La palabra mandaba al que diagnostica a
+        -- buscar un filtro de visibilidad que nunca se escribio. Dice "a menos
+        -- de", que es lo unico que la busqueda hace.
+        local enMapa, masCerca = lucesEnElMapa( ghost )
+
+        local dondeEsta = "el fantasma esta en " .. tostring( ghost:GetPos() )
+        local global    = "en TODO el mapa hay " .. enMapa .. " de esas clases"
+
+        if masCerca then
+            global = global .. " y la mas cercana esta a " .. math.Round( masCerca ) .. " u"
+
+        end
+
+        return false, "no habia luces a menos de " .. math.Round( radio ) .. " u " ..
+            "( " .. global .. " · " .. dondeEsta .. " · se buscaron gmod_light, gmod_lamp, " ..
+            "light, light_spot, point_spotlight, light_dynamic y env_projectedtexture -- " ..
+            "las estaticas SIN targetname no sobreviven como entidad )"
 
     end
 
@@ -1208,7 +1564,7 @@ EV.light = function( ghost, radio, _fuerza, _cuantos, dir )
     ---------------------------------------------------------------------------
     -- ⚠ LEER EL ESTADO ANTES DE TOCAR, CUANDO SE PUEDE
     ---------------------------------------------------------------------------
-    -- Solo una de las cinco familias tiene getter: los gmod_light / gmod_lamp,
+    -- Solo una de las cuatro familias tiene getter: los gmod_light / gmod_lamp,
     -- que son SENTs de Lua. El censo YA lo exige ( `isfunction( ent.GetOn )` ),
     -- asi que el dato estaba disponible y la primera version no lo miraba.
     --
@@ -1328,7 +1684,8 @@ EV.light = function( ghost, radio, _fuerza, _cuantos, dir )
         end )
 
         return true, "ESTALLIDO sobre " .. L.clase .. " #" .. L.ent:EntIndex() ..
-            ( L.como == "lighttoggle" and " ( conmutada: point_spotlight no acepta un estado )"
+            ( L.como == "lighttoggle"
+              and " ( se mando LightToggle SIN COMPROBAR: no esta medido que la clase acepte ese input )"
               or " ( queda apagada, NO destruida )" ) ..
             ( soloApaga and "  ( el tipo SOLO apaga: 30% de estallido )" or "  ( 10% de estallido )" )
 
@@ -1401,8 +1758,14 @@ EV.light = function( ghost, radio, _fuerza, _cuantos, dir )
     local transicion = ( antes == nil ) and "estado sin getter en esta clase"
         or ( ( antes and "encendida" or "apagada" ) .. " -> " .. ( final and "encendida" or "apagada" ) )
 
-    return true, pasos .. " conmutacion(es) sobre " .. L.clase .. " #" .. L.ent:EntIndex() ..
+    return true, pasos .. " input(s) enviado(s) a " .. L.clase .. " #" .. L.ent:EntIndex() ..
         " ( " .. transicion .. " )  [ " .. table.concat( resumen, ", " ) .. " ]" ..
+        -- ⚠ DICE "input(s) enviado(s)" Y NO "conmutacion(es)": para las cuatro
+        -- clases sin getter, lo unico que sabemos es que se mando el input. La
+        -- palabra vieja afirmaba el efecto sobre las tres familias que no lo
+        -- pueden leer -- que es el mismo verde-sin-comportamiento que el
+        -- encabezado de esta categoria dice estar cazando.
+        ( L.como == "lighttoggle" and "  ( LightToggle: nombre de input SIN MEDIR sobre esta clase )" or "" ) ..
         ( soloApaga and "  ( el tipo SOLO apaga )" or soloEnciende and "  ( el tipo SOLO enciende )" or "" )
 
 end
@@ -1410,10 +1773,19 @@ end
 ---------------------------------------------------------------------------
 -- sound -- la voz paranormal
 ---------------------------------------------------------------------------
--- ⚠ NUNCA EN LA POSICION DEL FANTASMA. Ver el contrato comun de arriba: seria
--- un localizador gratis que mata al spirit box, a la parabolica y a la caja
--- musical de un saque.
-EV.sound = function( ghost, radio, _fuerza, _cuantos, _dir, flags )
+-- ⭐ LA UNICA DE LAS OCHO QUE SUENA EN EL FANTASMA. Ver el contrato comun de
+-- arriba: es la excepcion, es del autor, y el motivo es que una voz no es un
+-- ruido ambiente -- es el que la emite.
+--
+-- Se emite con `ghost:EmitSound` y no con `sound.Play` en su posicion, y la
+-- diferencia importa: `EmitSound` ata el canal a la ENTIDAD, asi que la voz
+-- SIGUE al fantasma mientras camina en vez de quedar clavada donde arranco. Un
+-- tarareo que se queda atras mientras el fantasma se aleja delata que el sonido
+-- no es de el.
+-- ⚠ `_radio` deja de usarse EN ESTA CATEGORIA y se marca con el guion bajo como
+-- las otras tres que no lo usan. El radio sigue decidiendo si la categoria se
+-- elige; lo que ya no decide es donde suena.
+EV.sound = function( ghost, _radio, _fuerza, _cuantos, _dir, flags )
     local voz   = ghost:phantom_EventVoice()
     local bancos = VOZ[ voz ]
 
@@ -1425,13 +1797,16 @@ EV.sound = function( ghost, radio, _fuerza, _cuantos, _dir, flags )
     local snd = elegir( bancos[ key ] )
     if not snd then return false, "el banco '" .. key .. "' de la voz " .. voz .. " esta vacio" end
 
-    -- puntoCerca nunca devuelve nil ( contrato declarado en su cuerpo ).
-    local pos, comoSalio = puntoCerca( ghost, radio, true )
+    ghost:EmitSound( snd, 70, math.random( 96, 104 ) )
 
-    sound.Play( snd, pos, 70, math.random( 96, 104 ) )
-
-    return true, "voz " .. voz .. " / banco " .. key .. " a " ..
-        math.Round( ghost:GetPos():Distance( pos ) ) .. " u  ( " .. comoSalio .. " )"
+    -- ⚠ EL DETALLE NOMBRA EL ARCHIVO, y esto no es cosmetico. En la r1 esta
+    -- categoria imprimia "OK -- voz 1 / banco voice a 221 u" mientras el engine
+    -- escribia, en la linea de al lado, `Invalid sample rate (48000) for sound
+    -- 'phantasmagoria\ghost\paranormal_voice\voice_1_why_01.ogg'`. Las dos
+    -- lineas hablaban del mismo disparo y NO se podian aparear, porque la
+    -- nuestra no decia que clip habia elegido. `EV.prop` ya lo hacia.
+    return true, ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) ..
+        "  ( voz " .. voz .. " / banco " .. key .. ", en el fantasma )"
 
 end
 
@@ -1439,21 +1814,74 @@ end
 -- prop -- un trasto de la casa que suena solo
 ---------------------------------------------------------------------------
 EV.prop = function( ghost, radio )
-    -- puntoCerca nunca devuelve nil ( contrato declarado en su cuerpo ).
-    local pos, comoSalio = puntoCerca( ghost, radio, false )
+    -- ⭐ PRIMERO EL MUNDO, DESPUES EL SORTEO. Hasta la r1 esto era al reves --
+    -- se sorteaba un sonido de una tabla plana y se lo emitia en un punto -- y
+    -- por eso sonaban alarmas de auto sin auto. Ahora los sonidos que nombran un
+    -- objeto entran al sorteo SOLO si ese objeto esta a la vista del radio, y
+    -- cuando entran, suenan DESDE el.
+    local conSujeto = {}
 
-    local snd = elegir( SND.prop )
-    if not snd then return false, "el banco prop/ esta vacio" end
+    for _, fam in ipairs( PROP_CONSUJETO ) do
+        local hallado
+
+        for _, ent in ipairs( ents.FindInSphere( ghost:GetPos(), radio ) ) do
+            if not IsValid( ent ) then continue end
+            if ent == ghost then continue end
+            if not fam.sujeto( ent ) then continue end
+
+            hallado = ent
+            break
+
+        end
+
+        if IsValid( hallado ) then
+            for _, s in ipairs( fam.sonidos ) do
+                conSujeto[ #conSujeto + 1 ] = { snd = s, ent = hallado, que = fam.que }
+
+            end
+        end
+    end
+
+    -- El pozo es el banco ambiente MAS lo que el mundo habilito. Un sonido con
+    -- sujeto no tiene prioridad: si hay un auto, la alarma compite con el piano,
+    -- que es lo que evita que la unica casa con un auto suene a estacionamiento.
+    local nGen = #SND.prop
+    local nSuj = #conSujeto
+
+    if nGen + nSuj <= 0 then return false, "el banco prop/ esta vacio" end
+
+    local tirada = math.random( nGen + nSuj )
+
+    if tirada > nGen then
+        local elegido = conSujeto[ tirada - nGen ]
+
+        elegido.ent:EmitSound( elegido.snd, 75, math.random( 97, 103 ) )
+
+        return true, ( string.match( elegido.snd, "([^/]+)%.ogg$" ) or elegido.snd ) ..
+            " DESDE " .. elegido.que .. " ( " .. elegido.ent:GetClass() .. " #" ..
+            elegido.ent:EntIndex() .. " ) a " ..
+            math.Round( ghost:GetPos():Distance( elegido.ent:GetPos() ) ) .. " u"
+
+    end
+
+    -- puntoCerca nunca devuelve nil ( contrato declarado en su cuerpo ).
+    local pos = puntoCerca( ghost, radio, false )
+    local snd = SND.prop[ tirada ]
 
     sound.Play( snd, pos, 75, math.random( 97, 103 ) )
 
-    -- La guarda del `or snd`: hoy las 20 entradas de SND.prop terminan en .ogg y
+    -- La guarda del `or snd`: hoy las entradas de SND.prop terminan en .ogg y
     -- llevan barra, asi que el match siempre resuelve -- pero una ruta nueva sin
     -- extension devolveria nil y la concatenacion tiraria error EN EL EVENTO, no
     -- al cargar. Un banco de sonido es justo el lugar donde alguien pega una
     -- ruta a mano.
+    --
+    -- El detalle dice cuantos sonidos con sujeto habia disponibles: sin ese
+    -- numero, "sono un piano" no distingue "no habia auto" de "habia auto y
+    -- salio piano", y la fila que mida esto necesita separarlos.
     return true, ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) .. " a " ..
-        math.Round( ghost:GetPos():Distance( pos ) ) .. " u"
+        math.Round( ghost:GetPos():Distance( pos ) ) .. " u" ..
+        "  ( ambiente; " .. nSuj .. " sonido(s) con sujeto disponibles )"
 
 end
 
@@ -1482,6 +1910,26 @@ end
 -- categoria dependeria de que el sorteo la favorezca, y *un check que depende de
 -- un sorteo no es un check* ( PLANTILLA_CHECKS.md, punto 4 ).
 function ENT:phantom_FireEvent( forzada )
+    -- ⚠⚠ UN CADAVER NO HACE EVENTOS PARANORMALES, y hasta la r2 SI los hacia.
+    -- La base deja la entidad viva unos 10 s despues de la muerte
+    -- ( damageandhealth.lua ), y ni el scheduler ni el comando manual miraban
+    -- `term_Dead`: un fantasma muerto seguia tirando props y susurrando.
+    --
+    -- Se volvio URGENTE con el cambio de esta misma tanda. Con `sound.Play` en
+    -- un punto, la voz del cadaver al menos SONABA ( mal, pero sonaba ). Con
+    -- `ghost:EmitSound` el canal cuelga de la ENTIDAD, y la base ya le puso
+    -- `EF_NODRAW` al morir -- que la manda a `FL_EDICT_DONTSEND` y el cliente
+    -- **deja de recibirla**. O sea que el evento se dispara, el reporte dice OK,
+    -- y no lo escucha nadie. Es el mecanismo que la r22 midio, aplicado en
+    -- contra nuestra.
+    --
+    -- *Un cambio correcto puede volver grave un defecto que ya estaba y era
+    -- benigno: hay que preguntarse a quien mas le cambia el piso.*
+    --
+    -- Va ACA y no en el scheduler porque el disparo manual no pasa por el
+    -- scheduler, y hereda la guarda cualquier llamador futuro.
+    if self.term_Dead then return 0, "el fantasma esta MUERTO ( la base lo borra a los ~10 s )" end
+
     local st    = estado( self )
     local flags = self:phantom_EventFlags()
     local cazando = self.phantom_Hunting == true
@@ -1583,17 +2031,36 @@ function ENT:phantom_FireEvent( forzada )
             st.ultimo      = cat
             st.ultimoT     = CurTime()
 
-            anotar( string.format( "#%d %s %s r=%d %s", self:EntIndex(),
-                cazando and "HUNT " or "calma", cat, math.Round( radio ), tostring( detalle ) ) )
+            anotar( string.format( "%s %s %s r=%d %s%s", quien( self ),
+                cazando and "HUNT " or "calma", cat, math.Round( radio ),
+                tostring( detalle ), forzada and "  [FORZADO]" or "" ) )
 
         else
-            anotar( string.format( "#%d %s %s SIN SUJETO -- %s", self:EntIndex(),
-                cazando and "HUNT " or "calma", cat, tostring( detalle ) ) )
+            anotar( string.format( "%s %s %s SIN SUJETO -- %s%s", quien( self ),
+                cazando and "HUNT " or "calma", cat, tostring( detalle ),
+                forzada and "  [FORZADO]" or "" ) )
 
         end
     end
 
-    if salieron > 0 then st.disparos = st.disparos + 1 end
+    -- ⚠⚠ DOS CUENTAS Y NO UNA, y esto es lo que hacia INCONTESTABLE a la fila 01.
+    -- La pregunta de esa fila es "¿el motor corrio SOLO?", y hasta la r1 el
+    -- disparo forzado sumaba en el MISMO contador que el scheduler: el reporte
+    -- decia `despertadas con al menos un evento: 87` sobre una sesion en la que
+    -- el operador habia forzado a mano, y ese 87 no distingue las dos cosas. El
+    -- pie de la planilla avisaba de la contaminacion y pedia un `reset`, o sea
+    -- que le pedia al operador que no ensuciara el instrumento en vez de que el
+    -- instrumento separara. *Cuando un contador tiene dos escritores y uno es el
+    -- operador, no acredita al otro: hay que partirlo.*
+    if salieron > 0 then
+        if forzada then
+            st.forzados = ( st.forzados or 0 ) + 1
+
+        else
+            st.disparos = st.disparos + 1
+
+        end
+    end
 
     return salieron, ultimoDetalle
 
@@ -1607,9 +2074,11 @@ function ENT:phantom_ScheduleEvent( primeraVez )
     local flags = self:phantom_EventFlags()
 
     local rate = flags.rate or 1
+    local mulHunt = 1
 
     if self.phantom_Hunting and cvHunt:GetInt() ~= 0 then
-        rate = rate * ( ( flags.hunt and flags.hunt.rate ) or 1 )
+        mulHunt = ( flags.hunt and flags.hunt.rate ) or 1
+        rate = rate * mulHunt
 
     end
 
@@ -1629,6 +2098,35 @@ function ENT:phantom_ScheduleEvent( primeraVez )
     if primeraVez then espera = math.Rand( 4, 12 ) end
 
     st.next = CurTime() + espera
+
+    -- ⚠ EL VALOR SORTEADO SE GUARDA, y hasta la r1 se tiraba: la funcion lo
+    -- calculaba, lo devolvia, y el unico llamador ( el scheduler ) ignoraba el
+    -- retorno. El reporte imprimia el RANGO de la convar y "proximo en N s",
+    -- que juntos no dejan reconstruir el sorteo.
+    --
+    -- Costo real, medido en esta ronda: para decidir si el `rate` del hunt
+    -- estaba dividiendo el intervalo hubo que sacar los huecos a mano de los
+    -- timestamps de la bitacora y compararlos contra una media teorica. La
+    -- respuesta era que SI dividia -- o sea que el codigo estaba bien y la duda
+    -- la fabrico el instrumento. *Un valor que decide el comportamiento y no se
+    -- imprime obliga a re-derivarlo, y re-derivar es donde se cuelan los
+    -- errores.*
+    st.ultimaEspera = espera
+    st.ultimoRate   = rate
+    st.ultimoRango  = { lo / rate, hi / rate }
+    st.ultimaFuePrimera = primeraVez == true
+
+    -- ⚠ SE GUARDA EL HECHO, NO LA CONDICION. La primera version dejaba que el
+    -- reporte decidiera el rotulo "INCLUYE el multiplicador del hunt" leyendo
+    -- `phantom_Hunting` **al imprimir**, mientras el numero que acompañaba se
+    -- habia calculado **al sortear**. Un fantasma que entra en hunt despues del
+    -- sorteo leia un rotulo que su propio numero desmentia: es la familia "la
+    -- foto vieja" que este repo ya cerro dos veces ( r18 y r18b ).
+    --
+    -- Y se guarda el MULTIPLICADOR y no un booleano: un tipo cazando cuyo
+    -- `hunt.rate` es 1.0 estaria en hunt sin que el hunt cambie nada, y el
+    -- rotulo diria que incluye algo que no incluye.
+    st.ultimoMulHunt = mulHunt
 
     return espera
 
@@ -1662,6 +2160,13 @@ timer.Create( "phantasmagoria_event_scheduler", TICK, 0, function()
 
         local st = estado( ghost )
         st.vueltas = st.vueltas + 1
+
+        -- ⚠ EL CONTADOR SOLO ES MONOTONO: SIN LA HORA NO DICE SI SIGUE CORRIENDO.
+        -- `vueltas 209` se lee igual en un timer sano que en uno que murio hace
+        -- diez minutos con 209 vueltas hechas, y esta linea es LA acreditacion
+        -- del motor. Con la marca, el reporte puede decir "hace 0,4 s" o gritar.
+        -- Copiado de server_cloak.lua, que ya lo hace para el reconciliador.
+        st.vueltaT = CurTime()
 
         if st.next <= 0 then
             ghost:phantom_ScheduleEvent( true )
@@ -1697,13 +2202,73 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
 
     if sub == "reset" then
         PHANTASMAGORIA.EventLog = {}
+        PHANTASMAGORIA.EventLogPerdidas = 0
+
+        -- ⚠⚠ EL RESET NO PUEDE NILEAR LA TABLA ENTERA, y lo hacia. `phantom_ev`
+        -- guarda contadores PERO TAMBIEN estado de comportamiento: `doorHasta`
+        -- ( la cuarentena por puerta ) y `next` ( el reloj ). Nilearla:
+        --   · borra la cuarentena, asi que el evento de puertas puede repetir la
+        --     misma hoja que acababa de usar;
+        --   · deja `next = 0`, y el scheduler trata el 0 como "recien nacido" y
+        --     reprograma con `primeraVez`, o sea 4-12 s en vez del intervalo del
+        --     tipo.
+        -- Y la planilla manda correr `reset` JUSTO ANTES de las filas que miden
+        -- ritmo. *Un boton que existe para limpiar el instrumento no puede
+        -- fabricarle el primer dato a la medicion que viene.*
+        local sinMotor = {}
 
         local n = PHANTASMAGORIA.EachGhost( function( ghost )
-            ghost.phantom_ev = nil
+            -- ⚠ LOS OTROS TRES RECORRIDOS DE FANTASMAS DE ESTE ARCHIVO
+            -- COMPRUEBAN QUE EL METODO EXISTA Y ESTE NO LO HACIA. Un fantasma de
+            -- otra clase que declare `IsPhantasmagoriaGhost` sin incluir este
+            -- archivo hace reventar el reset A LA MITAD: los que ya se
+            -- recorrieron quedan reseteados, los de atras no, y el comando corta
+            -- con un error de Lua. *Una guarda que esta en tres de cuatro sitios
+            -- no es una guarda: es una costumbre.*
+            if not isfunction( ghost.phantom_ScheduleEvent ) then
+                sinMotor[ #sinMotor + 1 ] = quien( ghost )
+                return
+
+            end
+
+            local st = estado( ghost )
+
+            -- ⚠ `vueltas` NO SE BORRA, y esto es el arreglo de una
+            -- contradiccion: el reporte imprime, al lado de ese numero, *"si
+            -- dice 0, el timer NO esta corriendo"*. Ponerlo en cero fabricaba el
+            -- sintoma exacto de un motor muerto, en el comando que el operador
+            -- corre JUSTO ANTES de medir. No es un contador de la medicion: es
+            -- la acreditacion de que el motor existe.
+            st.disparos = 0
+            st.forzados = 0
+            st.porCat   = {}
+            st.motivos  = {}
+            st.ultimo   = nil
+            st.ultimoT  = 0
+
+            -- La cuarentena de puertas NO se toca: es comportamiento. El reloj
+            -- SI se reprograma, y a proposito -- ver el texto de abajo.
+            ghost:phantom_ScheduleEvent( false )
 
         end )
 
-        say( "[Phantasmagoria] bitacora y contadores borrados en " .. n .. " fantasma(s)." )
+        say( "[Phantasmagoria] bitacora y contadores borrados en " .. ( n - #sinMotor ) .. " fantasma(s)." )
+        say( "                 la cuarentena de puertas NO se toca ( es comportamiento )." )
+        -- ⚠ ESTA LINEA DECIA "el reloj NO se toca" Y LA LINEA DE ARRIBA LO
+        -- REPROGRAMA. Reprogramar es lo correcto -- si no, la primera muestra de
+        -- la medicion seria el resto del intervalo en vuelo, que esta sesgado
+        -- corto -- pero el operador tiene que saber cual de las dos cosas pasa.
+        -- *Un comentario y su codigo pueden contradecirse en dos lineas
+        -- consecutivas sin que ninguna prueba lo note.*
+        say( "                 el reloj SE REPROGRAMA con el intervalo del tipo ( 25-90 s / rate )," )
+        say( "                 no con el de bienvenida ni con el resto del anterior." )
+
+        if #sinMotor > 0 then
+            say( "                 ⚠ " .. #sinMotor .. " sin el motor, NO reseteado(s): " ..
+                table.concat( sinMotor, ", " ) )
+
+        end
+
         return
 
     end
@@ -1714,7 +2279,8 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
         ( cvMaster:GetBool() and "  ( encendido )" or "  ⚠ APAGADO: el scheduler no corre" ) )
     say( "  radio base  " .. math.Round( cvRadius:GetFloat() ) .. " u   ( alrededor del FANTASMA, no del jugador )" )
     say( "  intervalo   " .. math.Round( cvMin:GetFloat() ) .. " a " .. math.Round( cvMax:GetFloat() ) ..
-        " s, dividido por el `rate` del tipo" )
+        " s, dividido por el `rate` del tipo Y ADEMAS por el `hunt.rate` si esta cazando" )
+    say( "              ( el valor que de verdad salio esta en la linea 'sorteado' de cada fantasma )" )
     say( "  masa tope   " .. math.Round( cvMass:GetFloat() ) .. " kg" )
     say( "  en el hunt  phantasmagoria_ghost_evhunt = " .. cvHunt:GetInt() ..
         ( cvHunt:GetInt() == 0 and "  ( CONTROL: cazando no hay eventos )"
@@ -1779,8 +2345,20 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
         -- ⚠ ESTAS DOS LINEAS SON LA ACREDITACION DEL SCHEDULER. Sin ellas, "no
         -- pasa nada" no distingue un motor apagado de un motor que corre y no
         -- encuentra sujetos.
-        say( "    vueltas   " .. st.vueltas .. " del scheduler  ( a " .. TICK ..
-            " Hz; si dice 0, el timer NO esta corriendo )" )
+        --
+        -- ⚠ EL NUMERO SOLO ES MONOTONO Y NO CADUCA: `vueltas 209` se lee igual
+        -- en un timer sano que en uno que murio hace diez minutos habiendo hecho
+        -- 209. La hora de la ultima vuelta es lo que lo vuelve una medicion del
+        -- PRESENTE. *Un contador que solo sube dice que algo corrio alguna vez,
+        -- no que este corriendo.*
+        local desdeVuelta = st.vueltaT and ( CurTime() - st.vueltaT ) or nil
+
+        say( "    vueltas   " .. st.vueltas .. " del scheduler  ( a " .. TICK .. " Hz; " ..
+            ( desdeVuelta == nil and "TODAVIA NINGUNA: el timer no lo alcanzo ( o no esta corriendo )"
+              or ( desdeVuelta > TICK * 2
+                   and ( "!! LA ULTIMA FUE HACE " .. string.format( "%.1f", desdeVuelta ) ..
+                         " s, y deberia ser cada " .. TICK .. " s: EL TIMER DEJO DE CORRER" )
+                   or ( "la ultima hace " .. string.format( "%.1f", desdeVuelta ) .. " s" ) ) ) .. " )" )
         -- ⚠ ESTE NUMERO Y EL `disparos` DE CADA CATEGORIA SON DOS CUENTAS
         -- DISTINTAS, y hasta la revision se llamaban igual. Este cuenta
         -- DESPERTADAS con al menos un exito; el de abajo cuenta EVENTOS por
@@ -1788,13 +2366,52 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
         -- dos tipos que este bloque existe para lucir -- divergen, y la suma de
         -- las ocho columnas puede ser mayor que este. En los otros 28 coinciden,
         -- que es lo que hace el defecto dificil de ver.
-        say( "    despertadas con al menos un evento: " .. st.disparos .. "   ultimo: " ..
+        --
+        -- ⚠⚠ Y SON DOS CUENTAS TAMBIEN POR OTRO EJE: espontaneas contra
+        -- forzadas. La fila 01 de la planilla pregunta "¿el motor corrio SOLO?"
+        -- y hasta la r1 este numero sumaba los disparos del operador, asi que la
+        -- fila no podia contestarse con su propia salida.
+        --
+        -- ⚠ EL CONTADOR SE PARTIO Y SU VECINO NO. `st.ultimo` lo escribe
+        -- cualquiera de los dos caminos, asi que colgado del renglon rotulado
+        -- "( el scheduler, solo )" mostraba el ultimo evento del OPERADOR como
+        -- si fuera del motor -- que es exactamente lo que el corte existia para
+        -- impedir. Va en su propia linea, sin dueño.
+        say( "    despertadas ESPONTANEAS ( el scheduler, solo ): " .. st.disparos )
+        say( "    despertadas FORZADAS ( phantasmagoria_ghost_event ): " .. ( st.forzados or 0 ) ..
+            ( ( st.forzados or 0 ) > 0
+              and "   <- estas NO acreditan al motor; van rotuladas [FORZADO] en la bitacora"
+              or "" ) )
+        say( "    ultimo evento ( de cualquiera de los dos caminos ): " ..
             ( st.ultimo and ( st.ultimo .. " hace " .. math.Round( CurTime() - st.ultimoT ) .. " s" )
               or "ninguno todavia" ) )
 
         local falta = st.next - CurTime()
         say( "    proximo   " .. ( st.next <= 0 and "sin programar" or
-            ( falta > 0 and ( "en " .. math.Round( falta ) .. " s" ) or "YA ( vencido )" ) ) )
+            ( falta > 0 and ( "en " .. string.format( "%.1f", falta ) .. " s" )
+              or ( "YA ( vencido hace " .. string.format( "%.1f", -falta ) .. " s )" ) ) ) )
+
+        -- El intervalo REALMENTE SORTEADO, no el rango de la convar. Sin esta
+        -- linea, decidir si el `rate` del hunt divide el intervalo obliga a
+        -- restar timestamps de la bitacora a mano.
+        if st.ultimaEspera then
+            local r = st.ultimoRango or { 0, 0 }
+
+            -- ⚠ EL ROTULO DEL HUNT SALE DE LO QUE SE APLICO AL SORTEAR, no de lo
+            -- que el fantasma este haciendo AHORA. Ver `ultimoMulHunt`.
+            local mh = st.ultimoMulHunt or 1
+
+            say( "    sorteado  " .. string.format( "%.1f", st.ultimaEspera ) .. " s" ..
+                ( st.ultimaFuePrimera and "  ( la PRIMERA, que va a 4-12 s a proposito y no usa el rate )"
+                  or ( "  ( rango efectivo " .. string.format( "%.1f", r[ 1 ] ) .. " a " ..
+                       string.format( "%.1f", r[ 2 ] ) .. " s, con rate x" ..
+                       string.format( "%.2f", st.ultimoRate or 1 ) ..
+                       ( mh ~= 1
+                         and ( " -- INCLUYE el x" .. string.format( "%.2f", mh ) ..
+                               " del hunt, aplicado AL SORTEAR" )
+                         or " -- sin multiplicador de hunt en ese sorteo" ) .. " )" ) ) )
+
+        end
 
         say( "    rasgos:   rate x" .. string.format( "%.2f", flags.rate or 1 ) ..
             "  count " .. tostring( flags.count or 1 ) .. " ( categorias a la vez )" ..
@@ -1863,8 +2480,41 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
 
     local log = PHANTASMAGORIA.EventLog
 
+    -- ⚠ LA BITACORA ES GLOBAL, y el que la lee la lee como si fuera de UN
+    -- fantasma. En la r1 hay un tramo con `#442` y `#452` intercalados y nada lo
+    -- decia. Se cuenta cuantos sujetos distintos la escribieron, con la serie de
+    -- `quien()` como clave -- que es lo que hace separables las lineas.
+    local sujetos, nSujetos = {}, 0
+
+    for i = 1, #log do
+        local id = string.match( log[ i ], "(#%d+/s%S+)" )
+
+        if id and not sujetos[ id ] then
+            sujetos[ id ] = true
+            nSujetos = nSujetos + 1
+
+        end
+    end
+
+    local perdidas = PHANTASMAGORIA.EventLogPerdidas or 0
+
     say( "" )
-    say( "  bitacora ( " .. #log .. " / " .. BITACORA_MAX .. " ) -- lo que un comando en vivo ya no alcanza a ver:" )
+    say( "  bitacora ( " .. #log .. " / " .. BITACORA_MAX .. " renglones" ..
+        ( nSujetos > 0 and ( ", de " .. nSujetos .. " fantasma(s)" ) or "" ) ..
+        ( perdidas > 0 and ( ", " .. perdidas .. " YA DESCARTADAS" ) or "" ) ..
+        " ) -- lo que un comando en vivo ya no alcanza a ver:" )
+
+    if perdidas > 0 then
+        say( "    ⚠ la ventana se lleno y tiro " .. perdidas .. " renglon(es). Lo de abajo es la COLA," ..
+            " no la corrida entera." )
+
+    end
+
+    if nSujetos > 1 then
+        say( "    ⚠ hay " .. nSujetos .. " fantasmas escribiendo aca. Filtrar por la serie ( /sN )" ..
+            " antes de leer un ritmo: el EntIndex se recicla." )
+
+    end
 
     if #log <= 0 then
         say( "    vacia.  Si ademas 'vueltas' dice 0, el defecto es el scheduler y no los eventos." )
