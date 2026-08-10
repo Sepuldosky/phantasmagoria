@@ -1288,7 +1288,14 @@ local ACTS_QUE_PIDE_LA_BASE = {
     { act = ACT_HL2MP_WALK_CROUCH,   nuestra = "cwalk_all",    cuando = "agachado andando" },
     { act = ACT_HL2MP_JUMP_SLAM,     nuestra = "jump_slam",    cuando = "saltando" },
     { act = ACT_HL2MP_SWIM,          nuestra = "swimming_all", cuando = "nadando" },
-    { act = ACT_LAND,                nuestra = "jump_land",    cuando = "al aterrizar ( gesto )" },
+    -- ⚠ ESTA ES PRESTADA A PROPOSITO desde el 2026-08-09. Nuestra `jump_land`
+    -- portada deformaba al fantasma entero de forma persistente -- A/B en juego,
+    -- una sola variable -- y se saco del QC; `ACT_LAND` la sirve ahora la de
+    -- `m_anm`, que es una delta de Valve. El costo estaba pago: el terminator de
+    -- fabrica no anima aterrizajes. Ver §20 de
+    -- dev/HANDOFF_fantasma_rig_ragdoll_continuacion.md.
+    { act = ACT_LAND,                nuestra = "jump_land",    cuando = "al aterrizar ( gesto )",
+      prestada = true },
 }
 
 ---------------------------------------------------------------------------
@@ -1467,28 +1474,96 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_acts", function( ply )
             end
         end
 
-        local malas = 0
+        -- ⚠ EL NOMBRE NO PRUEBA DE QUIEN ES LA SECUENCIA, y esto esta escrito
+        -- porque el comando dijo `8/8 y es la nuestra` sobre una `jump_land` que
+        -- ya no estaba en nuestro .mdl. La prestada se llama IGUAL a proposito
+        -- --es justo lo que hace que el virtualmodel descarte la homonima-- asi
+        -- que el nombre no discrimina. Y el CONTEO tampoco: al sacar la nuestra,
+        -- la prestada deja de descartarse y `secuencias visibles` sigue dando
+        -- 1725, el mismo numero. *Las dos mitades del criterio se quedaron ciegas
+        -- al mismo tiempo, y el comentario de arriba decia que juntas alcanzaban.*
+        --
+        -- Lo que SI discrimina es el INDICE: el virtualmodel pone primero las
+        -- locales del modelo dueno y despues las prestadas. `idle` es la ultima
+        -- que declara nuestro QC, asi que todo indice mayor que el suyo es
+        -- prestado.
+        --
+        -- ⚠ Y ESE SUPUESTO SE COMPRUEBA, no se cree: las siete filas que sabemos
+        -- nuestras tienen que caer por debajo de la frontera. Si alguna no cae,
+        -- hay dos causas posibles --el dedup fallo, o la frontera envejecio
+        -- porque el QC cambio de orden-- y este comando NO puede separarlas: lo
+        -- dice y no reparte etiquetas.
+        -- El metodo se comprueba antes de llamarlo: si no existe, la columna del
+        -- dueno dice `?` y el veredicto sale PARCIAL. Reventar aca dejaria sin
+        -- imprimir tambien el conteo, que si se pudo medir.
+        local frontera = isfunction( ghost.LookupSequence ) and ghost:LookupSequence( "idle" ) or nil
+        local hayFrontera = frontera ~= nil and frontera >= 0
+
+        local function deQuien( idx )
+            if not hayFrontera or not idx or idx < 0 then return "?" end
+            return idx <= frontera and "nuestra" or "PRESTADA"
+
+        end
+
+        local malas, prestadas, sorpresas = 0, 0, 0
 
         for _, fila in ipairs( ACTS_QUE_PIDE_LA_BASE ) do
             local cands = porAct[ fila.act ] or {}
-            local elegida = ghost:GetSequenceName( ghost:SelectWeightedSequence( fila.act ) )
+            local idx = ghost:SelectWeightedSequence( fila.act )
+            local elegida = ghost:GetSequenceName( idx )
+            local duena = deQuien( idx )
 
-            -- El veredicto es el CONTEO y el NOMBRE juntos. Uno solo no alcanza:
-            -- un conteo de 1 sobre la secuencia equivocada seria un modelo que
-            -- responde siempre igual y siempre mal, y un nombre correcto con
-            -- conteo 2 es la moneda.
-            local ok = #cands == 1 and cands[ 1 ] == fila.nuestra
+            -- El veredicto es el CONTEO y el DUENO juntos. El nombre se imprime
+            -- pero YA NO VOTA: un conteo de 1 sobre la secuencia equivocada seria
+            -- un modelo que responde siempre igual y siempre mal, un conteo de 2
+            -- es la moneda, y un nombre correcto no dice de quien es.
+            local ok
+            if fila.prestada then
+                -- A proposito no la declaramos: alcanza con que resuelva a UNA, y
+                -- si resolviera a una NUESTRA seria que el QC volvio a emitirla.
+                ok = #cands == 1 and duena ~= "nuestra"
+
+            else
+                ok = #cands == 1 and cands[ 1 ] == fila.nuestra and duena ~= "PRESTADA"
+                if duena == "PRESTADA" then sorpresas = sorpresas + 1 end
+
+            end
             if not ok then malas = malas + 1 end
+            if duena == "PRESTADA" then prestadas = prestadas + 1 end
 
-            say( "    " .. ( ok and "OK  " or "!!  " ) .. string.format( "%-22s", fila.nuestra ) ..
+            -- TRES marcas y no dos: si el conteo esta bien pero el dueno no se
+            -- pudo leer, la fila no es OK ni !!, es `??`. Poner OK ahi seria
+            -- contar como aprobado justo lo que no se midio.
+            local marca
+            if #cands ~= 1 then marca = "!!  "
+            elseif duena == "?" then marca = "??  "
+            elseif ok then marca = "OK  "
+            else marca = "!!  " end
+
+            say( "    " .. marca .. string.format( "%-22s", fila.nuestra ) ..
                 #cands .. " secuencia" .. ( #cands == 1 and "" or "s" ) ..
-                "   elige: " .. tostring( elegida ) ..
+                "   elige: " .. tostring( elegida ) .. " #" .. tostring( idx ) ..
+                " [" .. duena .. "]" ..
+                ( fila.prestada and " <- prestada A PROPOSITO" or "" ) ..
                 "   ( " .. fila.cuando .. " )" )
 
             if #cands ~= 1 then
                 say( "         compiten: " .. table.concat( cands, ", " ) )
 
             end
+        end
+
+        if not hayFrontera then
+            say( "         !! la frontera no se pudo leer: este modelo no declara una " ..
+                "secuencia `idle`, asi que la columna [nuestra/PRESTADA] dice `?` y de " ..
+                "quien es cada una NO se midio." )
+
+        elseif sorpresas > 0 then
+            say( "         !! " .. sorpresas .. " fila(s) que esperabamos NUESTRAS " ..
+                "resolvieron por encima de la frontera ( indice > " .. frontera .. " ). " ..
+                "O el descarte por nombre no ocurrio, O el QC cambio de orden y `idle` " ..
+                "ya no es la ultima local: este comando no distingue las dos." )
+
         end
 
         -- La linea de estado ahora mismo, que es lo que ata el conteo con lo que
@@ -1607,12 +1682,22 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_acts", function( ply )
 
         end
 
-        if malas == 0 then
-            say( "    >> PASA: 8/8 actividades con UNA sola secuencia, y es la nuestra." )
+        local n = #ACTS_QUE_PIDE_LA_BASE
+
+        if not hayFrontera then
+            -- Ni PASA ni FALLA: la mitad del criterio no se pudo medir. Un
+            -- veredicto que se emite igual convierte lo que no midio en aprobado.
+            say( "    >> PARCIAL: " .. ( n - malas ) .. "/" .. n .. " con UNA sola secuencia, " ..
+                "pero de QUIEN es cada una este comando NO lo midio ( sin frontera )." )
+
+        elseif malas == 0 then
+            say( "    >> PASA: " .. n .. "/" .. n .. " actividades con UNA sola secuencia -- " ..
+                ( n - prestadas ) .. " nuestras y " .. prestadas ..
+                " prestada(s) a proposito ( frontera: nuestras hasta el #" .. frontera .. " )." )
 
         else
-            say( "    >> FALLA: " .. malas .. " de 8 actividades no resuelven a nuestra secuencia. " ..
-                "Con 2 candidatas el estiramiento sale una vez de cada dos." )
+            say( "    >> FALLA: " .. malas .. " de " .. n .. " actividades no resuelven como " ..
+                "corresponde. Con 2 candidatas el estiramiento sale una vez de cada dos." )
 
         end
     end
