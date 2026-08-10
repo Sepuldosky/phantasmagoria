@@ -216,7 +216,15 @@ local function cmd_ragdoll( ply )
 					i, tostring( e:GetBoneName( b ) ), p:GetMass(), v ) )
 			end
 		end
-		print( string.format( "[ph_ghost]   volumen total %.2f  (nuestro .phy dice 2278.19)", vt ) )
+		-- ⚠ EL 2278.19 ESTABA CLAVADO Y ES EL DE LA NENA. Sobre el Male
+		-- (4170.73) y la OldCrone (64424.50) esta linea --que es LA QUE
+		-- SEPARA las causas-- comparaba contra el archivo de otro modelo.
+		local vEsp = ficha().volumen or 0
+		print( string.format(
+			"[ph_ghost]   volumen total %.2f  (nuestro .phy dice %.2f)  %s",
+			vt, vEsp,
+			math.abs( vt - vEsp ) < 1 and "COINCIDE: es nuestra colision"
+			or "NO COINCIDE: el motor esta sirviendo OTRA colision" ) )
 
 		-- EL TERCERO. Si el ciudadano de HL2 devuelve los MISMOS numeros que
 		-- el fantasma, el motor esta sirviendo la misma colision para los dos

@@ -82,6 +82,12 @@ PHANTASMAGORIA.ParesHueso = {
 -- solido, asi que en un modelo chico la masa del archivo es MAYOR que la
 -- pedida ( la nena pide 30.73 y el archivo tiene 36.58; el Male pide 56.17 y
 -- tiene 58.04 ). El numero que se compara en juego es el del archivo.
+-- `volumen` es la suma de los solidos del MISMO .phy. Va al lado de la masa
+-- porque es lo que SEPARA las causas cuando la masa no da: el motor no
+-- recalcula la masa pero el volumen sale del archivo, asi que un volumen que no
+-- es el nuestro dice que el motor esta sirviendo OTRA colision. Estaba clavado
+-- en 2278.19 --el de la nena-- adentro del instrumento, o sea que sobre el Male
+-- y la OldCrone la linea de diagnostico mentia por un factor de 2 y de 28.
 -- ⚠ Y el de la OldCrone es una DECISION, no una medicion derivada: su ragdoll
 -- da 9.64x el volumen del ciudadano porque el casco convexo de su habito
 -- encierra aire de los tobillos al pecho, asi que la densidad de Valve daria
@@ -94,6 +100,7 @@ PHANTASMAGORIA.GhostModels = {
 		altura  = 44.94,
 		nuestro = { 6.70, 6.09, 9.72, 9.61, 3.47 },
 		masa    = 36.58,
+		volumen = 2278.19,
 	},
 	{
 		mdl     = "models/phantasmagoria/ghost_male.mdl",
@@ -102,6 +109,7 @@ PHANTASMAGORIA.GhostModels = {
 		altura  = 72.29,
 		nuestro = { 9.43, 11.15, 20.45, 18.31, 2.18 },
 		masa    = 58.04,
+		volumen = 4170.73,
 	},
 	{
 		mdl     = "models/phantasmagoria/ghost_oldcrone.mdl",
@@ -110,6 +118,7 @@ PHANTASMAGORIA.GhostModels = {
 		altura  = 68.98,
 		nuestro = { 8.44, 10.58, 12.77, 18.18, 4.62 },
 		masa    = 54.02,
+		volumen = 64424.50,
 	},
 }
 
