@@ -20,13 +20,20 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 >
 > **LO QUE SIGUE, EN ESTE ORDEN:**
 >
-> 1. **PROPS HORNEADOS** — que suenen los `prop_static` del mapa. Ya medido para arrancar:
->    `gm_funkis_night` tiene **1588 `prop_static` / 418 modelos**, de los cuales **9 modelos y 11
->    instancias** son trastos de casa (3 radios, 2 parlantes, 2 despertadores, 2 relojes, 1
->    teléfono); el parseo del game lump `sprp` está probado; `props_funkis/radionette01.mdl` ya
->    figura en la lista `exacto` de la familia radio. ⚠ **El bloqueante real no es leer el BSP:** un
->    `prop_static` **no tiene entidad**, y la familia radio necesita `EmitSound`/`StopSound` para
->    cortar los clips largos — la salida es un **emisor invisible en el origen del prop**.
+> 1. **PROPS HORNEADOS** — que suenen los `prop_static` del mapa. **Prompt completo en
+>    `dev/PROMPT_phantasmagoria_props_horneados.txt`.** Censo rehecho el 2026-08-10 con instrumento
+>    versionado (`dev/censo_props_horneados.py`): `gm_funkis_night` tiene **1588 `prop_static` / 418
+>    modelos**, y las reglas reales de `PROP_CONSUJETO` reclamarían **12 modelos / 19 instancias**, de
+>    los cuales **4 modelos / 8 instancias son FALSOS POSITIVOS** (una antena de skybox, una guía
+>    telefónica, y seis rollos/dispensadores de papel higiénico que la familia «inodoro» toma por
+>    inodoros). Verdaderos: **8 modelos / 11 instancias**.
+>    ⚠ **El desglose que este documento citaba antes —«9 modelos, 3 radios, 2 parlantes, 2
+>    despertadores…»— NO REPRODUCE:** contaba una familia que el addon no tiene (no hay familia
+>    «speaker») y se perdía los inodoros. Su script no sobrevivió, y por eso el nuevo vive en `dev/`.
+>    ⚠ **El bloqueante real no es leer el BSP:** un `prop_static` **no tiene entidad**, y las familias
+>    con clip largo necesitan `EmitSound`/`StopSound` (el `clock_tick` dura 46,55 s) — la salida es un
+>    **emisor invisible en el origen del prop**, y cuál entidad sirve para eso es una **precondición
+>    sin medir**.
 > 2. **POR QUÉ EL BOT SE QUEDA PEGADO Y SE DESPEJA SOLO, y por qué a veces quiere pasar a través de un
 >    vidrio.** Pedido del autor, **después** de los props horneados. Su pista: la base Terminator
 >    tendría **convars para ver el *thinking*** del NPC. ⚠ **Nada de esto está medido**: no se sabe si
