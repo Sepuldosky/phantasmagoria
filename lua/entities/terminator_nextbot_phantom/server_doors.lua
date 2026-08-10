@@ -220,6 +220,37 @@ local DOOR_CLASSES = {
     [ "func_door_rotating" ] = true,
 }
 
+-- Cuantos saltos de `GetParent()` se suben cuando el sondeo pega en un PANEL
+-- parenteado en vez de en la hoja ( ver el bloque grande de doorAhead ).
+--
+-- ⚠ EXISTE UNA SOLA VEZ A PROPOSITO, y no es cosmetico: hay DOS lugares que
+-- suben la misma cadena -- doorAhead, que encuentra la puerta, y la huella, que
+-- pregunta si el trace pego en esa puerta o en uno de sus paneles. Si los dos
+-- topes no fueran el mismo numero, una puerta encontrada en el salto 4 no
+-- dejaria huella porque el otro lado se rinde en el 3, y el sintoma seria
+-- "abre pero no deja evidencia" en una sola puerta del mapa.
+local PARENT_HOPS = 4
+
+-- ¿`ent` ES la puerta, o uno de sus paneles parenteados? Existe porque el
+-- `tr` que devuelve doorAhead pego en el HIJO ( ver la advertencia de ahi ), asi
+-- que un `tr.Entity == door` pelado es FALSO justo en las puertas que el arreglo
+-- del padre vino a rescatar.
+local function esLaPuertaOSuPanel( ent, door )
+    if not IsValid( ent ) or not IsValid( door ) then return false end
+
+    local e = ent
+
+    for _ = 1, PARENT_HOPS + 1 do
+        if e == door then return true end
+        if not IsValid( e ) then return false end
+
+        e = e:GetParent()
+
+    end
+
+    return false
+end
+
 ---------------------------------------------------------------------------
 -- Leer el estado de una puerta
 ---------------------------------------------------------------------------
@@ -409,7 +440,183 @@ local function doorAhead( ghost )
     local hit = tr.Entity
 
     if IsValid( hit ) and DOOR_CLASSES[ hit:GetClass() ] then
+        ghost.phantom_doorBlocker = nil
         return hit, tr, src, reach
+
+    end
+
+    ---------------------------------------------------------------------------
+    -- ⚠⚠⚠ LA PUERTA PUEDE SER EL **PADRE** DE LO QUE TOCAMOS -- y esta era la
+    -- causa real del reporte de la r2, tres rondas mal adjudicada al vidrio
+    ---------------------------------------------------------------------------
+    -- El autor: *"quedan atrapados en dos puertas que tienen vidrios, ni siquiera
+    -- la abren, son las dos puertas para ir a la piscina"*. Se le echo la culpa a
+    -- la TRANSPARENCIA ( el panel deja pasar la vista y no el cuerpo, que es un
+    -- modo de falla real de nextbot ) y era falso.
+    --
+    -- LO QUE PASA, leido del lump de ENTIDADES del .bsp: esas puertas estan
+    -- armadas como un `func_door_rotating` con sus paneles PARENTEADOS encima.
+    --
+    --   door_terrace01  func_door_rotating   distance 90 · speed 100 · wait 4
+    --      hijos: 2 prop_dynamic ( manijas ) · func_breakable *139 ( el VIDRIO )
+    --             · func_brush *222 ( el MARCO )
+    --   door_veranda01  func_door_rotating   idem, con *217 y *249
+    --
+    -- El sondeo pega SIEMPRE contra un hijo -- son los que sobresalen -- y el
+    -- hijo es `func_breakable` / `func_brush`, que no estan en DOOR_CLASSES. La
+    -- puerta, cuya clase SI esta en la lista, queda detras de sus propios
+    -- paneles y el bot no la ve nunca. *El sintoma era correcto y la causa que se
+    -- le adjudico era otra entidad.*
+    --
+    -- ⚠ POR QUE SE SUBE AL PADRE Y **NO** SE AGRANDA `DOOR_CLASSES`: porque el
+    -- autor lo veto con motivo -- *"Peligroso hacer que las ventanas se puedan
+    -- traspasar, eso no deberia hacerse para que el ghost no escape"* -- y porque
+    -- `func_brush` es la clase con que se hacen paredes. Medido sobre el mapa:
+    -- de 181 `func_breakable` solo **5** tienen una puerta arriba, y de 11
+    -- `func_brush` solo **2**. O sea que esto alcanza a 7 entidades y deja 176
+    -- ventanas y 9 paredes exactamente como estaban. Un ensanche de la lista
+    -- blanca habria tocado las 192.
+    --
+    -- ⚠ MEDIDO EN JUEGO ANTES DE ESCRIBIR ESTO, y era la unica suposicion del
+    -- arreglo: que `GetParent()` devuelva la puerta en RUNTIME, no solo que el
+    -- `parentname` este en el BSP ( que es lo que escribio el compilador, no lo
+    -- que resuelve el engine ). En el realm SERVER, que es donde corre esta
+    -- funcion: `func_brush [466]` -> `func_door_rotating [89]` y
+    -- `func_breakable [256]` -> el MISMO `[89]`. El engine es un tercero y esto
+    -- se pregunto en vez de asumirse ( COR-5 ).
+    --
+    -- Bucle acotado y no un solo salto: en este mapa la cadena es de UN nivel,
+    -- pero un mapa puede anidar y cuatro saltos con guarda no cuestan nada. El
+    -- tope tambien protege de un ciclo de parenteo mal armado por un mapper.
+    if IsValid( hit ) then
+        local padre = hit:GetParent()
+
+        for _ = 1, PARENT_HOPS do
+            if not IsValid( padre ) then break end
+
+            if DOOR_CLASSES[ padre:GetClass() ] then
+                -- se limpia el blocker igual que en la rama de arriba: esto ES
+                -- una puerta reconocida, no un obstaculo sin identificar
+                ghost.phantom_doorBlocker = nil
+
+                -- ⚠ SE DEVUELVE `tr` SIN TOCAR, Y SE DICE: el trace pego en el
+                -- PANEL, no en la hoja. `tr.HitPos` / `tr.Fraction` describen el
+                -- hijo. Para los usos GEOMETRICOS es correcto -- el panel esta EN
+                -- la puerta, asi que la distancia es la misma cosa a centimetros.
+                --
+                -- ⚠⚠ Y ESTE RENGLON YA COBRO UNA VEZ: la primera version decia
+                -- "es correcto para lo que los llamadores hacen hoy" y era FALSO,
+                -- porque un llamador no usaba la geometria del `tr` sino su
+                -- IDENTIDAD -- `if tr.Entity == door` para armar la huella, que
+                -- con el padre devuelto da falso siempre. El autor lo vio en
+                -- juego: *"ya abre las puertas, pero parece no dejar huellas"*.
+                -- Arreglado con `esLaPuertaOSuPanel`. La leccion, para el
+                -- proximo que agregue un uso: **un `==` entre entidades tambien
+                -- es un uso del trace**, y revisar "los usos de tr" mirando solo
+                -- HitPos y Fraction deja afuera justo el que se rompe.
+                return padre, tr, src, reach
+
+            end
+
+            padre = padre:GetParent()
+
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- ⚠⚠ LO QUE **NO** ES UNA PUERTA TAMBIEN SE GUARDA -- r3, fila 06
+    ---------------------------------------------------------------------------
+    -- El autor reporto: *"quedan atrapados en dos puertas que tienen vidrios, ni
+    -- siquiera la abren, son las dos puertas para ir a la piscina"*.
+    --
+    -- Y el instrumento de puertas es CIEGO a eso por construccion: cuando el
+    -- sondeo pega en algo que no esta en la lista blanca de tres clases, esta
+    -- funcion devuelve `nil`, el cronometro de atasco contra puertas se pone en
+    -- CERO, y el reporte imprime `delante ninguna puerta · peor 0,0 s`. O sea que
+    -- **"no hay nada adelante" y "hay algo que no reconozco" escriben la misma
+    -- linea** -- y el eje 6 es exactamente la diferencia entre las dos.
+    --
+    -- Esto no cambia comportamiento: guarda el hit crudo y sigue devolviendo nil.
+    -- Va ANTES del return y NO mueve el return ni el orden de nada, porque la
+    -- rama que llama a esta funcion tambien dispara `phantom_PhaseRelease` y
+    -- `phantom_PhaseTimeout`, que son las dos que impiden que el fantasma quede
+    -- no-solido para siempre.
+    if IsValid( hit ) then
+        -- ⚠⚠⚠ UN SER NO ES GEOMETRIA, Y MEZCLARLOS HIZO QUE ESTE INSTRUMENTO
+        -- CONTARA AL QUE LO ESTABA MIDIENDO. Corrida del autor, r3 2026-08-10:
+        -- se paro delante del fantasma para observarlo, el sondeo le pego A EL, y
+        -- el reporte imprimio `player #1 targetname 'SEPULDOSKY'` seguido del
+        -- consejo entero de DOOR_CLASSES -- *"si hay que agregarla, hay que tocar
+        -- LAS DOS copias de la tabla"* -- sobre un JUGADOR. Y el contador de
+        -- abajo subio 20 -> 84 -> 146 mientras el bot lo miraba a el.
+        --
+        -- Ese contador es el que la r2 uso para senalar las puertas con vidrio.
+        -- O sea que **el acto de pararse a observar inflaba el numero que se iba
+        -- a leer**: la escena que el instrumento existe para detectar ( una hoja
+        -- que la lista blanca no reconoce ) y la escena mas comun de todas ( hay
+        -- alguien parado adelante ) escribian el mismo renglon y el mismo total.
+        --
+        -- Se separan y se cuentan aparte. `esSer` decide por lo que la entidad
+        -- ES, no por su clase: un nextbot NO es `IsNPC()` -- los otros fantasmas
+        -- incluidos --, y esa rama ya se pago en server_collision.lua.
+        local esSer = hit:IsPlayer() or hit:IsNPC() or hit:IsNextBot()
+
+        ghost.phantom_doorBlocker = {
+            clase   = hit:GetClass(),
+            nombre  = hit:GetName(),
+            indice  = hit:EntIndex(),
+            modelo  = hit:GetModel(),
+            frac    = tr.Fraction,
+            dist    = math.Round( reach * tr.Fraction ),
+            cuando  = CurTime(),
+            esSer   = esSer,
+        }
+
+        -- ⚠ SE GUARDA CONTRA EL CONTADOR, **NO** CON UN `return` TEMPRANO. La
+        -- primera version de este arreglo cortaba aca con `return nil` y era un
+        -- defecto nuevo: esta funcion termina en `return nil, tr, src, reach`
+        -- -- CUATRO valores --, asi que un `return nil` pelado le come tres al
+        -- que llama. Es literal lo que el encabezado de este bloque advierte:
+        -- *"NO mueve el return ni el orden de nada"*. Un arreglo que respeta la
+        -- advertencia escrita al lado cuesta una linea; ignorarla, una ronda.
+        if esSer then
+            ghost.phantom_doorSer = ( ghost.phantom_doorSer or 0 ) + 1
+
+        else
+
+        -- ⚠⚠ CAMPO PROPIO Y NO `phantom_doorStats`, Y ES UN ARREGLO DE LA
+        -- REVISION DE ESTA MISMA TANDA. La primera version hacia
+        -- `local s = ghost.phantom_doorStats; if s then ... end`, y esa tabla la
+        -- crea UNICAMENTE `stats()`, cuyos call sites estan TODOS detras de una
+        -- puerta ya reconocida. O sea que en la escena exacta para la que este
+        -- contador se escribio -- un fantasma trabado contra una hoja que la
+        -- lista blanca NO reconoce, y que por lo tanto puede no haber visto una
+        -- puerta valida en toda su vida -- el contador **no podia subir**, y la
+        -- linea del reporte quedaba ademas debajo del early return de `st`.
+        --
+        -- *Un contador cuya precondicion la apaga el mismo escenario que vino a
+        -- medir es un cero que no significa nada.* Y el arreglo obvio
+        -- ( llamar `stats( ghost )` aca ) tampoco servia: `stats` es un local
+        -- declarado DESPUES de esta funcion, asi que en este punto vale nil.
+        ghost.phantom_doorNoPuerta = ( ghost.phantom_doorNoPuerta or 0 ) + 1
+
+        end
+
+    elseif tr.Hit then
+        -- Pego en el MUNDO ( `IsValid` es false sobre worldspawn en GMod ): un
+        -- brush, o un prop estatico horneado. Se distingue del caso de arriba
+        -- porque ahi hay una entidad a la que se le puede preguntar cosas y aca
+        -- no, y las dos escenas piden arreglos distintos.
+        ghost.phantom_doorBlocker = {
+            clase  = "( el MUNDO: brush o prop estatico )",
+            indice = 0,
+            frac   = tr.Fraction,
+            dist   = math.Round( reach * tr.Fraction ),
+            cuando = CurTime(),
+        }
+
+    else
+        ghost.phantom_doorBlocker = nil
 
     end
 
@@ -883,7 +1090,23 @@ function ENT:phantom_DoorThink()
     -- de vista de la evidencia, y el criterio del autor es "cuando la abra".
     local pendiente
 
-    if tr and tr.Hit and tr.Entity == door then
+    -- ⚠ NO ES `tr.Entity == door`, Y LA IGUALDAD PELADA ERA UN DEFECTO REAL: en
+    -- las puertas con paneles parenteados el trace pego en el VIDRIO y `door` es
+    -- el PADRE, asi que la comparacion daba falso SIEMPRE y esas puertas abrian
+    -- sin dejar evidencia -- `huellas` se quedaba en 0 justo en las dos puertas
+    -- por las que se escribio el arreglo del padre. Lo reporto el autor en juego
+    -- ( *"ya abre las puertas, pero parece no dejar huellas"* ) y el renglon que
+    -- lo advertia estaba escrito en doorAhead: decia que devolver el `tr` del
+    -- hijo *"es correcto para lo que los llamadores hacen hoy"*. No lo era. La
+    -- revision de esa advertencia miro los usos GEOMETRICOS del `tr` ( HitPos,
+    -- Fraction ) y no el de IDENTIDAD, que es el unico que la ruptura rompe:
+    -- *un `==` entre entidades tambien es un uso del trace.*
+    --
+    -- El panel ES parte de la puerta, asi que la huella sobre el vidrio es la
+    -- huella correcta: `MakePrint` la guarda relativa a la PUERTA ( lpos ), y
+    -- como el panel esta parenteado se mueve rigido con ella -- el punto local
+    -- sigue cayendo sobre el vidrio cuando la hoja gira.
+    if tr and tr.Hit and esLaPuertaOSuPanel( tr.Entity, door ) then
         pendiente = PHANTASMAGORIA.MakePrint( self, door, tr.HitPos, tr.HitNormal )
 
     end
@@ -1493,6 +1716,19 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
             ghost.phantom_doorWorstState = nil
             ghost.phantom_doorBlocked    = 0
 
+            -- ⚠ EL CONTADOR NUEVO ENTRA EN EL RESET. Sin esto, el A/B que la
+            -- planilla manda hacer arrastraria el numero de la primera mitad al
+            -- medir la segunda, que es la contaminacion que el reset existe para
+            -- evitar. *Un contador nuevo que no entra en el reset convierte el
+            -- boton de limpiar en un boton que limpia casi todo.*
+            ghost.phantom_doorNoPuerta   = 0
+            -- ⚠ Y el de SERES tambien, por la MISMA regla que el comentario de
+            -- arriba enuncia -- que se escribio para el contador de al lado y se
+            -- olvido al partirlo en dos el 2026-08-10. *Una regla escrita arriba
+            -- del campo no se aplica sola al campo que nace debajo.*
+            ghost.phantom_doorSer        = 0
+            ghost.phantom_doorBlocker    = nil
+
         end )
 
         say( "[Phantasmagoria] contadores y peor-marca reseteados en " .. n .. " fantasma(s). Las huellas NO se tocan." )
@@ -1599,7 +1835,69 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
                 "   ( velocidad " .. math.Round( ghost:GetCurrentSpeed() ) .. " u/s, el umbral es " .. STUCK_SPEED .. " )" )
 
         else
-            say( "    delante   ninguna puerta" )
+            -- ⚠ "NINGUNA PUERTA" Y "ALGO QUE NO RECONOZCO" NO SE PUEDEN SEGUIR
+            -- IMPRIMIENDO IGUAL -- r3, fila 06. El autor reporto un fantasma
+            -- atrapado en dos puertas con vidrio, y este renglon era el unico que
+            -- podia hablar de eso: decia lo mismo con el pasillo despejado que
+            -- con el bot pegado a una hoja de una clase que la lista blanca no
+            -- conoce. Ver el bloque de `phantom_doorBlocker` en doorAhead.
+            local bl = ghost.phantom_doorBlocker
+
+            if bl and ( CurTime() - ( bl.cuando or 0 ) ) < 2 then
+                say( "    delante   ninguna PUERTA, pero el sondeo SI pega:" )
+                say( "              " .. tostring( bl.clase ) ..
+                    ( bl.indice and bl.indice > 0 and ( " #" .. bl.indice ) or "" ) ..
+                    ( ( bl.nombre and bl.nombre ~= "" ) and ( "  targetname '" .. bl.nombre .. "'" ) or "  sin targetname" ) ..
+                    "  a " .. tostring( bl.dist ) .. " u" )
+
+                if bl.modelo and bl.modelo ~= "" then
+                    say( "              modelo '" .. bl.modelo .. "'" )
+
+                end
+
+                if bl.esSer then
+                    -- ⚠ UN SER NO LLEVA EL CONSEJO DE DOOR_CLASSES. Antes si, y
+                    -- el reporte terminaba diciendole al autor que evaluara
+                    -- agregar `player` a la lista blanca de puertas -- sobre EL
+                    -- MISMO, parado ahi para poder leer el reporte.
+                    say( "              ⚠ ES UN SER, NO GEOMETRIA: no hay nada que agregar a ninguna lista." )
+                    say( "                Se cuenta aparte a proposito ( ver los dos acumulados de abajo )." )
+                    say( "                Si sos vos, corrase: parado ahi estas midiendo tu propio bloqueo." )
+
+                else
+                    say( "              ⚠ ESA CLASE **NO** ESTA EN DOOR_CLASSES ( prop_door_rotating, func_door," )
+                    say( "                func_door_rotating ), asi que para este bloque no es una puerta: no la" )
+                    say( "                abre, no la atraviesa, y el cronometro de trabado ni siquiera corre." )
+                    say( "                Parate delante y corre phantasmagoria_ghost_puerta para el detalle." )
+
+                end
+
+            else
+                say( "    delante   ninguna puerta, y el sondeo tampoco pega contra nada" )
+
+            end
+
+            -- ⚠ EL CONTADOR VA **ACA**, ARRIBA DEL early return DE `st`, y ese es
+            -- el punto entero: el reporte corta con "( todavia no vio ninguna
+            -- puerta cerrada )" cuando `phantom_doorStats` no existe, que es
+            -- justo el estado de un fantasma que nunca reconocio una puerta --
+            -- o sea la escena de la fila 06. Impreso mas abajo, el numero que
+            -- esta fila fue a buscar no aparecia nunca.
+            -- ⚠⚠ LOS DOS ACUMULADOS VAN SEPARADOS, y esa es toda la correccion:
+            -- el de GEOMETRIA es el que senala una hoja que la lista blanca no
+            -- reconoce ( el sintoma de la r2 ) y el de SERES sube cada vez que
+            -- alguien -- casi siempre el que esta leyendo el reporte -- se para
+            -- delante del bot. Sumados en un solo numero, observar el fenomeno
+            -- lo inflaba: 20 -> 84 -> 146 en la corrida del 2026-08-10, con el
+            -- autor parado ahi. *Un instrumento que cuenta al observador entre
+            -- los sujetos no mide el fenomeno, mide la medicion.*
+            say( "              acumulado: topo con GEOMETRIA que no es puerta " ..
+                ( ghost.phantom_doorNoPuerta or 0 ) .. " tick(s) de sondeo" ..
+                ( ( ghost.phantom_doorNoPuerta or 0 ) > 0
+                  and "   ( parate ahi y corre phantasmagoria_ghost_puerta )" or "" ) )
+            say( "                         topo con un SER ( jugador / NPC / nextbot ) " ..
+                ( ghost.phantom_doorSer or 0 ) .. " tick(s)" ..
+                "   ( NO es un defecto: alguien estaba delante )" )
 
         end
 
@@ -1727,3 +2025,234 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
 
     end
 end, "Imprime que puerta tiene delante cada fantasma, cuanto lleva trabado contra ella, que peldano de la escalera uso y cuantas huellas dejo." )
+
+---------------------------------------------------------------------------
+-- INSTRUMENTO: LA COSA QUE ESTOY MIRANDO -- r3, fila 06
+---------------------------------------------------------------------------
+-- El autor reporto: *"quedan atrapados en dos puertas que tienen vidrios, ni
+-- siquiera la abren, son las dos puertas para ir a la piscina"*.
+--
+-- ⚠ NINGUNO DE LOS DOS INSTRUMENTOS QUE YA EXISTEN PUEDE CONTESTAR ESO, y el
+-- motivo es estructural y no un olvido: `phantasmagoria_ghost_doors` y
+-- `phantasmagoria_ghost_stuck` cuelgan **del fantasma**, y el fantasma solo sabe
+-- de lo que la lista blanca de tres clases ya reconocio. Si esas dos hojas son
+-- de otra clase, los dos comandos van a decir "ninguna puerta" para siempre, con
+-- toda la razon y sin ayudar en nada.
+--
+-- Este cuelga **del jugador**: parado delante de la hoja y con el crosshair
+-- encima, contesta que ES esa cosa y por que el fantasma no la trata como una
+-- puerta. Es la diferencia entre adivinar el arreglo y medir el sujeto.
+--
+-- LAS TRES MASCARAS NO SON UN ADORNO: son lo que convierte "es de vidrio" en un
+-- numero. Si `MASK_BLOCKLOS` NO pega y `MASK_NPCSOLID` SI, esa cosa **deja ver y
+-- no deja pasar** -- que es la definicion de un panel de vidrio y tambien el
+-- modo de falla que traba a un nextbot: el navmesh dice que hay camino, la vista
+-- dice que hay camino, y el cuerpo no entra.
+--
+-- *El objetivo de este comando no es arreglar nada: es que la proxima ronda
+-- tenga un dato en vez de una anecdota.*
+local function contentsLegibles( n )
+    local nombres = {
+        { CONTENTS_SOLID,       "SOLID"       },
+        { CONTENTS_WINDOW,      "WINDOW"      },
+        { CONTENTS_GRATE,       "GRATE"       },
+        { CONTENTS_MOVEABLE,    "MOVEABLE"    },
+        { CONTENTS_MONSTER,     "MONSTER"     },
+        { CONTENTS_PLAYERCLIP,  "PLAYERCLIP"  },
+        { CONTENTS_MONSTERCLIP, "MONSTERCLIP" },
+    }
+
+    local puestos = {}
+
+    for _, par in ipairs( nombres ) do
+        if bit.band( n, par[ 1 ] ) ~= 0 then puestos[ #puestos + 1 ] = par[ 2 ] end
+
+    end
+
+    return #puestos > 0 and table.concat( puestos, "+" ) or "( ninguno de los mirados )"
+
+end
+
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_puerta", function( ply, _, args )
+    -- ⚠ ESTE COMANDO MIDE LO QUE EL OPERADOR ESTA MIRANDO, asi que desde la
+    -- consola del servidor no hay sujeto. Se dice en vez de tirar un error de
+    -- indexacion sobre un `ply` invalido.
+    if not IsValid( ply ) then
+        print( "[Phantasmagoria] este comando mide lo que estas MIRANDO: hay que correrlo desde el juego." )
+        return
+
+    end
+
+    if not ply:IsAdmin() then
+        ply:PrintMessage( HUD_PRINTCONSOLE, "[Phantasmagoria] hace falta ser admin." )
+        return
+
+    end
+
+    local say = PHANTASMAGORIA.MakeSay( ply )
+    local ojo = ply:EyePos()
+    local dir = ply:GetAimVector()
+
+    -- `MASK_NPCSOLID` es la del CUERPO del bot ( terminator_nextbot_base/
+    -- init.lua:68 ) y `MASK_BLOCKLOS` la de su VISTA ( la base, shared.lua:239 ).
+    -- Las dos salen de la base y no de una eleccion nuestra: por eso el veredicto
+    -- de abajo habla del fantasma y no de un trace cualquiera.
+    local MASCARAS = {
+        { "MASK_SOLID",    MASK_SOLID    },
+        { "MASK_NPCSOLID", MASK_NPCSOLID },
+        { "MASK_BLOCKLOS", MASK_BLOCKLOS },
+    }
+
+    local pegaron = {}
+    local ent, tr
+
+    say( "" )
+    say( "===== LA COSA QUE ESTAS MIRANDO ( r3, las puertas de vidrio ) =====" )
+
+    for _, m in ipairs( MASCARAS ) do
+        local t = util.TraceLine( { start = ojo, endpos = ojo + dir * 200, mask = m[ 2 ], filter = ply } )
+
+        pegaron[ m[ 1 ] ] = t.Hit
+
+        say( "  " .. m[ 1 ] .. string.rep( " ", 16 - #m[ 1 ] ) ..
+            ( t.Hit and ( "PEGA a " .. math.Round( ( t.HitPos - ojo ):Length() ) .. " u  contra " ..
+                ( IsValid( t.Entity ) and ( t.Entity:GetClass() .. " #" .. t.Entity:EntIndex() ) or "el MUNDO" ) ..
+                "   MatType " .. tostring( t.MatType ) ..
+                "   HitTexture '" .. tostring( t.HitTexture ) .. "'" )
+              or "no pega ( nada solido para esta mascara en 200 u )" ) )
+
+        if not ent and t.Hit and IsValid( t.Entity ) then ent, tr = t.Entity, t end
+        if not tr and t.Hit then tr = t end
+
+    end
+
+    -- ⚠ EL VEREDICTO SALE DE LA **DIFERENCIA** ENTRE DOS MEDICIONES Y NO DE UNA
+    -- SOLA. Un renglon que diga "es vidrio" sin decir de donde lo saco es una
+    -- opinion con formato de dato.
+    say( "" )
+
+    if pegaron[ "MASK_NPCSOLID" ] and not pegaron[ "MASK_BLOCKLOS" ] then
+        say( "  ⭐ VEREDICTO: DEJA VER Y NO DEJA PASAR. El cuerpo del bot choca ( NPCSOLID ) y su vista" )
+        say( "     lo atraviesa ( BLOCKLOS ). Eso es un panel de vidrio, y es el modo de falla que traba" )
+        say( "     a un nextbot: el navmesh y la vista dicen que hay camino, y el cuerpo no entra." )
+
+    elseif pegaron[ "MASK_NPCSOLID" ] and pegaron[ "MASK_BLOCKLOS" ] then
+        say( "  VEREDICTO: tapa las dos cosas, o sea que es un solido normal y no un vidrio." )
+        say( "     Si el fantasma se traba aca, no es por transparencia." )
+
+    elseif not pegaron[ "MASK_NPCSOLID" ] then
+        say( "  VEREDICTO: el cuerpo del bot NO choca con esto. Si el fantasma se traba, lo traba otra" )
+        say( "     cosa: apunta al marco, al piso, o a lo que tenga al lado." )
+
+    end
+
+    if not IsValid( ent ) then
+        say( "" )
+        say( "  no hay ninguna ENTIDAD ahi: pegaste en el mundo, o en un prop estatico horneado." )
+        say( "  ⚠ Los prop_static NO existen como entidad en runtime. Un trace SI los pega, pero" )
+        say( "    tr.Entity es el MUNDO y el discriminador de que pegaste en uno es que HitTexture" )
+        say( "    valga '**studio**'. Mira ese campo en las tres lineas de arriba." )
+        return
+
+    end
+
+    local clase = ent:GetClass()
+    local dentro = tr and util.PointContents( tr.HitPos + dir * 2 ) or 0
+
+    say( "" )
+    say( "  clase       " .. clase )
+    say( "  targetname  '" .. tostring( ent:GetName() ) .. "'" )
+    say( "  indice      #" .. ent:EntIndex() .. "   modelo '" .. tostring( ent:GetModel() ) .. "'" )
+    say( "  contents    " .. dentro .. "  ->  " .. contentsLegibles( dentro ) ..
+        "   ( medido 2 u ADENTRO de la superficie )" )
+
+    ---------------------------------------------------------------------------
+    -- LA LINEA QUE CONTESTA "¿POR QUE EL FANTASMA NO LA ABRE?"
+    ---------------------------------------------------------------------------
+    if not DOOR_CLASSES[ clase ] then
+        say( "" )
+        say( "  ⭐ ESTA CLASE **NO** ESTA EN DOOR_CLASSES, que admite prop_door_rotating, func_door y" )
+        say( "     func_door_rotating y nada mas. Para todo este bloque, esto NO es una puerta: el" )
+        say( "     fantasma no la abre, no la atraviesa, y su cronometro de trabado ni siquiera arranca." )
+        say( "     **Es la causa mas probable del reporte de la r2.**" )
+        say( "     ⚠ Si hay que agregarla, hay que tocar LAS DOS copias de la tabla: la de este archivo" )
+        say( "     y la de server_events.lua, o el evento de golpes queda mirando una lista distinta." )
+        return
+
+    end
+
+    local info = readDoor( ent )
+
+    say( "" )
+    say( "  ES UNA PUERTA RECONOCIDA." )
+    say( "  estado      " .. info.campo .. " = " .. tostring( info.crudo ) .. "   " ..
+        ( info.abierta and "ABIERTA" or ( info.cerrada and "cerrada" or "en movimiento" ) ) ..
+        ( info.locked and "   ⚠ CON LLAVE" or "" ) )
+
+    -- Los keyvalues que deciden si el peldano 1 puede hacer algo: en un `func_door`
+    -- el bit "Use Opens" de `spawnflags` es la diferencia entre una puerta que
+    -- responde a Use y una que solo responde a un boton.
+    local kv = ent.GetKeyValues and ent:GetKeyValues() or nil
+
+    if istable( kv ) then
+        for _, k in ipairs( { "spawnflags", "speed", "opendir", "slavename", "filtername" } ) do
+            if kv[ k ] ~= nil then
+                say( "  kv." .. k .. string.rep( " ", 12 - #k ) .. tostring( kv[ k ] ) )
+
+            end
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- EL SUBCOMANDO QUE MIDE EL EFECTO Y NO LA INTENCION
+    ---------------------------------------------------------------------------
+    if args and args[ 1 ] == "use" then
+        local ghost
+
+        PHANTASMAGORIA.EachGhost( function( g ) if not ghost then ghost = g end end )
+
+        if not IsValid( ghost ) then
+            say( "" )
+            say( "  'use' necesita un fantasma en el mapa: lo que prueba es SU camino ( ghost:Use2 )," )
+            say( "  no un Fire generico, justamente porque el fantasma es el que falla." )
+            return
+
+        end
+
+        -- ⚠ SE NIEGA SI LA APERTURA ESTA VETADA, y es la leccion de la ronda 6:
+        -- `testdoor` gritaba ESCUCHA AHORA sobre una apertura que el veto se iba a
+        -- comer. Sin esta rama, un "no se movio" no mediria la puerta: mediria la
+        -- convar.
+        local puede, motivo = ghost:phantom_CanOpenDoors()
+
+        if not puede then
+            say( "" )
+            say( "  ⚠ NO SE DISPARA NADA: la apertura esta vetada -- " .. tostring( motivo ) )
+            return
+
+        end
+
+        local antes = readDoor( ent ).crudo
+
+        ghost:Use2( ent )
+
+        -- El estado de una puerta cambia en el tick siguiente, no en este: el
+        -- veredicto llega diferido, igual que en el evento de puertas.
+        timer.Simple( 0.3, function()
+            if not IsValid( ent ) or not IsValid( ply ) then return end
+
+            local say2 = PHANTASMAGORIA.MakeSay( ply )
+            local desp = readDoor( ent ).crudo
+
+            say2( "  use -> " .. ( desp ~= antes
+                and ( "SE MOVIO ( " .. tostring( antes ) .. " -> " .. tostring( desp ) .. " )" )
+                or ( "SIN EFECTO ( sigue en " .. tostring( antes ) .. " ). Con el veto ya descartado, " ..
+                     "quedan la lista negra de clases de la base y el hook TerminatorBlockUse de un tercero." ) ) )
+
+        end )
+
+        say( "" )
+        say( "  use disparado desde el fantasma #" .. ghost:EntIndex() .. ". El veredicto llega en 0,3 s." )
+
+    end
+end, "Mide la cosa que estas mirando: si el fantasma la reconoce como puerta, si es vidrio, y por que no la abre. Subcomando: 'use'." )

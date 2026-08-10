@@ -1,6 +1,105 @@
 Phantasmagoria: sonidos. 826 archivos .ogg, 50 MB, de TRES fuentes distintas que
 conviene no confundir. El grueso es Phasmophobia (Kinetic Games).
 
+!! 15 ARCHIVOS PASARON A MONO EL 2026-08-09 (r3), Y NO ES UN DETALLE DE FORMATO:
+   SOURCE NO ESPACIALIZA UN SONIDO ESTEREO. Lo reproduce en 2D, sin posicion. La
+   r3 de Diseno 21 introdujo las familias con sujeto -- "el telefono suena DESDE
+   el telefono" -- y medido con ffprobe, 14 de los 21 clips de PROP_CONSUJETO
+   eran estereo: dos tercios de la mecanica nueva incumplian su promesa EN
+   SILENCIO. Se oian, y se oian igual desde cualquier lado.
+
+   Convertidos con dev/mono_posicionales.py: los 12 de prop/ que quedaban
+   estereo (car_alarm, car_lock, phone_vibrate, tv_on, tv_off, tv_noise,
+   piano_key_1..5, guitar_string, microwave_beep, teddy_laugh) mas clock_tick.
+   Los 15 quedaron en 1 canal, MISMA duracion (delta 0,000 salvo dos de 0,026 y
+   0,007) y sample rate 44100 -- o sea que la reparacion de la r2 sobrevivio.
+   Backup verificado por sha256 en
+   dev/other/OLD/phantasmagoria_sound (BACKUP BEFORE MONO POSICIONALES).
+
+   !! ESTE PARRAFO DECIA 29 Y HOY SON 21 -- los 8 de ghost/breathing pasaron a
+   mono el 2026-08-10 ( ver el bloque de abajo ). Quedan: event/creak (10),
+   event/impact (9) y ghost/humming (2). El texto original sigue, tachado por
+   esta linea y no borrado, porque el criterio que lo escribio sigue valiendo
+   para los 21 que quedan.
+
+   ⚠ Y EL 21 ES DE UN UNIVERSO QUE HAY QUE NOMBRAR O EL NUMERO NO SE PUEDE
+   REPRODUCIR: son las rutas que el Lua CITA -- 164 distintas, todas resuelven en
+   disco --, no los archivos del arbol. **El arbol entero tiene 250 estereo de
+   826**, y el grueso son cosas que ningun .lua toca todavia
+   ( equipment/spiritbox_response 62, ghost/special/alternate 31, video_camera 17,
+   player 15 ). Quien cense la carpeta y saque 250 no encontro un error del doc:
+   midio otra cosa. Los dos numeros son ciertos y contestan preguntas distintas
+   -- "que puede sonar mal en juego" es el de 21, "cuanto falta convertir si algun
+   dia se consumen" es el de 250. Medidos los dos el 2026-08-10, no derivados.
+   ( De hecho event/impact tiene 10 estereo en disco y solo 9 citados: por eso
+     este numero se MIDE sobre las citas y no se resta de una lista. )
+
+   !! QUEDAN 29 ESTEREO Y NO SE TOCARON, A PROPOSITO: event/creak (10),
+   event/impact (9), ghost/breathing (8) y ghost/humming (2). Suenan en un PUNTO
+   cerca del fantasma o sobre el fantasma -- no sobre un objeto que el jugador
+   este mirando -- y el autor YA LOS ESCUCHO y los dio por buenos en la r1 y en
+   la r2 ("Suenan bien", fila 11). Cambiar un asset que el autor ya aprobo, sin
+   preguntarle, es lo que este taller no hace. Quedan medidos y con una fila en
+   la planilla de la r3; si esa fila sale roja, el script corre sobre ellos
+   cambiando una lista.
+
+!! LOS 8 DE ghost/breathing SE REEMPLAZARON EL 2026-08-10 (r3), Y EL PARRAFO DE
+   ARRIBA YA NO LOS DESCRIBE. Siguen contando para los 29 estereo -- no se
+   convirtieron -- pero su CONTENIDO no es mas el rip crudo.
+
+   POR QUE: el autor identifico que "esos breathing de la carpeta ghost son del
+   JUGADOR", no del fantasma. Es respiracion de personaje jugable de Phasmophobia
+   usada como ambiente del fantasma, y se oia como lo que era: microfono cercano,
+   seco, humano. No habia reemplazo en el arbol, asi que en vez de vaciar el
+   banco se transformo la fuente.
+
+   QUIEN Y CON QUE: el autor, A MANO EN AUDACITY, sobre los originales. Change
+   Tempo -20% mas su propia cadena de eco y barrido. Las tres variantes generadas
+   por script (suave/medio/fuerte) se DESCARTARON -- no le gusto ninguna -- y su
+   herramienta se borro para que nadie la vuelva a correr sobre estos archivos,
+   que ya estan procesados: correrla de nuevo seria procesar dos veces.
+   Referencia de destino declarada por el autor: la voz real del fantasma de
+   Phasmophobia, o sea ghost/paranormal_voice/ (41 clips), que es "de estudio,
+   limpia, con eco y un wahwah al final".
+
+   MEDIDO al instalar, y por eso se puede afirmar que son los suyos: los 8
+   crecieron entre x1.25 y x1.40 (4.69 -> 6.14 s el mas largo; 3.30 -> 4.40 s el
+   mas corto). Siguen en 2 canales y 44100 Hz. Copia verificada por sha256 contra
+   el archivo de origen, uno por uno.
+
+   BACKUP de los 8 originales, verificado por sha256 ANTES de escribir:
+   dev/other/OLD/phantasmagoria_sound (BACKUP BEFORE FANTASMAGORIZAR BREATHING).
+
+   !! LA CARPETA YA NO ES HOMOGENEA, y conviene saberlo antes de tratarla en
+   lote: son NUEVE archivos y solo se procesaron OCHO. deogen.ogg quedo INTACTO
+   porque no esta en ningun banco -- es el delator del tipo `deogen` por el
+   spiritbox, reservado igual que humming hasta que ese aparato exista. Un script
+   que barra la carpeta entera lo va a agarrar; el banco del Lua, no.
+
+   !! PASARON A MONO EL MISMO DIA, por decision del autor, y con eso la deuda
+   queda CERRADA y no declarada. Source NO espacializa un estereo: el fantasma
+   con AUSENCIA no se ve, asi que ubicarlo de oido es la mecanica entera.
+
+   LA OBJECION QUE SE HABIA LEVANTADO SE MIDIO Y NO APLICABA. Se advirtio que un
+   downmix sobre una cadena con efectos de fase puede cancelar parcialmente. Se
+   comprobo antes de tocar, canal por canal: RMS de L, de R y de (L+R)/2. Si la
+   suma cae ~3 dB por debajo del promedio de los canales hay decorrelacion, y por
+   debajo de eso hay cancelacion. **Los ocho dieron entre -0,00 y -0,65 dB**: el
+   material es practicamente mono ya. *Una advertencia correcta en general puede
+   no aplicar al caso, y la diferencia se mide en un minuto.*
+
+   CALIDAD: se re-codifico DESDE EL BACKUP en una sola generacion ( no encima del
+   mono anterior ) a Vorbis q10 -- **201 kbps mono contra los 209 kbps POR CANAL
+   del export del autor**. Se subio a proposito: la primera pasada salio a q6
+   ( 85 kbps ) y eso era tirar bitrate sobre un asset hecho a mano cuya calidad
+   nadie de este lado puede juzgar de oido. 2.111 KB estereo -> 1.070 KB mono.
+   Duracion y sample rate intactos ( delta < 0,02 s, 44100 Hz ).
+
+   BACKUP del estereo del autor, verificado por sha256 ANTES de convertir:
+   dev/other/OLD/phantasmagoria_sound (BACKUP BEFORE BREATHING A MONO).
+   Es un backup DISTINTO del de arriba: aquel guarda el rip crudo, este guarda el
+   trabajo del autor. Los dos hacen falta y por eso son dos carpetas.
+
 !! ESTE ENCABEZADO DECIA "656 archivos, 37 MB, de DOS fuentes" y estuvo mal por
 lo menos desde que entro la tercera tanda. No es un detalle de prolijidad: el
 2026-08-09 se publico, en cuatro archivos, una particion por vendor string como

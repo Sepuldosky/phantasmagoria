@@ -133,9 +133,14 @@ end
 -- bucle sobre GetChildren() del wraith existe porque su bot lleva un arma
 -- parenteada, y el nuestro no lleva ninguna. Si esto da 0 en toda una corrida,
 -- SetNoDraw sobre la entidad alcanza.
+-- ⚠ `ajenosCadaver` ENTRO EN LA r3 Y NO ES SIMETRICO CON `ajenos`: aquel tiene
+-- que dar 0 y este tiene que dar DISTINTO de 0 cuando hubo un muerto. Los dos
+-- juntos son lo que vuelve legible el 0 del primero -- solo, no distingue
+-- "mire y no paso nada" de "no mire".
 local function stats( ghost )
     ghost.phantom_visStats = ghost.phantom_visStats or {
-        ocultadas = 0, mostradas = 0, ajenos = 0, hijosMax = 0, hijosTocados = 0,
+        ocultadas = 0, mostradas = 0, ajenos = 0, ajenosCadaver = 0,
+        hijosMax = 0, hijosTocados = 0,
     }
 
     return ghost.phantom_visStats
@@ -194,6 +199,52 @@ end
 -- ido con el. Este vive en la mesa del addon y lo imprime cualquier corrida
 -- posterior, sin haber estado mirando.
 PHANTASMAGORIA.KidsSeen = PHANTASMAGORIA.KidsSeen or {}
+
+---------------------------------------------------------------------------
+-- ⚠⚠ EL CENSO DE EF_NODRAW -- LA GEMELA DEL CENSO DE HIJOS, Y EL ARREGLO DE LA
+-- FILA 08 DE LA r2
+---------------------------------------------------------------------------
+-- §21.9.7 ya lo habia dejado escrito para la r2 y la r2 no lo cerro:
+-- *"`ESCRITORES AJENOS` muere con el fantasma, asi que el 0 que se leyo era de
+-- otro sujeto"*.
+--
+-- Es literalmente lo que le paso al autor: la rafaga fue de `#236/s6`, el
+-- fantasma se borro, y cuando corrio `phantasmagoria_ghost_vis` el reporte
+-- hablaba de `#529/s8` -- un sujeto distinto, con su contador en 0 y con toda la
+-- razon. El numero que hacia falta ya no existia.
+--
+-- La clave es la SERIE ( `phantom_Serial` ), que no se recicla: el EntIndex si,
+-- y este mismo archivo ya pago esa leccion dos veces.
+PHANTASMAGORIA.NoDrawSeen = PHANTASMAGORIA.NoDrawSeen or {}
+
+local function censarNoDraw( ghost, muerto )
+    local clave = tostring( ghost.phantom_Serial or "?" )
+    local reg = PHANTASMAGORIA.NoDrawSeen[ clave ]
+
+    if not reg then
+        reg = {
+            serie   = clave,
+            indice  = ghost:EntIndex(),
+            ticks   = 0,
+            muertos = 0,
+            vivos   = 0,
+            primera = CurTime(),
+        }
+
+        PHANTASMAGORIA.NoDrawSeen[ clave ] = reg
+
+    end
+
+    reg.ticks  = reg.ticks + 1
+    reg.ultima = CurTime()
+
+    -- ⚠ SE CUENTAN LAS DOS Y NO SOLO LA MALA. Un registro con `vivos 0` y
+    -- `muertos 600` es la base haciendo su trabajo; uno con `vivos 40` es el
+    -- hallazgo. Guardar solo el total dejaria las dos escenas escritas igual --
+    -- que es el defecto que este censo viene a arreglar, cometido de nuevo.
+    if muerto then reg.muertos = reg.muertos + 1 else reg.vivos = reg.vivos + 1 end
+
+end
 
 local function censarHijo( ghost, child, invisible, ocultado )
     local clave = tostring( child:GetClass() ) .. "  modelo '" .. tostring( child:GetModel() ) .. "'"
@@ -475,13 +526,113 @@ function ENT:phantom_ReconcileVisibility( myTbl )
     --
     -- *Una alarma que no acota su sujeto no mide de menos: mide de mas, y el
     -- falso positivo cuesta lo mismo que el defecto que buscaba.*
-    if self:GetNoDraw() and not self.term_Dead then
+    --
+    -- ⚠⚠⚠ Y EN LA r2 LA RAFAGA VOLVIO **CON LA GUARDA PUESTA** ( fila 08, FALLA ).
+    -- ~38 renglones de `#236/s6` en 0,6 s, todos identicos, justo antes de que el
+    -- autor borrara ese fantasma. La guarda `not term_Dead` estaba en el archivo
+    -- desde antes de esa corrida, asi que el diagnostico se DA VUELTA: si la
+    -- alarma sono, el sujeto **no era un cadaver de la base** -- o era un bot
+    -- VIVO con la bandera puesta por un tercero, que es exactamente el defecto
+    -- que este detector existe para cazar, o `term_Dead` no estaba puesto cuando
+    -- corrio el reconciliador.
+    --
+    -- Los tres arreglos de la r3, y NINGUNO es apagar el sensor:
+    --
+    -- ( 1 ) EL FLANCO. La alarma era de NIVEL: una linea por tick mientras la
+    --       bandera estuviera puesta, contra un anillo de 40. Eso no es ruido:
+    --       **borra la prueba de todo lo demas**, y por eso el reporte de la
+    --       fila 08 llego con 38 de 40 renglones diciendo lo mismo y ni uno solo
+    --       de las transiciones que hacian falta para diagnosticarlo. El
+    --       CONTADOR sigue subiendo cada tick -- es lo que mide la DURACION, y
+    --       el catalogo nº 33 dice que eso no se toca -- y lo que se vuelve de
+    --       flanco es solo la escritura en la bitacora.
+    --
+    -- ( 2 ) LA TERCERA RAMA. `GetNoDraw() and term_Dead` no se contaba en
+    --       NINGUN lado -- existia solo como texto en el comando --, asi que
+    --       `ESCRITORES AJENOS 0` no distinguia "mire y no paso" de "no mire".
+    --       Ahora el cadaver tiene su propio contador y el 0 del de al lado
+    --       queda acreditado por un numero que si subio.
+    --
+    -- ( 3 ) QUE SOBREVIVA AL FANTASMA. `st.ajenos` vive en la entidad y se
+    --       muere con ella: cuando el autor fue a mirar, el sujeto de la rafaga
+    --       ya no existia. El censo de hijos ya resolvio este mismo problema con
+    --       una tabla global; esta es la gemela.
+    local nodraw = self:GetNoDraw()
+
+    if nodraw and not self.term_Dead then
         local st = stats( self )
         st.ajenos = st.ajenos + 1
 
-        anotar( quien( self ) .. "  !! ESCRITOR AJENO: la entidad tiene EF_NODRAW puesto y " ..
-            "la ausencia ya no usa SetNoDraw. Con eso el cliente deja de recibirla." )
+        censarNoDraw( self, false )
 
+        -- El flanco 0 -> 1. `phantom_ajenoDesde` guarda CUANDO empezo, no un
+        -- booleano: con la hora se puede cerrar el episodio abajo diciendo
+        -- cuanto duro, y una duracion es lo unico que distingue un tick suelto
+        -- de una bandera pegada.
+        if not myTbl.phantom_ajenoDesde then
+            myTbl.phantom_ajenoDesde = CurTime()
+            myTbl.phantom_ajenoTicks = 0
+
+            -- ⚠ LA LINEA NOMBRA AL SOSPECHOSO EN VEZ DE DECIR "alguien". En la
+            -- r1 esa palabra mando al autor a buscar codigo nuestro que no
+            -- existia, y en la r2 lo mando a mirar al cadaver. Hay un tercero
+            -- MEDIDO en este mismo taller que hace `SetNoDraw( true )` sobre una
+            -- entidad VIVA y deja dos marcas legibles: el KnockDown del fork de
+            -- Trepang² Slide ( dev/trepang_slide_fix/lua/trepang_slide/
+            -- impact.lua:739-755 ) esconde al personaje y le planta un ragdoll
+            -- gemelo al lado. *No se acusa a un tercero sin un dato que lo
+            -- senale; se agranda el instrumento hasta que lo senale.*
+            local pistas = {}
+
+            if self.GetNW2Bool and self:GetNW2Bool( "IsRagdoll", false ) then
+                pistas[ #pistas + 1 ] = "IsRagdoll=true"
+
+            end
+
+            if IsValid( self.TRSlideRagdoll ) then
+                pistas[ #pistas + 1 ] = "TRSlideRagdoll valido"
+
+            end
+
+            anotar( quien( self ) .. "  !! ESCRITOR AJENO ( EMPIEZA ): la entidad tiene EF_NODRAW puesto y " ..
+                "la ausencia ya no usa SetNoDraw. Con eso el cliente deja de recibirla." ..
+                "  vida " .. self:Health() .. " · term_Dead " .. tostring( self.term_Dead ) ..
+                " · hunt " .. tostring( self.phantom_Hunting == true ) ..
+                " · hijos " .. #self:GetChildren() ..
+                ( #pistas > 0
+                  and ( "  >> ES EL KnockDown DE Trepang² Slide ( " .. table.concat( pistas, ", " ) ..
+                        " ): el bot esta VIVO y escondido, con un ragdoll gemelo al lado" )
+                  or "  ( sin marcas de Trepang² Slide: el escritor es OTRO )" ) )
+
+        end
+
+        myTbl.phantom_ajenoTicks = ( myTbl.phantom_ajenoTicks or 0 ) + 1
+
+    else
+        -- El flanco 1 -> 0, que es la mitad que convierte la alarma en una
+        -- medicion: sin el cierre, un episodio de un tick y uno de un minuto
+        -- escriben exactamente el mismo renglon.
+        if myTbl.phantom_ajenoDesde then
+            anotar( quien( self ) .. "  escritor ajeno TERMINADO: duro " ..
+                string.format( "%.2f", CurTime() - myTbl.phantom_ajenoDesde ) .. " s ( " ..
+                ( myTbl.phantom_ajenoTicks or 0 ) .. " ticks )" )
+
+            myTbl.phantom_ajenoDesde = nil
+            myTbl.phantom_ajenoTicks = nil
+
+        end
+
+        -- ⚠ ACA CONTABA EL CADAVER Y SE FUE A `AdditionalRagdollDeathEffects`.
+        -- No era redundante: era INALCANZABLE. Esta funcion la llama
+        -- `ENT:BehaveUpdate` ( server.lua:749 ) y BehaveUpdate no corre en un
+        -- nextbot muerto, asi que esta rama no podia ejecutarse nunca -- y el
+        -- censo reportaba `NINGUNO` con cadaveres en el mapa.
+        --
+        -- No se deja "por las dudas" a proposito: `muertos` cuenta MUERTES desde
+        -- el gancho nuevo, y esta rama contaba TICKS. Las dos escribiendo el
+        -- mismo campo lo volverian a mezclar el dia que la base cambie -- que es
+        -- el defecto que la r3 acaba de sacar de `marcados`. **Un campo, un
+        -- escritor.**
     end
 
     -- ⚠ EL TERCER MOTIVO PARA VOLVER A APLICAR, Y ENTRO POR LA r22: que haya
@@ -626,6 +777,43 @@ function ENT:AdditionalRagdollDeathEffects( ragdoll )
     ragdoll:SetNoDraw( false )
     ragdoll:DrawShadow( true )
 
+    -- ⚠⚠⚠ EL CENSO DEL CADAVER SE TOMA ACA, Y ES EL ARREGLO DE LA FILA 05 DE LA
+    -- r3. Antes se tomaba en `phantom_ReconcileVisibility`, que vive adentro de
+    -- `ENT:BehaveUpdate` ( server.lua:749, y BehaveUpdate arranca en :726 ) --
+    -- o sea **adentro del tick que deja de correr justo cuando el bot muere**.
+    -- La rama del cadaver era INALCANZABLE POR CONSTRUCCION: el censo no podia
+    -- reportar `muertos > 0` ni con todos los fantasmas del mapa muertos.
+    --
+    -- Lo delató el propio instrumento: su renglon dice *"un cero aca con un
+    -- fantasma MUERTO es un rojo del INSTRUMENTO"*, y en la r3 salio `NINGUNO`
+    -- con un fantasma matado a tiros en la misma partida.
+    --
+    -- ⚠ Y ES MEDIA CORRECCION DE LA r3 TERMINADA: aquella ronda ya habia
+    -- diagnosticado que `st.ajenos` *"vive en la entidad y se muere con ella"* y
+    -- movio el ALMACENAMIENTO a una tabla global. Pero dejo la TOMA DE MUESTRA
+    -- adentro del tick que muere. *Se arreglo donde se guarda el dato y no donde
+    -- se toma* -- y las dos mitades tienen que sobrevivir al sujeto, no una.
+    --
+    -- El `timer.Simple( 0 )` no es cosmetico: la base mata en este orden --
+    -- BecomeRagdoll, este gancho, y AL FINAL `self:SetNoDraw( true )` sobre el
+    -- bot ( damageandhealth.lua:804-826, ya citado arriba ). Leer la bandera
+    -- ahora mismo daria `false` SIEMPRE, o sea un cero igual de falso que el que
+    -- venimos a arreglar, y esta vez sin nadie que lo acuse.
+    --
+    -- ⚠ LO QUE ESTA MUESTRA NO CUBRE, dicho en vez de disimulado: una muerte que
+    -- NO pase por BecomeRagdoll no llega a este gancho y no se censa. No esta
+    -- medido si la base tiene ese camino; si aparece un cadaver sin registro, es
+    -- por aca y no por el bug de arriba.
+    timer.Simple( 0, function()
+        if not IsValid( self ) then return end
+        if not self:GetNoDraw() then return end
+
+        local st = stats( self )
+        st.ajenosCadaver = ( st.ajenosCadaver or 0 ) + 1
+
+        censarNoDraw( self, true )
+    end )
+
 end
 
 ---------------------------------------------------------------------------
@@ -656,16 +844,18 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
         -- filas no puede llevarse el unico registro largo. Se borra a mano y
         -- diciendolo: `phantasmagoria_ghost_vis resetcenso`.
         say( "[Phantasmagoria] contadores y bitacora de visibilidad vaciados en " .. n .. " fantasma(s)." )
-        say( "    el censo de hijos NO se toco ( sobrevive a proposito ). Para vaciarlo: ..._ghost_vis resetcenso" )
+        say( "    los censos de hijos y de EF_NODRAW NO se tocaron ( sobreviven a proposito )." )
+        say( "    Para vaciarlos: ..._ghost_vis resetcenso" )
         return
 
     end
 
     if sub == "resetcenso" then
-        PHANTASMAGORIA.KidsSeen = {}
+        PHANTASMAGORIA.KidsSeen  = {}
+        PHANTASMAGORIA.NoDrawSeen = {}
 
-        say( "[Phantasmagoria] censo de hijos vaciado. ⚠ A partir de ahora un censo vacio vuelve a " ..
-            "significar 'no vi ninguno DESDE EL RESET', no 'no hay'." )
+        say( "[Phantasmagoria] censo de hijos y de EF_NODRAW vaciados. ⚠ A partir de ahora un censo " ..
+            "vacio vuelve a significar 'no vi ninguno DESDE EL RESET', no 'no hay'." )
         return
 
     end
@@ -779,6 +969,22 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
             " · ESCRITORES AJENOS " .. st.ajenos ..
             " ( tiene que ser 0: cuenta ticks con EF_NODRAW puesto por un tercero, CON EL BOT VIVO )" )
 
+        -- ⚠ EL DENOMINADOR DEL 0 DE ARRIBA, Y ES EL ARREGLO DE LA FILA 08.
+        -- Un `ESCRITORES AJENOS 0` solo no distingue tres cosas: "mire y no
+        -- paso", "no mire", y "el sujeto que lo tenia ya se borro y su contador
+        -- se fue con el". Este numero al lado acredita que el instrumento estuvo
+        -- mirando: si hubo un muerto en la partida y esto sigue en 0, el que no
+        -- corrio es el reconciliador.
+        -- ⚠ ESTE NUMERO ES **DE ESTE BOT** Y SE MUERE CON EL, igual que el de
+        -- arriba: los dos viven en `phantom_visStats`, que es una tabla de la
+        -- entidad. Sirve para acreditar la lectura de AHORA -- si estas mirando
+        -- un cadaver, tiene que subir -- y NO sirve para contestar "que paso con
+        -- el que ya se borro". Para eso esta el censo global del pie, que es
+        -- justamente el arreglo que la fila 08 pedia. *Decir de quien es un
+        -- contador es parte del contador.*
+        say( "              ticks con EF_NODRAW de CADAVER " .. ( st.ajenosCadaver or 0 ) ..
+            "  ( de ESTE bot; el que sobrevive a su muerte es el censo del pie )" )
+
         -- LA MEDICION DE DISENO 20.2, y no una curiosidad: si esto da 0, el
         -- bucle sobre los hijos es una poliza y SetNoDraw sobre la entidad
         -- alcanza. Si da distinto de 0, hay entidades pegadas al bot que se
@@ -855,6 +1061,42 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_vis", function( ply, _, args )
                 " con el fantasma invisible · ocultado por nosotros " .. reg.ocultados ..
                 " · ultimo dueno serie " .. tostring( reg.ultimoDueno ) ..
                 " · hace " .. string.format( "%.0f", CurTime() - ( reg.ultima or CurTime() ) ) .. " s" )
+
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- EL CENSO DE EF_NODRAW -- lo que la fila 08 de la r2 no pudo leer
+    ---------------------------------------------------------------------------
+    -- La rafaga fue de `#236/s6`; para cuando el autor tipeo el comando ese
+    -- fantasma ya no existia y el reporte hablaba de `#529/s8`, con su contador
+    -- en 0 y con toda la razon. Esto sobrevive a los dos, y separa al cadaver
+    -- ( esperado ) del bot vivo ( el hallazgo ) POR SERIE.
+    local nd, nND = PHANTASMAGORIA.NoDrawSeen or {}, 0
+
+    for _ in pairs( nd ) do nND = nND + 1 end
+
+    say( "[Phantasmagoria] censo de EF_NODRAW de toda la sesion ( sobrevive a los fantasmas ): " ..
+        ( nND > 0 and ( nND .. " fantasma(s) lo tuvieron puesto alguna vez" )
+          or "NINGUNO todavia -- ni siquiera un cadaver" ) )
+
+    if nND <= 0 then
+        say( "    ⚠ Un cero aca con un fantasma MUERTO en la partida es un rojo del INSTRUMENTO," )
+        say( "      no una buena noticia: la base pone EF_NODRAW en toda muerte" )
+        say( "      ( damageandhealth.lua:826 ), asi que el cadaver tendria que aparecer." )
+
+    else
+        -- ⚠ LAS DOS COLUMNAS NO ESTAN EN LA MISMA UNIDAD Y POR ESO SE ROTULAN
+        -- DISTINTO. `VIVO` son TICKS -- el reconciliador mira una vez por tick
+        -- mientras el bot vive -- y `cadaver` son MUERTES, una muestra por
+        -- muerte desde `AdditionalRagdollDeathEffects`. Sumarlas en un
+        -- "N tick(s)" como hacia este renglon era comparar peras con muertes.
+        for _, reg in pairs( nd ) do
+            say( "    serie " .. reg.serie .. " ( era #" .. reg.indice .. " )" ..
+                "   VIVO " .. reg.vivos .. " tick(s)  ·  cadaver " .. reg.muertos .. " muerte(s)" ..
+                "   ultimo hace " .. string.format( "%.0f", CurTime() - ( reg.ultima or CurTime() ) ) .. " s" ..
+                ( reg.vivos > 0 and "   !! LOS 'VIVO' SON EL HALLAZGO: un tercero le puso la bandera a un bot vivo"
+                  or "   ( solo cadaver: es la base y es correcto )" ) )
 
         end
     end

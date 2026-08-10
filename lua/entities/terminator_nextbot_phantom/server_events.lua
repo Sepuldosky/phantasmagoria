@@ -185,6 +185,14 @@ local cvHunt = CreateConVar( "phantasmagoria_ghost_evhunt", "1", FCVAR_ARCHIVE,
 local cvMass = CreateConVar( "phantasmagoria_ghost_evmass", "60", FCVAR_ARCHIVE,
     "Masa maxima en kg de un prop que el fantasma puede tirar. Por encima, lo saltea.", 1, 5000 )
 
+-- ⚠ LA RESERVA DE VOZ ( r3 ). Ver el bloque VOZ mas abajo para el corte y el
+-- pedido del autor que lo origina. Es DOS estados y no tres, por el mismo motivo
+-- que `evhunt`: no hay un flag por NPC que ignorar, el corte es del catalogo.
+local cvReserva = CreateConVar( "phantasmagoria_ghost_evreserva", "1", FCVAR_ARCHIVE,
+    "Reserva los bancos `voice` ( las frases y las risas ) y `humming` ( el canto ) para el paramic " ..
+    "y para los eventos de manifestacion, dejando en el sorteo ambiente solo `whisper` y `breath`. " ..
+    "0 = CONTROL, todo al sorteo ( el comportamiento de la r2 ) · 1 = reserva puesta.", 0, 1 )
+
 ---------------------------------------------------------------------------
 -- LAS OCHO CATEGORIAS
 ---------------------------------------------------------------------------
@@ -278,23 +286,61 @@ SND.throw = {
     "phantasmagoria/event/throw/throw_11.ogg",
 }
 
-SND.knock = {
+---------------------------------------------------------------------------
+-- ⚠⚠ LOS GOLPES VAN EN CINCO BANCOS Y NO EN DOS -- EL ARREGLO DE LA FILA 11
+---------------------------------------------------------------------------
+-- Pregunta del autor, r2: *"mi pregunta es si el sonido viene de una fuente
+-- real, es decir, que func_breakable_surf de una ventana genere ese ruido?"*
+--
+-- LA RESPUESTA MEDIDA ES **NO, Y ESTABA AL REVES**. `SND.knock` tenia SIETE
+-- entradas: UNA de puerta y SEIS de ventana. Como el codigo elegia ese banco
+-- entero cuando el trace pegaba en una PUERTA, golpear una puerta sonaba a
+-- ventana **6 de cada 7 veces ( 85,7 % )**. Y la otra mitad es peor y nadie la
+-- habia preguntado: `contra` solo podia valer "puerta" o "pared", asi que una
+-- ventana REAL caia en "pared" y se llevaba `SND.impact`, donde hay **cero**
+-- clips de ventana. Los seis `window_*` eran INALCANZABLES golpeando una
+-- ventana.
+--
+-- El catalogo lo decia y el codigo no lo implementaba: `about.txt:226` describe
+-- `event/knock` como *"golpeteo en puerta Y ventana"* -- dos cosas en una
+-- carpeta -- y el comentario del Lua CITABA bien esa linea mientras la linea de
+-- abajo trataba la carpeta como una sola. *Un comentario correcto al lado de un
+-- codigo que no lo implementa es indistinguible de un comentario mentiroso: los
+-- dos hacen que el lector no mire.*
+--
+-- ⚠ EL COSTO HONESTO DE PARTIRLO, y se escribe porque nadie lo va a ver:
+-- `impact_stone` queda con **UN** clip, y el evento repite el mismo clip 2-3
+-- veces a proposito ( ver EV.knock ). Hoy la piedra sale 1 de 18 y pasa
+-- desapercibida; partido, toda pared de hormigon suena siempre igual salvo por
+-- el pitch. Es un hueco de ASSET, no de codigo, y esta declarado en vez de
+-- tapado.
+SND.knock_door = {
     "phantasmagoria/event/knock/door.ogg",
+}
+
+SND.knock_window = {
     "phantasmagoria/event/knock/window_1.ogg", "phantasmagoria/event/knock/window_2.ogg",
     "phantasmagoria/event/knock/window_3.ogg", "phantasmagoria/event/knock/window_4.ogg",
     "phantasmagoria/event/knock/window_5.ogg", "phantasmagoria/event/knock/window_6.ogg",
 }
 
-SND.impact = {
+SND.impact_wood = {
     "phantasmagoria/event/impact/wood_1.ogg", "phantasmagoria/event/impact/wood_2.ogg",
     "phantasmagoria/event/impact/wood_3.ogg", "phantasmagoria/event/impact/wood_4.ogg",
     "phantasmagoria/event/impact/wood_5.ogg", "phantasmagoria/event/impact/wood_6.ogg",
     "phantasmagoria/event/impact/wood_impact_1.ogg", "phantasmagoria/event/impact/wood_impact_2.ogg",
     "phantasmagoria/event/impact/wood_impact_3.ogg", "phantasmagoria/event/impact/wood_impact_4.ogg",
     "phantasmagoria/event/impact/wood_impact_5.ogg", "phantasmagoria/event/impact/wood_impact_6.ogg",
+}
+
+SND.impact_metal = {
     "phantasmagoria/event/impact/metal_pipe_hit.ogg", "phantasmagoria/event/impact/metal_pipe_2.ogg",
     "phantasmagoria/event/impact/metal_pipe_6.ogg",   "phantasmagoria/event/impact/metal_deep.ogg",
-    "phantasmagoria/event/impact/metal_tank.ogg",     "phantasmagoria/event/impact/stone.ogg",
+    "phantasmagoria/event/impact/metal_tank.ogg",
+}
+
+SND.impact_stone = {
+    "phantasmagoria/event/impact/stone.ogg",
 }
 
 SND.creak = {
@@ -318,7 +364,8 @@ SND.switch = {
 -- parpadeo a veces sonara a vidrio roto sin haber roto nada.
 SND.bulb = { "phantasmagoria/event/impact/lightbulb_smash.ogg" }
 
--- ⚠ `break_slow.ogg` queda FUERA de SND.impact a proposito: dura mucho mas que
+-- ⚠ `break_slow.ogg` queda FUERA de los tres bancos de impacto a proposito:
+-- dura mucho mas que
 -- los demas y suena a algo cediendo, no a un golpe. En un banco de golpeteo
 -- seria el clip que se oye como un bug.
 
@@ -345,16 +392,75 @@ SND.furniture = {
 -- afirma que estan ahi. Los que nombran un objeto identificable tienen que
 -- comprobarlo; los que no ( un crujido de piano, unas llaves ) pueden sonar en
 -- cualquier casa y por eso se quedan.*
+-- ⚠⚠ QUEDAN **TRES** Y ANTES ERAN DIECIOCHO -- ES EL PEDIDO DE LA r2 Y NO UN
+-- RECORTE. El autor, literal: *"sabes quiero lo mismo para otros sonidos,
+-- sonidos de radio solo para radio, sonidos de telefono solo para telefonos"* y
+-- *"Ruido de tecla de piano o guitarra suena un poco raro en mapas donde no hay
+-- pianos ni guitarras, los sonidos tienen que ser circuntanciales."*
+--
+-- Los otros quince se mudaron a PROP_CONSUJETO, abajo, cada uno con el objeto
+-- que tiene que estar presente. Los tres que quedan son los que **no nombran un
+-- objeto operable**: unas llaves tintineando y un reloj andando pueden pasar en
+-- cualquier casa, y no le prometen al jugador que hay algo ahi.
+--
+-- ⚠ Y EL COMENTARIO QUE JUSTIFICABA DEJAR EL PIANO ACA CONTRADECIA AL AUTOR CON
+-- TODAS LAS LETRAS. Decia: *"los que no ( un crujido de piano, unas llaves )
+-- pueden sonar en cualquier casa y por eso se quedan"*. Estaba escrito en la r2
+-- como si fuera una regla derivada, y la regla de la que se derivaba -- la del
+-- auto -- decia exactamente lo contrario. *Una regla se aplica a los casos que
+-- la cumplen, no a los que uno no tuvo ganas de mudar.*
+--
+-- CONSECUENCIA QUE HAY QUE ACEPTAR DE FRENTE, y es la misma tesis de §21.1: en
+-- un cuarto sin un solo objeto reconocible, `prop` va a sonar a llaves o a
+-- reloj, o va a decir SIN SUJETO. Eso es correcto: la categoria existe para que
+-- el ruido te diga que hay algo ahi.
+-- ⚠⚠ Y SON DOS Y NO TRES, PORQUE `clock_tick` MIDE **46,55 s**. Estuvo en esta
+-- lista hasta que la revision de esta misma tanda lo midio, y era el defecto que
+-- el bloque de la radio -- veinte lineas mas abajo, escrito el mismo dia --
+-- declara intolerable con estas palabras: *"`sound.Play` no devuelve nada que se
+-- pueda apagar, asi que un clip de 42 s disparado como one-shot en un punto es
+-- un ruido que no termina y que se solapa con el siguiente evento"*.
+--
+-- Es MAS LARGO que tres de los cuatro clips de radio que esta ronda se nego a
+-- poner en el banco plano por ese motivo exacto. *Una regla escrita en un bloque
+-- no se aplica sola al bloque de al lado, aunque los haya escrito la misma mano
+-- el mismo dia.* Se fue a su propia familia con sujeto ( un reloj ) y con corte.
+-- ⚠⚠⚠ ACA VIVIA EL "PRESENTADOR BRITANICO" QUE EL AUTOR REPORTO TRES RONDAS
+-- SEGUIDAS, Y NADIE LO ENCONTRO PORQUE SE LO BUSCO EN LA CARPETA EQUIVOCADA.
+-- Este banco citaba `prop/key_1.ogg` y `prop/key_2.ogg`, que **no son llaves: es
+-- el encargado hablando**. La r3 dio por MEDIDO que la carpeta del presentador
+-- ( `voice/` ) no tenia un solo consumidor, y era cierto -- el consumidor estaba
+-- en `prop/`, con dos clips suyos guardados ahi bajo un nombre de utileria.
+--
+-- COMO SE VEIA EN JUEGO: este es el banco de FALLBACK, el que suena cuando el
+-- evento `prop` no encuentra un objeto reconocible cerca. O sea que el locutor
+-- aparecia justo cuando NO habia nada que lo explicara, y se leia como *"sono la
+-- radio sola"*. El sintoma estaba lo mas lejos posible de su causa.
+--
+-- LOS DOS DATOS QUE LO CIERRAN, y ninguno es el nombre del archivo:
+--   · DURACION. `key_1`/`key_2` miden **3,47 s y 3,44 s** -- largo de frase. Las
+--     llaves de verdad de esta misma carpeta miden **0,50 a 0,96 s**.
+--   · PROCEDENCIA. En el rip original `Key 1.wav` y `Key 2.wav` estan entre
+--     `Hint None.wav`, `Arrival 1.wav` y `Welcome Back 1.wav`, o sea entre las
+--     lineas del encargado -- no entre `Key Pickup 1.wav` / `Key lock 1.wav`,
+--     que si son utileria.
+-- *El nombre de un asset miente como un comentario, y una carpeta tambien.*
+--
+-- El autor los mudo a `voice/` al identificarlos, lo que dejo estas dos rutas
+-- COLGADAS: el fallback se quedaba sin un solo clip valido y habria enmudecido
+-- en silencio. Entran las ocho llaves REALES de `prop/` -- todas mono, todas de
+-- menos de un segundo. Son mas que dos a proposito: un banco de fallback que se
+-- repite se nota mas que uno que varia. Si `lock`/`unlock` se pisan con la
+-- familia de puertas, se recorta a los `pickup` y no hace falta tocar nada mas.
 SND.prop = {
-    "phantasmagoria/prop/clock_tick.ogg",     "phantasmagoria/prop/phone_ring.ogg",
-    "phantasmagoria/prop/phone_vibrate.ogg",  "phantasmagoria/prop/piano_key_1.ogg",
-    "phantasmagoria/prop/piano_key_2.ogg",    "phantasmagoria/prop/piano_key_3.ogg",
-    "phantasmagoria/prop/piano_key_4.ogg",    "phantasmagoria/prop/piano_key_5.ogg",
-    "phantasmagoria/prop/guitar_string.ogg",  "phantasmagoria/prop/microwave_beep.ogg",
-    "phantasmagoria/prop/teddy_laugh.ogg",    "phantasmagoria/prop/toilet_flush.ogg",
-    "phantasmagoria/prop/tv_on.ogg",          "phantasmagoria/prop/tv_off.ogg",
-    "phantasmagoria/prop/tv_noise.ogg",       "phantasmagoria/prop/tv_remote.ogg",
-    "phantasmagoria/prop/key_1.ogg",          "phantasmagoria/prop/key_2.ogg",
+    "phantasmagoria/prop/key_pickup_1.ogg",
+    "phantasmagoria/prop/key_pickup_4.ogg",
+    "phantasmagoria/prop/key_lock_1.ogg",
+    "phantasmagoria/prop/key_lock_2.ogg",
+    "phantasmagoria/prop/key_lock_3.ogg",
+    "phantasmagoria/prop/key_unlock_1.ogg",
+    "phantasmagoria/prop/key_unlock_2.ogg",
+    "phantasmagoria/prop/key_unlock_3.ogg",
 }
 
 -- Sonidos que NOMBRAN un objeto, y por eso no se sortean si el objeto no esta.
@@ -367,6 +473,89 @@ SND.prop = {
 -- `return tab and tab.IsGlideVehicle or IsVehicle( self )` ). Se comprueba
 -- igual `IsGlideVehicle` a mano por si el orden de carga deja el parche sin
 -- aplicar -- cuesta una comparacion y evita un silencio dificil de diagnosticar.
+---------------------------------------------------------------------------
+-- EL DISCRIMINADOR POR NOMBRE DE MODELO
+---------------------------------------------------------------------------
+-- Pedido del autor, r2: *"Creo que mejor que buscar entre tanto modelo
+-- directamente es hacer algo general para tomar esos modelos por nombre y
+-- discriminador."* Esto es esa cosa general.
+--
+-- ⚠ NO PUEDE SER UNA LISTA BLANCA DE CLASES, Y ESTA MEDIDO: HIM monta
+-- `models/props_lab/citizenradio.mdl` sobre un SENT de Lua con
+-- `ENT.Base = "base_anim"` ( him/lua/entities/homeless_radio/ ), no sobre un
+-- `prop_physics`. Un filtro por clase pierde esa radio entera. El criterio es
+-- **tiene modelo y el modelo coincide**, y nada mas.
+--
+-- ⚠ Y NO PUEDE SER SOLO UN HASH DE RUTAS EXACTAS, aunque `prop_data.lua` de este
+-- mismo addon use esa forma y sea O(1): el autor pidio "nombre Y discriminador",
+-- y su propio catastro tiene seis radios que se llaman distinto -- citizenradio,
+-- radio_reference, radionette01, german_radio, radio_box, radio. Enumerarlas es
+-- exactamente lo que dijo que no quiere hacer.
+--
+-- Asi que son TRES campos y el tercero es el que evita el desastre:
+--   exacto  basenames completos ( sin `.mdl` ), para lo que se conoce por nombre
+--   parte   substrings del basename, para la familia entera
+--   nunca   substrings que DESCALIFICAN, y corren PRIMERO
+--
+-- ⚠⚠ EL `nunca` NO ES PARANOIA: SALE DE UN CENSO DE **6542 `.mdl`** DEL TALLER,
+-- y cinco de los nueve basenames que contienen "radio" NO SON RADIOS:
+--
+--   radios de verdad ( 4 )   radio · dez_radio · fmradio · wick_dev_fmradio
+--   PASTILLAS ANTI-RADIACION ( 3 )   drug_radioprotector · dez_drug_radioprotector
+--                            · wick_radioprotector
+--   UN DETECTOR ( 2 )        dev_radio_diolator · dev_radio_diolator_hud
+--
+-- Sin la lista negra, **la mayoria de los "radios" del taller son pastillas**, y
+-- el fantasma pondria musica creepy adentro de un blister. Los cinco se vetan
+-- por `radioprotector` y `radio_diolator`, que son las dos raices.
+--
+--   · `radio_p1` es **el modelo ROTO** de la radio de CS:S -- lo senalo el autor
+--     en el mismo mensaje, y contiene "radio".
+--   · `models/nizckm/mwiii/executions/weapons/bromeo_805_myphone` es un **ARMA**
+--     de Modern Warfare III y contiene "phone".
+--   · `eqp_parabolic_microphone_iii` -- **nuestro propio paramic** -- contiene
+--     "phone" adentro de "microphone". Lo veta `microphone`, y si no, el
+--     fantasma haria sonar un telefono desde el instrumento con el que el
+--     jugador lo esta escuchando.
+--   · "radiator" NO hace falta vetarlo: no contiene "radio". Se midio, y se dice
+--     para que nadie lo agregue de nuevo por las dudas -- *un veto que no puede
+--     disparar ensucia la lista de motivos de los que si.*
+--
+-- ⚠ Y EL DENOMINADOR DE ESE CENSO TIENE UN LIMITE QUE HAY QUE DECIR: los 6542
+-- `.mdl` son los del WORKSPACE ( addons desempacados y repos propios ). **El
+-- contenido montado de HL2, CS:S y L4D2 no esta ahi**, asi que "cero pianos" en
+-- el censo NO significa que no haya pianos en juego: significa que el censo no
+-- los puede ver. La lista blanca por nombre exacto existe justamente para eso.
+local function basenameDe( ent )
+    local m = ent.GetModel and ent:GetModel()
+    if not isstring( m ) or m == "" then return nil end
+
+    -- El punto va ESCAPADO. ARC9 lo escribe sin escapar ( cl_drawmodel.lua:16 ) y
+    -- ahi el `.` matchea cualquier caracter: `foo_mdl` pasaria igual.
+    return string.lower( string.match( m, "([^/\\]+)%.mdl$" ) or m )
+
+end
+
+local function modeloCoincide( ent, regla )
+    local nom = basenameDe( ent )
+    if not nom then return false end
+
+    for _, mal in ipairs( regla.nunca or {} ) do
+        if string.find( nom, mal, 1, true ) then return false end
+
+    end
+
+    if regla.exacto and regla.exacto[ nom ] then return true end
+
+    for _, parte in ipairs( regla.parte or {} ) do
+        if string.find( nom, parte, 1, true ) then return true end
+
+    end
+
+    return false
+
+end
+
 local PROP_CONSUJETO = {
     {
         que     = "un vehiculo",
@@ -394,7 +583,242 @@ local PROP_CONSUJETO = {
 
         end,
     },
+
+    ---------------------------------------------------------------------------
+    -- LA RADIO -- Diseno 21.9.8 ①, que estaba diseñada y sin escribir
+    ---------------------------------------------------------------------------
+    -- Los diez `.ogg` de `sound/phantasmagoria/prop/radio/` estaban en disco
+    -- desde el 2026-08-03 y **ninguna linea de Lua los citaba**. El pedido
+    -- estaba escrito en `about.txt:242-244` -- *"que el fantasma agarre un prop
+    -- de radio de HL2 o CS ( la de office ) y reproduzca esto"* -- y el autor lo
+    -- repitio en la r2 poniendo el catastro de modelos.
+    --
+    -- ⚠ POR QUE NO SE PODIAN CABLEAR AL BANCO PLANO, medido: duran de **19,5 a
+    -- 159,8 segundos** ( ffprobe sobre los diez ). `sound.Play` no devuelve nada
+    -- que se pueda apagar, asi que un clip de 42 s disparado como one-shot en un
+    -- punto es un ruido que no termina y que se solapa con el siguiente evento.
+    -- Es el mismo motivo por el que los cuatro `_loop` quedaron fuera en la r1.
+    --
+    -- Por eso esta familia lleva `largo`: se emite con `ent:EmitSound` -- el
+    -- canal cuelga de la radio, asi que la sigue si alguien la mueve -- y se
+    -- corta con `ent:StopSound` a los pocos segundos. Un radioruido que arranca
+    -- y para solo es lo que hace una radio poseida; uno de 42 s es un bug.
+    --
+    -- ⚠⚠ CUATRO DE LOS DIEZ CLIPS NO ENTRAN, Y NO ES POR DURACION: el autor
+    -- pidio en la misma r2 *"quitar tambien los sonidos del presentador
+    -- britanico que en realidad no es un sonido de miedo es parte del equipo de
+    -- cazafantasmas"*. Los cuatro que se dejan afuera son los que **puede que
+    -- tengan voz hablada** y nadie los escucho todavia: `creepy_news`,
+    -- `creepy_music_news`, `creepy_radio_easteregg_helpmewithend` y
+    -- `event_creepy_eas_paranormal_radio_advise` ( un aviso de emergencia ). Los
+    -- dos `ritual_*` quedan afuera por ser loops de 33 y 160 s.
+    --
+    -- *No se cablea un clip cuyo contenido nadie midio a una regla que habla de
+    -- su contenido.* Van a la pregunta abierta de la r3, con nombre y duracion.
+    --
+    -- ( Y el presentador britanico de verdad -- la carpeta `voice/` del arbol de
+    --   sonido, 26 archivos -- **no tiene un solo consumidor** en el addon.
+    --
+    --   ⚠ EL CRITERIO DE LA MEDICION HAY QUE ESCRIBIRLO, PORQUE SIN EL NO SE
+    --   REPRODUCE Y ESTE COMENTARIO LA INVALIDA. Lo que se cuenta son las rutas
+    --   ENTRE COMILLAS, o sea las que el motor puede llegar a emitir: son 39, y
+    --   las 39 empiezan con `phantasmagoria/ghost/paranormal_voice/` -- que es la
+    --   voz DEL FANTASMA y no la del encargado. Un `rg` que cuente tambien los
+    --   comentarios da otro numero, justamente porque estos dos renglones
+    --   nombran la carpeta del encargado para explicar que no se usa.
+    --
+    --   Y el instrumento correcto es la BARRA: un `rg voice` a secas da decenas
+    --   de hits que son el RASGO `voice` del tipo de fantasma ( el indice 1 / 2
+    --   de la voz, en ghost_flags.lua ). Un check escrito sobre `voice` sin barra
+    --   acusaria al encargado de algo que no hizo y "arreglaria" el rasgo.
+    --
+    --   ⚠⚠⚠ "No habia nada que quitar" ERA FALSO, y el 2026-08-10 se encontro lo
+--   que habia. La medicion de arriba es CORRECTA y aun asi la conclusion era
+--   equivocada, que es lo que la vuelve util: conto las rutas que **contienen
+--   la palabra `voice`** y las 39 dieron `paranormal_voice/`. El presentador
+--   estaba en `SND.prop`, bajo `phantasmagoria/prop/key_1.ogg` -- una ruta que
+--   **no contiene la palabra `voice` en ninguna parte**, asi que el censo no
+--   podia verla ni con el criterio bien escrito.
+--
+--   *Un censo acotado por la carpeta donde ESPERAS que este el sospechoso no
+--   puede encontrarlo donde no esta.* El universo correcto no eran las rutas
+--   con `voice`: eran TODAS las rutas de sonido citadas ( son 164 ), cruzadas
+--   contra lo que suena en cada una. Hoy la afirmacion vale y esta medida al
+--   reves -- **cero** citas a `phantasmagoria/voice/` en todo el Lua -- que es
+--   la direccion en la que un cero significa algo. )
+    {
+        que     = "una radio",
+        largo   = { 6, 14 },   -- segundos de emision antes del StopSound
+        -- ⚠ LOS DOS DE ABAJO LOS PIDIO EL AUTOR EXPLICITAMENTE ( r3, 2026-08-10 ):
+        -- *"Agrega creepy_radio_easteregg_helpmewithend.ogg y ritual_chanting_loop
+        -- al roster de los sonidos de radio"*. Los dos motivos por los que estaban
+        -- afuera quedan CONTESTADOS y no simplemente ignorados:
+        --   · la duracion ( 60 s y 32 s ) no importa en ESTA familia, que es la
+        --     unica que lleva `largo` y corta con StopSound a los 6-14 s;
+        --   · el de `_loop` tampoco: un loop cortado a los 10 s se oye como una
+        --     radio que arranca y para, que es justo lo que se busca.
+        --
+        -- ⚠⚠ `creepy_radio_easteregg_helpmewithend` ERA ESTEREO ( medido con
+        -- ffprobe, 2 canales, 60 s ) y por eso paso por dev/mono_posicionales.py
+        -- ANTES de entrar aca. Sin esa conversion habria roto EN SILENCIO la
+        -- promesa de la familia -- Source no espacializa un estereo, lo tira en 2D
+        -- --, que es el defecto exacto que la r3 acababa de pagar en 15 archivos.
+        -- `ritual_chanting_loop` ya venia en 1 canal.
+        sonidos = {
+            "phantasmagoria/prop/radio/creepy_music.ogg",
+            "phantasmagoria/prop/radio/creepy_music_old.ogg",
+            "phantasmagoria/prop/radio/creepy_music_slowdown.ogg",
+            "phantasmagoria/prop/radio/creepy_montage.ogg",
+            "phantasmagoria/prop/radio/creepy_radio_easteregg_helpmewithend.ogg",
+            "phantasmagoria/prop/radio/ritual_chanting_loop.ogg",
+        },
+        modelo  = {
+            -- El catastro del autor, verificado sobre nada -- son nombres que el
+            -- dijo de memoria mirando el spawnmenu, y por eso van como `exacto`
+            -- ademas del substring: si alguno esta mal escrito, el substring lo
+            -- salva igual.
+            exacto = {
+                [ "citizenradio" ]    = true,   -- HL2, props_lab
+                [ "radio_reference" ] = true,   -- Portal
+                [ "radionette01" ]    = true,   -- gm_funkis_night
+                [ "german_radio" ]    = true,   -- Day of Defeat
+                [ "radio_box" ]       = true,
+            },
+            parte = { "radio" },
+            -- Las dos raices de los cinco falsos positivos medidos, mas el
+            -- modelo roto que senalo el autor y los sufijos de pedazos.
+            nunca = { "radioprotector", "radio_diolator", "radio_p1",
+                      "_p1", "_p2", "_p3", "_p4", "_gib", "broken", "destroyed" },
+        },
+    },
+
+    ---------------------------------------------------------------------------
+    -- EL TELEFONO
+    ---------------------------------------------------------------------------
+    -- El autor: *"Telefonos en l4d estan en su carpeta prop_interior, variantes
+    -- phone_motel y phone ( p_1 son partes del prop destruido ) en css tambien
+    -- hay varios telefonos, oldphone de css militia es uno, css office tiene
+    -- radio y phone."*
+    {
+        que     = "un telefono",
+        sonidos = {
+            "phantasmagoria/prop/phone_ring.ogg",
+            "phantasmagoria/prop/phone_vibrate.ogg",
+        },
+        modelo  = {
+            exacto = { [ "oldphone" ] = true, [ "phone" ] = true, [ "phone_motel" ] = true },
+            parte  = { "phone" },
+            -- `myphone` es un ARMA de MWIII, medida en el taller. `headphone` y
+            -- `microphone` no aparecieron en el censo pero son la misma familia
+            -- de falsos positivos y cuestan una comparacion.
+            nunca  = { "myphone", "headphone", "microphone", "_p1", "_gib", "broken" },
+        },
+    },
+
+    ---------------------------------------------------------------------------
+    -- EL TELEVISOR
+    ---------------------------------------------------------------------------
+    -- ⚠ "tv" A SECAS SERIA UN DESASTRE como substring ( matchea `tvrip`,
+    -- `motv...`, cualquier cosa ). Van los delimitados y los basenames exactos.
+    --
+    -- ⚠⚠ Y EL `nunca` LLEVA LOS SUFIJOS DE PEDAZOS, QUE EN ESTA FAMILIA SON
+    -- MAYORIA. Censo del taller: de los CINCO basenames que contienen "tv_",
+    -- **uno es un televisor y cuatro son pedazos rotos** -- `tv_plasma` mas
+    -- `tv_plasma_p1` a `_p4` ( dev/other/cs_office_tv/ ). Sin esto, cuatro de
+    -- cada cinco "televisores" que el evento puede encontrar son escombros, y
+    -- el fantasma prende una tele que ya exploto. El autor uso la misma
+    -- convencion al describir sus telefonos de L4D: *"p_1 son partes del prop
+    -- destruido"*.
+    {
+        que     = "un televisor",
+        sonidos = {
+            "phantasmagoria/prop/tv_on.ogg",     "phantasmagoria/prop/tv_off.ogg",
+            "phantasmagoria/prop/tv_noise.ogg",  "phantasmagoria/prop/tv_remote.ogg",
+        },
+        -- ⚠ `tv_noise` dura 10,03 s medidos: sin este corte queda sonando
+        -- encima del evento siguiente. Es el mismo motivo que la radio, con
+        -- otro numero -- y el numero se midio, no se supuso.
+        largo   = { 4, 9 },
+        modelo  = {
+            exacto = { [ "tv" ] = true, [ "tvset" ] = true, [ "tv_plasma" ] = true },
+            parte  = { "tv_", "_tv", "television" },
+            nunca  = { "_p1", "_p2", "_p3", "_p4", "_gib", "broken", "destroyed" },
+        },
+    },
+
+    ---------------------------------------------------------------------------
+    -- EL PIANO -- el caso que el autor nombro por su nombre
+    ---------------------------------------------------------------------------
+    {
+        que     = "un piano",
+        sonidos = {
+            "phantasmagoria/prop/piano_key_1.ogg", "phantasmagoria/prop/piano_key_2.ogg",
+            "phantasmagoria/prop/piano_key_3.ogg", "phantasmagoria/prop/piano_key_4.ogg",
+            "phantasmagoria/prop/piano_key_5.ogg",
+        },
+        modelo  = { parte = { "piano" }, nunca = { "_gib", "broken" } },
+    },
+
+    {
+        que     = "una guitarra",
+        sonidos = { "phantasmagoria/prop/guitar_string.ogg" },
+        modelo  = { parte = { "guitar" }, nunca = { "_gib", "broken" } },
+    },
+
+    {
+        que     = "un microondas",
+        sonidos = { "phantasmagoria/prop/microwave_beep.ogg" },
+        modelo  = { parte = { "microwave" } },
+    },
+
+    {
+        que     = "un inodoro",
+        sonidos = { "phantasmagoria/prop/toilet_flush.ogg" },
+        modelo  = { parte = { "toilet" } },
+    },
+
+    {
+        que     = "un peluche",
+        sonidos = { "phantasmagoria/prop/teddy_laugh.ogg" },
+        modelo  = { parte = { "teddy" } },
+    },
+
+    -- El reloj. Llego aca desde el banco plano por su duracion ( ver el
+    -- comentario de SND.prop ): 46,55 s son treinta veces mas que cualquier otro
+    -- clip ambiente, y sin sujeto ni corte era un tic-tac que se comia el evento
+    -- siguiente.
+    {
+        que     = "un reloj",
+        sonidos = { "phantasmagoria/prop/clock_tick.ogg" },
+        largo   = { 5, 12 },
+        modelo  = { parte = { "clock" }, nunca = { "_p1", "_gib", "broken" } },
+    },
 }
+
+-- ⚠ LA MITAD DE LA PREGUNTA DEL AUTOR QUE TIENE RESPUESTA Y ES **NO** ( con su
+-- consuelo ): *"Algunos modelos estan baked en el mapa, me pregunto si seran
+-- posibles de tomar?"*
+--
+-- Como ENTIDADES, no. Los `prop_static` se hornean en el BSP al compilar y no
+-- existen en runtime: `ents.FindByClass( "prop_static" )` tiene **cero** call
+-- sites en los 70 addons desempacados del taller, y no es casualidad. Un trace
+-- SI los pega, pero `tr.Entity` es el MUNDO ( `IsWorld()` da true ) y el
+-- discriminador de que pegaste en uno es `tr.HitTexture == "**studio**"` -- el
+-- NOMBRE del modelo no viene del trace.
+--
+-- Lo que SI se puede, y hay un tercero en este mismo taller que lo hace y
+-- funciona: **abrir el `.bsp` desde Lua y leer el game lump `sprp`**. StormFox2
+-- lo tiene escrito -- `file.Open( "maps/" .. game.GetMap() .. ".bsp", "rb",
+-- "GAME" )`, el fourCC 1936749168, la tabla de rutas de modelo, y hasta un
+-- `FindStaticsInSphere( pos, radio )` que es el gemelo exacto de
+-- `ents.FindInSphere` sobre lo horneado.
+--
+-- NO SE ESCRIBE EN ESTA RONDA, y el motivo es una medicion que falta y cuesta
+-- diez minutos: **nadie conto cuantas radios, televisores o pianos ESTATICOS
+-- tiene el mapa del autor.** La r1 ya saco `gm_funkis_night.bsp` del `.gma` y
+-- parseo su LUMP_ENTITIES ( 322 luces, 43 conmutables, 15 prop_physics ); lo que
+-- no toco es el lump `sprp`. Si ahi hay cero objetos de estas ocho familias,
+-- todo el parser sobra. *Primero el numero que decide, despues el codigo.*
 
 SND.door = {
     "phantasmagoria/door/handle_open_1.ogg", "phantasmagoria/door/handle_open_2.ogg",
@@ -418,14 +842,52 @@ SND.door = {
 -- Asi que la voz se sortea UNA VEZ por fantasma y se guarda. El rasgo `voice`
 -- del tipo la fija cuando la fuente lo dice: Banshee y Dayan son "Can only be
 -- female, ghost model and ghost name will reflect this".
+---------------------------------------------------------------------------
+-- ⚠⚠ LA RESERVA: `whisper` SUENA SOLO, `voice` Y `humming` SE GUARDAN
+---------------------------------------------------------------------------
+-- Pedido del autor, r2, literal: *"Los sonidos de paranormal_voice se escuchan
+-- creo que con el paramic o en eventos cuando el fantasma se manifiesta, no es
+-- un sonido que suene por sonar, lo mismo que los cantos. Tal vez un pequeño
+-- whisper podria ser sonido del fantasma sin usar paramic o en evento."*
+--
+-- Es una correccion de DISENO y no un bug: el banco `paranormal_voice` es -- lo
+-- dice su propio nombre y `about.txt` -- **lo que la parabolica le oye DECIR**.
+-- Que el fantasma grite "get out" cada cuarenta segundos al aire libre gasta la
+-- carta antes de que exista el equipo que la reparte.
+--
+-- EL CORTE ES POR **SI SE ENTIENDE O NO**, y esa es la unica regla que no
+-- depende de que a uno le guste el clip:
+--   whisper   lo que NO dice palabras -- susurro, murmullo, jadeo, quejido,
+--             shhh. Es presencia, no mensaje: puede sonar solo.
+--   voice     lo que DICE algo ( "get out", "why", "watching you" ) **y las
+--             risas**, que no dicen palabras pero son un susto y no una
+--             presencia. Reservado.
+--   humming   el canto y la caja musical. Reservado -- el autor los nombro
+--             aparte y §21.9.8 ② ya los tiene diseñados como un evento con
+--             puesta en escena ( el fantasma se queda quieto y te mira ), que no
+--             existe todavia.
+--
+-- Quedan OCHO en `whisper` por voz, que es lo mismo que tenia `breath` por dos.
+--
+-- ⚠ LA RESERVA NO BORRA NADA Y TIENE PERILLA. Los clips reservados siguen en la
+-- tabla y `phantasmagoria_ghost_evreserva 0` los devuelve al sorteo, que es el
+-- comportamiento exacto de la r2. Sin ese control, "ya casi no habla" y "el
+-- banco se rompio otra vez" se leen igual -- y este bloque ya tuvo un banco
+-- mudo entero con el instrumento diciendo OK.
 local VOZ = {
     [ 1 ] = {
-        voice = {
-            "phantasmagoria/ghost/paranormal_voice/voice_1_cant_find_me.ogg",
+        whisper = {
+            "phantasmagoria/ghost/paranormal_voice/voice_1_mutterings_01.ogg",
+            "phantasmagoria/ghost/paranormal_voice/voice_1_mutterings_02.ogg",
+            "phantasmagoria/ghost/paranormal_voice/voice_1_mutterings_03.ogg",
+            "phantasmagoria/ghost/paranormal_voice/voice_1_shhh_02.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_gasp_01.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_gasp_02.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_gasp_03.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_gasp_04.ogg",
+        },
+        voice = {
+            "phantasmagoria/ghost/paranormal_voice/voice_1_cant_find_me.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_get_out_01.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_get_out_02.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_hey_02.ogg",
@@ -434,10 +896,6 @@ local VOZ = {
             "phantasmagoria/ghost/paranormal_voice/voice_1_high_laugh_01.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_high_laugh_02.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_high_laugh_03.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_1_mutterings_01.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_1_mutterings_02.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_1_mutterings_03.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_1_shhh_02.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_slow_laugh.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_slow_laugh_02.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_1_slow_laugh_03.ogg",
@@ -459,6 +917,16 @@ local VOZ = {
     },
 
     [ 2 ] = {
+        whisper = {
+            "phantasmagoria/ghost/paranormal_voice/voice_2_whisper_01.ogg",
+            "phantasmagoria/ghost/paranormal_voice/voice_2_whisper_02.ogg",
+            "phantasmagoria/ghost/paranormal_voice/voice_2_whisper_03.ogg",
+            "phantasmagoria/ghost/paranormal_voice/voice_2_whisper_04.ogg",
+            "phantasmagoria/ghost/paranormal_voice/voice_2_mutters_01.ogg",
+            "phantasmagoria/ghost/paranormal_voice/voice_2_moan_01.ogg",
+            "phantasmagoria/ghost/paranormal_voice/voice_2_moan_03.ogg",
+            "phantasmagoria/ghost/paranormal_voice/voice_2_moan_04.ogg",
+        },
         voice = {
             "phantasmagoria/ghost/paranormal_voice/voice_2_cold_01.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_2_help_01.ogg",
@@ -466,16 +934,8 @@ local VOZ = {
             "phantasmagoria/ghost/paranormal_voice/voice_2_laugh_03.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_2_laugh_04.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_2_lost_01.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_2_moan_01.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_2_moan_03.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_2_moan_04.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_2_mutters_01.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_2_shout_get_out_01.ogg",
             "phantasmagoria/ghost/paranormal_voice/voice_2_watching_you_01.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_2_whisper_01.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_2_whisper_02.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_2_whisper_03.ogg",
-            "phantasmagoria/ghost/paranormal_voice/voice_2_whisper_04.ogg",
         },
         breath = {
             "phantasmagoria/ghost/breathing/voice_2_01.ogg",
@@ -865,6 +1325,70 @@ local THROW_CLASSES = {
     [ "prop_physics_multiplayer" ] = true,
 }
 
+---------------------------------------------------------------------------
+-- ⚠⚠ LA MARCA DEL PHYSGUN, Y ES EL ARREGLO DE LA FILA 05 DE LA r2
+---------------------------------------------------------------------------
+-- El autor, en juego: *"Si te tira lo tomado con el physgun"*, con la linea
+-- `OK -- 1 prop(s) tirado(s) ... ( ultimo prop_physics #63 a 181 u )` **sin
+-- sufijo de vetados**, o sea `vetosN == 0`: el prop que tenia agarrado paso los
+-- ocho vetos de `propVetado` y los cuatro filtros de `EV.throw`.
+--
+-- ⚠⚠ LO QUE DECIA ACA QUEDO REFUTADO EN JUEGO EL 2026-08-10 ( fila 04 de la r3 )
+-- y se corrige diciendolo, porque tres parrafos de abajo se apoyaban en ello.
+--
+-- DECIA: *"`Entity:IsPlayerHolding()` **NO cubre la physgun**, y no es una lectura
+-- de la wiki: esta MEDIDO EN JUEGO sobre artagdoll -- con el cuerpo agarrado del
+-- pecho con la physgun, su conteo dio 'agarrados: 0 de 1'
+-- ( `dev/other/artagdoll/ARTAGDOLL_CHANGELOG.md:2174-2182` )"*.
+--
+-- LO MEDIDO: el autor sostuvo un `prop_physics` **con la physgun** y el motivo
+-- que imprimio el desglose fue `alguien lo tiene agarrado` -- el de
+-- `IsPlayerHolding`, no el de esta marca. **Si la cubre.**
+--
+-- POR QUE LAS DOS MEDICIONES NO SE CONTRADICEN: artagdoll midio sobre un
+-- **ragdoll** y esto es un **prop_physics**. Son dos sujetos distintos y el
+-- comentario los trato como uno. *Una medicion solo refuta lo que sabe leer.*
+--
+-- CONSECUENCIA, y es la que importaba: mientras `IsPlayerHolding` corriera
+-- primero, **este veto era codigo muerto**. Hoy es el unico que queda en pie
+-- ( ver `propVetado` ), asi que la marca ya no es "la otra mitad": es la mitad.
+--
+-- ⚠ Y EL COMENTARIO QUE SOSTENIA ESA LINEA ERA FALSO EN DOS FORMAS, las dos
+-- corregidas abajo: decia *"los TRES precedentes del taller lo filtran igual"* y
+-- despues nombraba DOS -- y ninguno de los dos FILTRA. `him/server.lua:526` no
+-- descarta nada, cambia un peso de chance; `corpus_cargo_capture.lua:914` es el
+-- camino de SOLTAR un carry por +USE. Cero de los 16 call sites ajenos de
+-- `IsPlayerHolding` en el workspace acompanan la llamada con una comprobacion de
+-- physgun. *Un comentario que cuenta mal sus propios ejemplos es la senal mas
+-- barata de que nadie los abrio.*
+--
+-- LA SENAL QUE SI EXISTE, y es la que artagdoll uso para cerrar el mismo caso:
+-- los hooks del physgun. Se guarda **el jugador y no un booleano**, a proposito:
+-- si `PhysgunDrop` no llegara a disparar ( una desconexion sosteniendo el prop ),
+-- el Player queda NULL y el `IsValid` apaga el veto solo. Un `true` pegado seria
+-- la marca PERMANENTE que ya nos costo una revision con `GetCreator`.
+--
+-- `OnPhysgunPickup` y no `PhysgunPickup`: el segundo es el que PREGUNTA si se
+-- permite -- un prop protection puede vetarlo despues -- y el primero corre
+-- cuando el agarre YA se concreto. Es el motivo textual de artagdoll
+-- ( `gaze.lua:1465-1467` ).
+--
+-- ⚠ CUANTOS SUJETOS MAS VETA, porque esa es la pregunta que el veto de
+-- `GetCreator` no supo contestar: como mucho UNO POR JUGADOR, y **solo mientras
+-- dura el agarre**. La diferencia con aquel no es de tamano sino de NATURALEZA:
+-- `creator` es permanente y lo escribe el spawnmenu al nacer, asi que su
+-- conjunto era *"todo prop que alguna vez spawneo alguien"*, para siempre. Esta
+-- marca vive entre dos hooks y el prop vuelve al pozo de candidatos solo.
+hook.Add( "OnPhysgunPickup", "phantasmagoria_throw_physgun", function( ply, ent )
+    if IsValid( ent ) then ent.PhantasmagoriaPhysgunHolder = ply end
+
+end )
+
+hook.Add( "PhysgunDrop", "phantasmagoria_throw_physgun", function( _ply, ent )
+    if IsValid( ent ) then ent.PhantasmagoriaPhysgunHolder = nil end
+
+end )
+
 -- Lo que NO se toca, y por que cada uno. Es una lista negra CORTA porque la
 -- blanca de arriba ya hace el trabajo grueso; estos son los que pasan la blanca
 -- y aun asi no hay que mover.
@@ -893,10 +1417,34 @@ local function propVetado( ent, ghost )
     if ent == ghost then return "es el fantasma" end
     if ent.IsPhantasmagoriaGhost then return "es otro fantasma" end
 
-    -- Un prop en la mano de alguien: moverlo pelea contra el physgun / gravity
-    -- gun y el resultado es un tironeo. Los tres precedentes del taller lo
-    -- filtran igual ( him/server.lua:526, corpus_cargo_capture.lua:914 ).
-    if ent.IsPlayerHolding and ent:IsPlayerHolding() then return "alguien lo tiene agarrado" end
+    -- ⚠⚠⚠ ACA HABIA UN `IsPlayerHolding()` Y SE FUE POR DOS MOTIVOS DISTINTOS,
+    -- uno del autor y uno medido. NO se borro por limpieza.
+    --
+    -- ( 1 ) DECISION DEL AUTOR ( r3, 2026-08-10 ): *"Nadie usa gravity gun y esta
+    -- arma en HL2 hace 'inestable' a los props igualmente por lore del arma, si un
+    -- fantasma quisiera pegarle o tratar de tirar el objeto tomado por el gravity
+    -- gun deberia ser factible bajo la logica de Half Life 2."* O sea que un prop
+    -- en la gravity gun **deja de estar vetado a proposito**.
+    -- ⚠ Y ALCANZA TAMBIEN AL +USE, que el autor no nombro: era la misma linea la
+    -- que cubria los dos. Se dice en vez de disimularlo -- un prop que llevas con
+    -- E ahora tambien se puede volar.
+    --
+    -- ( 2 ) LA MEDICION QUE SOSTENIA EL ORDEN QUEDO REFUTADA EN JUEGO. El bloque
+    -- de arriba afirmaba, en negrita y como MEDIDO, que `IsPlayerHolding()` **no
+    -- cubre la physgun**. La fila 04 de la r3 lo dio vuelta: el autor sostuvo el
+    -- prop **con la physgun** y el motivo que salio fue `alguien lo tiene
+    -- agarrado`, que solo lo puede devolver esa llamada. O sea que SI la cubre, y
+    -- por eso este `return` se comia al de abajo: **la rama de la physgun era
+    -- codigo muerto** y las "dos claves para acreditar cada mitad" no podian
+    -- cumplirse ni en principio.
+    -- ⚠ Como se reconcilia con artagdoll, que midio lo contrario: aquello fue
+    -- sobre un **ragdoll** agarrado del pecho, no sobre un `prop_physics`. *Una
+    -- medicion solo refuta lo que sabe leer* -- el comentario tomo un resultado
+    -- sobre ragdolls y lo cito como si hablara de props.
+    if IsValid( ent.PhantasmagoriaPhysgunHolder ) then
+        return "lo tienen con la PHYSGUN", tostring( ent.PhantasmagoriaPhysgunHolder )
+
+    end
 
     -- ⚠⚠ ACA HUBO UN VETO POR `GetCreator()` Y DURO UNA REVISION. La idea era
     -- razonable -- "GetOwner esta vacio en los props de sandbox, el que guarda
@@ -1151,14 +1699,62 @@ end
 -- del fantasma y suena ahi. Es el piso del motor: si TODAS las demas categorias
 -- quedan sin sujeto, esta contesta igual, y eso es deliberado -- un motor de
 -- eventos que en un mapa pelado no hace absolutamente nada se lee como roto.
+-- ⚠ UNA SOLA TABLA DE DESPACHO, Y LA BITACORA LEE DE ELLA. La version anterior
+-- escribia la misma condicion en TRES lugares -- la eleccion del banco, el
+-- rotulo del log y la rama de "al aire" -- y solo la primera decidia. Con eso,
+-- arreglar la primera y olvidar las otras dos deja el log mintiendo con cara de
+-- dato. La entrada de DEFAULT es explicita y no un `or`: *un default implicito
+-- es una decision que nadie tomo y nadie puede auditar.*
+local KNOCK_SUP = {
+    puerta  = { banco = "knock_door",   carpeta = "event/knock ( puerta )"  },
+    ventana = { banco = "knock_window", carpeta = "event/knock ( ventana )" },
+    madera  = { banco = "impact_wood",  carpeta = "event/impact ( madera )" },
+    metal   = { banco = "impact_metal", carpeta = "event/impact ( metal )"  },
+    piedra  = { banco = "impact_stone", carpeta = "event/impact ( piedra )" },
+}
+
+-- El DEFAULT es madera y no "lo que sea": es el banco mas grande ( 12 clips ) y
+-- el mas de casa. En un mapa sin surfaceprops bien puestos, TODO cae acá, y eso
+-- hay que saberlo al leer una corrida.
+local KNOCK_DEFAULT = "madera"
+
+-- ⚠ EL MAPA DE MATERIALES ES LA MITAD **NO MEDIDA** DE ESTE BLOQUE, y va dicho.
+-- `tr.MatType` sobre una entidad tiene precedente firme en la propia base
+-- ( motionoverrides.lua:138, `traceResult.MatType == MAT_GLASS` ) y en HIM
+-- ( server.lua:1166 ). Lo que **NO** esta medido en ninguno de los 153 `.lua`
+-- del taller es si viene poblado sobre un BRUSH del mundo o sobre un prop
+-- estatico horneado: los dos usos del taller que lo leen contra el suelo
+-- ( glide_wheel/init.lua:413 y el fork de Trepang ) llevan los dos un fallback
+-- `or 0`, o sea que se verian identicos si la senal no llegara nunca. Es
+-- exactamente el falso verde del catalogo nº 42.
+--
+-- Por eso la fila 11 de la r3 imprime el CRUDO al lado del veredicto, y por eso
+-- la mitad que contesta la pregunta del autor -- puerta y ventana -- sale de la
+-- CLASE de `tr.Entity` y no del material: si MatType resultara mudo, se pierden
+-- solo madera/metal/piedra y las paredes quedan tan sordas como hoy.
+local KNOCK_MAT = {
+    [ MAT_GLASS ]    = "ventana",
+    [ MAT_WOOD ]     = "madera",
+    [ MAT_METAL ]    = "metal",
+    [ MAT_GRATE ]    = "metal",
+    [ MAT_VENT ]     = "metal",
+    [ MAT_CONCRETE ] = "piedra",
+    [ MAT_TILE ]     = "piedra",
+}
+
 EV.knock = function( ghost, radio )
     local origen = ghost:GetPos() + Vector( 0, 0, 45 )
-    local mejor, contra
+    local mejor, contra, porque, matCrudo, claseGolpeada
 
     for _ = 1, 8 do
         local ang = math.Rand( 0, 360 )
         local dir = Vector( math.cos( math.rad( ang ) ), math.sin( math.rad( ang ) ), math.Rand( -0.2, 0.3 ) )
 
+        -- MASK_SOLID y no BRUSHONLY: es lo que hace que el trace pegue en la
+        -- hoja de una puerta y en el panel de un func_breakable_surf, que son
+        -- justo los dos sujetos de esta categoria. ( El mismo archivo usa
+        -- MASK_SOLID_BRUSHONLY en puntoCerca, donde lo que interesa es el
+        -- mundo. )
         local tr = util.TraceLine( {
             start  = origen,
             endpos = origen + dir * radio,
@@ -1167,15 +1763,34 @@ EV.knock = function( ghost, radio )
         } )
 
         if tr.Hit then
-            mejor = tr.HitPos + tr.HitNormal * 4
+            mejor    = tr.HitPos + tr.HitNormal * 4
+            matCrudo = tr.MatType
 
-            -- CONTRA QUE golpeo decide de que banco sale el clip, y no es un
-            -- adorno: el catalogo separa las dos cosas por lo que SON
-            -- ( about.txt ) -- `event/knock` es "golpeteo en puerta y ventana" y
-            -- `event/impact` es "golpes contra madera, metal, piedra". Golpear
-            -- una pared con el clip de una puerta se oye mal sin que nadie pueda
-            -- decir por que.
-            contra = ( IsValid( tr.Entity ) and DOOR_CLASSES[ tr.Entity:GetClass() ] ) and "puerta" or "pared"
+            -- LA ESCALERA: la CLASE gana al material, y el material gana al
+            -- default. La clase es la unica de las tres que esta medida
+            -- funcionando ( es la linea que ya distinguia la puerta ).
+            local clase = IsValid( tr.Entity ) and tr.Entity:GetClass() or nil
+            claseGolpeada = clase
+
+            if clase and DOOR_CLASSES[ clase ] then
+                contra, porque = "puerta", "la clase de la entidad"
+
+            elseif clase == "func_breakable_surf" then
+                -- La clase de una ventana rompible de Source. La base ya la
+                -- trata como vidrio ( motionoverrides.lua:140 ) y el arma de
+                -- punos tambien ( weapon_terminatorfists_term.lua:462 ).
+                contra, porque = "ventana", "la clase de la entidad ( func_breakable_surf )"
+
+            elseif matCrudo and KNOCK_MAT[ matCrudo ] then
+                contra, porque = KNOCK_MAT[ matCrudo ], "el material del trace ( MatType " .. matCrudo .. " )"
+
+            else
+                contra = KNOCK_DEFAULT
+                porque = "NINGUNA senal discrimino ( MatType " .. tostring( matCrudo ) ..
+                    " ) -- cayo al default"
+
+            end
+
             break
 
         end
@@ -1183,13 +1798,24 @@ EV.knock = function( ghost, radio )
 
     -- Sin pared a la vista ( campo abierto ): suena al lado igual. Un fantasma
     -- afuera sigue haciendo ruido.
+    --
+    -- ⚠ ESTE ES UN TERCER CAMINO Y NO UN CASO DEL DEFAULT: no hubo superficie
+    -- que clasificar, ni siquiera hay HitPos. Se rotula distinto para que una
+    -- corrida pueda separar "no discrimino el material" de "no habia contra que
+    -- golpear", que llevan a arreglos distintos.
     local pos = mejor or ( origen + VectorRand() * math.min( radio, 120 ) )
 
-    local banco = ( contra == "puerta" ) and SND.knock or SND.impact
-    local snd   = elegir( banco )
+    if not mejor then
+        contra, porque = KNOCK_DEFAULT, "al aire: los 8 traces fallaron, no habia superficie"
+
+    end
+
+    local sup   = KNOCK_SUP[ contra ] or KNOCK_SUP[ KNOCK_DEFAULT ]
+    local snd   = elegir( SND[ sup.banco ] )
 
     if not snd then
-        return false, "el banco de golpes esta vacio ( contra " .. tostring( contra or "nada" ) .. " )"
+        return false, "el banco '" .. sup.banco .. "' esta vacio ( contra " .. tostring( contra ) ..
+            ", decidido por " .. tostring( porque ) .. " )"
 
     end
 
@@ -1206,10 +1832,16 @@ EV.knock = function( ghost, radio )
         end )
     end
 
+    -- ⚠ EL DETALLE NOMBRA EL CLIP, Y ESA ES LA LINEA QUE HACIA INVISIBLE AL
+    -- DEFECTO. El log viejo decia `( contra puerta, banco event/knock )` -- que
+    -- era CIERTO -- mientras sonaba `window_4.ogg`. La variable `snd` existia y
+    -- no aparecia en el retorno. Es la misma leccion que EV.sound pago en la r1
+    -- con el sample rate: *dos lineas que hablan del mismo disparo y no se
+    -- pueden aparear no son dos mediciones, es una.*
     return true, golpes .. " golpe(s) a " .. math.Round( ghost:GetPos():Distance( pos ) ) .. " u" ..
-        ( mejor and ( " ( contra " .. contra .. ", banco " ..
-            ( contra == "puerta" and "event/knock" or "event/impact" ) .. " )" )
-          or " ( al aire, no habia pared -- banco event/impact )" )
+        "  [ " .. ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) .. " ]" ..
+        "  ( contra " .. contra .. ", banco " .. sup.carpeta .. "; lo decidio " .. porque ..
+        ( claseGolpeada and ( "; la entidad es " .. claseGolpeada ) or "; pego en el MUNDO" ) .. " )"
 
 end
 
@@ -1811,11 +2443,88 @@ EV.sound = function( ghost, _radio, _fuerza, _cuantos, _dir, flags )
 
     if not bancos then return false, "la voz " .. tostring( voz ) .. " no tiene bancos" end
 
-    local key = sortearPeso( flags.soundBanks or {}, { "voice", "breath", "humming" } )
-    if not key then return false, "los tres soundBanks del tipo estan en cero" end
+    ---------------------------------------------------------------------------
+    -- ⚠⚠ LA RESERVA SE APLICA SOBRE LOS PESOS, NO SOBRE LA TABLA DE DATOS
+    ---------------------------------------------------------------------------
+    -- Los rasgos por tipo viven en ghost_flags.lua con las claves `voice`,
+    -- `breath` y `humming` en 25 de los 30 tipos. Renombrarlas para meter
+    -- `whisper` habria significado tocar un archivo de DATOS -- que ademas es el
+    -- que `gen_types.py` no pisa, o sea el unico lugar donde los rasgos
+    -- sobreviven -- para expresar una decision de COMPORTAMIENTO. Y peor: un
+    -- tipo con `humming 4` ( el Myling ) habria quedado con un peso apuntando a
+    -- una clave inexistente, que en `sortearPeso` no es un error: es un peso que
+    -- nunca sale.
+    --
+    -- Asi que los datos no se tocan y lo que se re-rutea es el peso: con la
+    -- reserva puesta, el peso de `voice` va al banco `whisper` y el de `humming`
+    -- sale del sorteo. Es reversible por convar, no toca 25 filas, y el reporte
+    -- puede decir las dos cosas -- que banco sono y de que peso vino.
+    local reserva = cvReserva:GetBool()
+    local pesos   = flags.soundBanks or {}
+    local orden, mapa
 
-    local snd = elegir( bancos[ key ] )
-    if not snd then return false, "el banco '" .. key .. "' de la voz " .. voz .. " esta vacio" end
+    if reserva then
+        orden = { "voice", "breath" }
+        mapa  = { voice = "whisper", breath = "breath" }
+
+    else
+        orden = { "voice", "breath", "humming" }
+        mapa  = { voice = "voice", breath = "breath", humming = "humming" }
+
+    end
+
+    -- ⚠⚠ EL CONTROL TIENE QUE REPRODUCIR LA r2 Y NO LO HACIA. Con la reserva en
+    -- 0 el mapa manda el peso `voice` al banco `voice`, que despues del corte de
+    -- esta ronda tiene 15 clips en la voz 1 y 8 en la voz 2 -- pero en la r2 ese
+    -- peso sorteaba sobre **los 23 y los 16**, o sea sobre `whisper` + `voice`
+    -- juntos, que era una sola tabla. Los 8 de `whisper` quedaban INALCANZABLES
+    -- justo en el estado que existe para volver al comportamiento anterior.
+    --
+    -- *Un control que no reproduce el estado que dice reproducir no es un
+    -- control: es un tercer estado sin nombre* -- y habria hecho que la fila 08
+    -- comparara la reserva contra algo que nunca corrio.
+    --
+    -- La union se arma UNA VEZ y se guarda en la propia tabla VOZ: esto corre en
+    -- cada evento de sonido, y rearmar 23 entradas por disparo seria basura para
+    -- el recolector sin ningun motivo. La clave lleva guion bajo adelante para
+    -- que se lea como lo que es -- un derivado y no un banco del catalogo.
+    if not reserva then
+        if not bancos._todaLaVoz then
+            local t = {}
+
+            for _, ruta in ipairs( bancos.whisper or {} ) do t[ #t + 1 ] = ruta end
+            for _, ruta in ipairs( bancos.voice or {} ) do t[ #t + 1 ] = ruta end
+
+            bancos._todaLaVoz = t
+
+        end
+
+        mapa.voice = "_todaLaVoz"
+
+    end
+
+    local key = sortearPeso( pesos, orden )
+
+    -- ⚠ UN TIPO QUE **SOLO** TARAREA SE QUEDA SIN POZO CON LA RESERVA PUESTA, y
+    -- eso hay que decirlo en vez de devolver "los soundBanks estan en cero", que
+    -- seria falso: no estan en cero, estan reservados. Degrada a `whisper` -- que
+    -- es lo que el autor pidio que quede -- y lo ROTULA, para que una corrida no
+    -- lea el degradado como el comportamiento normal del tipo.
+    local degradado = ""
+
+    if not key then
+        if reserva then
+            key, degradado = "voice", "  ( DEGRADADO: con la reserva puesta este tipo se quedaba sin pozo )"
+
+        else
+            return false, "los tres soundBanks del tipo estan en cero"
+
+        end
+    end
+
+    local banco = mapa[ key ] or key
+    local snd = elegir( bancos[ banco ] )
+    if not snd then return false, "el banco '" .. banco .. "' de la voz " .. voz .. " esta vacio" end
 
     ghost:EmitSound( snd, 70, math.random( 96, 104 ) )
 
@@ -1825,8 +2534,18 @@ EV.sound = function( ghost, _radio, _fuerza, _cuantos, _dir, flags )
     -- 'phantasmagoria\ghost\paranormal_voice\voice_1_why_01.ogg'`. Las dos
     -- lineas hablaban del mismo disparo y NO se podian aparear, porque la
     -- nuestra no decia que clip habia elegido. `EV.prop` ya lo hacia.
+    -- ⚠ DICE EL BANCO **Y** EL PESO DEL QUE VINO, porque con la reserva puesta
+    -- ya no son la misma palabra: un `whisper` que salio del peso `voice` y uno
+    -- que hubiera salido de un peso `whisper` inexistente se leen igual, y solo
+    -- el primero existe. Sin los dos nombres, la fila que mida la reserva no
+    -- puede distinguir "la reserva funciono" de "el tipo no tenia voice".
+    local comoSeLlama = ( banco == "_todaLaVoz" ) and "whisper+voice ( el pozo entero de la r2 )" or banco
+
     return true, ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) ..
-        "  ( voz " .. voz .. " / banco " .. key .. ", en el fantasma )"
+        "  ( voz " .. voz .. " / banco " .. comoSeLlama ..
+        ( banco ~= key and ( ", del peso '" .. key .. "'" ) or "" ) ..
+        ", en el fantasma" .. ( reserva and "; RESERVA puesta" or "; reserva APAGADA ( control )" ) ..
+        " )" .. degradado
 
 end
 
@@ -1839,54 +2558,117 @@ EV.prop = function( ghost, radio )
     -- por eso sonaban alarmas de auto sin auto. Ahora los sonidos que nombran un
     -- objeto entran al sorteo SOLO si ese objeto esta a la vista del radio, y
     -- cuando entran, suenan DESDE el.
-    local conSujeto = {}
+    --
+    -- ⚠ UN SOLO BARRIDO PARA LAS OCHO FAMILIAS, Y ESTE ES EL CAMBIO DE FORMA DE
+    -- LA r3. La version de la r2 tenia el `ents.FindInSphere` **adentro** del
+    -- bucle de familias: con una familia daba 1 barrido y no se notaba, con las
+    -- ocho de hoy darian OCHO barridos de la misma esfera en el mismo tick,
+    -- siete de ellos redundantes. Se invierten los bucles: la esfera se pide una
+    -- vez y cada entidad se clasifica contra todas las familias en la misma
+    -- pasada.
+    local esfera = ents.FindInSphere( ghost:GetPos(), radio )
+    local hallado, cuantas = {}, 0
 
-    for _, fam in ipairs( PROP_CONSUJETO ) do
-        local hallado
+    for _, ent in ipairs( esfera ) do
+        if not IsValid( ent ) then continue end
+        if ent == ghost then continue end
 
-        for _, ent in ipairs( ents.FindInSphere( ghost:GetPos(), radio ) ) do
-            if not IsValid( ent ) then continue end
-            if ent == ghost then continue end
-            if not fam.sujeto( ent ) then continue end
+        for i, fam in ipairs( PROP_CONSUJETO ) do
+            if hallado[ i ] then continue end
 
-            hallado = ent
-            break
+            -- Dos formas de ser sujeto y no una: un predicado ( el vehiculo,
+            -- que se reconoce por IsVehicle y no por su modelo ) o una regla de
+            -- modelo. Nunca las dos.
+            local es = fam.sujeto and fam.sujeto( ent ) or
+                ( fam.modelo and modeloCoincide( ent, fam.modelo ) )
 
-        end
-
-        if IsValid( hallado ) then
-            for _, s in ipairs( fam.sonidos ) do
-                conSujeto[ #conSujeto + 1 ] = { snd = s, ent = hallado, que = fam.que }
+            if es then
+                hallado[ i ] = ent
+                cuantas = cuantas + 1
 
             end
         end
+
+        if cuantas >= #PROP_CONSUJETO then break end
+
     end
 
-    -- El pozo es el banco ambiente MAS lo que el mundo habilito. Un sonido con
-    -- sujeto no tiene prioridad: si hay un auto, la alarma compite con el piano,
-    -- que es lo que evita que la unica casa con un auto suene a estacionamiento.
-    local nGen = #SND.prop
-    local nSuj = #conSujeto
+    ---------------------------------------------------------------------------
+    -- ⚠⚠ SE SORTEA LA FAMILIA Y DESPUES EL CLIP -- Y NO AL REVES
+    ---------------------------------------------------------------------------
+    -- La r2 armaba un pozo plano con UNA entrada por cada clip de cada familia
+    -- presente. Con dos clips de auto contra dieciocho de ambiente eso era 10 %
+    -- y se leia razonable; con la familia radio ( cuatro clips ) mas siete
+    -- familias mas, el ambiente -- que ahora tiene tres -- quedaria en menos del
+    -- 10 % y una casa con una radio sonaria a radio casi siempre.
+    --
+    -- *Un sorteo plano sobre pozos de tamano muy distinto no reparte por
+    -- categoria: reparte por cuantos archivos tiene cada carpeta*, que es un
+    -- dato del catalogo de audio y no una decision de diseno.
+    --
+    -- Ahora cada familia presente pesa 1, y el ambiente pesa 1. Con una radio en
+    -- la sala eso es 50/50 radio-ambiente; con radio y tele, 33 % cada uno.
+    local opciones = {}
 
-    if nGen + nSuj <= 0 then return false, "el banco prop/ esta vacio" end
+    if #SND.prop > 0 then opciones[ #opciones + 1 ] = { ambiente = true } end
 
-    local tirada = math.random( nGen + nSuj )
+    for i, fam in ipairs( PROP_CONSUJETO ) do
+        if IsValid( hallado[ i ] ) then
+            opciones[ #opciones + 1 ] = { fam = fam, ent = hallado[ i ] }
 
-    if tirada > nGen then
-        local elegido = conSujeto[ tirada - nGen ]
+        end
+    end
 
-        elegido.ent:EmitSound( elegido.snd, 75, math.random( 97, 103 ) )
+    if #opciones <= 0 then
+        return false, "no habia ningun objeto reconocible a " .. math.Round( radio ) ..
+            " u y el banco ambiente esta vacio"
 
-        return true, ( string.match( elegido.snd, "([^/]+)%.ogg$" ) or elegido.snd ) ..
-            " DESDE " .. elegido.que .. " ( " .. elegido.ent:GetClass() .. " #" ..
-            elegido.ent:EntIndex() .. " ) a " ..
-            math.Round( ghost:GetPos():Distance( elegido.ent:GetPos() ) ) .. " u"
+    end
+
+    local elegida = elegir( opciones )
+
+    if elegida.fam then
+        local fam = elegida.fam
+        local ent = elegida.ent
+        local snd = elegir( fam.sonidos )
+
+        if not snd then
+            return false, "la familia '" .. fam.que .. "' no tiene sonidos"
+
+        end
+
+        ent:EmitSound( snd, 75, math.random( 97, 103 ) )
+
+        -- ⚠ EL CLIP LARGO SE CORTA, Y POR ESO ESTA FAMILIA EMITE EN LA ENTIDAD.
+        -- `sound.Play` no devuelve nada que se pueda apagar; `EmitSound` ata el
+        -- canal a la entidad y `StopSound` lo suelta. Sin esto, la radio suena
+        -- 42 segundos y se solapa con el evento siguiente.
+        local corte = ""
+
+        if fam.largo then
+            local dur = math.Rand( fam.largo[ 1 ], fam.largo[ 2 ] )
+
+            timer.Simple( dur, function()
+                if not IsValid( ent ) then return end
+                ent:StopSound( snd )
+
+            end )
+
+            corte = ", cortado a los " .. string.format( "%.1f", dur ) .. " s"
+
+        end
+
+        return true, ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) ..
+            " DESDE " .. fam.que .. " ( " .. ent:GetClass() .. " #" .. ent:EntIndex() ..
+            ( basenameDe( ent ) and ( "  modelo '" .. basenameDe( ent ) .. "'" ) or "" ) .. " ) a " ..
+            math.Round( ghost:GetPos():Distance( ent:GetPos() ) ) .. " u" .. corte ..
+            "  ( " .. ( #opciones - 1 ) .. " familia(s) con sujeto en el radio )"
 
     end
 
     -- puntoCerca nunca devuelve nil ( contrato declarado en su cuerpo ).
     local pos = puntoCerca( ghost, radio, false )
-    local snd = SND.prop[ tirada ]
+    local snd = elegir( SND.prop )
 
     sound.Play( snd, pos, 75, math.random( 97, 103 ) )
 
@@ -1896,12 +2678,13 @@ EV.prop = function( ghost, radio )
     -- al cargar. Un banco de sonido es justo el lugar donde alguien pega una
     -- ruta a mano.
     --
-    -- El detalle dice cuantos sonidos con sujeto habia disponibles: sin ese
-    -- numero, "sono un piano" no distingue "no habia auto" de "habia auto y
-    -- salio piano", y la fila que mida esto necesita separarlos.
+    -- ⚠ EL DETALLE DICE CUANTAS FAMILIAS TENIAN SUJETO, y ese numero es el que
+    -- separa dos escenas que se leen igual: "sono a llaves porque no habia nada
+    -- reconocible" y "sono a llaves habiendo una radio al lado". La primera es
+    -- el mecanismo funcionando; la segunda es el sorteo.
     return true, ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) .. " a " ..
         math.Round( ghost:GetPos():Distance( pos ) ) .. " u" ..
-        "  ( ambiente; " .. nSuj .. " sonido(s) con sujeto disponibles )"
+        "  ( ambiente; " .. ( #opciones - 1 ) .. " familia(s) con sujeto en el radio )"
 
 end
 
@@ -2003,6 +2786,29 @@ function ENT:phantom_FireEvent( forzada )
 
     local salieron, ultimoDetalle = 0, nil
 
+    -- ⚠⚠ EL SORTEO VA SIN REEMPLAZO, Y ANTES NO LO IBA. Lo destapo la bitacora
+    -- del autor en la r3: `throw` salio REPETIDO en 3 de las 4 despertadas.
+    -- No era mala suerte -- `sortearPeso` se llamaba fresco en cada vuelta sobre
+    -- el mismo orden, asi que con el poltergeist ( throw pesa 8 de 16 ) sacar la
+    -- misma dos veces tenia probabilidad 1/2 por tirada.
+    --
+    -- Por que es un defecto y no una preferencia: `count` esta documentado como
+    -- *"categorias A LA VEZ"* y existe para **The Twins**, cuyo `radius` es un
+    -- ARRAY INDEXADO POR ITERACION ( la vuelta 1 al radio normal, la 2 al
+    -- extendido ). Dos tiros de la misma categoria no son dos interacciones: son
+    -- la misma dos veces, a dos distancias. *Un parametro que dice "a la vez"
+    -- tiene que sortear sin reemplazo o no dice eso.*
+    --
+    -- La copia se hace SOLO si hace falta ( count > 1 y sin forzar ): con count 1
+    -- --los otros veintinueve tipos-- esto es exactamente el codigo de antes y no
+    -- se paga una tabla por evento.
+    local restantes = CAT_ORDER
+    if cuantos > 1 and not forzada then
+        restantes = {}
+        for _, k in ipairs( CAT_ORDER ) do restantes[ #restantes + 1 ] = k end
+
+    end
+
     -- EL BUCLE QUE SALVA A THE TWINS Y AL POLTERGEIST CON LA MISMA LINEA.
     -- Con count = 1 y radius = { 1.0 } es identico al comportamiento de los
     -- otros veintinueve tipos: no es una rama nueva, es un bucle de largo uno.
@@ -2013,12 +2819,30 @@ function ENT:phantom_FireEvent( forzada )
             cat = forzada
 
         else
-            cat = sortearPeso( flags.weights or {}, CAT_ORDER )
+            cat = sortearPeso( flags.weights or {}, restantes )
 
             if not cat then
-                st.motivos.sorteo = "todos los pesos del tipo estan en cero"
+                -- ⚠ DOS ESTADOS DISTINTOS Y NO COMPARTEN RENGLON: que el tipo
+                -- tenga todo en cero es un error de configuracion; que se
+                -- agoten a mitad de camino es `count` pidiendo mas categorias
+                -- de las que tienen peso, y es esperable. Con un solo mensaje,
+                -- el segundo se leeria como el primero y mandaria a revisar
+                -- ghost_flags.lua para nada.
+                st.motivos.sorteo = ( i > 1 )
+                    and ( "se agotaron las categorias con peso en la vuelta " .. i
+                          .. " de " .. cuantos .. " ( count pide mas de las que hay )" )
+                    or "todos los pesos del tipo estan en cero"
                 break
 
+            end
+
+            -- sin reemplazo: sale del orden para las vueltas siguientes. Se
+            -- recorre al reves para que el remove no saltee un elemento.
+            if restantes ~= CAT_ORDER then
+                for n = #restantes, 1, -1 do
+                    if restantes[ n ] == cat then table.remove( restantes, n ) end
+
+                end
             end
         end
 
@@ -2302,6 +3126,9 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
         " s, dividido por el `rate` del tipo Y ADEMAS por el `hunt.rate` si esta cazando" )
     say( "              ( el valor que de verdad salio esta en la linea 'sorteado' de cada fantasma )" )
     say( "  masa tope   " .. math.Round( cvMass:GetFloat() ) .. " kg" )
+    say( "  reserva     phantasmagoria_ghost_evreserva = " .. cvReserva:GetInt() ..
+        ( cvReserva:GetBool() and "  ( `voice` y `humming` guardados para el paramic y la manifestacion )"
+          or "  ( CONTROL: todo al sorteo, como en la r2 )" ) )
     say( "  en el hunt  phantasmagoria_ghost_evhunt = " .. cvHunt:GetInt() ..
         ( cvHunt:GetInt() == 0 and "  ( CONTROL: cazando no hay eventos )"
           or "  ( los multiplicadores `hunt` del tipo deciden )" ) )
@@ -2472,6 +3299,22 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
         say( "    voces:    voice " .. tostring( sb.voice or 1 ) ..
             "  breath " .. tostring( sb.breath or 1 ) ..
             "  humming " .. tostring( sb.humming or 1 ) .. "   ( pesos del banco de sonido )" )
+
+        -- ⚠ EL PESO Y EL BANCO YA NO SE LLAMAN IGUAL, Y LA LINEA DE ARRIBA
+        -- SIGUE HABLANDO DE PESOS. Sin esta segunda linea, un operador lee
+        -- `voice 4` y espera oir frases, que es exactamente lo que la reserva
+        -- impide. *Cuando un rotulo deja de nombrar lo que produce, el
+        -- instrumento tiene que decir las dos cosas o miente por omision.*
+        if cvReserva:GetBool() then
+            say( "              -> con la RESERVA puesta, el peso 'voice' sale por el banco `whisper`" )
+            say( "                 ( 8 clips ) y el peso 'humming' NO participa. Los guarda para el" )
+            say( "                 paramic y para la manifestacion. Apagar con phantasmagoria_ghost_evreserva 0." )
+
+        else
+            say( "              -> reserva APAGADA ( control ): los tres pesos salen por su banco homonimo," )
+            say( "                 o sea el comportamiento de la r2." )
+
+        end
 
         for _, key in ipairs( CAT_ORDER ) do
             local w    = ( flags.weights or {} )[ key ]

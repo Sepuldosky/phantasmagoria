@@ -7,6 +7,403 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-10 (38) — **Las puertas parenteadas ABREN en juego. Y la advertencia que el propio arreglo se escribió cobró el mismo día: un `==` entre entidades también es un uso del trace.**
+
+El autor lo corrió en juego: **«ya abre las puertas»**. El arreglo del padre —subir por `GetParent()`
+cuando el sondeo pega en el vidrio o el marco parenteados, sin tocar `DOOR_CLASSES`— hace lo que se
+escribió para hacer, en las dos puertas del reporte de la r2. **La causa que se le adjudicó al vidrio
+durante tres rondas era falsa y la buena era el parenteo.**
+
+### ⭐⭐ El «parece no dejar huellas» tenía causa, y era el renglón que el arreglo mismo advertía
+
+El autor lo reportó dudando: *«pero parece no dejar huellas (No estoy seguro)»*. **La duda tenía
+razón**, y el defecto se leyó en el código sin necesidad de otra pasada:
+
+```lua
+if tr and tr.Entity == door then          -- <-- FALSO SIEMPRE en estas puertas
+    pendiente = PHANTASMAGORIA.MakePrint( self, door, tr.HitPos, tr.HitNormal )
+```
+
+El `tr` pegó en el **panel** y `door` ahora es el **padre**: la igualdad no se cumple nunca, así que
+`pendiente` quedaba `nil` y `huellas` se quedaba en **0 justo en las dos puertas por las que existe el
+arreglo**. Abrían sin dejar evidencia.
+
+Y esto **estaba advertido en el propio archivo**, tres rondas más arriba en el mismo día: el bloque
+del padre decía que devolver el `tr` del hijo *«es correcto para lo que los llamadores hacen hoy»*.
+No lo era. **La revisión que escribió esa frase miró los usos GEOMÉTRICOS del trace** (`HitPos`,
+`Fraction`, que efectivamente dan lo mismo a centímetros) **y no el de IDENTIDAD, que es el único que
+la ruptura rompe.** La lección queda escrita en los dos renglones: *un `==` entre entidades también
+es un uso del trace, y revisar «los usos de `tr`» por sus campos numéricos deja afuera precisamente
+el que se cae.*
+
+Arreglo: `esLaPuertaOSuPanel( tr.Entity, door )`, que sube la misma cadena. El punto sobre el vidrio
+**es** la huella correcta — `MakePrint` la guarda relativa a la puerta y el panel está parenteado, o
+sea que se mueve rígido con la hoja y el punto local sigue cayendo sobre el vidrio cuando gira.
+
+**MEDIDO EN JUEGO EL MISMO DÍA Y CIERRA:** `intentos 1 · escalera 1 Use2 1 · ABRIO 1 · fallo 0 ·
+huellas 1`, y el detalle `huella 1 mano 4 en func_door_rotating #467, quedan 60 s`, con
+`huellas vivas: 1 de 1 guardadas`. La huella se guarda contra la **puerta** (`func_door_rotating`, la
+clase del padre) y no contra el panel, que es lo que el arreglo prometía.
+
+### El tope de saltos existe UNA sola vez, y no es cosmético
+
+`PARENT_HOPS = 4`, consumido por los **dos** lados que suben la cadena. Con dos números sueltos, una
+puerta encontrada en el salto 4 no dejaría huella porque el otro lado se rinde en el 3 — y el síntoma
+sería *«abre pero no deja evidencia»* **en una sola puerta del mapa**, que es la clase de defecto que
+no se encuentra buscándolo. Es la regla del lote de equipamiento (una constante que decide geometría
+tiene que existir una vez) aplicada a un tope de iteración.
+
+### Lo que NO se midió, dicho y no disimulado
+
+- **La planilla del bloque (`dev/checks/phantasmagoria-puertas-parenteadas.html`) nunca se creó.** El
+  bloque se cierra por el veredicto en juego del autor y no por sus seis filas. **Tres de las seis
+  quedaron cubiertas por la corrida** (01/02 abre · el arreglo de la huella · y el **control
+  negativo**, que el autor midió con el ojo: *«confirmo que no traspasa los ventanales»*), y el
+  **acumulado** cerró en `topó con GEOMETRÍA que no es puerta 0 tick(s)` contra los **383** de la
+  corrida anterior — ⚠ pero **no en condiciones equivalentes**: en esta pasada el fantasma vio **una
+  sola** puerta cerrada, así que el 0 dice «no volvió a topar con geometría no reconocida», no «el
+  mismo escenario da 0». Lo que sostiene que esto no es un ensanche de la lista blanca sigue siendo
+  la **lectura del BSP** (de 181 `func_breakable` sólo 5 tienen puerta arriba, y de 11 `func_brush`
+  sólo 2) más el **diff** con `DOOR_CLASSES` intacta en sus dos copias, tres clases cada una.
+- **La huella no se puede VER en juego** y esto no cambió: no existe consumidor que la dibuje —hace
+  falta la linterna UV—, así que el único lector es `phantasmagoria_ghost_doors`. Lo que se verificó
+  es el **productor del dato** y el contador, que es lo que se podía verificar hoy.
+- **`func_movelinear` sigue sin abrirse.** Está fuera de `DOOR_CLASSES` y el mapa tiene 1 con hijos:
+  con el arreglo del padre tampoco se abre, porque el padre tampoco está en la lista. Es una decisión
+  aparte y sigue pendiente.
+
+Checks al día: **luacheck 35/35 · sintaxis real 35/35 · returns de hooks 0/26 · 164 rutas de sonido,
+0 faltantes** (este último con auto-control: una ruta inventada tiene que dar faltante).
+
+### Lo que pidió el autor para después
+
+El bloque que sigue son los **props horneados** (que suenen los `prop_static` del mapa). **Y después
+de ése**, la pregunta que el autor dejó planteada: **por qué el bot se queda pegado y después se
+despeja solo, y por qué a veces quiere pasar a través de un vidrio.** Su pista: la base Terminator
+tendría convars para ver el *thinking* del NPC. Sin medir todavía — no se sabe si esas convars existen
+ni qué exponen.
+
+⚠ **UNA HIPÓTESIS APUNTABA AL ARREGLO DE HOY Y LA CORRIDA LA DESCARTÓ.** El atravesado tiene **una
+sola puerta de entrada: la cercanía** (`puede and distancia <= PHASE_RANGE`, 45 u), y esa distancia es
+`tr.Fraction * reach` — o sea **la distancia AL PANEL**, no a la hoja. Antes del arreglo, `doorAhead`
+devolvía `nil` en las puertas parenteadas y el no-sólido **no podía prenderse ahí**; después, el
+vidrio resuelve a puerta reconocida, así que en principio acercarse al panel lo prende a 45 u **del
+vidrio** — y con `MASK_NPCWORLDSTATIC` (131083, sin `CONTENTS_MOVEABLE`) el fantasma tampoco choca con
+brush entities que no son puertas. Eso se habría visto exactamente como *«quiere pasar a través de un
+vidrio»*.
+
+**No pasa.** El autor lo mira y reporta *«confirmo que no traspasa los ventanales»*, con el reporte
+mostrando `atravesó 1 vez (todas por cercanía)` y `estado sólido (la última vez atravesó 0,5 s)`: el
+no-sólido se prende **sobre la puerta** y por medio segundo, que es para lo que se escribió, y las
+ventanas siguen frenándolo. Esa rama queda cerrada y **el «pasar a través de un vidrio» no es de este
+arreglo**.
+
+⚠ Pero ojo con lo que eso cierra y lo que no: *«no lo traspasa» no es «no lo intenta»*. **Querer y
+poder son dos cosas**, y el síntoma que el autor describió es de intención (el bot *quiere* pasar).
+Eso —junto con el «se queda pegado y se despeja solo», cuyo candidato más cercano sigue siendo la
+misma máquina (`PHASE_MAX = 5` es techo duro y `PHASE_COOLDOWN` lo libera)— es material del bloque de
+después de los props horneados, y ahí sí valen las convars de *thinking* de la base.
+
+---
+
+## 2026-08-10 (37) — **La r3 corrió 14/14 en verde y cinco de esas filas no lo estaban. Y el defecto más caro lo trajo la propia r3.**
+
+La planilla salió **14 pasa · 0 falla**. Las **notas** dicen otra cosa en cinco filas, que es exactamente
+para lo que el footer pedía llenarlas: *«en la r1 el hallazgo más caro entró por una nota de una fila
+marcada PASA»*. Volvió a pasar.
+
+### ⭐⭐⭐ Un `return` en un hook de `PlayerSpawn` se saltea `GM:PlayerSpawn` ENTERO
+
+Tres síntomas reportados como tres problemas —aparecer **sin playermodel**, **errores de Lua en otros
+addons**, y **Cargo sin cinturón** (la munición no bajaba y el `unload` se negaba)— eran **UN defecto**,
+y su causa era una línea de `server_collision.lua`, el archivo que la r3 estrenó: `marcarPly` colgada
+**directo** de `PlayerInitialSpawn` y `PlayerSpawn`, con `return quiere` al final.
+
+Leído en la fuente del engine en disco (`garrysmod/lua/includes/modules/hook.lua`, `Call`):
+
+```lua
+if ( a != nil ) then return a, b, c, d, e, f end
+...
+return GamemodeFunction( gm, ... )      -- <-- NUNCA SE LLEGA
+```
+
+Un hook que devuelve algo **no corta la cola de la fila: se saltea la función del gamemode**. Y
+`GM:PlayerSpawn` (`gamemodes/base/gamemode/player.lua:229-259`) es el **único** que llama a
+`PlayerLoadout` (:251), a `PlayerSetModel` (:255) y a `SetupHands()` (:257). Esa parte **no depende del
+orden de `pairs()`**: el `GamemodeFunction` se saltea siempre.
+
+**Y las dos perillas del bloque no lo apagaban: `false` tampoco es `nil`.** Con `nocollide 0` y
+`nocollide_ply 0` la función devolvía `false`, el `!= nil` daba verdadero y la cadena se cortaba igual.
+El «0 de control» que el bloque publicaba **sólo podía absolver al archivo culpable**.
+
+Arreglo: los dos `hook.Add` envueltos en un closure que se queda con el booleano (el `return` se
+consume en `reaplicar`, así que sacárselo rompería el re-conteo). Medido con un arnés que **copia** el
+`hook.Call` del engine: A sin el hook y D arreglado corren la cadena entera; **B (`true`) y C (`false`)
+la cortan idéntico**. Instrumento nuevo permanente: `dev/auditar_returns_de_hooks.py` — audita los 26
+`hook.Add` del addon y hoy da **0 sospechosos de 26** (probado contra el código de ayer: 3 de 3).
+
+### Las cinco filas que su propio criterio reprobaba
+
+- **04 · el veto del throw.** Salió `alguien lo tiene agarrado` sosteniendo con la **physgun**, que es
+  literal el camino de FALLA de la fila. Refuta una medición que el archivo daba por firme: se afirmaba
+  que `IsPlayerHolding()` **no cubre la physgun**, citando artagdoll. **Sí la cubre** — aquella medición
+  fue sobre un **ragdoll** y ésta sobre un `prop_physics`; *una medición sólo refuta lo que sabe leer*.
+  Consecuencia: la rama de la physgun era **código muerto**. Decisión del autor: la gravity gun **deja
+  de vetar** (por lore de HL2 ya desestabiliza los props), y el veto de physgun pasa a ser el único.
+  Alcanza también al **+USE**, que era la misma línea — dicho, no disimulado.
+- **05 · el censo de `EF_NODRAW`** decía `NINGUNO` con un fantasma muerto en la partida, que su propio
+  renglón declara *rojo del INSTRUMENTO*. La muestra vivía en `phantom_ReconcileVisibility`, que se
+  llama desde `ENT:BehaveUpdate` — **el tick que deja de correr cuando el bot muere**. Rama inalcanzable
+  por construcción. Movida a `AdditionalRagdollDeathEffects` con `timer.Simple(0)` (la base pone
+  `SetNoDraw` **después** del gancho). *La r3 ya había arreglado dónde se GUARDA el dato y no dónde se
+  TOMA.* Columnas re-rotuladas: `VIVO` son ticks y `cadaver` son muertes, y el renglón las sumaba.
+- **02 · el A/B de la marca** no podía discriminar: `marcadosPly` lo escribía **sólo** el camino de la
+  perilla, así que con el mecanismo andando marcaba `0` — la misma lectura que apagado. Ahora el reporte
+  **lee el estado vivo**. Se borraron los cuatro contadores que quedaban sin lector; el de fantasmas
+  mezclaba un acumulador de sesión con una foto de vivos en el mismo campo (por eso saltaba de `5 de ?`
+  a `1 de 1`). *Si la propiedad se puede leer, no se cuenta.*
+- **03 · la cuarta predicción no se pudo verificar.** `phantasmagoria_ghost_opendoors` tiene default
+  **1** pero es `FCVAR_ARCHIVE`: quedó en **0** de una ronda anterior que la usó de control y sobrevivió
+  al reinicio. La planilla no la listaba en el setup. *Una convar archivada no vuelve a su default porque
+  reinicies.* Agregada al setup con esa nota. **Re-corrida el mismo día y CIERRA EN VERDE:** con la
+  convar en 1, `intentos 2 · ABRIO 2 · fallo 0`, resuelto en el escalón 1 (`Use2`) las dos veces — sin
+  llegar a `OpenAwayFrom` ni a `Fire Open` — y 2 huellas dejadas. La r3 queda cerrada, 14/14 medido.
+
+### El sondeo de puertas contaba AL OBSERVADOR entre los sujetos
+
+La corrida de cierre lo destapó sola. El autor se paró delante del fantasma para poder leer el reporte,
+el sondeo le pegó **a él**, y salió `player #1 targetname 'SEPULDOSKY'` seguido del consejo entero de
+`DOOR_CLASSES` — *«si hay que agregarla, hay que tocar LAS DOS copias de la tabla»* — **sobre un
+jugador**. Y el acumulado `topó con algo que NO es puerta` subió **20 → 84 → 146** mientras lo miraba.
+
+Ese acumulado es el que la r2 usó para señalar las puertas con vidrio. O sea que **el acto de pararse a
+observar inflaba el número que se iba a leer**, y la escena que el instrumento existe para detectar (una
+hoja que la lista blanca no reconoce) y la más común de todas (hay alguien parado adelante) escribían el
+mismo renglón y el mismo total. *Un instrumento que cuenta al observador entre los sujetos no mide el
+fenómeno, mide la medición.* Se partió en dos acumulados —GEOMETRÍA y SERES (`IsPlayer`/`IsNPC`/
+`IsNextBot`, que es la rama que `server_collision.lua` ya había pagado: un nextbot no es `IsNPC()`)— y el
+consejo de `DOOR_CLASSES` ya no se le da a un ser.
+
+Dos trampas más, agarradas al escribirlo: el primer intento cortaba con un `return nil` pelado y esta
+función termina en **`return nil, tr, src, reach`** — cuatro valores —, o sea que le comía tres al que
+llama; es literal lo que el encabezado del bloque advierte tres líneas más arriba. Y el contador nuevo no
+entraba en el `reset`, debajo de un comentario que enuncia esa misma regla para el contador de al lado:
+*una regla escrita arriba del campo no se aplica sola al campo que nace debajo.*
+
+**Y el chequeo de sintaxis del repo no parsea.** `luacheck_gmod.py` dio `OK` sobre las tres versiones,
+incluida la rota: sólo mide `continue` neutralizados y saltos crudos. Se agregó un parseo real (LuaJIT
+vía lupa, con `continue` neutralizado como hace el otro): **35 archivos, 0 errores de sintaxis**. La
+primera corrida de ese parseo dio falso rojo porque *no* neutralizó `continue` — lo desmintió el control
+obvio, correrlo sobre la versión de `HEAD`, que "falló" igual.
+- **12 · el sorteo de categorías era CON REEMPLAZO.** `count` está documentado como *«categorías a la
+  vez»*, pero `sortearPeso` se llamaba fresco cada vuelta: con el poltergeist (`throw` pesa 8 de 16) la
+  misma salía dos veces con probabilidad 1/2, y la bitácora del autor tiene `throw`+`throw` en 3 de 4
+  despertadas. Para **The Twins** rompe la mecánica: `radius` está indexado por iteración, así que eran
+  dos veces lo mismo a dos distancias. Ahora sortea sin reemplazo, con mensaje propio para «se agotaron».
+
+### El banco de voz, y el británico no estaba donde se buscó
+
+El `whisper` está **limpio**: los dos son 100 % `paranormal_voice/`. Los respiros del **jugador** estaban
+en el banco **`breath`**, que es otro peso y suena con la reserva puesta o sin ella. Y `deogen.ogg` **no
+está en ningún banco** mientras el tipo `deogen` saca `breath = 6`: *el tipo que existe para delatarse
+con un sonido sacaba 6:1 de un banco que no lo contiene*. Eso y `ghost/banshee_scream/` (22 clips, cero
+consumidores) no son defectos: esperan el spiritbox y el paramic, igual que `humming`.
+
+**Los 8 de `breath` los rehízo el autor a mano en Audacity** sobre los originales — las tres variantes
+generadas por script se descartaron. Crecieron entre ×1,25 y ×1,40; backup verificado por sha256 en
+`dev/other/OLD/…(BACKUP BEFORE FANTASMAGORIZAR BREATHING)`.
+
+**Y pasaron a MONO el mismo día**, por decisión del autor: Source no espacializa un estéreo y el fantasma
+con AUSENCIA se ubica de oído. La objeción que se había levantado —que un downmix sobre una cadena con
+fase puede cancelar— **se midió antes de tocar** (RMS de L, de R y de (L+R)/2, canal por canal) y **no
+aplicaba: los ocho dieron entre −0,00 y −0,65 dB**, o sea material prácticamente mono ya. *Una
+advertencia correcta en general puede no aplicar al caso, y la diferencia se mide en un minuto.*
+Re-codificados **desde el backup en una sola generación** a Vorbis q10 — 201 kbps mono contra los 209
+kbps **por canal** del export del autor; la primera pasada había salido a q6 (85 kbps) y eso era tirar
+bitrate sobre un asset hecho a mano que nadie de este lado puede juzgar de oído. Segundo backup, aparte
+del anterior: `…(BACKUP BEFORE BREATHING A MONO)` guarda **el trabajo del autor**, el otro guarda el rip
+crudo — hacen falta los dos.
+
+Con eso el `about.txt` pasa de **29 estéreo a 21**, y el censo destapó que ese número **nunca fue del
+árbol**: es el universo de rutas que el Lua **cita** (164, todas resuelven). El árbol entero tiene **250
+estéreo de 826**, casi todos en carpetas que ningún `.lua` toca todavía. Los dos números son ciertos y
+contestan preguntas distintas; quedan medidos y nombrados para que nadie lea uno como error del otro.
+(`event/impact` tiene 10 estéreo en disco y 9 citados — por eso el número **se mide sobre las citas** y
+no se resta de una lista.)
+
+**El roster de radio suma dos** por pedido del autor. `creepy_radio_easteregg_helpmewithend` **era
+estéreo** y pasó por `dev/mono_posicionales.py` antes de entrar: sin eso habría roto **en silencio** la
+promesa de la familia, el defecto exacto que la r3 acababa de pagar en 15 archivos. El instrumento lo
+detectó solo, porque saca las rutas del Lua.
+
+### Método
+
+- **Un inventario hecho con `git log` no ve un archivo `??`.** La sesión paralela declaró que no había
+  tocado ningún `.lua` fuera de su commit, y era **cierto de su commit y falso de su working tree**:
+  `server_collision.lua` es untracked y no aparece en ningún diff.
+- **El instrumento de sintaxis sin argumentos revisa CERO archivos y sale 0.** Verde sin medir.
+- **El «presentador británico» apareció, y no estaba en la radio.** Vivía en `SND.prop` — el banco de
+  **fallback** del evento `prop`, el que suena cuando no hay objeto reconocible cerca — bajo
+  `phantasmagoria/prop/key_1.ogg` y `key_2.ogg`. Por eso el síntoma parecía sin causa: el locutor
+  aparecía justo cuando no había nada que lo explicara. Lo cierran dos datos que no son el nombre:
+  duran **3,47 s y 3,44 s** contra los **0,50-0,96 s** de las llaves reales, y en el rip original
+  `Key 1.wav`/`Key 2.wav` están entre `Hint None.wav` y `Arrival 1.wav`, no entre `Key Pickup 1.wav`.
+  El autor los mudó a `voice/` al identificarlos, lo que dejó las dos rutas **colgadas** y el fallback
+  sin un clip válido; entran las ocho llaves reales de `prop/`. Hoy: **164 rutas de sonido citadas, 0
+  faltantes, 0 citas de `voice/`**.
+- **Y la r3 había dado por MEDIDO que `voice/` no tenía consumidor.** La medición era correcta y la
+  conclusión falsa: contó las rutas que **contienen la palabra `voice`** y las 39 dieron
+  `paranormal_voice/`. El consumidor estaba en una ruta que **no contiene esa palabra**. *Un censo
+  acotado por la carpeta donde esperás que esté el sospechoso no puede encontrarlo donde no está* — el
+  universo correcto eran las 164 rutas, no las que se llamaban como la sospecha.
+- No se pudo identificar por medición cuál clip de radio traía voz hablada: la métrica de banda de voz
+  **falló su propio control** (`creepy_news` quedó más lejos del locutor que `creepy_music`) porque la
+  estática de banda ancha aplana el espectro. Se dice en vez de rankear con un instrumento que no
+  discrimina — y al final la respuesta no estaba ahí.
+
+---
+
+## 2026-08-09 (36) — **El fantasma deja de ser un cuerpo: atraviesa. Y los sonidos dejan de mentir sobre el mundo.**
+
+La r2 corrió **9 · 2 · 0**. Esta entrada cierra las dos fallas, contesta las tres preguntas que el
+autor dejó en las notas, y estrena **cinco mecanismos que nunca corrieron** — ninguno sin su `0` de
+control.
+
+### ⭐ El pedido que encabeza: *«que no colisione contra jugadores y npcs»*
+
+`server_collision.lua`, nuevo. **No toca ni el grupo de colisión ni la máscara**, que es lo que
+permite que server_doors.lua siga siendo el dueño único de la solidez y que las nueve trazas de la
+base sigan devolviendo lo mismo: usa `GM:ShouldCollide`, más un override de `PhysicallyPushEnt` para
+el empujón explícito de 15000 que la base aplica **sin filtrar por tipo** sobre lo que toque su hull.
+
+**Por qué no el camino obvio.** El wraith de la base cambia el grupo a `COLLISION_GROUP_DEBRIS`, y
+era tentador. Se descartó por cuatro motivos y el que decide es el que **no se pudo medir**: la regla
+de qué grupos alcanza una bala vive en `CGameRules::ShouldCollide`, que es C++ y no está en ninguno
+de los 153 `.lua` de los cuatro árboles. **El fantasma tiene que seguir siendo matable**, y ésa es
+justo la propiedad que ese camino deja sin garantía. *Cuando una opción apuesta la única propiedad
+que no se puede equivocar, se elige la otra.*
+
+⚠ **Y la mitad que sigue sin medirse va con dos perillas en vez de una.** `GM:ShouldCollide` sólo se
+llama si alguna de las dos entidades tiene `SetCustomCollisionCheck`, y **sobre cuál de las dos hace
+falta no está medido**: el único precedente del taller (HIM) la pone sobre el *jugador*, no sobre el
+bot. Las dos arrancan encendidas —la única configuración que no puede fallar por ese motivo— y la
+fila 02 de la planilla las separa **en la misma ronda**, porque dos condiciones encendidas a la vez
+son un criterio que se cumple a medias y se lee como cumplido.
+
+### Las dos fallas de la r2
+
+**Fila 05 — el `throw` tiraba el prop que tenías agarrado.** No era que el veto no corriera:
+**`IsPlayerHolding()` no cubre la physgun**, y eso está medido **en juego** en este mismo taller
+sobre artagdoll (*«agarrados: 0 de 1»* con el cuerpo sostenido del pecho). Entra la señal que
+faltaba, por `OnPhysgunPickup`/`PhysgunDrop`, guardando **el jugador y no un booleano** para que una
+desconexión no deje la marca pegada. Motivo canónico propio, distinto del de la gravity gun: si
+compartieran clave, el desglose no podría decir cuál de las dos mitades disparó.
+
+⚠ Y el comentario que sostenía esa línea **era falso en dos formas**: decía *«los TRES precedentes del
+taller lo filtran igual»* y después nombraba **dos**, y ninguno de los dos filtra. *Un comentario que
+cuenta mal sus propios ejemplos es la señal más barata de que nadie los abrió.*
+
+**Fila 08 — la ráfaga de `ESCRITOR AJENO`.** El diagnóstico **se da vuelta**: la guarda del cadáver
+ya estaba puesta cuando salió esa corrida, así que el sujeto **no era un cadáver**. Tres cambios, y
+ninguno es apagar el sensor: la alarma pasa a **flanco** (de nivel escribía una línea por tick contra
+un anillo de 40, y **borraba la prueba de todo lo demás en 0,6 s** — por eso el reporte llegó con 38
+de 40 renglones diciendo lo mismo); el cadáver **se cuenta aparte**, porque un `0` sin un número que
+sí se movió no acredita nada; y entra `PHANTASMAGORIA.NoDrawSeen`, un censo por serie que
+**sobrevive al fantasma** — que es exactamente lo que le faltó al autor, cuyo sujeto ya no existía
+cuando fue a mirarlo. La línea nueva además **nombra al sospechoso**: hay un tercero medido en este
+taller que hace `SetNoDraw` sobre una entidad **viva** (el KnockDown del fork de Trepang² Slide) y
+deja dos marcas legibles.
+
+### Los sonidos son circunstanciales, que es el pedido más largo del reporte
+
+`SND.prop` pasa de **18 clips planos a 2**. Los otros dieciséis se mudaron a **nueve familias con
+sujeto real** —vehículo, radio, teléfono, televisor, piano, guitarra, microondas, inodoro, peluche,
+reloj— que se reconocen **por nombre de modelo**, con lista negra. Y el barrido se invirtió: un solo
+`ents.FindInSphere` clasificando contra todas las familias, en vez de uno por familia.
+
+⚠ **El comentario que justificaba dejar el piano en el banco plano contradecía al autor con todas las
+letras** — decía que *«un crujido de piano puede sonar en cualquier casa»* mientras él pedía lo
+contrario. *Una regla se aplica a los casos que la cumplen, no a los que uno no tuvo ganas de mudar.*
+
+**La lista negra no es paranoia: sale de un censo de 6542 `.mdl`.** Cinco de los nueve basenames que
+contienen «radio» **no son radios**: tres son pastillas anti-radiación (`radioprotector`) y dos un
+detector (`radio_diolator`). Y de los cinco que contienen `tv_`, **uno es un televisor y cuatro son
+pedazos rotos**. Sin la lista, la mayoría de los «radios» del taller son un blister.
+
+**Y la radio entra por fin** (Diseño §21.9.8 ①, escrita el 3 de agosto y sin cablear): emite en la
+entidad y **se corta con `StopSound`**, porque sus clips duran de 19,5 a 159,8 s medidos.
+
+### ⚠⚠ Source no espacializa estéreo — y 14 de los 21 clips de las familias nuevas lo eran
+
+La promesa entera de este bloque es *«el teléfono suena DESDE el teléfono»*, y **dos tercios de las
+familias nuevas la incumplían en silencio**: se oían, y se oían igual desde cualquier lado. Medidas
+las **156** rutas del motor con `ffprobe`: **44 estéreo**.
+
+Convertidos a mono los **15** que esta ronda promete posicionales sobre un objeto nombrado
+(`dev/mono_posicionales.py`), con backup verificado por sha256 y **re-lectura del disco** — los 15
+quedaron en 1 canal, con la misma duración y con el sample rate 44100 de la reparación de la r2
+intacto. Los otros **29 no se tocaron**: suenan en un punto cerca del fantasma, no sobre un objeto
+que el jugador esté mirando, **y el autor ya los escuchó y los dio por buenos**. Quedan medidos, con
+su propia fila.
+
+*Un asset que el autor ya aprobó no se cambia sin preguntarle; uno que rompe la mecánica que se está
+entregando, sí — y la diferencia se escribe.*
+
+### Las voces se guardan, el golpe suena a lo que golpea, y el fantasma no se va del mapa
+
+- **La reserva de voz.** El corte es **por si se entiende o no**: susurros, murmullos, jadeos y
+  quejidos siguen de ambiente (8 clips por voz); las frases, las risas y el canto se reservan para el
+  paramic y la manifestación. Se re-rutea **el peso**, no la tabla de datos: `ghost_flags.lua` no se
+  toca. ⚠ Y el control **no reproducía la r2** hasta que la revisión lo agarró: con la perilla en 0
+  los 8 de `whisper` quedaban inalcanzables. *Un control que no reproduce el estado que dice
+  reproducir es un tercer estado sin nombre.*
+- **Fila 11 contestada, y estaba al revés.** `SND.knock` tenía **1 clip de puerta y 6 de ventana**, y
+  el código elegía ese banco entero al pegar en una **puerta**: golpear una puerta sonaba a ventana
+  **6 de cada 7 veces**, y una ventana real caía en «pared», donde no hay un solo clip de ventana.
+  Ahora son **cinco bancos**, la clase gana al material, el material gana al default, y la bitácora
+  imprime **el clip que sonó** — sin eso, el defecto era invisible en el log.
+- **La correa** (`server_leash.lua`). El fantasma no se escapaba por capricho: su tarea de deambular
+  **puntúa por distancia** y encadena a otra de radio 5000-6000 que penaliza lo ya visitado. Se
+  filtra el **destino** en `SetupPathShell` — no se aborta ni se teleporta, porque devolver `nil`
+  encadena a `biginertia` y **lo manda más lejos**.
+- **Las puertas de vidrio.** El instrumento que faltaba: `phantasmagoria_ghost_puerta` cuelga **del
+  jugador** y no del fantasma, y traza con las tres máscaras de la base. Si `MASK_NPCSOLID` pega y
+  `MASK_BLOCKLOS` no, esa cosa **deja ver y no deja pasar**, que es la definición de un panel de
+  vidrio. Y `doorAhead` ahora guarda **lo que no es una puerta**: hasta hoy, «no hay nada adelante» y
+  «hay algo que no reconozco» escribían la misma línea.
+
+### La revisión adversarial, y los seis que introdujo esta misma tanda
+
+Seis lentes sobre el diff propio y un verificador por hallazgo — **66 defectos propuestos**. Los que
+más enseñan son los que **entraron con los arreglos de esta ronda**:
+
+| | qué pasaba |
+|---|---|
+| **`clock_tick` dura 46,55 s** | quedó en el banco plano, disparado con `sound.Play`, que **no se puede parar**. Es más largo que tres de los cuatro clips de radio que esta misma ronda se negó a poner ahí *por ese motivo exacto*, y el comentario que lo prohíbe estaba **veinte líneas más abajo, escrito el mismo día**. *Una regla escrita en un bloque no se aplica sola al bloque de al lado.* |
+| **el contador de la fila 06** | colgaba de `phantom_doorStats`, una tabla que **sólo existe si el fantasma ya reconoció una puerta** — o sea que en la escena exacta para la que se escribió (una hoja que la lista blanca **no** reconoce) no podía subir. *Un contador cuya precondición la apaga el mismo escenario que vino a medir es un cero que no significa nada.* |
+| **el falso rojo de la correa** | con `leash 1` un fantasma cazando pasa derecho por la guarda del hunt, así que los dos contadores quedan en 0 — y el reporte tenía escrito *«el override no corrió ni una vez»*. Habría cantado un **rojo sobre el mecanismo funcionando como se diseñó**. Es el nº 30 del catálogo. |
+| **`marcados` contaba vueltas** | con la perilla en 0 decía *«marcados 3 fantasma(s)»* sobre tres sujetos a los que les acababa de poner la bandera en **false**. Ahora cuenta la marca puesta y lleva su denominador. |
+| **`marcarPly` pisaba a un tercero** | escritura absoluta de `SetCustomCollisionCheck` en cada respawn, sin leer lo que había: le apagaba la bandera a HIM, que la usa para su propia lista. Ahora **sólo apagamos lo que nosotros prendimos**. |
+| **un comentario que se invalidó solo** | afirmaba *«los 39 hits de una ruta que termina en `voice/` son los 39 de paranormal_voice»* — y al nombrar en ese mismo comentario la carpeta del encargado, el grep que describe pasó a dar 40. *El criterio de una medición hay que escribirlo, o el texto que la cita la rompe.* |
+
+Y una que **no** es un defecto y se deja escrita para que nadie la busque de nuevo: **el presentador
+británico no había que quitarlo de ningún lado**. Medido, las 39 rutas entre comillas que terminan en
+`voice/` son las 39 de `ghost/paranormal_voice/` — la voz del fantasma. La carpeta del encargado
+(26 archivos) **no tiene un solo consumidor** en el addon.
+
+### Lo que se midió y no se escribió
+
+**Los props horneados del mapa: sí se puede, y no se hizo.** Los `prop_static` no existen como
+entidad en runtime (`ents.FindByClass( "prop_static" )` tiene **cero** call sites en los 70 addons
+desempacados del taller), pero **se puede abrir el `.bsp` y leer el game lump `sprp`** — StormFox2 lo
+hace y funciona, con un `FindStaticsInSphere` que es el gemelo exacto de `ents.FindInSphere`. No se
+escribió porque falta el número que decide y cuesta diez minutos: **nadie contó cuántas radios, teles
+o pianos estáticos tiene el mapa del autor**. Si es cero, todo el parser sobra.
+
+Planilla: `dev/checks/phantasmagoria-eventos-r3.html`, 13 filas. **Nada de esto corrió en juego.**
+
+---
+
 ## 2026-08-09 (35) — **La r1 de eventos corrió: 8 · 0 · 3. El motor anduvo; el que mintió fue el audio, y el instrumento lo acreditó.**
 
 Primera corrida en juego del bloque de eventos paranormales (Diseño §21). El autor: las ocho

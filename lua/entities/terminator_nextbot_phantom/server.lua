@@ -71,6 +71,23 @@ local MODEL_CANDIDATES = {
     -- clona el repo tiene un fantasma que funciona, no un error.
     { mdl = "models/phantasmagoria/ghost_girl.mdl" },
 
+    -- LOS OTROS DOS DEL TALLER ( 2026-08-10 ), para que el bot no tenga solo a
+    -- la nena. Mismo pipeline, mismos 53/56 huesos ValveBiped, mismo ragdoll de
+    -- 15 solidos, mismas 7 actividades nuestras + ACT_LAND prestada.
+    --
+    -- ⚠ VAN DESPUES DE LA NENA A PROPOSITO: `pickModel` devuelve EL PRIMERO que
+    -- exista, asi que este orden es una PRIORIDAD y no una lista. Ponerlos
+    -- arriba cambiaria el fantasma que sale por defecto sin que nadie lo pida --
+    -- y la nena es la unica de las tres con una pasada en juego cerrada.
+    --
+    -- Ghost_Male: 72.29 u, o sea del tamano de un playermodel ( male_07 mide
+    -- 72.00 ), asi que el hull {-16,-16,0},{16,16,72} le entra sin tocar nada.
+    { mdl = "models/phantasmagoria/ghost_male.mdl" },
+
+    -- Ghost_OldCrone: 68.98 u. Es la primera de la familia CATRig ( son 8
+    -- entidades ) y la primera con TRES materiales y el pelo TRANSLUCIDO.
+    { mdl = "models/phantasmagoria/ghost_oldcrone.mdl" },
+
     -- EL DE PRUEBAS, por pedido del autor ( 2026-08-06 ): el cadaver de HL2.
     -- Es el mismo que usa HIM sobre ESTA MISMA BASE ( him/.../homeless/shared.lua:12 ),
     -- que es la mejor evidencia posible de que sirve: no es un modelo parecido,
@@ -102,7 +119,43 @@ local MODEL_CANDIDATES = {
     { mdl = "models/player/group01/male_04.mdl" },
 }
 
+--[[
+    ⚠ `ph_ghost_modelo` NO gobierna ESTA lista, y el autor lo reporto como "el
+    comando no funciona": gobierna los comandos `ph_ghost_*` de
+    autorun/server/phantasmagoria_ghostmodel.lua, que spawnean sus propios
+    sujetos -- y ahi SI funciona ( con la convar en ghost_oldcrone,
+    `ph_ghost_ragdoll` spawneo la vieja ). Lo que salia con la nena era el
+    NextBot, que elige por esta funcion y devuelve EL PRIMERO que exista.
+
+    Son dos mecanismos distintos y hasta hoy solo uno tenia perilla. Esta convar
+    es la del bot; vacia mantiene el orden de MODEL_CANDIDATES, que es lo que
+    habia. Se resuelve en cada spawn --no se cachea-- para que cambiarla afecte
+    al proximo fantasma sin recargar el mapa.
+]]
+local cvBotModelo = CreateConVar( "phantasmagoria_bot_modelo", "", FCVAR_ARCHIVE,
+    "Fuerza el modelo del NextBot ( ghost_girl, ghost_male, ghost_oldcrone ). " ..
+    "Vacio = el primero de MODEL_CANDIDATES que exista." )
+
 local function pickModel()
+    local forzado = string.Trim( cvBotModelo:GetString() or "" )
+
+    if forzado ~= "" then
+        local ruta = "models/phantasmagoria/" .. forzado .. ".mdl"
+
+        if util.IsValidModel( ruta ) then
+            ghostPrint( "modelo FORZADO por phantasmagoria_bot_modelo: " .. ruta )
+            return { mdl = ruta }
+
+        end
+
+        -- Un nombre mal escrito no puede quedarse callado: sin este aviso, el
+        -- bot sale con la nena y se lee como "la convar no funciona", que es
+        -- exactamente la confusion que esta perilla viene a resolver.
+        ghostPrint( "phantasmagoria_bot_modelo = '" .. forzado .. "' -> " .. ruta ..
+            " NO esta montado; se sigue con la lista." )
+
+    end
+
     for _, cand in ipairs( MODEL_CANDIDATES ) do
         if util.IsValidModel( cand.mdl ) then return cand end
 
@@ -3543,6 +3596,30 @@ include( "server_steps.lua" )
 -- comprueba: no usa ENT.MyClassTask ( la clave Think ya es de las puertas ) sino
 -- ENT:AdditionalThink, que la base declara como stub libre.
 include( "server_stuck.lua" )
+
+-- Pedido del autor ( r2 ): *"Puedes hacer que el fantasma no colisione contra
+-- jugadores y npcs? Que es bastante molesto y eso lo convierte directamente en
+-- un fantasma."*
+--
+-- VA DESPUES DE server_doors.lua Y NO ES INDISTINTO, aunque no lo consuma: ese
+-- archivo es el DUENO UNICO de la solidez del fantasma ( escribe SetSolidMask en
+-- dos lugares y nada mas ), y este archivo esta escrito para NO pelearle -- no
+-- toca ni el grupo de colision ni la mascara. Leerlos en este orden es lo que
+-- hace evidente que no se pisan.
+--
+-- ⚠ NO declara AdditionalInitialize ni AdditionalThink: las dos ya tienen dueno
+-- y la segunda **no encadena, BORRA**. La marca de colision entra por
+-- OnEntityCreated.
+include( "server_collision.lua" )
+
+-- Pedido del autor ( r2, fila 06 ): *"poder mantenerlos dentro de la casa en un
+-- area sin que se escapen a la punta del mapa"*.
+--
+-- VA DESPUES de server_stuck.lua porque su primera guarda deja pasar derecho el
+-- rescate de atascado ( `isUnstuck` ), que es justo lo que ese archivo mide: si
+-- la correa compitiera con el rescate, el instrumento de atascos empezaria a
+-- contar un defecto que introdujo esta.
+include( "server_leash.lua" )
 
 -- Diseno 20 ①: fuera del hunt el fantasma NO SE VE.
 --

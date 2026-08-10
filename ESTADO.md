@@ -1,6 +1,6 @@
 # Phantasmagoria — Estado actual y handoff
 
-**Última actualización:** 2026-08-09
+**Última actualización:** 2026-08-10
 **Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
@@ -13,7 +13,94 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐ **LO ÚLTIMO (2026-08-09): LA r1 DE EVENTOS CORRIÓ — 8 pasa · 0 falla · 3 sin correr. EL MOTOR
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-10). LA r3 CERRÓ 14/14 MEDIDO y el bloque de las PUERTAS PARENTEADAS
+> CERRÓ EN JUEGO.** Detalle en el CHANGELOG, entradas **(37)** y **(38)**. Lo de abajo, escrito el
+> 2026-08-09, describe la r3 *antes* de correrla: sigue valiendo como explicación de por qué se hizo
+> cada cosa, pero **el estado ya no es «sin correr en juego»**.
+>
+> **LO QUE SIGUE, EN ESTE ORDEN:**
+>
+> 1. **PROPS HORNEADOS** — que suenen los `prop_static` del mapa. Ya medido para arrancar:
+>    `gm_funkis_night` tiene **1588 `prop_static` / 418 modelos**, de los cuales **9 modelos y 11
+>    instancias** son trastos de casa (3 radios, 2 parlantes, 2 despertadores, 2 relojes, 1
+>    teléfono); el parseo del game lump `sprp` está probado; `props_funkis/radionette01.mdl` ya
+>    figura en la lista `exacto` de la familia radio. ⚠ **El bloqueante real no es leer el BSP:** un
+>    `prop_static` **no tiene entidad**, y la familia radio necesita `EmitSound`/`StopSound` para
+>    cortar los clips largos — la salida es un **emisor invisible en el origen del prop**.
+> 2. **POR QUÉ EL BOT SE QUEDA PEGADO Y SE DESPEJA SOLO, y por qué a veces quiere pasar a través de un
+>    vidrio.** Pedido del autor, **después** de los props horneados. Su pista: la base Terminator
+>    tendría **convars para ver el *thinking*** del NPC. ⚠ **Nada de esto está medido**: no se sabe si
+>    esas convars existen ni qué exponen. Censarlas en la base (`rg --no-ignore` con denominador) antes
+>    de escribir una línea de instrumento propio.
+>    ⚠ **Una hipótesis apuntaba al arreglo de las puertas y ya está DESCARTADA en juego:** el
+>    no-sólido entra sólo por cercanía (`distancia <= PHASE_RANGE`, 45 u) medida **al PANEL**, así que
+>    el vidrio de una puerta podría prenderlo — pero el autor midió *«no traspasa los ventanales»*, con
+>    `atravesó 1 vez` y `0,5 s` sobre la **puerta**. **El pasar-a-través-del-vidrio no es de ahí.**
+>    ⚠ Lo que **no** cierra eso: *«no lo traspasa» no es «no lo intenta»* — **querer y poder son dos
+>    cosas** y el síntoma reportado es de intención. Candidato vivo para el «se queda pegado y se
+>    despeja solo»: `PHASE_MAX = 5` (techo duro) + `PHASE_COOLDOWN`. `phantasmagoria_ghost_doors` ya
+>    imprime fases y fases largas, así que ese eje se mide con lo que hay.
+>
+> ⚠ **Frontera que quedó abierta a propósito:** `func_movelinear` (1 en el mapa, con hijos) **no
+> abre** — no está en `DOOR_CLASSES` y el arreglo del padre no lo alcanza. Agregarla es tocar la
+> tabla, que es lo que el bloque de las puertas decidió no hacer.
+
+> ⭐⭐ **LO ÚLTIMO (2026-08-09, r3): EL FANTASMA ATRAVIESA. Escrito, revisado, y SIN CORRER EN JUEGO.**
+>
+> **La r2 dio 9 · 2 · 0.** Esta tanda cierra las dos fallas, contesta las tres preguntas del autor y
+> estrena **cinco mecanismos nuevos**, cada uno con su `0` de control. **Lo primero del chat
+> siguiente: correr `dev/checks/phantasmagoria-eventos-r3.html` (13 filas).**
+>
+> **EL PEDIDO QUE ENCABEZA:** *«que no colisione contra jugadores y npcs, que es bastante molesto y
+> eso lo convierte directamente en un fantasma»*. Entra `server_collision.lua`, que **no toca ni el
+> grupo de colisión ni la máscara** — la solidez sigue teniendo dueño único en `server_doors.lua` —
+> sino `GM:ShouldCollide`, más un override de `PhysicallyPushEnt` para el empujón de 15000 que la
+> base aplica sin filtrar por tipo.
+>
+> ⚠⚠ **DOS COSAS DE ESE BLOQUE NO SE PUDIERON MEDIR LEYENDO, Y LAS DOS DECIDEN SI FUNCIONA.**
+> (a) **Sobre cuál de las dos entidades hace falta `SetCustomCollisionCheck`**: el único precedente
+> del taller (HIM) la pone sobre el JUGADOR, no sobre el bot. Van **dos perillas** encendidas y la
+> fila 02 las separa en la misma ronda. (b) **Si las balas siguen pegando**: la regla vive en
+> `CGameRules::ShouldCollide`, que es C++. La fila 03 es la que no se puede saltear.
+>
+> **LAS DOS FALLAS, CON SU CAUSA MEDIDA.** La 05: `IsPlayerHolding()` **no cubre la physgun**, y está
+> medido en juego en este taller sobre artagdoll. La 08 **se da vuelta**: la guarda del cadáver ya
+> estaba puesta, así que el sujeto de la ráfaga **no era un cadáver** — la alarma pasa a flanco
+> (de nivel borraba la bitácora entera en 0,6 s), cuenta el cadáver aparte, **sobrevive al fantasma**
+> con `PHANTASMAGORIA.NoDrawSeen`, y **nombra al sospechoso**.
+>
+> ⚠⚠ **EL HALLAZGO QUE NO SALIÓ DE NINGUNA FILA: SOURCE NO ESPACIALIZA ESTÉREO.** La promesa entera
+> del bloque nuevo es *«el teléfono suena DESDE el teléfono»*, y **14 de los 21 clips de las familias
+> nuevas eran estéreo**: la incumplían en silencio. Medidas las **156** rutas del motor, **44 estéreo**.
+> Se pasaron a mono los **15** posicionales sobre un objeto nombrado (`dev/mono_posicionales.py`,
+> backup por sha256 y re-lectura del disco); los **29** restantes —creak, impact, breathing, humming—
+> **no se tocaron**, porque el autor ya los escuchó y los dio por buenos, y tienen su propia fila.
+>
+> **LO QUE ENTRÓ ADEMÁS:** `SND.prop` de 18 clips planos a **2**, con nueve familias con sujeto
+> reconocidas **por nombre de modelo** (lista negra medida sobre **6542 `.mdl`**: cinco de los nueve
+> «radio» son pastillas anti-radiación y un detector; cuatro de los cinco `tv_` son escombros) · la
+> **radio** cableada por fin, con `StopSound` · la **reserva de voz** (susurros sí, frases y canto
+> no) · el banco de golpes partido en **cinco** (`SND.knock` tenía 1 puerta y 6 ventanas, así que
+> golpear una puerta sonaba a ventana 6 de cada 7 veces) · la **correa** (`server_leash.lua`) · y
+> `phantasmagoria_ghost_puerta`, que cuelga **del jugador** y contesta por qué el fantasma no abre
+> las dos puertas de la piscina.
+>
+> ⚠ **LA REVISIÓN ADVERSARIAL PROPUSO 66 DEFECTOS Y SEIS LOS INTRODUJO ESTA MISMA TANDA.** Los tres
+> que dejan regla: `clock_tick` mide **46,55 s** y quedó en el banco plano que este mismo archivo
+> prohíbe veinte líneas más abajo *escrito el mismo día*; el contador de la fila 06 colgaba de una
+> tabla que **sólo existe si el fantasma ya reconoció una puerta**, o sea que no podía subir en la
+> escena para la que se escribió; y la correa cantaba un **rojo sobre sí misma funcionando**, porque
+> cazando pasa derecho y los dos contadores quedan en 0. Detalle en el CHANGELOG (36).
+>
+> **UNA PREGUNTA PARA EL AUTOR, Y BLOQUEA SEIS CLIPS:** de los diez `.ogg` de `prop/radio/` se
+> cablearon **cuatro**. Quedaron afuera `creepy_news`, `creepy_music_news`,
+> `creepy_radio_easteregg_helpmewithend` y `event_creepy_eas_paranormal_radio_advise` **porque nadie
+> los escuchó** y pueden traer voz hablada — y el pedido de esta ronda incluye *«quitar los sonidos
+> del presentador británico»*. Los dos `ritual_*` quedan afuera por ser loops.
+>
+> ---
+>
+> ⭐ **LO ANTERIOR (2026-08-09): LA r1 DE EVENTOS CORRIÓ — 8 pasa · 0 falla · 3 sin correr. EL MOTOR
 > ANDUVO. El que mintió fue el AUDIO, y el instrumento lo acreditó.**
 >
 > **Lo que quedó cerrado con evidencia del autor y no se re-discute:** las ocho categorías disparan,
