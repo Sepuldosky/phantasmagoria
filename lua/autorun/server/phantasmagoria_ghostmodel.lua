@@ -34,7 +34,33 @@
 	del servidor y en lineas cortas.
 ]]
 
-local MODELO = "models/phantasmagoria/ghost_girl.mdl"
+--[[
+	CUAL DE LOS TRES SE SPAWNEA. Hasta el 2026-08-10 esto era una constante con
+	la nena adentro, y con ella la masa esperada y los cinco largos de hueso:
+	los tres comandos de este archivo solo sabian medir un modelo.
+
+	La convar elige, y el DEFAULT ES LA NENA a proposito -- es la unica de las
+	tres con una pasada en juego cerrada, asi que una corrida vieja de la
+	planilla sigue midiendo lo mismo que medía. Con un valor que no este en el
+	registro se avisa y se cae a la nena, en vez de spawnear nil.
+]]
+local cvModelo = CreateConVar( "ph_ghost_modelo", "ghost_girl", FCVAR_ARCHIVE,
+	"Cual de los fantasmas portados spawnean los comandos ph_ghost_* " ..
+	"( ghost_girl, ghost_male, ghost_oldcrone )" )
+
+local function ficha()
+	local corto = cvModelo:GetString()
+	local ruta = "models/phantasmagoria/" .. corto .. ".mdl"
+	local f = PHANTASMAGORIA.GhostModelPorRuta[ ruta ]
+
+	if not f then
+		print( "[ph_ghost] ph_ghost_modelo = " .. tostring( corto ) ..
+			" no esta en ghost_models.lua; se usa ghost_girl." )
+		return PHANTASMAGORIA.GhostModelPorRuta[ "models/phantasmagoria/ghost_girl.mdl" ]
+	end
+
+	return f
+end
 
 -- Los 15 huesos del ragdoll, que son los del ciudadano de HL2. Escritos aca
 -- para que el chequeo sea INDEPENDIENTE del .qci que los genero: si los dos
@@ -58,7 +84,12 @@ local SOLIDOS_ESPERADOS = 15
 -- no tiene ni uno --su solido mas chico da 1,019 kg-- asi que el efecto no se
 -- ve en el modelo del que salieron los numeros. Este valor sale de la cuenta
 -- que hace smdragdoll.py, no de mirar el .phy compilado.
-local MASA_ESPERADA = 36.58
+-- ⚠ ERA UNA CONSTANTE CON EL NUMERO DE LA NENA. Sale del registro, que trae la
+-- masa REAL del .phy de cada modelo ( 36.58 / 58.04 / 54.02 ), no el $mass del
+-- .qci: studiomdl no baja de 1 kg por solido y los dos numeros difieren.
+local function masaEsperada()
+	return ficha().masa or 0
+end
 
 local spawneados = {}
 
@@ -78,8 +109,9 @@ local function donde( ply )
 end
 
 local function existe()
-	if util.IsValidModel( MODELO ) then return true end
-	print( "[ph_ghost] " .. MODELO .. " NO esta montado." )
+	local m = ficha().mdl
+	if util.IsValidModel( m ) then return true end
+	print( "[ph_ghost] " .. m .. " NO esta montado." )
 	print( "[ph_ghost] el addon no tiene el modelo, o el .mdl no compilo." )
 	return false
 end
@@ -90,7 +122,7 @@ local function cmd_ragdoll( ply )
 	if not existe() then return end
 
 	local e = agregar( ents.Create( "prop_ragdoll" ) )
-	e:SetModel( MODELO )
+	e:SetModel( ficha().mdl )
 	e:SetPos( donde( ply ) )
 	e:Spawn()
 	e:Activate()
@@ -105,8 +137,8 @@ local function cmd_ragdoll( ply )
 	-- indistinguible de "la masa esta mal". file.Size resuelve por el orden de
 	-- montaje, asi que dice cual gana, no cual escribi yo.
 	print( "[ph_ghost] modelo de la entidad : " .. tostring( e:GetModel() ) )
-	for _, f in ipairs( { "models/phantasmagoria/ghost_girl.mdl",
-	                      "models/phantasmagoria/ghost_girl.phy" } ) do
+	local base = string.sub( ficha().mdl, 1, -5 )
+	for _, f in ipairs( { base .. ".mdl", base .. ".phy" } ) do
 		print( string.format( "[ph_ghost] %s  %s bytes", f,
 			tostring( file.Size( f, "GAME" ) ) ) )
 	end
@@ -162,8 +194,8 @@ local function cmd_ragdoll( ply )
 		if IsValid( p ) then total = total + p:GetMass() end
 	end
 	print( string.format( "[ph_ghost] masa total: %.2f kg  (esperado %.2f)  %s",
-		total, MASA_ESPERADA,
-		math.abs( total - MASA_ESPERADA ) < 0.5 and "OK" or "FALLA" ) )
+		total, masaEsperada(),
+		math.abs( total - masaEsperada() ) < 0.5 and "OK" or "FALLA" ) )
 
 	-- Si la masa total no da, el total no dice DONDE. La corrida 1 dio 85,19
 	-- contra los 36,57 que tiene el .phy, y con un solo numero no se puede
@@ -171,7 +203,7 @@ local function cmd_ragdoll( ply )
 	-- juego cargo OTRO archivo. El VOLUMEN lo separa: sale del mismo .phy y el
 	-- motor no lo recalcula, asi que si los volumenes coinciden con los del
 	-- archivo, es el archivo correcto y lo que cambia es solo la masa.
-	if math.abs( total - MASA_ESPERADA ) >= 0.5 then
+	if math.abs( total - masaEsperada() ) >= 0.5 then
 		print( "[ph_ghost] --- desglose (masa y volumen por solido) ---" )
 		local vt = 0
 		for i = 0, n - 1 do
@@ -239,7 +271,7 @@ local function cmd_anim( ply, _, args )
 	local seq = args[ 1 ] or "menu_walk"
 
 	local e = agregar( ents.Create( "prop_dynamic" ) )
-	e:SetModel( MODELO )
+	e:SetModel( ficha().mdl )
 	e:SetPos( donde( ply ) )
 	-- La keyvalue DefaultAnim es lo que hace que CDynamicProp instale su
 	-- AnimThink: sin ella el servidor no avanza el ciclo. Ya costo una ronda.
@@ -278,13 +310,16 @@ local function cmd_anim( ply, _, args )
 	-- no ve nada. Contra el archivo si se ve.
 	-- Para dimensionar: el ciudadano de HL2 tiene el brazo de ~11 u y la nena
 	-- de 6.70, o sea que un valor citizen aca salta a la vista.
-	local PARES = {
-		{ "ValveBiped.Bip01_L_UpperArm", "ValveBiped.Bip01_L_Forearm", 6.70 },
-		{ "ValveBiped.Bip01_L_Forearm",  "ValveBiped.Bip01_L_Hand",    6.09 },
-		{ "ValveBiped.Bip01_L_Thigh",    "ValveBiped.Bip01_L_Calf",    9.72 },
-		{ "ValveBiped.Bip01_L_Calf",     "ValveBiped.Bip01_L_Foot",    9.61 },
-		{ "ValveBiped.Bip01_Neck1",      "ValveBiped.Bip01_Head1",     3.47 },
-	}
+	-- ⚠ ERAN LOS CINCO LARGOS DE LA NENA, ESCRITOS ACA. Salen del registro
+	-- ( lua/phantasmagoria/ghost_models.lua ) porque son distintos por modelo:
+	-- el muslo mide 9.72 en la nena, 20.45 en el Male y 12.77 en la OldCrone.
+	local f = ficha()
+	local PARES = {}
+
+	for k, par in ipairs( PHANTASMAGORIA.ParesHueso ) do
+		PARES[ k ] = { par[ 1 ], par[ 2 ], f.nuestro[ k ] }
+
+	end
 	local function distancias( ent )
 		-- SIN SetupBones() ni InvalidateBoneCache(): las dos son de CLIENTE y
 		-- en servidor salen nil. Llamarlas tira un error por medicion y no

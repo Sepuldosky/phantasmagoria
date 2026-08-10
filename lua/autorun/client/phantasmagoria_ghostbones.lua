@@ -36,14 +36,23 @@
 	el que salga dice cual gano.
 ]]
 
--- {padre, hijo, largo que declara el .mdl, largo que impone m_anm}
-local PARES = {
-	{ "ValveBiped.Bip01_L_UpperArm", "ValveBiped.Bip01_L_Forearm", 6.70, 11.69 },
-	{ "ValveBiped.Bip01_L_Forearm",  "ValveBiped.Bip01_L_Hand",    6.09, 11.48 },
-	{ "ValveBiped.Bip01_L_Thigh",    "ValveBiped.Bip01_L_Calf",    9.72, 17.85 },
-	{ "ValveBiped.Bip01_L_Calf",     "ValveBiped.Bip01_L_Foot",    9.61, 16.53 },
-	{ "ValveBiped.Bip01_Neck1",      "ValveBiped.Bip01_Head1",     3.47,  3.59 },
-}
+--[[
+	⚠ LA TABLA ERA DE LA NENA Y ESTABA ESCRITA ACA. Sus cinco largos ( 6.70 /
+	6.09 / 9.72 / 9.61 / 3.47 ) son los de `ghost_girl.mdl`; sobre el Ghost_Male
+	el muslo mide 20.45 y sobre la OldCrone 12.77, asi que esta fila habria dado
+	ROJO sobre dos modelos sanos. Ahora sale de
+	`lua/phantasmagoria/ghost_models.lua`, que la mide por modelo.
+
+	Y EL PARRAFO DE ARRIBA QUEDO A MEDIAS: decia «son dos juegos de numeros bien
+	separados, asi que no hay que interpretar». Es cierto EN LA NENA. Medida la
+	separacion contra m_anm en los tres modelos, CADA UNO tiene un par que no
+	llega al 10 % -- en la nena es el cuello ( 3.47 contra 3.59, doce centesimas ),
+	en el Male el antebrazo ( 11.15 contra 11.48 ) y en la OldCrone tambien el
+	antebrazo ( 10.58 contra 11.48 ). Sobre esos pares la fila NO PUEDE FALLAR, y
+	sumaban al veredicto igual: el «5/5» del arco de la nena eran cuatro pares
+	utiles y uno que no discriminaba. `PHANTASMAGORIA.ParesUtiles` los cuenta.
+]]
+local PARES = PHANTASMAGORIA and PHANTASMAGORIA.ParesHueso
 
 --[[
 	⚠ ESTE COMANDO NO VEIA AL NEXTBOT, Y ERA EL CHECK QUE LA RONDA 16 EXISTIA
@@ -122,7 +131,10 @@ local function cmd()
 	for _, e in ipairs( ents.GetAll() ) do
 		local mdl = IsValid( e ) and e:GetModel() or nil
 
-		if isstring( mdl ) and string.find( mdl, "ghost_girl", 1, true ) then
+		-- El sujeto es CUALQUIERA de los modelos portados, no "ghost_girl":
+		-- con el Male o la OldCrone puestos, el find por nombre contestaba
+		-- «no hay ninguna entidad» sobre un fantasma que estaba en pantalla.
+		if PHANTASMAGORIA.EsGhostModel( mdl ) then
 			local cls = e:GetClass()
 
 			if CLASES_EXCLUIDAS[ cls ] then
@@ -137,8 +149,11 @@ local function cmd()
 
 	if #encontrados == 0 then
 		-- EL VACIO COMO MEDICION: que se busco, entre cuantas, y que se saco.
-		print( "[ph_bones] NO HAY NINGUNA ENTIDAD con 'ghost_girl' en el modelo, de las " ..
+		print( "[ph_bones] NO HAY NINGUNA ENTIDAD con un modelo de fantasma PORTADO, de las " ..
 			#ents.GetAll() .. " que existen en el cliente." )
+		local cuales = {}
+		for _, m in ipairs( PHANTASMAGORIA.GhostModels or {} ) do cuales[ #cuales + 1 ] = m.mdl end
+		print( "[ph_bones] Se buscaron: " .. table.concat( cuales, ", " ) .. "  ( y sus variantes _noinc / _seam )." )
 		print( "[ph_bones] Se busca por MODELO y no por clase, asi que esto alcanza al NextBot, " ..
 			"a los props y al ragdoll por igual." )
 
@@ -176,9 +191,29 @@ local function cmd()
 			print( string.format( "[ph_bones]     seq %d (%s)   ciclo %.3f",
 				seq, tostring( e:GetSequenceName( seq ) ), e:GetCycle() ) )
 
+			-- LA FICHA DEL MODELO QUE ESTA PUESTO, no una tabla global: los
+			-- largos esperados son distintos por modelo y medirlos contra los
+			-- de otro es reprobar geometria sana.
+			local ficha = PHANTASMAGORIA.EsGhostModel( e:GetModel() )
+			local utiles, nUtiles = PHANTASMAGORIA.ParesUtiles( ficha )
+
+			if not ficha then
+				print( "[ph_bones]   !! sin ficha para este modelo: no hay largos esperados " ..
+					"contra que comparar. Agregarlo a lua/phantasmagoria/ghost_models.lua." )
+				continue
+			end
+
+			print( string.format( "[ph_bones]     ficha %s (%s)   %d de %d pares DISCRIMINAN " ..
+				"( separacion >= %.0f %% contra m_anm )",
+				ficha.nombre, ficha.etiqueta, nUtiles, #PARES,
+				100 * PHANTASMAGORIA.MinimaSeparacion ) )
+
 			local propio, ajeno, difieren = 0, 0, 0
 
-			for _, par in ipairs( PARES ) do
+			for k, par in ipairs( PARES ) do
+				local esperado = ficha.nuestro[ k ]
+				local prestado = par.prestado
+				local util = utiles[ k ]
 				local ia, ib = e:LookupBone( par[ 1 ] ), e:LookupBone( par[ 2 ] )
 				local etiqueta = par[ 1 ]:sub( 17 ) .. "->" .. par[ 2 ]:sub( 17 )
 
@@ -198,9 +233,15 @@ local function cmd()
 						-- lado como control: si los dos coinciden, la duda se cerro
 						-- en esta corrida y sobre ESTA clase de entidad.
 						local d = dMat or dPos
-						local dp, da = math.abs( d - par[ 3 ] ), math.abs( d - par[ 4 ] )
+						local dp, da = math.abs( d - esperado ), math.abs( d - prestado )
 						local quien
-						if dp < da then quien = "NUESTRO" propio = propio + 1
+						-- ⚠ SOLO SUMAN AL VEREDICTO LOS PARES QUE PUEDEN FALLAR.
+						-- Un par cuyo largo nuestro y el prestado se apartan un
+						-- 3 % da "NUESTRO" con el esqueleto prestado puesto: su
+						-- verde no distingue nada y contarlo infla el resultado.
+						if not util then
+							quien = "NO DISCRIMINA"
+						elseif dp < da then quien = "NUESTRO" propio = propio + 1
 						else quien = "m_anm"  ajeno = ajeno + 1 end
 
 						local nota = ""
@@ -217,17 +258,26 @@ local function cmd()
 						end
 
 						print( string.format(
-							"[ph_bones]   %-24s %6.2f   (.mdl %5.2f / m_anm %5.2f)  -> %s%s",
-							etiqueta, d, par[ 3 ], par[ 4 ], quien, nota ) )
+							"[ph_bones]   %-24s %6.2f   (.mdl %5.2f / m_anm %5.2f, sep %3.0f %%)  -> %s%s",
+							etiqueta, d, esperado, prestado,
+							100 * math.abs( esperado - prestado ) / prestado, quien, nota ) )
 					end
 				end
 			end
 
-			print( string.format( "[ph_bones]   VEREDICTO: %d/%d se parecen a NUESTRO esqueleto  %s",
-				propio, #PARES,
-				propio == #PARES and "-> el modelo usa SUS proporciones"
-				or ( ajeno == #PARES and "-> ESTIRADO: esta tomando el esqueleto de m_anm"
-				     or "-> mezcla; hay que mirar hueso por hueso" ) ) )
+			-- El denominador son los pares UTILES y no los cinco: decir "4/5"
+			-- cuando uno de los cinco no puede fallar convierte un aprobado en
+			-- un aparente fallo, y decir "5/5" contando ese par acredita algo
+			-- que nadie midio. Los dos errores salen de la misma linea.
+			print( string.format( "[ph_bones]   VEREDICTO: %d/%d de los pares que DISCRIMINAN " ..
+				"se parecen a NUESTRO esqueleto  %s   ( %d par(es) fuera del veredicto por no discriminar )",
+				propio, nUtiles,
+				propio == nUtiles and "-> el modelo usa SUS proporciones"
+				or ( ajeno == nUtiles and "-> ESTIRADO: esta tomando el esqueleto de m_anm"
+				     or "-> mezcla; hay que mirar hueso por hueso" ),
+				#PARES - nUtiles ) )
+			print( "[ph_bones]   ⚠ esto NO despeja una deformacion: el largo de un hueso no " ..
+				"depende de la pose y daria lo mismo con el fantasma doblado en dos." )
 
 			if difieren > 0 then
 				print( "[ph_bones]   ⚠ " .. difieren .. " par(es) leyeron distinto por los dos " ..
@@ -283,7 +333,8 @@ local function cmd_land()
 	for _, e in ipairs( ents.GetAll() ) do
 		local mdl = IsValid( e ) and e:GetModel() or nil
 
-		if isstring( mdl ) and string.find( mdl, "ghost_girl", 1, true )
+		-- Cualquiera de los modelos portados ( ghost_models.lua ), no "ghost_girl".
+		if PHANTASMAGORIA.EsGhostModel( mdl )
 			and not CLASES_EXCLUIDAS[ e:GetClass() ] then
 			sujeto = e
 			break
@@ -291,8 +342,9 @@ local function cmd_land()
 	end
 
 	if not sujeto then
-		print( "[ph_land] SIN CORRER: no hay ninguna entidad con 'ghost_girl' en el modelo, " ..
-			"de las " .. #ents.GetAll() .. " que existen en el cliente." )
+		print( "[ph_land] SIN CORRER: no hay ninguna entidad con un modelo de fantasma PORTADO, " ..
+			"de las " .. #ents.GetAll() .. " que existen en el cliente. Se buscaron " ..
+			#( PHANTASMAGORIA.GhostModels or {} ) .. " modelos y sus variantes." )
 		return
 	end
 
@@ -523,7 +575,8 @@ local function elegirSujeto()
 	for _, e in ipairs( ents.GetAll() ) do
 		local mdl = IsValid( e ) and e:GetModel() or nil
 
-		if isstring( mdl ) and string.find( mdl, "ghost_girl", 1, true )
+		-- Cualquiera de los modelos portados ( ghost_models.lua ), no "ghost_girl".
+		if PHANTASMAGORIA.EsGhostModel( mdl )
 			and not CLASES_EXCLUIDAS[ e:GetClass() ] then
 			candidatos[ #candidatos + 1 ] = e
 
@@ -562,8 +615,9 @@ local function cmd_facing()
 	local sujeto, motivo, descartados, nCand = elegirSujeto()
 
 	if not sujeto then
-		print( "[ph_facing] SIN CORRER: no hay ninguna entidad con 'ghost_girl' en el modelo, " ..
-			"de las " .. #ents.GetAll() .. " que existen en el cliente." )
+		print( "[ph_facing] SIN CORRER: no hay ninguna entidad con un modelo de fantasma PORTADO, " ..
+			"de las " .. #ents.GetAll() .. " que existen en el cliente. Se buscaron " ..
+			#( PHANTASMAGORIA.GhostModels or {} ) .. " modelos y sus variantes." )
 		return
 	end
 
@@ -1035,6 +1089,11 @@ concommand.Add( "ph_ghost_anm", cmd_anm, nil,
 local MODELOS = {
 	{ "models/phantasmagoria/ghost_girl.mdl",      "el bueno" },
 	{ "models/phantasmagoria/ghost_girl_seam.mdl", "CONTROL NEGATIVO (roto a proposito)" },
+	-- Los dos del 2026-08-10. No tienen `_seam` propio: el control negativo de
+	-- la costura se fabrico UNA vez sobre la nena y su arco esta cerrado, asi
+	-- que aca entran solo como sujetos.
+	{ "models/phantasmagoria/ghost_male.mdl",      "Ghost_Male" },
+	{ "models/phantasmagoria/ghost_oldcrone.mdl",  "Ghost_OldCrone" },
 }
 local MUESTRAS = 128
 -- Los cortes de la RAZON de la cadera. Medido sobre los dos .mdl compilados,

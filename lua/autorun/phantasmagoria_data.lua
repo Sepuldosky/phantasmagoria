@@ -97,6 +97,14 @@ local DATOS = {
     -- En los DOS realms: el ENT lo escribe desde el servidor, y el conteo del
     -- cargador de abajo lo mira en los dos.
     "phantasmagoria/actlog.lua",
+
+    -- Los modelos de fantasma portados y sus largos de hueso por modelo. En los
+    -- DOS realms: la lista del NextBot la lee el servidor y los instrumentos de
+    -- huesos son de cliente. Hasta el 2026-08-10 los tres consumidores tenian
+    -- "ghost_girl" y el 9.72 de la nena escritos a mano, asi que con el
+    -- Ghost_Male o la OldCrone en pantalla decian «no hay ninguna entidad» o
+    -- reprobaban un modelo sano.
+    "phantasmagoria/ghost_models.lua",
 }
 
 if SERVER then
@@ -217,6 +225,8 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
         " · propios " .. ( propios and ( propiosVivos .. " de " .. propios .. " vivos en PropData" ) or "NO EXISTE" ) ..
         " · ActUniverse " .. ( acts and ( acts .. " actividades" ) or "NO EXISTE" ) ..
         " · PushActLog " .. ( pushOk and "OK" or "NO EXISTE" ) ..
+        " · GhostModels " .. ( ghosts and ( ghostsConHuesos .. " de " .. ghosts .. " con sus 5 largos" ) or "NO EXISTE" ) ..
+        " · EsGhostModel/ParesUtiles " .. ( ghostFnOk and "OK" or "NO EXISTE" ) ..
         ".  Los tipos los necesita la cordura ( threshold por tipo ), PropData corrige la masa " ..
         "de los props, y el actlog es el instrumento de la pose T." ..
         ( ( propios and propiosVivos < propios ) and
