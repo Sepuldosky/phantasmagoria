@@ -877,14 +877,18 @@ local THROW_CLASSES = {
 -- de agrupar. *Una clave de agregacion con la identidad del sujeto adentro no
 -- agrega: enumera.*
 --
--- ⚠ TRES DE ESTOS MOTIVOS NO PUEDEN SALIR HOY, y se dice para que ninguna fila
--- los acredite. No es por falta de escritores: es porque la LISTA BLANCA
--- ( THROW_CLASSES ) corre antes y deja pasar solo prop_physics y
--- prop_physics_multiplayer.
---   "es el fantasma" / "es otro fantasma"  el fantasma no es un prop_physics.
---   "es inventario de Cargo"               ver el bloque de abajo.
--- Dejan de ser inalcanzables el dia que THROW_CLASSES crezca, y por eso se
--- escriben.
+-- ⚠ CUATRO DE ESTOS MOTIVOS NO PUEDEN SALIR HOY, y se dice para que ninguna
+-- fila los acredite:
+--   "es el fantasma" / "es otro fantasma"  la LISTA BLANCA ( THROW_CLASSES )
+--   "es inventario de Cargo"               corre antes y solo deja pasar
+--                                          prop_physics y _multiplayer; ninguno
+--                                          de los tres sujetos llega ahi.
+--   "es equipamiento de Phantasmagoria"    por otro motivo: NADIE escribe todavia
+--                                          `IsPhantasmagoriaEquipment`.
+-- Los tres primeros dejan de ser inalcanzables el dia que THROW_CLASSES crezca;
+-- el cuarto, el dia que exista el equipo ( Diseno 8 ). Por eso se escriben.
+-- ⚠ Y la cuenta decia TRES: el cuarto se olvidaba porque su motivo es distinto,
+-- que es justo la razon por la que hay que enumerarlos.
 local function propVetado( ent, ghost )
     if ent == ghost then return "es el fantasma" end
     if ent.IsPhantasmagoriaGhost then return "es otro fantasma" end
@@ -1452,7 +1456,8 @@ local LIGHT_CLASSES = {
     -- esta. Cero apariciones de `LightOn` / `LightOff`, que es como se llaman
     -- los inputs de CPointSpotlight en Source. O sea que este renglon es un
     -- comentario de un tercero COPIADO, que es el pecado que este mismo archivo
-    -- documenta ochenta lineas mas abajo.
+    -- documenta en el encabezado de `EV.door` ( "lo que no envejece es medir la
+    -- hoja" ).
     --
     -- No se cambia sobre memoria -- eso seria el mismo pecado del otro lado --
     -- pero el reporte deja de afirmar que conmuto: `Entity:Fire` con un input
@@ -1471,6 +1476,22 @@ local LIGHT_CLASSES = {
 -- otra lista que la busqueda, podria decir "0 en todo el mapa" con luces que la
 -- busqueda si mira, o al reves. *Un instrumento que mide una lista distinta de
 -- la que usa el sujeto no lo esta midiendo a el.*
+-- ⚠⚠ Y COMPARTIR LA TABLA NO ALCANZABA: LA BUSQUEDA TIENE UN FILTRO MAS.
+-- `lucesCerca` descarta las `seton` que no traen getter y setter ( son SENTs de
+-- Lua y sin eso no se las puede tocar ), y este censo no lo hacia. Con una
+-- lampara de sandbox rota cerca, el mensaje de vacio decia "no habia luces a
+-- 450 u ( en TODO el mapa hay 1 y la mas cercana esta a 30 u )" -- dos mitades
+-- ciertas que juntas se leen como un defecto de radio que no existe.
+--
+-- *Compartir la lista no es compartir el criterio: el filtro tambien es parte de
+-- lo que hace que dos censos hablen del mismo universo.*
+local function lucesUtilizable( fam, ent )
+    if fam.como ~= "seton" then return true end
+
+    return isfunction( ent.SetOn ) and isfunction( ent.GetOn )
+
+end
+
 local function lucesEnElMapa( ghost )
     local n, mejor = 0, nil
     local pos = ghost:GetPos()
@@ -1478,6 +1499,7 @@ local function lucesEnElMapa( ghost )
     for _, fam in ipairs( LIGHT_CLASSES ) do
         for _, ent in ipairs( ents.FindByClass( fam.clase ) ) do
             if not IsValid( ent ) then continue end
+            if not lucesUtilizable( fam, ent ) then continue end
 
             n = n + 1
 
@@ -1510,11 +1532,9 @@ local function lucesCerca( ghost, radio )
             -- Las de sandbox son SENTs de Lua: si no traen su getter y su
             -- setter no se las puede ni leer ni tocar, asi que no son sujeto.
             -- Las otras cinco clases se manejan por input del engine y no
-            -- necesitan nada.
-            if fam.como == "seton" and not ( isfunction( ent.SetOn ) and isfunction( ent.GetOn ) ) then
-                continue
-
-            end
+            -- necesitan nada. Es la MISMA pregunta que hace el censo global --
+            -- por eso vive en una funcion y no duplicada en dos lugares.
+            if not lucesUtilizable( fam, ent ) then continue end
 
             sumar( fam.clase, ent, fam.como )
 
@@ -2326,8 +2346,17 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
         local flags, deDonde = ghost:phantom_EventFlags()
 
         say( "" )
+        -- ⚠ EL ROTULO DEL CADAVER, Y ENTRA POR LA MISMA LECCION QUE ESTA ESCRITA
+        -- EN server_cloak.lua: la guarda de `term_Dead` se puso en el MOTOR y no
+        -- en el TEXTO, o sea la mitad que el operador lee. Sin esto, un cadaver
+        -- se lista como "( calma )" con su `proximo en 12 s` como si fuera a
+        -- ocurrir -- y no va a ocurrir nunca, porque phantom_FireEvent lo corta.
+        -- El comando gemelo de este MISMO commit ya lo hacia bien; este no.
+        --
+        -- *Que la leccion este escrita en el archivo de al lado no la aplica.*
         say( "  --- fantasma #" .. ghost:EntIndex() .. "  ( " ..
-            ( ghost.phantom_Hunting and "HUNT" or "calma" ) .. " ) ---" )
+            ( ghost.term_Dead and "MUERTO -- el motor NO dispara; la base lo borra a los ~10 s"
+              or ( ghost.phantom_Hunting and "HUNT" or "calma" ) ) .. " ) ---" )
         say( "    rasgos    " .. deDonde )
 
         -- ⚠ SE IMPRIMEN LOS DOS: el RASGO ( lo que el tipo pide ) y el VALOR
@@ -2564,12 +2593,24 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_event", function( ply, _, args 
 
         end
 
-        local salieron = ghost:phantom_FireEvent( cat )
-        local st       = estado( ghost )
+        -- ⚠⚠ EL SEGUNDO RETORNO SE TIRABA, Y CON EL LA UNICA GUARDA NUEVA DE ESTA
+        -- TANDA. `phantom_FireEvent` devuelve ( salieron, porque ), y la guarda
+        -- del cadaver contesta por ahi -- pero este comando descartaba el segundo
+        -- valor e imprimia `st.motivos[ cat ]`, que es la FOTO DEL DISPARO
+        -- ANTERIOR. Sobre un fantasma muerto decia "NO SALIO" y abajo el motivo
+        -- de la vez que si habia salido: un motivo viejo puesto al lado de un
+        -- veredicto nuevo, que es la familia de la foto vieja otra vez.
+        --
+        -- *Escribir una guarda que contesta por un canal que nadie lee es
+        -- escribir una guarda muda -- y peor, deja hablando al que estaba antes.*
+        local salieron, porque = ghost:phantom_FireEvent( cat )
+        local st = estado( ghost )
 
         say( "    #" .. ghost:EntIndex() .. "  " .. cat .. " -> " ..
             ( salieron > 0 and ( salieron .. " disparo(s)" ) or "NO SALIO" ) )
-        say( "        " .. tostring( st.motivos[ cat ] or "sin motivo registrado ( el bucle ni lo intento )" ) )
+        say( "        " .. tostring( ( salieron <= 0 and porque )
+            or st.motivos[ cat ]
+            or "sin motivo registrado ( el bucle ni lo intento )" ) )
 
     end )
 
@@ -2728,8 +2769,9 @@ end
 -- de las puertas, ModifyMovementSpeed de la velocidad y BehaveUpdatePriority de
 -- este archivo". Esa frase es FALSA por partida doble:
 --
---   · server_cloak.lua:826 lista DOS claves, no tres.
---   · server_cloak.lua:385-386 dice, con todas las letras, que descarto esa
+--   · la guarda de server_cloak.lua ( "LAS DOS GUARDAS DEL CIERRE" ) itera
+--     `{ "Think", "ModifyMovementSpeed" }`: DOS claves, no tres.
+--   · el bloque "NO VA EN ENT.MyClassTask" del mismo archivo dice, con todas las
 --     clave: "⚠ Y NO VA EN ENT.MyClassTask, QUE ERA LO OBVIO Y ESTA MAL".
 --     El cloak cuelga de ENT:BehaveUpdate.
 --

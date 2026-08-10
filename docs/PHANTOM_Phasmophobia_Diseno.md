@@ -2593,15 +2593,35 @@ lucir era la única completamente muda.
 391 clips extraídos del juego *«son el Vorbis ORIGINAL de Unity, copiados tal cual: reencodear
 ya-comprimido sólo pierde»*. Es cierto sobre la **calidad** y falso sobre la **compatibilidad** —
 copiar tal cual se trae el sample rate nativo de Unity, 48000, que Source rechaza. La partición por
-vendor string lo prueba: los 265 que **sí** pasaron por ffmpeg dan **0 inválidos**; los 391 que se
-saltearon la conversión dan **268**.
+vendor string del Ogg:
+
+| vendor | total | inválidos |
+|---|---:|---:|
+| `Fmod5Sharp` (rip del juego, copiado tal cual) | 391 | **268** |
+| `Lavf` (reencodeado por ffmpeg) | 265 | 0 |
+| `Xiph libVorbis` (terceros / radio) | 170 | 2 |
+| **TOTAL** | **826** | **270** |
 
 > *El sample rate no es calidad, es compatibilidad. Una decisión de no reencodear puede ser correcta
 > en el eje que la motivó y desastrosa en un eje que nadie nombró.*
 
+⚠⚠ **Y ESTA TABLA ESTUVO MAL PUBLICADA, con la palabra «denominador» al lado, en cuatro archivos y
+en el mensaje del commit `091aa68`.** Traía sólo las dos primeras filas, y **0 + 268 = 268 contra 270
+inválidos**: faltaban dos, los dos clips de `prop/radio/`, de una **tercera fuente que el encabezado
+de `about.txt` no declaraba** — decía *«656 archivos, de DOS fuentes»* cuando son **826 y tres**. La
+causa raíz sigue en pie y explica **268 de 270**; lo que no se sostenía era llamarla partición
+cerrada. Lo agarró la auditoría previa al push, tarde: el commit ya había salido.
+
+> *Una partición que no suma el total no es una prueba: es una anécdota con tabla. Y se publica igual
+> cuando el que la escribe ya tiene la respuesta y el número que falta es chico.*
+
+Es el mismo defecto que el catálogo del taller lleva anotado como **un máximo sin su denominador** —
+esta vez cometido por el que había escrito, dos párrafos antes, que *«una lista filtrada no es el
+universo»*.
+
 **Y el instrumento lo acreditó.** `EV.sound` hacía `sound.Play` y devolvía `true` **literal** en la
 línea siguiente — el mismo archivo documenta que `sound.Play` no devuelve nada. Peor: **el autor ya
-había arreglado este exacto modo de falla para `door` ochenta líneas más arriba**, y ahí la lección
+había arreglado este exacto modo de falla para `door`, en el mismo archivo**, y ahí la lección
 está escrita («lo que no envejece es medir la hoja»). *Una lección aprendida en una función no se
 aplica sola a la de al lado.*
 

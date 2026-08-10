@@ -1,5 +1,13 @@
-Phantasmagoria: sonidos. Origen: Phasmophobia (Kinetic Games). 656 archivos,
-37 MB, de DOS fuentes distintas que conviene no confundir:
+Phantasmagoria: sonidos. 826 archivos .ogg, 50 MB, de TRES fuentes distintas que
+conviene no confundir. El grueso es Phasmophobia (Kinetic Games).
+
+!! ESTE ENCABEZADO DECIA "656 archivos, 37 MB, de DOS fuentes" y estuvo mal por
+lo menos desde que entro la tercera tanda. No es un detalle de prolijidad: el
+2026-08-09 se publico, en cuatro archivos, una particion por vendor string como
+"la prueba con denominador" de por que 270 .ogg tenian el sample rate mal -- y
+NO CERRABA (0 + 268 = 268, faltaban 2), justamente porque el encabezado declaraba
+dos fuentes y hay tres. Los 2 que faltaban son de la tercera. Con las tres, la
+particion cierra: 391 + 265 + 170 = 826 y 268 + 0 + 2 = 270.
 
   265  rip de terceros (phasmo-sounds-main), .wav -> .ogg Vorbis q4 el
        2026-08-01: 141 MB -> 11 MB, 0 fallos, duraciones verificadas contra el
@@ -24,7 +32,30 @@ Phantasmagoria: sonidos. Origen: Phasmophobia (Kinetic Games). 656 archivos,
 
        Medido el 2026-08-09 sobre los 826 .ogg del arbol: 270 invalidos
        (264 a 48000 y 6 a 32000), y el banco de VOZ del fantasma estaba roto
-       ENTERO -- 39 de 39 clips, las dos voces. Reconvertidos a 44100 con
+       ENTERO -- 39 de 39 clips, las dos voces.
+
+       LA PARTICION POR VENDOR STRING, COMPLETA Y CON DENOMINADOR:
+
+           vendor                                total   invalidos
+           Fmod5Sharp   ( rip del juego )          391         268
+           Lavf         ( reencodeado ffmpeg )     265           0
+           Xiph libVorbis ( terceros / radio )     170           2
+           TOTAL                                   826         270
+
+       O sea que la decision de "copiar tal cual" explica 268 de los 270 -- que
+       es la causa raiz y sigue en pie -- pero NO los explica todos. Los otros 2
+       son de la tercera fuente: prop/radio/creepy_radio_easteregg_helpmewithend
+       y prop/radio/event_creepy_eas_paranormal_radio_advise, que vinieron a
+       48000 de origen.
+
+       !! Y ESA ES LA LECCION QUE ESTE BLOQUE SE GANO SOLO. La primera version
+       publico la particion como "la prueba con denominador" citando SOLO dos
+       fuentes: 0 + 268 = 268, y los invalidos eran 270. Se publico igual en
+       cuatro archivos porque el que la escribio ya tenia la respuesta y el
+       numero que faltaba era chico. *Una particion que no suma el total no es
+       una prueba: es una anecdota con tabla.*
+
+       Reconvertidos a 44100 con
        dev/resample_44100.py (ffmpeg, calidad elegida POR ARCHIVO para no bajar
        del bitrate de origen), backup verificado por sha256.
 

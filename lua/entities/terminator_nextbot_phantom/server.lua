@@ -3554,7 +3554,8 @@ include( "server_stuck.lua" )
 --
 -- ⚠ ESTE PARRAFO DECIA "las TRES claves ... y `BehaveUpdatePriority` de este
 -- archivo" Y ERA FALSO EN LAS DOS MITADES ( corregido el 2026-08-09 ):
--- server_cloak.lua:826 lista DOS, y :385-386 dice explicitamente que descarto
+-- la guarda del cierre de server_cloak.lua itera DOS claves, y su bloque
+-- "NO VA EN ENT.MyClassTask" dice explicitamente que descarto
 -- esa clave porque cuelga de ENT:BehaveUpdate, que es un metodo y no una clave.
 -- `BehaveUpdatePriority` NO se asigna en ningun archivo del addon.
 --

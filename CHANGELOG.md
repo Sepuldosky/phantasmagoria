@@ -33,8 +33,24 @@ Censados los **826 `.ogg`** del árbol con dos instrumentos independientes (pars
 **La causa raíz estaba escrita como una decisión correcta** en `sound/phantasmagoria/about.txt`: los
 391 clips extraídos del juego *«son el Vorbis ORIGINAL de Unity, copiados tal cual: reencodear
 ya-comprimido sólo pierde»*. Cierto sobre la **calidad**, falso sobre la **compatibilidad**. La
-partición por vendor string del Ogg lo prueba con denominador: los **265** que pasaron por ffmpeg dan
-**0 inválidos**; los **391** que se saltearon la conversión dan **268**.
+partición por vendor string del Ogg lo muestra:
+
+| vendor | total | inválidos |
+|---|---:|---:|
+| `Fmod5Sharp` (rip del juego, copiado tal cual) | 391 | **268** |
+| `Lavf` (reencodeado por ffmpeg) | 265 | 0 |
+| `Xiph libVorbis` (terceros / radio) | 170 | 2 |
+| **TOTAL** | **826** | **270** |
+
+⚠⚠ **Y ESTA TABLA SE PUBLICÓ MAL PRIMERO, en cuatro archivos, con la palabra «denominador» al
+lado.** Decía sólo las dos primeras filas — *«los 265 que pasaron por ffmpeg dan 0, los 391 que se
+saltearon dan 268»*— y **0 + 268 = 268 contra 270 inválidos**. Faltaban dos, que son de una **tercera
+fuente que el encabezado de `about.txt` no declaraba** (decía «656 archivos, de DOS fuentes» cuando
+son 826 y tres). La causa raíz sigue en pie y explica **268 de 270**; lo que no se sostenía era
+presentarla como una partición cerrada.
+
+> *Una partición que no suma el total no es una prueba: es una anécdota con tabla. Y se publica igual
+> cuando el que la escribe ya tiene la respuesta y el número que falta es chico.*
 
 > *El sample rate no es calidad, es compatibilidad. Una decisión puede ser correcta en el eje que la
 > motivó y desastrosa en un eje que nadie nombró.*
@@ -55,7 +71,7 @@ idempotente — corrido de nuevo sobre el árbol ya reparado dice `sujetos: 0 ·
 
 **Y el instrumento lo acreditó:** `EV.sound` hacía `sound.Play` y devolvía `true` **literal** en la
 línea siguiente — el mismo archivo documenta que `sound.Play` no devuelve nada. **El autor ya había
-arreglado este exacto modo de falla para `door` ochenta líneas más arriba**, con la lección escrita.
+arreglado este exacto modo de falla para `door`, en el mismo archivo**, con la lección escrita al lado.
 *Una lección aprendida en una función no se aplica sola a la de al lado.* Ahora el detalle **nombra
 el archivo elegido**, que es lo que permite aparear nuestra línea con la del engine.
 
