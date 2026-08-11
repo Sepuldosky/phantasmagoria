@@ -1384,3 +1384,205 @@ end
 
 concommand.Add( "ph_ghost_costura", cmd_costura, nil,
 	"Mide el tambaleo del ciclo en el modelo bueno y en el de control. Arg: secuencia." )
+
+--------------------------------------------------------- los dedos, del lado que los dibuja
+
+--[[
+	ph_ghost_dedos  -- responde si los huesos de dedo OBEDECEN una manipulacion
+
+	POR QUE HACE FALTA UNO NUEVO, Y POR QUE NINGUNO DE LOS QUE HAY SIRVE.
+
+	El autor reporto que en la OldCrone "los huesos de la mano no alinean con la
+	herramienta Finger Poser", en LAS DOS MANOS, y que en el Ghost_Male estan
+	bien. Se midieron OCHO propiedades del `.mdl` compilado contra el Male, que
+	es el que funciona, y LAS OCHO COINCIDEN:
+
+	  nombres ValveBiped 30/30 · sin duplicados · jerarquia igual a HL2 ·
+	  orientacion contra HL2 3.93 gr peor y 2.09 de media EN LOS DOS ·
+	  largos de falange del mismo orden · peso de malla con 0 dedos sin peso ·
+	  flexion en reposo 16.6 contra 15.1 gr · flags de hueso 0x400/0x500 iguales
+
+	O sea que TODO lo que se puede leer del archivo dice que son iguales. Lo que
+	no se midio nunca es lo unico que la herramienta hace de verdad: aplicar
+	`ManipulateBoneAngles` y ver si la geometria RESPONDE. *Un identificador
+	correcto es consistente con cualquier render* -- la cadena tiene que
+	terminar en posiciones de hueso, no en nombres.
+
+	⚠ LA TRAMPA QUE HARIA A ESTE COMANDO MENTIR, Y ESTA EVITADA POR CONSTRUCCION.
+	Rotar un hueso NO MUEVE SU PROPIO ORIGEN: una rotacion alrededor de una
+	articulacion deja la articulacion donde estaba. Un instrumento que rotara
+	`L_Finger1` y midiera la posicion de `L_Finger1` daria CERO en un modelo
+	sano, y ese cero se leeria como "el hueso no obedece" -- un rojo perfecto
+	sobre algo que anda. Lo que se mide es el HIJO.
+
+	Y EL CRITERIO NO ES UN UMBRAL INVENTADO: es geometria. Rotando `d` grados
+	una articulacion cuyo hijo esta a `L` unidades, el hijo se desplaza
+
+	    esperado = 2 * L * sin( d / 2 )
+
+	asi que cada fila trae su propio valor esperado, sacado del largo de ESE
+	hueso en ESTE modelo. Tres lecturas posibles y las tres se distinguen:
+
+	  medido ~ esperado   el hueso obedece: el defecto NO esta en el esqueleto
+	  medido ~ 0          el motor no esta aplicando la manipulacion a ese hueso
+	  medido /= esperado  obedece pero no como la geometria predice: mirar ejes
+
+	CORRE SOBRE TODOS LOS FANTASMAS QUE HAYA, a proposito: con el Male y la
+	OldCrone spawneados a la vez, el Male --que el autor confirmo bueno en las
+	dos manos-- es el control EN LA MISMA CORRIDA. Un numero de la vieja sin el
+	del Male al lado no dice nada.
+
+	⚠ RESTAURA la manipulacion al salir. Un instrumento que deja al sujeto
+	manipulado convierte la proxima medicion de cualquier otro en basura.
+
+	⚠⚠ Y LO QUE EL ARNES **NO** PUEDE DECIR DE ESTE COMANDO. `luaharness.py` lo
+	corre con 0 fallas, y ese verde vale MENOS de lo que parece: el sujeto del
+	banco tiene diez huesos y ninguno es de dedo, asi que las 20 filas salen por
+	"sin leer" y la rama que MIDE no se ejecuta. Peor: el stub devuelve la pose
+	de una tabla fija, o sea que `ManipulateBoneAngles` no la moveria ni en un
+	modelo sano -- simular eso seria simular el motor, que es justo lo que el
+	banco se niega a hacer ("fiel en huesos y hostil en geometria"). O sea que
+	el arnes aca solo prueba que NO REVIENTA. *La rama que decide este comando
+	solo corre en juego, y su verde offline no acredita nada.*
+]]
+
+local GRADOS_PRUEBA = 30
+
+-- Los 15 pares (articulacion -> hijo cuyo desplazamiento se mide) de una mano.
+-- El hijo es el que se mueve; ver el aviso de arriba.
+local CADENA_DEDOS = {
+	{ "Finger0",  "Finger01" }, { "Finger01", "Finger02" },
+	{ "Finger1",  "Finger11" }, { "Finger11", "Finger12" },
+	{ "Finger2",  "Finger21" }, { "Finger21", "Finger22" },
+	{ "Finger3",  "Finger31" }, { "Finger31", "Finger32" },
+	{ "Finger4",  "Finger41" }, { "Finger41", "Finger42" },
+}
+
+local function cmd_dedos()
+	local sujetos = {}
+
+	for _, e in ipairs( ents.GetAll() ) do
+		local mdl = IsValid( e ) and e:GetModel() or nil
+
+		if PHANTASMAGORIA.EsGhostModel( mdl )
+			and not CLASES_EXCLUIDAS[ e:GetClass() ] then
+			sujetos[ #sujetos + 1 ] = e
+
+		end
+	end
+
+	if #sujetos == 0 then
+		print( "[ph_dedos] SIN CORRER: no hay ningun fantasma portado en el cliente." )
+		print( "[ph_dedos] Spawnear el Male Y la vieja: el Male es el control." )
+		return
+	end
+
+	print( "[ph_dedos] " .. #sujetos .. " sujeto(s). Se rota " .. GRADOS_PRUEBA ..
+		" gr cada articulacion y se mide cuanto se movio SU HIJO." )
+	print( "[ph_dedos] esperado = 2*L*sin(" .. ( GRADOS_PRUEBA / 2 ) .. " gr), con L el largo del hueso." )
+
+	local seno = math.sin( math.rad( GRADOS_PRUEBA / 2 ) )
+
+	for _, e in ipairs( sujetos ) do
+		local ficha = PHANTASMAGORIA.EsGhostModel( e:GetModel() )
+		print( "[ph_dedos] --- " .. ( ficha and ficha.nombre or "?" ) ..
+			"  " .. tostring( e ) .. " ---" )
+
+		local obedecen, ceros, raros, sinLeer = 0, 0, 0, 0
+		local peorNom, peorRaz = "-", 1
+
+		for _, lado in ipairs( { "L", "R" } ) do
+			for _, par in ipairs( CADENA_DEDOS ) do
+				local nA = "ValveBiped.Bip01_" .. lado .. "_" .. par[ 1 ]
+				local nB = "ValveBiped.Bip01_" .. lado .. "_" .. par[ 2 ]
+				local iA, iB = e:LookupBone( nA ), e:LookupBone( nB )
+
+				if not iA or not iB then
+					sinLeer = sinLeer + 1
+
+				else
+					e:SetupBones()
+					local mA = e:GetBoneMatrix( iA )
+					local mB = e:GetBoneMatrix( iB )
+
+					if not mA or not mB then
+						-- ⚠ nil NO es cero: un hueso que no se pudo leer no es
+						-- un hueso que no se movio, y meterlos en el mismo saco
+						-- es como se fabrica un rojo sobre un modelo sano.
+						sinLeer = sinLeer + 1
+
+					else
+						local pA = mA:GetTranslation()
+						local antes = mB:GetTranslation()
+						local largo = pA:Distance( antes )
+						local esperado = 2 * largo * seno
+
+						e:ManipulateBoneAngles( iA, Angle( 0, GRADOS_PRUEBA, 0 ) )
+						e:InvalidateBoneCache()
+						e:SetupBones()
+
+						local m2 = e:GetBoneMatrix( iB )
+						local movio = m2 and antes:Distance( m2:GetTranslation() ) or -1
+
+						e:ManipulateBoneAngles( iA, Angle( 0, 0, 0 ) )
+						e:InvalidateBoneCache()
+						e:SetupBones()
+
+						if movio < 0 then
+							sinLeer = sinLeer + 1
+
+						elseif esperado < 0.01 then
+							-- Un hueso de largo ~0 no puede desplazar a su hijo:
+							-- su fila no puede fallar y no entra al veredicto.
+							sinLeer = sinLeer + 1
+
+						else
+							local razon = movio / esperado
+
+							if movio < esperado * 0.1 then
+								ceros = ceros + 1
+								print( string.format( "[ph_dedos]   %s_%-9s NO SE MOVIO  (esperaba %.3f u)",
+									lado, par[ 1 ], esperado ) )
+
+							elseif razon < 0.75 or razon > 1.25 then
+								raros = raros + 1
+								print( string.format( "[ph_dedos]   %s_%-9s movio %.3f de %.3f u  (x%.2f)",
+									lado, par[ 1 ], movio, esperado, razon ) )
+
+							else
+								obedecen = obedecen + 1
+
+							end
+
+							if math.abs( razon - 1 ) > math.abs( peorRaz - 1 ) then
+								peorRaz, peorNom = razon, lado .. "_" .. par[ 1 ]
+							end
+						end
+					end
+				end
+			end
+		end
+
+		local medidos = obedecen + ceros + raros
+		print( string.format( "[ph_dedos]   %d obedecen · %d NO se movieron · %d fuera de rango",
+			obedecen, ceros, raros ) )
+		print( string.format( "[ph_dedos]   medidos %d de 20 · sin leer %d · peor razon x%.2f (%s)",
+			medidos, sinLeer, peorRaz, peorNom ) )
+
+		if medidos == 0 then
+			print( "[ph_dedos]   >> SIN CORRER: no se midio una sola articulacion." )
+		elseif ceros == medidos then
+			print( "[ph_dedos]   >> NINGUNO OBEDECE: el motor no aplica la manipulacion aca." )
+		elseif obedecen == medidos then
+			print( "[ph_dedos]   >> TODOS OBEDECEN como predice la geometria." )
+			print( "[ph_dedos]   >> El esqueleto NO es la causa: mirar malla o pose de partida." )
+		else
+			print( "[ph_dedos]   >> MEZCLA: hay que mirar las filas de arriba una por una." )
+		end
+	end
+
+	print( "[ph_dedos] manipulacion RESTAURADA en los " .. #sujetos .. " sujeto(s)." )
+end
+
+concommand.Add( "ph_ghost_dedos", cmd_dedos, nil,
+	"Rota cada articulacion de dedo y mide si su hijo se desplaza lo que predice la geometria." )
