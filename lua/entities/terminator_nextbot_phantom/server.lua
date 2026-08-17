@@ -74,6 +74,12 @@ local MODEL_CANDIDATES = {
     -- nuestro esqueleto y pide el hull del fantasma. Lo miran los dos bloques de
     -- abajo. NO es lo mismo que "es el primero de la lista" -- ver el comentario
     -- de `esNuestroModelo`.
+    --
+    -- ⚠ EL ALTO DE LA MALLA NO ESTA ACA A PROPOSITO. Vive en `altura`, en
+    -- lua/phantasmagoria/ghost_models.lua, que es el registro que ya lo tenia
+    -- medido por modelo antes de que este archivo lo necesitara. Copiarlo aca
+    -- seria darle DOS casas a un numero que decide geometria, que es la forma en
+    -- que estos numeros se desincronizan. Ver el bloque del hull.
     { mdl = "models/phantasmagoria/ghost_girl.mdl", nuestro = true },
 
     -- LOS OTROS DOS DEL TALLER ( 2026-08-10 ), para que el bot no tenga solo a
@@ -86,7 +92,10 @@ local MODEL_CANDIDATES = {
     -- y la nena es la unica de las tres con una pasada en juego cerrada.
     --
     -- Ghost_Male: 72.29 u, o sea del tamano de un playermodel ( male_07 mide
-    -- 72.00 ), asi que el hull {-16,-16,0},{16,16,72} le entra sin tocar nada.
+    -- 72.00 ). Eso era una HIPOTESIS ESCRITA ( "el hull de la base le entra sin
+    -- tocar nada" ) y ahora es un resultado: la regla de abajo, aplicada a su
+    -- 72.29, devuelve 32x32x72, que es el de la base exactamente. La prediccion
+    -- se cumplio, pero el numero no sale de la prediccion.
     { mdl = "models/phantasmagoria/ghost_male.mdl", nuestro = true },
 
     -- Ghost_OldCrone: 68.98 u. Es la primera de la familia CATRig ( son 8
@@ -123,6 +132,7 @@ local MODEL_CANDIDATES = {
     -- Del que deriva el anterior. Viene con GMod.
     { mdl = "models/player/group01/male_04.mdl" },
 }
+
 
 --[[
     ⚠ `ph_ghost_modelo` NO gobierna ESTA lista, y el autor lo reporto como "el
@@ -398,6 +408,45 @@ end, "phantasmagoria_modelo_del_bot" )
 -- todas sus cuentas. No se elige un ancho "que parezca bien": se escala el que
 -- ya estaba por lo unico que cambio.
 --
+-- ⚠ Y ESE "44,94" ERA UN `local`, O SEA LA CONSTANTE DE UN MODELO LEIDA PARA
+-- TODOS. REGRESION MEDIDA EN JUEGO EL 2026-08-17:
+--
+--     [Phantasmagoria] spawn #442  hull 20x20x45  malla 44.94 de alto  ojos z 40
+--
+-- con la OldCrone puesta. Los dos numeros son de la nena: a un cuerpo de 68,98 u
+-- se le puso una caja de 45, que le cubre el 65 %, y la linea de diagnostico
+-- afirmaba un alto de malla que no era el de ese modelo.
+--
+-- COMO LLEGO, Y ES LA PARTE QUE VALE: hasta el `1a16191` el flag `esNuestroModelo`
+-- decia "es la nena", asi que los adultos corrian con el 32x32x72 de la base --
+-- mal, pero de otra manera. Al arreglar el flag ( y habia que arreglarlo: apagaba
+-- tambien las actividades ) el hull de la nena paso a los tres. *Un arreglo
+-- correcto puede destapar una constante escondida detras del defecto que
+-- arreglo.*
+--
+-- LA REGLA, QUE AHORA ES UNA Y VALE PARA CUALQUIER MODELO DEL TALLER: el alto
+-- sale del `.vvd` de ESE modelo ( campo `altura` de su ficha en
+-- lua/phantasmagoria/ghost_models.lua ) y el ancho se escala con el mismo factor
+-- `altura / 72`. Los tres numeros que produce:
+--
+--     modelo            malla ( .vvd )   hull
+--     ghost_girl            44,94        20 x 20 x 45
+--     ghost_male            72,29        32 x 32 x 72
+--     ghost_oldcrone        68,98        30 x 30 x 69
+--
+-- ⚠ EL CONTROL DE ESTE CAMBIO ES LA PRIMERA FILA: la nena tiene que salir
+-- IDENTICA a lo que ya estaba ( 20x20x45 ), porque es el unico de los tres con
+-- una pasada en juego cerrada. Sale identica, y no por casualidad -- el factor y
+-- el redondeo son los mismos que produjeron el 45 y el 10 a mano.
+--
+-- ⚠ Y EL ANCHO SIGUE SIN SALIR DE LA MALLA, que es lo que la hipotesis facil
+-- diria. El bbox en X de la nena es 30,4 u contra un hull de 20: los X de los
+-- tres ( 30,4 / 51,9 / 42,5 ) estan DOMINADOS POR LOS BRAZOS de la pose de
+-- reposo, no por el ancho del cuerpo. El ancho sale del jugador, escalado. Lo
+-- que si se puede mirar es que la relacion no se descoloque entre modelos:
+-- bbox_X / ancho_del_hull da 1,52 · 1,62 · 1,42, o sea que a los tres les
+-- sobresalen los brazos en la misma medida que a la nena cerrada.
+--
 -- LO QUE LA BASE DERIVA SOLA de esto, y por eso no hay que tocarlo:
 --   ViewOffset ......... round( 45 - (45/72)*8 )   = 40  -> adentro de la cabeza
 --   CrouchCollisionBounds maxs.z = 45 * 0,6        = 27
@@ -414,14 +463,43 @@ end, "phantasmagoria_modelo_del_bot" )
 -- el fantasma camina con el hull de 72 de la base, que es el comportamiento de
 -- hoy y el control negativo de la fila del hull.
 local cvHull = CreateConVar( "phantasmagoria_ghost_hull", "1", FCVAR_ARCHIVE,
-    "El fantasma usa un hull proporcional a SU cuerpo ( 20x20x45 ) en vez del de la base " ..
+    "El fantasma usa un hull proporcional a SU PROPIO cuerpo ( 20x20x45 la nena, 32x32x72 el " ..
+    "Male, 30x30x69 la OldCrone ) en vez del de la base " ..
     "( 32x32x72, clavado en terminator_nextbot_base/init.lua:39 ). " ..
-    "En 0 usa el de la base: los ojos le quedan 19 u sobre la cabeza. Sirve de control negativo. " ..
+    "En 0 usa el de la base: a la nena los ojos le quedan 19 u sobre la cabeza. Sirve de " ..
+    "control negativo. " ..
     "Se lee AL SPAWNEAR, asi que cambiarla no afecta a los fantasmas ya vivos.", 0, 1 )
 
--- 44,94 del .vvd, redondeado. El ancho es 16 * ( 45 / 72 ).
-local HULL_ALTO  = 45
-local HULL_ANCHO = 10
+-- El hull de la base, que es de donde se escala. Clavado en
+-- terminator_nextbot_base/init.lua:39 y medido, no supuesto.
+local BASE_ALTO, BASE_ANCHO = 72, 16
+
+--- El hull de un modelo portado: ( alto, ancho ), o nil si no le toca uno.
+--
+-- ⚠ EL ALTO SE LE PREGUNTA AL REGISTRO Y NO A UN `local` DE ESTE ARCHIVO. El
+-- campo `altura` de `lua/phantasmagoria/ghost_models.lua` tiene los tres numeros
+-- medidos del `.vvd` desde el 2026-08-10 --44,94 · 72,29 · 68,98, remedidos hoy
+-- sobre los archivos MONTADOS y reproducen-- o sea que el dato que faltaba aca
+-- ya existia en el addon. La copia local era una SEGUNDA casa para un numero que
+-- decide geometria, y una segunda casa es como se desincronizan.
+--
+-- Se consulta EN EL SPAWN y no al cargar este archivo: el registro lo monta un
+-- autorun compartido y no hay nada escrito que garantice que corrio antes que
+-- esta entidad. En el spawn ya corrio todo.
+--
+-- nil se devuelve en tres casos y ninguno inventa un numero: modelo ajeno,
+-- registro ausente, ficha sin `altura`. Sin hull nuestro el fantasma camina con
+-- el 32x32x72 de la base -- que para un adulto de 69-72 u esta MUCHO mas cerca
+-- que la caja de 45 de la nena, o sea que la degradacion va al lado seguro.
+local function hullDelModelo( mdl )
+    local ficha = PHANTASMAGORIA and isfunction( PHANTASMAGORIA.EsGhostModel )
+        and PHANTASMAGORIA.EsGhostModel( mdl ) or nil
+
+    if not ficha or not isnumber( ficha.altura ) then return nil end
+
+    return math.Round( ficha.altura ), math.Round( BASE_ANCHO * ( ficha.altura / BASE_ALTO ) )
+
+end
 
 ---------------------------------------------------------------------------
 -- ⚠ CUANDO SE MIDE EL HULL, Y ES LA FILA 03 QUE SALIO ROJA EN LA RONDA 16
@@ -487,9 +565,16 @@ function ENT:SetupCollisionBounds( myTbl )
     -- devuelve el hull del .phy, que en este modelo llega a 46,65 porque es el
     -- del ragdoll. Los dos contestan con un numero creible a una pregunta que no
     -- es la que se hizo, y ese error ya se pago tres veces en este taller.
-    -- 44,94 sale del .vvd ( vvdbounds.py sobre ghost_girl.vvd ), que es la unica
-    -- fuente que contiene la malla y nada mas.
-    local MALLA_ALTO = 44.94
+    -- Sale del .vvd ( vvdbounds.py ), que es la unica fuente que contiene la
+    -- malla y nada mas, y se lee del registro POR MODELO.
+    --
+    -- ⚠ ERA UN `local MALLA_ALTO = 44.94` --el de la nena-- impreso para
+    -- cualquier fantasma: el 2026-08-17 la linea del spawn de una OldCrone de
+    -- 68,98 u afirmo "malla 44.94 de alto". *Una constante que vale para un
+    -- modelo no puede vivir donde se lee para todos.*
+    local ficha = PHANTASMAGORIA and isfunction( PHANTASMAGORIA.EsGhostModel )
+        and PHANTASMAGORIA.EsGhostModel( self:GetModel() ) or nil
+    local MALLA_ALTO = ficha and isnumber( ficha.altura ) and ficha.altura or nil
 
     -- GetViewOffset puede no existir sobre un NextBot. Se prueba en vez de
     -- suponerlo, y si no esta se DICE -- un cero por metodo faltante se leeria
@@ -497,14 +582,33 @@ function ENT:SetupCollisionBounds( myTbl )
     local okOff, off = pcall( self.GetViewOffset, self )
     local ojos = okOff and isvector( off ) and off.z or nil
 
+    -- ⚠ Sin `malla` no hay con que comparar los ojos, y hay que DECIRLO en vez
+    -- de callar la columna: un modelo ajeno con los ojos sobre la cabeza y un
+    -- modelo cuya malla nadie midio se ven igual en una linea que omite el aviso.
+    local textoMalla = MALLA_ALTO and ( "  malla " .. MALLA_ALTO .. " de alto" )
+        or "  malla: SIN MEDIR para este modelo ( no esta en ghost_models.lua o su ficha no trae `altura` )"
+
+    local textoOjos
+    if not ojos then
+        textoOjos = "  ojos: GetViewOffset no se pudo leer en esta entidad"
+
+    elseif not MALLA_ALTO then
+        textoOjos = "  ojos z " .. math.Round( ojos, 1 ) ..
+            "  ( sin malla medida no se puede decir si estan sobre la cabeza )"
+
+    else
+        textoOjos = "  ojos z " .. math.Round( ojos, 1 ) ..
+            ( ojos > MALLA_ALTO and "  <- LOS OJOS ESTAN SOBRE LA CABEZA" or "" )
+
+    end
+
     ghostPrint( "spawn #", self:EntIndex(),
+        "  ", tostring( self:GetModel() ),
         "  hull ", math.Round( maxs.x - mins.x ), "x", math.Round( maxs.y - mins.y ),
         "x", math.Round( maxs.z - mins.z ),
         "  ( la base sola da 32x32x72 )",
-        "  malla ", MALLA_ALTO, " de alto",
-        ojos and ( "  ojos z " .. math.Round( ojos, 1 ) ..
-            ( ojos > MALLA_ALTO and "  <- LOS OJOS ESTAN SOBRE LA CABEZA" or "" ) )
-            or "  ojos: GetViewOffset no se pudo leer en esta entidad",
+        textoMalla,
+        textoOjos,
         "  [ medido DENTRO de SetupCollisionBounds, no en un timer ]",
         "\n" )
 
@@ -1031,10 +1135,32 @@ function ENT:AdditionalInitialize()
     -- Se escribe en la ENTIDAD y no en la clase a proposito: ENT.CollisionBounds
     -- es una tabla COMPARTIDA que viene de la base, y mutarla se lo llevaria
     -- puesto a todo terminator del mapa, incluidos los que no son nuestros.
-    if esNuestroModelo and cvHull:GetBool() then
+    --
+    -- ⚠ EL HULL ES DEL MODELO Y NO DE LA CLASE. `esNuestroModelo` alcanzaba para
+    -- decidir SI hay hull nuestro, pero el alto y el ancho eran dos `local` con
+    -- los numeros de la nena, asi que los tres modelos salian con su caja. Ahora
+    -- salen de la entrada del modelo que esta entidad tiene puesto.
+    -- Se le pregunta al modelo que la ENTIDAD tiene puesto, no al que la
+    -- resolucion eligio: `chosen` es un local de archivo compartido por todos
+    -- los fantasmas y con la convar caliente puede estar apuntando a otro.
+    local alto, ancho = hullDelModelo( self:GetModel() )
+
+    -- ⚠ DOS FUENTES QUE TIENEN QUE COINCIDIR, Y SI NO COINCIDEN ESO ES EL
+    -- HALLAZGO. `MODEL_CANDIDATES` dice que este modelo es del taller y el
+    -- registro dice que no lo conoce: una de las dos esta desactualizada, y sin
+    -- este aviso el sintoma seria un fantasma con el hull de la base y nada en
+    -- la consola -- o sea el defecto de hoy, silencioso otra vez.
+    if not alto and esNuestroModelo then
+        ghostPrint( "el modelo ", tostring( self:GetModel() ), " esta en MODEL_CANDIDATES ",
+            "como NUESTRO pero lua/phantasmagoria/ghost_models.lua no lo tiene ( o su ficha ",
+            "no trae `altura` ). Sale con el hull 32x32x72 de la base.\n" )
+
+    end
+
+    if alto and cvHull:GetBool() then
         self.CollisionBounds = {
-            Vector( -HULL_ANCHO, -HULL_ANCHO, 0 ),
-            Vector(  HULL_ANCHO,  HULL_ANCHO, HULL_ALTO ),
+            Vector( -ancho, -ancho, 0 ),
+            Vector(  ancho,  ancho, alto ),
         }
 
     end
