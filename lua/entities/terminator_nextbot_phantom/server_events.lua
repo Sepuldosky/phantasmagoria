@@ -194,6 +194,35 @@ local cvReserva = CreateConVar( "phantasmagoria_ghost_evreserva", "1", FCVAR_ARC
     "0 = CONTROL, todo al sorteo ( el comportamiento de la r2 ) · 1 = reserva puesta.", 0, 1 )
 
 ---------------------------------------------------------------------------
+-- LOS PROPS HORNEADOS DEL MAPA
+---------------------------------------------------------------------------
+-- La perilla existe para poder correr el A/B: con ella en 0 el evento se
+-- comporta EXACTAMENTE como antes de este bloque, asi que la fila que dice "la
+-- radio horneada suena" tiene contra que compararse. Sin control, "sono una
+-- radio" no distingue el mecanismo nuevo de un ambiente que ya sonaba.
+local cvHorneados = CreateConVar( "phantasmagoria_ghost_evhorneados", "1", FCVAR_ARCHIVE,
+    "Deja que el evento `prop` use tambien los props HORNEADOS del mapa ( prop_static, leidos del " ..
+    ".bsp ) cuando ninguna entidad real cubre la familia. Las entidades reales SIEMPRE tienen " ..
+    "prioridad. 0 = CONTROL, solo entidades ( el comportamiento previo ) · 1 = tambien horneados.", 0, 1 )
+
+-- Cuanto vive un emisor de un prop horneado cuando la familia NO declara corte.
+-- Es una tanda fija y generosa a proposito: `SoundDuration` no es confiable
+-- sobre `.ogg` del lado del servidor, y el clip mas largo de las familias
+-- cortas esta bien por debajo de esto.
+local EMISOR_VIDA = 20
+
+-- ⚠ LOS CONTADORES SON DEL INSTRUMENTO Y SON TRES, NO UNO.
+--   `vivos`      la fila de la FUGA: tiene que subir durante el clip y VOLVER a
+--                cero. Una sola lectura no distingue "no hay fuga" de "todavia
+--                no se creo ninguno", por eso tambien esta `creados`.
+--   `creados`    el acumulado de la sesion. Es el que vuelve legible al `vivos`:
+--                un `vivos = 0` con `creados = 0` no acredita nada.
+--   `salteados`  cuantas veces el barrido se encontro un emisor y lo salteo. Va
+--                con NUMERO y no con silencio -- "no aparecio el emisor entre
+--                los sujetos" se cumple igual si el barrido no corrio nunca.
+local EMISORES = { vivos = 0, creados = 0, salteados = 0 }
+
+---------------------------------------------------------------------------
 -- LAS OCHO CATEGORIAS
 ---------------------------------------------------------------------------
 -- ⚠ ESTA LISTA ES LA CANONICA. ghost_flags.lua tiene una copia en
@@ -526,33 +555,34 @@ SND.prop = {
 -- contenido montado de HL2, CS:S y L4D2 no esta ahi**, asi que "cero pianos" en
 -- el censo NO significa que no haya pianos en juego: significa que el censo no
 -- los puede ver. La lista blanca por nombre exacto existe justamente para eso.
+-- ⚠ LAS DOS DELEGAN EN `phantasmagoria/bsp_statics.lua`, Y NO ES UN REFACTOR DE
+-- ADORNO.
+--
+-- Estas funciones reciben una ENTIDAD -- `basenameDe` hace `ent:GetModel()`. Un
+-- prop HORNEADO ( `prop_static` ) no es una entidad: es una ruta de modelo
+-- leida del `.bsp`, asi que no tiene con que entrar por aca. La salida facil
+-- era escribir un matcher paralelo para los estaticos, y entonces el dia que
+-- alguien agregue una palabra a un `nunca` va a arreglar la mitad de los casos
+-- y la otra mitad va a seguir sonando mal, sin error y sin rastro.
+--
+-- *Una regla que decide identidad tiene que existir una vez.* Es la misma
+-- leccion que `PARENT_HOPS` en el bloque de las puertas, y ese defecto ya se
+-- cobro una huella. Asi que la regla se parte en dos: la parte que SACA el
+-- modelo -- que si es distinta entre una entidad y una ruta -- y la parte que
+-- NORMALIZA y DECIDE, que vive una sola vez en el modulo y la usan las dos.
+--
+-- El cuerpo que estaba aca se movio tal cual, sin cambiarle una linea ni el
+-- orden ( `nunca` primero y gana, despues `exacto`, despues `parte` ): mover
+-- una regla y corregirla en el mismo paso deja sin saber cual de las dos cosas
+-- explica un cambio de comportamiento.
 local function basenameDe( ent )
     local m = ent.GetModel and ent:GetModel()
-    if not isstring( m ) or m == "" then return nil end
-
-    -- El punto va ESCAPADO. ARC9 lo escribe sin escapar ( cl_drawmodel.lua:16 ) y
-    -- ahi el `.` matchea cualquier caracter: `foo_mdl` pasaria igual.
-    return string.lower( string.match( m, "([^/\\]+)%.mdl$" ) or m )
+    return PHANTASMAGORIA.BasenameDeRuta( m )
 
 end
 
 local function modeloCoincide( ent, regla )
-    local nom = basenameDe( ent )
-    if not nom then return false end
-
-    for _, mal in ipairs( regla.nunca or {} ) do
-        if string.find( nom, mal, 1, true ) then return false end
-
-    end
-
-    if regla.exacto and regla.exacto[ nom ] then return true end
-
-    for _, parte in ipairs( regla.parte or {} ) do
-        if string.find( nom, parte, 1, true ) then return true end
-
-    end
-
-    return false
+    return PHANTASMAGORIA.NombreCoincide( basenameDe( ent ), regla )
 
 end
 
@@ -687,7 +717,14 @@ local PROP_CONSUJETO = {
             parte = { "radio" },
             -- Las dos raices de los cinco falsos positivos medidos, mas el
             -- modelo roto que senalo el autor y los sufijos de pedazos.
-            nunca = { "radioprotector", "radio_diolator", "radio_p1",
+            -- ⚠ `radio_antenna` lo destapo el censo de props HORNEADOS
+            -- ( 2026-08-16 ): `props_radiostation/radio_antenna01_skybox` entraba
+            -- a esta familia por el substring "radio" y es una ANTENA del skybox
+            -- 3D. Vive a 9210 en Y de una casa que ocupa de -1100 a 100, asi que
+            -- una consulta por radio probablemente no lo alcanzaria nunca --
+            -- **pero eso lo salva la distancia, no la regla**, y una regla que
+            -- solo funciona porque el objeto estaba lejos no es una regla.
+            nunca = { "radioprotector", "radio_diolator", "radio_p1", "radio_antenna",
                       "_p1", "_p2", "_p3", "_p4", "_gib", "broken", "destroyed" },
         },
     },
@@ -711,7 +748,12 @@ local PROP_CONSUJETO = {
             -- `myphone` es un ARMA de MWIII, medida en el taller. `headphone` y
             -- `microphone` no aparecieron en el censo pero son la misma familia
             -- de falsos positivos y cuestan una comparacion.
-            nunca  = { "myphone", "headphone", "microphone", "_p1", "_gib", "broken" },
+            -- ⚠ `phone_book` es una GUIA telefonica, no un telefono. Entraba por
+            -- el substring "phone" igual que los otros tres de esta lista, y lo
+            -- destapo el censo de props horneados ( 2026-08-16 ): el autor lo
+            -- confirmo mirandolo, *"no es un telefono, es un libro"*.
+            nunca  = { "myphone", "headphone", "microphone", "phone_book",
+                       "_p1", "_gib", "broken" },
         },
     },
 
@@ -774,7 +816,18 @@ local PROP_CONSUJETO = {
     {
         que     = "un inodoro",
         sonidos = { "phantasmagoria/prop/toilet_flush.ogg" },
-        modelo  = { parte = { "toilet" } },
+        -- ⚠⚠ ESTA FAMILIA NO TENIA `nunca` NINGUNO, y era la peor de las cuatro.
+        -- El censo de props horneados ( 2026-08-16 ) midio que **6 de las 9
+        -- instancias de "inodoro" del mapa eran PAPEL HIGIENICO** --
+        -- `toiletpaperroll` x4 y `toiletpaperdispenser_residential` x2 -- o sea
+        -- que dos de cada tres veces que el fantasma tiraba la cadena, la tiraba
+        -- un rollo. El autor lo marco dos veces: *"NO ES TOILET"*.
+        --
+        -- Un solo veto cubre los dos modelos porque los dos empiezan igual, y se
+        -- prefiere `toiletpaper` a dos entradas sueltas: cualquier variante del
+        -- pack ( `toiletpaperroll_2`, otro dispenser ) queda cubierta sin volver
+        -- a tocar la lista.
+        modelo  = { parte = { "toilet" }, nunca = { "toiletpaper", "_gib", "broken" } },
     },
 
     {
@@ -2573,6 +2626,24 @@ EV.prop = function( ghost, radio )
         if not IsValid( ent ) then continue end
         if ent == ghost then continue end
 
+        -- ⚠⚠ EL BARRIDO NO SE PUEDE ENCONTRAR A SI MISMO. Los emisores de los
+        -- props horneados son entidades de verdad, asi que aparecen en el
+        -- proximo `ents.FindInSphere`. Sin este salteo, el mecanismo crearia una
+        -- entidad que su propio buscador encuentra y el fantasma le haria sonar
+        -- la radio a un emisor de radio.
+        --
+        -- *Un instrumento que cuenta al observador entre los sujetos no mide el
+        -- fenomeno: mide la medicion.* Es la misma forma del defecto que la r3
+        -- cerro en el sondeo de puertas.
+        --
+        -- El salteo LLEVA NUMERO y no silencio: "no aparecio el emisor entre los
+        -- sujetos" se cumple igual si el barrido no corrio.
+        if ent.PhantasmagoriaEmisor then
+            EMISORES.salteados = EMISORES.salteados + 1
+            continue
+
+        end
+
         for i, fam in ipairs( PROP_CONSUJETO ) do
             if hallado[ i ] then continue end
 
@@ -2591,6 +2662,46 @@ EV.prop = function( ghost, radio )
 
         if cuantas >= #PROP_CONSUJETO then break end
 
+    end
+
+    ---------------------------------------------------------------------------
+    -- LOS PROPS HORNEADOS -- el relleno de un mapa que no tiene props sueltos
+    ---------------------------------------------------------------------------
+    -- ⚠ LAS ENTIDADES CON PRIORIDAD SON LAS REALES, y por eso esta pasada corre
+    -- DESPUES y solo sobre las familias que quedaron SIN sujeto. Si hay una
+    -- radio `prop_physics` a 3 m y una horneada a 8 m, gana la de verdad: se
+    -- puede empujar, romper y mirar. Lo horneado es el relleno.
+    --
+    -- ⚠⚠ Y NO SE CREA NINGUN EMISOR ACA. Se guarda un DESCRIPTOR ( modelo +
+    -- posicion ) y el emisor se crea solo para la familia que GANA el sorteo.
+    -- Crearlos en el barrido seria fabricar cuatro entidades por evento para
+    -- usar una: las otras tres serian fuga, y encima aparecerian en el proximo
+    -- barrido -- o sea que el mecanismo se ensuciaria a si mismo justo por
+    -- adelantarse.
+    local horneado = {}
+
+    if cvHorneados:GetBool() and cuantas < #PROP_CONSUJETO then
+        local cerca = PHANTASMAGORIA.EstaticosEnEsfera( ghost:GetPos(), radio )
+
+        for _, est in ipairs( cerca ) do
+            local nom = PHANTASMAGORIA.BasenameDeRuta( est.modelo )
+
+            for i, fam in ipairs( PROP_CONSUJETO ) do
+                -- `fam.sujeto` no aplica: es el vehiculo, y se reconoce por
+                -- IsVehicle(). Un prop horneado nunca es un vehiculo.
+                if not hallado[ i ] and fam.modelo and PHANTASMAGORIA.NombreCoincide( nom, fam.modelo ) then
+                    -- El MAS CERCANO gana, que es lo que hace el barrido de
+                    -- entidades por accidente ( se queda con el primero que
+                    -- encuentra ) y aca se hace a proposito.
+                    local d = est.pos:DistToSqr( ghost:GetPos() )
+
+                    if not horneado[ i ] or d < horneado[ i ].d then
+                        horneado[ i ] = { modelo = est.modelo, pos = est.pos, d = d }
+
+                    end
+                end
+            end
+        end
     end
 
     ---------------------------------------------------------------------------
@@ -2616,6 +2727,12 @@ EV.prop = function( ghost, radio )
         if IsValid( hallado[ i ] ) then
             opciones[ #opciones + 1 ] = { fam = fam, ent = hallado[ i ] }
 
+        elseif horneado[ i ] then
+            -- Un horneado pesa lo mismo que una entidad real: la prioridad ya
+            -- se ejercio arriba ( solo entran las familias que quedaron sin
+            -- sujeto ), asi que darle menos peso aca lo penalizaria DOS veces.
+            opciones[ #opciones + 1 ] = { fam = fam, est = horneado[ i ] }
+
         end
     end
 
@@ -2634,6 +2751,45 @@ EV.prop = function( ghost, radio )
 
         if not snd then
             return false, "la familia '" .. fam.que .. "' no tiene sonidos"
+
+        end
+
+        -- EL EMISOR DE UN PROP HORNEADO, creado recien ahora que se sabe cual
+        -- familia gano.
+        --
+        -- MEDIDO EN JUEGO ( P2, 2026-08-16 ): un `info_target` sin modelo SE OYE
+        -- y SUENA DESDE SU POSICION. La prueba fue mas fuerte que el criterio:
+        -- con el emisor puesto en la radio, el autor localizo el tic-tac y se lo
+        -- atribuyo al reloj horneado que hay a 29 u -- o sea que el jugador
+        -- ubica el sonido por direccion Y por plausibilidad del objeto. Por eso
+        -- el emisor va en la posicion DEL PROP QUE MATCHEO y no en la del
+        -- fantasma: es lo unico que hace que la atribucion caiga en el objeto
+        -- correcto.
+        --
+        -- Y por eso alcanza la opcion barata: no hace falta un `prop_dynamic`
+        -- con el modelo del prop -- que ademas matchearia su propia familia en
+        -- el proximo barrido ( ver el salteo de arriba ).
+        local emisor
+
+        if elegida.est then
+            emisor = ents.Create( "info_target" )
+
+            if not IsValid( emisor ) then
+                return false, "no se pudo crear el emisor para el prop horneado '" ..
+                    tostring( elegida.est.modelo ) .. "'"
+
+            end
+
+            emisor:SetPos( elegida.est.pos )
+            emisor:Spawn()
+
+            -- ⚠ LA MARCA VA ANTES DE QUE NADIE PUEDA BARRER. Es lo que lo saca
+            -- del proximo `ents.FindInSphere`.
+            emisor.PhantasmagoriaEmisor = true
+            ent = emisor
+
+            EMISORES.creados = EMISORES.creados + 1
+            EMISORES.vivos   = EMISORES.vivos + 1
 
         end
 
@@ -2658,9 +2814,45 @@ EV.prop = function( ghost, radio )
 
         end
 
+        -- ⚠ LIMPIAR EL EMISOR, Y NO ANTES DE TIEMPO. Si se lo borra mientras
+        -- suena, borrarlo ES el corte -- una entidad que se va se lleva su
+        -- canal. Si se lo deja, el mapa se llena: en la prueba a mano de P2
+        -- quedaron cuatro `info_target` vivos en cuatro comandos.
+        --
+        -- La vida se mide desde el corte cuando la familia lo tiene, y si no,
+        -- de una tanda fija generosa: `SoundDuration` no es confiable sobre
+        -- `.ogg` del lado del servidor, asi que no se le pregunta -- se le da
+        -- margen. Un emisor de mas durante diez segundos no molesta a nadie; uno
+        -- que no se va nunca, si.
+        if IsValid( emisor ) then
+            local vida = fam.largo and ( fam.largo[ 2 ] + 2 ) or EMISOR_VIDA
+
+            SafeRemoveEntityDelayed( emisor, vida )
+
+            timer.Simple( vida + 0.5, function()
+                EMISORES.vivos = math.max( 0, EMISORES.vivos - 1 )
+
+            end )
+        end
+
+        -- El sujeto se NOMBRA distinto segun de donde salio, y no es cosmetico:
+        -- sin esta palabra, la linea de un horneado y la de un `prop_physics` se
+        -- leen igual, y entonces la fila que dice "sono una radio" no distingue
+        -- el mecanismo nuevo del que ya andaba.
+        local quien
+
+        if elegida.est then
+            quien = "prop_static HORNEADO  modelo '" .. tostring( elegida.est.modelo ) ..
+                "'  ( emisor #" .. ent:EntIndex() .. " )"
+
+        else
+            quien = ent:GetClass() .. " #" .. ent:EntIndex() ..
+                ( basenameDe( ent ) and ( "  modelo '" .. basenameDe( ent ) .. "'" ) or "" )
+
+        end
+
         return true, ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) ..
-            " DESDE " .. fam.que .. " ( " .. ent:GetClass() .. " #" .. ent:EntIndex() ..
-            ( basenameDe( ent ) and ( "  modelo '" .. basenameDe( ent ) .. "'" ) or "" ) .. " ) a " ..
+            " DESDE " .. fam.que .. " ( " .. quien .. " ) a " ..
             math.Round( ghost:GetPos():Distance( ent:GetPos() ) ) .. " u" .. corte ..
             "  ( " .. ( #opciones - 1 ) .. " familia(s) con sujeto en el radio )"
 
@@ -3037,6 +3229,135 @@ local function adminOnly( ply )
     return false
 
 end
+
+---------------------------------------------------------------------------
+-- LOS PROPS HORNEADOS DEL MAPA -- el instrumento de la fila 02
+---------------------------------------------------------------------------
+-- ⚠ EL NOMBRE NO PUEDE COLISIONAR CON UNA CONVAR. Una convar y un concommand
+-- homonimos se registran los dos, la consola resuelve contra la convar primero
+-- y el comando queda MUDO -- le costo dos filas a la ronda 2, y peor: la
+-- planilla mandaba correr `<nombre> reset`, que en vez de resetear le asignaba
+-- "reset" a la convar, o sea 0, o sea APAGABA lo que iba a medir. Por eso el
+-- registro pasa por `AddCommand`, que vuelve la colision un error ruidoso.
+-- Verificado antes de elegirlo: `phantasmagoria_ghost_estaticos` no existe hoy
+-- ni como comando ni como convar.
+--
+-- ⚠⚠ Y LO QUE VUELVE AUDITABLE A ESTE COMANDO NO ESTA ACA: los numeros ya los
+-- midio `dev/censo_props_horneados.py`, que queda en el repo y se vuelve a
+-- correr con una linea. 418 modelos distintos en 1588 instancias. **Si el Lua
+-- da otro numero, es el Lua el que esta mal.** Sin ese numero previo, cualquier
+-- cosa que imprimiera esto se leeria como correcta -- que es como se perdio el
+-- censo viejo, cuyo desglose no reproduce y quedo citado como prosa.
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_estaticos", function( ply )
+    if not adminOnly( ply ) then return end
+
+    local say = PHANTASMAGORIA.MakeSay( ply )
+    local d = PHANTASMAGORIA.Estaticos()
+
+    say( "===== PROPS HORNEADOS ( prop_static, leidos del .bsp ) =====" )
+    say( "  mapa        " .. tostring( d.mapa ) .. "   ( " .. tostring( d.ruta ) .. " )" )
+
+    if not d.ok then
+        say( "  !! NO SE PUDO LEER: " .. tostring( d.error ) )
+        say( "  ⚠ esto NO es 'el mapa no tiene props horneados'. Es que no se pudo medir," )
+        say( "    y las dos cosas se leen igual si uno mira un cero. La fila 02 es ROJA." )
+        return
+
+    end
+
+    say( "  bsp         " .. d.bytes .. " bytes · VBSP " .. tostring( d.version ) ..
+        " · sprp v" .. tostring( d.sprp_version ) .. " · " .. d.paso .. " bytes por entrada" )
+    say( "  CONTROL     " .. d.sobrantes .. " byte(s) sobrantes ( tiene que ser 0 ) · " ..
+        "las " .. d.n_modelos .. " rutas del diccionario tienen forma de modelo" )
+    say( "" )
+    say( "  modelos distintos     " .. d.n_modelos .. "     ( el .py midio 418 )" )
+    say( "  instancias            " .. d.n_props .. "    ( el .py midio 1588 )" )
+
+    local coincide = ( d.n_modelos == 418 and d.n_props == 1588 )
+    say( "  -> " .. ( coincide and "COINCIDE con el censo de Python"
+        or "!! NO COINCIDE. En gm_funkis_night el numero correcto es 418/1588; " ..
+           "en otro mapa esta linea no aplica y hay que correr el .py sobre ese mapa." ) )
+
+    -- El reparto por familias. Usa `modeloCoincide` NO: eso recibe una entidad.
+    -- Usa la MISMA regla por debajo -- `NombreCoincide` -- que es todo el punto
+    -- de haber partido `basenameDe` en dos ( ver el aviso de trampa 1 arriba ).
+    local porModelo = PHANTASMAGORIA.EstaticosPorModelo()
+    say( "" )
+    say( "  LO QUE LAS FAMILIAS RECLAMARIAN SOBRE ESTOS " .. d.n_props .. ":" )
+
+    local totM, totI = 0, 0
+    for _, fam in ipairs( PROP_CONSUJETO ) do
+        if fam.modelo then
+            local nm, ni, muestra = 0, 0, {}
+            for ruta, cuantos in pairs( porModelo ) do
+                if PHANTASMAGORIA.NombreCoincide( PHANTASMAGORIA.BasenameDeRuta( ruta ), fam.modelo ) then
+                    nm, ni = nm + 1, ni + cuantos
+                    muestra[ #muestra + 1 ] = "x" .. cuantos .. " " .. ruta
+
+                end
+            end
+
+            if nm > 0 then
+                say( "    " .. fam.que .. ":  " .. nm .. " modelo(s) / " .. ni .. " instancia(s)" )
+                table.sort( muestra )
+                for _, linea in ipairs( muestra ) do say( "        " .. linea ) end
+
+                totM, totI = totM + nm, totI + ni
+
+            else
+                say( "    " .. fam.que .. ":  ninguno" )
+
+            end
+        end
+    end
+
+    say( "  TOTAL RECLAMADO  " .. totM .. " modelo(s) / " .. totI .. " instancia(s)" )
+    -- ⚠ ESTE BLOQUE SE ESCRIBIO EN PASADO EL 2026-08-16, Y EL MOTIVO IMPORTA.
+    -- Mientras los cuatro falsos positivos estuvieron vivos, aca los anunciaba
+    -- en presente. Se arreglaron el mismo dia y el texto quedo igual: la salida
+    -- decia "8 modelo(s) / 11 instancia(s)" arriba y "el censo identifico 4
+    -- modelos / 8 falsos" abajo, o sea que el propio instrumento se contradecia
+    -- y el renglon viejo acusaba un defecto que ya no existia.
+    --
+    -- *Un instrumento que describe un defecto que el mismo ya no tiene no es
+    -- documentacion vieja: es una medicion falsa, y la lee alguien que confia en
+    -- el numero de al lado.* Queda como historia, y sirve de control: si algun
+    -- dia el total vuelve a dar 12/19, es que un `nunca` se perdio.
+    say( "" )
+    say( "  HISTORIA -- este censo destapo 4 modelos / 8 instancias FALSOS ( 2026-08-16 )" )
+    say( "    y ya estan ARREGLADOS en las reglas. Eran defectos que corrian sobre los" )
+    say( "    prop_physics desde antes; este comando no los creo, los midio contra un" )
+    say( "    universo grande por primera vez:" )
+    say( "      radio_antenna01_skybox  -> ANTENA del skybox 3D  ( veto 'radio_antenna' )" )
+    say( "      phone_book              -> una GUIA telefonica   ( veto 'phone_book' )" )
+    say( "      toiletpaperroll x4 + toiletpaperdispenser x2 -> PAPEL ( veto 'toiletpaper' )" )
+    say( "        eran 6 de las 9 'inodoro' del mapa, o sea dos de cada tres cadenas." )
+    say( "    El total paso de 12/19 a 8/11. ⚠ Si alguna vez vuelve a dar 12/19, se" )
+    say( "    perdio un `nunca`: este renglon es el control de esa regresion." )
+
+    -- Las filas 06 ( la fuga ) y 07 ( el instrumento no se cuenta a si mismo ).
+    -- ⚠ Se imprime tambien el conteo REAL de emisores en el mapa, y no solo el
+    -- contador propio: si los dos numeros se separan, el que miente es el
+    -- contador -- y un contador que miente convierte a la fila de la fuga en un
+    -- verde que no mide nada.
+    local reales = 0
+    for _, e in ipairs( ents.FindByClass( "info_target" ) ) do
+        if e.PhantasmagoriaEmisor then reales = reales + 1 end
+
+    end
+
+    say( "" )
+    say( "  EMISORES ( las filas 06 y 07 )" )
+    say( "    vivos ahora      " .. EMISORES.vivos .. "   ( contados en el mapa: " .. reales ..
+        ( EMISORES.vivos == reales and " -- coinciden )" or " -- ⚠ NO COINCIDEN, el contador miente )" ) )
+    say( "    creados en total " .. EMISORES.creados ..
+        ( EMISORES.creados == 0 and "   ( todavia ninguno: un 'vivos 0' aca no acredita nada )" or "" ) )
+    say( "    salteados por el barrido " .. EMISORES.salteados ..
+        ( EMISORES.salteados == 0 and "   ( con un emisor vivo al lado esto tiene que subir )" or "" ) )
+    say( "    horneados en el sorteo   " .. ( cvHorneados:GetBool() and "1 ( encendido )"
+        or "0 ( APAGADO -- control: el evento se comporta como antes del bloque )" ) )
+
+end, "Censa los prop_static horneados del mapa y que reclamarian las familias de sonido." )
 
 PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args )
     if not adminOnly( ply ) then return end
@@ -3648,3 +3969,29 @@ if not isfunction( ENT.BehaveUpdate ) then
         "fantasma deja de esconderse fuera del hunt y no hay error que lo diga.\n" )
 
 end
+
+-- ( 6 ) LA REGLA DE IDENTIDAD DE MODELO VIVE EN OTRO ARCHIVO, Y ESTE NO CONTROLA
+-- CUANDO CARGA. `basenameDe` y `modeloCoincide` delegan en
+-- `phantasmagoria/bsp_statics.lua`, que lo incluye `lua/autorun/`. El orden
+-- entre `lua/autorun/` y `lua/entities/` lo decide el ENGINE, que es un tercero,
+-- y este taller ya pago tres defectos por asumir tres APIs suyas.
+--
+-- Que las funciones no esten AHORA no es fatal -- las delegadas se llaman en
+-- runtime, no al incluir -- pero que no esten NUNCA si lo es: la clasificacion
+-- de familias reventaria recien en el primer evento de props, o sea en juego y
+-- con el fantasma delante. Se avisa en el momento barato.
+--
+-- ⚠ El chequeo va DIFERIDO a `Initialize` a proposito. Hacerlo aca mismo diria
+-- "no existe" en el caso perfectamente sano de que los entities carguen
+-- primero, y una guarda que grita cuando todo esta bien se aprende a ignorar --
+-- que es como se pierde la vez que si importaba.
+hook.Add( "Initialize", "phantasmagoria_eventos_regla_de_modelo", function()
+    if isfunction( PHANTASMAGORIA.BasenameDeRuta ) and isfunction( PHANTASMAGORIA.NombreCoincide ) then return end
+
+    ErrorNoHalt( "[Phantasmagoria] la regla de identidad de modelo NO EXISTE: " ..
+        "`PHANTASMAGORIA.BasenameDeRuta` / `NombreCoincide` deberian venir de " ..
+        "phantasmagoria/bsp_statics.lua, que carga desde lua/autorun/phantasmagoria_data.lua. " ..
+        "Sin ellas, el evento de props no puede clasificar NINGUNA familia y revienta en el " ..
+        "primer sorteo. Mirar si el archivo esta en la lista DATOS.\n" )
+
+end )

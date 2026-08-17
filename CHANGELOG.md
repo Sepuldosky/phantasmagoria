@@ -7,6 +7,99 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-17 (39) — **Los props HORNEADOS del mapa suenan. Un emisor invisible y sin modelo, y el jugador le atribuye el sonido al prop que hay al lado.**
+
+La pregunta del autor era *«algunos modelos están baked en el mapa, me pregunto si serán posibles de
+tomar?»*. Como entidades **no**: `ents.FindByClass( "prop_static" )` devuelve vacío y tiene cero call
+sites en los 70 addons del taller. Se leen del `.bsp`, y ahora se leen.
+
+### ⭐⭐ Las dos precondiciones del engine, medidas en juego antes de escribir una línea
+
+**P1 — el `.bsp` se abre y se lee estando el mapa adentro de un `.gma`.** StormFox2 hace el mismo
+`file.Open` pero sobre mapas sueltos; que el sistema de archivos virtual lo exponga por `maps/` cuando
+viaja adentro de `gmpublisher.gma` era otra afirmación. Verde, y con **cuatro** mitades porque *abrir
+no es leer*: `size=340212229 · magic=VBSP · vbsp=20 · lectura profunda 4/4 bytes`. La cuarta es la que
+no se podía saltear — un handle que abre y no deja leer hondo hubiera sido un falso verde, y el parser
+vive de `Seek`.
+
+**P2 — el emisor.** Un `prop_static` no tiene entidad, y todo el evento emite con `ent:EmitSound` y
+corta con `ent:StopSound`. `sound.Play` no sirve: no devuelve nada que se pueda apagar, y `clock_tick`
+dura **46,55 s**. Verde las tres — se oye · suena desde ahí · `StopSound` lo corta — **y la segunda
+pasó más fuerte que su criterio**: con un `info_target` invisible y sin modelo puesto en la radio, el
+autor localizó el tic-tac y se lo adjudicó **al reloj horneado que hay a 29 u**. *El jugador ubica el
+sonido por dirección y por plausibilidad del objeto*, así que alcanza la opción barata y el emisor
+tiene que ir en la posición del prop que matcheó.
+
+### ⚠⚠ La consola de Source corta en 255 caracteres, y el síntoma es un error de sintaxis de Lua
+
+La primera versión de la línea de P1 medía **559**. Entraron 255, se perdieron 304, y lo que llegó fue
+`'<name>' expected near '<eof>'` — o sea un rojo que parece del código y es **del transporte**. Y el
+control no podía verlo: **compilar la línea no mide su largo**, y un prefijo truncado compila entero
+antes de truncarse. De los cinco comandos generados, tres pasaban de 255 y el chequeo les dio verde.
+Ahora el generador de la planilla mide el largo, y su guarda se probó con una inyección real.
+
+### ⚠ El auto-control que se copió del `.py` no atrapa un corrimiento de un byte
+
+«Un `PropType` fuera del diccionario» suena más fuerte de lo que es: medido sobre este mapa, leer el
+índice corrido **un** byte da 256, que cae **adentro** del rango 0..417 y pasa sin decir nada. Atrapa
+la desalineación grosera y deja pasar la sutil, que es la que produce números creíbles. Entran dos que
+sí discriminan: la **forma de las rutas del diccionario** (medido: 418/418 válidas, y con un byte de
+corrimiento **0 de 418**) y **sobrantes ≠ 0**. Los dos abortan en vez de reportar.
+
+El lector se validó **antes** de correrlo en juego portando su aritmética exacta a Python contra el
+`.bsp` real: 418/1588/72/sobrantes 0, las cinco coordenadas del censo clavadas, y el decoder de float
+a mano **bit-exacto** contra `struct.unpack` sobre 1200 valores. En juego dio lo mismo.
+
+### ⭐ Los cuatro falsos positivos, destapados y arreglados: de 12/19 a 8/11
+
+No los creó este bloque — **corrían desde antes sobre los `prop_physics`** y lo único nuevo es que por
+fin se midieron contra un universo grande. `radio_antenna01_skybox` entraba a *radio* por el substring
+(es una antena del skybox 3D); `phone_book` a *teléfono* (es una guía); y la familia *inodoro* era
+`parte = { "toilet" }` **sin ningún `nunca`**, así que **6 de las 9 «inodoro» del mapa eran papel
+higiénico** — dos de cada tres cadenas las tiraba un rollo. Con los tres vetos: **8 modelos / 11
+instancias**, sin perder ni uno bueno.
+
+*Y a la antena la salvaba la distancia, no la regla* (9210 en Y contra una casa que ocupa de −1100 a
+100): **una regla que sólo funciona porque el objeto estaba lejos no es una regla.**
+
+### Las tres trampas que el bloque tenía escritas desde antes de empezar
+
+- **Una regla que decide identidad tiene que existir una vez.** `modeloCoincide` recibe una *entidad*
+  y un horneado es una *ruta*. La salida fácil era un matcher paralelo, y entonces el día que alguien
+  toque un `nunca` arregla la mitad de los casos. Se partió en la parte que **saca** el modelo (sí es
+  distinta) y la que **normaliza y decide** (una sola, en el módulo). El cuerpo se movió sin cambiarle
+  una línea ni el orden: mover una regla y corregirla en el mismo paso deja sin saber cuál de las dos
+  explica un cambio de comportamiento.
+- **El barrido no se cuenta a sí mismo.** El emisor es una entidad de verdad y aparece en el próximo
+  `ents.FindInSphere`; sin el salteo, el fantasma le haría sonar la radio a un emisor de radio. *Un
+  instrumento que cuenta al observador entre los sujetos mide la medición.* El salteo lleva **número**
+  y no silencio — «no apareció» se cumple igual si el barrido no corrió. Medido: **2**.
+- **El emisor se crea recién cuando la familia gana el sorteo.** Crearlo en el barrido sería fabricar
+  cuatro entidades por evento para usar una: las otras tres serían fuga *y* ensuciarían el barrido
+  siguiente.
+
+### Lo medido en juego
+
+`phantasmagoria_ghost_estaticos`: **418 modelos / 1588 instancias**, coincide con el `.py`; control de
+sobrantes 0 y las 418 rutas con forma de modelo; **8/11** reclamadas. Emisores: **creados 7, vivos 0,
+y el conteo real en el mapa también 0** — subieron y volvieron. Salteados **2**.
+
+### Fronteras abiertas, dichas para que ninguna fila se las acredite
+
+- **El corte de la radio decapita el clip, y está medido.** Con planitud espectral (control: ruido
+  blanco 0,557 · tono puro 0,000), **tres de los cuatro** clips en juego terminan en ruido de banda
+  ancha — la estática y el apagado. El corte de la r3 cae entre los 6 y los 14 s, que en los cuatro es
+  el **medio tonal**: `StopSound` siempre se come el final, y la promesa era *«arranca y para sola»*.
+  El autor lo pidió explícito: **que suenen completos**. Va junto con el `+USE` de abajo y **no antes**
+  — sacar el corte sin el interruptor reintroduce el solapamiento que la r3 cerró.
+- **Apagar la radio o el teléfono con `+USE`**, sólo esos dos por ahora. Pedido del autor, sin escribir.
+- **El ruido de llaves cuando no hay sujeto.** El autor: si el evento es circunstancial, unas llaves sin
+  llaves sobran. Idea suya para reubicarlas: que el bot cierre puertas con pestillo.
+- Las filas 03, 04 y 05 de la planilla (que la radio horneada suene, el control negativo con el
+  mecanismo puesto, y el A/B real-contra-horneado) **no se corrieron todavía**.
+
+---
+
 ## 2026-08-10 (38) — **Las puertas parenteadas ABREN en juego. Y la advertencia que el propio arreglo se escribió cobró el mismo día: un `==` entre entidades también es un uso del trace.**
 
 El autor lo corrió en juego: **«ya abre las puertas»**. El arreglo del padre —subir por `GetParent()`

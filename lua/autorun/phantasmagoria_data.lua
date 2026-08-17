@@ -105,6 +105,23 @@ local DATOS = {
     -- Ghost_Male o la OldCrone en pantalla decian «no hay ninguna entidad» o
     -- reprobaban un modelo sano.
     "phantasmagoria/ghost_models.lua",
+
+    -- Los props HORNEADOS del mapa ( `prop_static` ), leidos del `.bsp`. El
+    -- ORDEN ES INDISTINTO -- no lee ni escribe ninguna de las tablas de arriba
+    -- -- pero va aca igual porque la lista es el unico lugar donde se declara
+    -- que existe.
+    --
+    -- ⚠ NO PARSEA AL CARGAR. El `.bsp` de este mapa pesa 340 MB y se navega con
+    -- `Seek`; el parseo es perezoso y se dispara con la primera consulta, asi
+    -- que incluirlo en los dos realms cuesta las funciones y nada mas. La cache
+    -- es POR MAPA, para que un `changelevel` no deje viva la lista de la casa
+    -- anterior con coordenadas plausibles.
+    --
+    -- En los DOS realms porque tambien define la regla de identidad de un
+    -- modelo ( `BasenameDeRuta` / `NombreCoincide` ), que server_events.lua
+    -- delega para no tener dos matchers -- ver el aviso de trampa 1 en el
+    -- propio archivo.
+    "phantasmagoria/bsp_statics.lua",
 }
 
 if SERVER then
@@ -205,14 +222,41 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
         end
     end
 
+    -- ⚠ LA COLUMNA DE ghost_models.lua, QUE FALTABA DESDE QUE EL ARCHIVO ENTRO
+    -- A `DATOS`. La condicion de exito no lo nombraba, asi que el cargador
+    -- imprimia su verde con ese archivo caido entero -- que es exactamente lo
+    -- que el aviso de arriba prohibe ( "un archivo nuevo en la lista sin una
+    -- linea aca queda vigilado por nadie" ). Y el mensaje de error SI lo
+    -- nombraba, pero leyendo `ghosts`, `ghostsConHuesos` y `ghostFnOk`, que no
+    -- se definen en ninguna parte de este archivo: eran globals nil, o sea que
+    -- esa columna decia "NO EXISTE" pasara lo que pasara. *Una guarda que
+    -- siempre dice lo mismo no es una guarda, es un adorno.*
+    local ghosts = contar( PHANTASMAGORIA.GhostModels )
+    local ghostFnOk = isfunction( PHANTASMAGORIA.EsGhostModel )
+        and isfunction( PHANTASMAGORIA.ParesUtiles )
+
+    -- ⚠ LA COLUMNA DE bsp_statics.lua. Se comprueban las FUNCIONES y no una
+    -- tabla, por dos motivos: el modulo no deja ninguna tabla poblada al cargar
+    -- ( parsea reci en la primera consulta, porque el .bsp pesa 340 MB ), asi
+    -- que no hay nada que contar; y lo que los consumidores llaman son las
+    -- funciones. Una de cada familia -- la del parseo y la de la regla de
+    -- identidad -- porque un archivo cortado a la mitad definiria las primeras
+    -- y no las ultimas.
+    local bspOk = isfunction( PHANTASMAGORIA.Estaticos )
+        and isfunction( PHANTASMAGORIA.EstaticosEnEsfera )
+        and isfunction( PHANTASMAGORIA.BasenameDeRuta )
+        and isfunction( PHANTASMAGORIA.NombreCoincide )
+
     if tipos and tipos > 0 and props and props > 0 and acts and acts > 0 and pushOk
         and propios and propios > 0 and propiosVivos == propios
-        and conEventos == tipos then
+        and conEventos == tipos and bspOk
+        and ghosts and ghosts > 0 and ghostFnOk then
 
         MsgC( Color( 190, 120, 255 ), "[Phantasmagoria] ", color_white,
             "datos cargados en ", realm, ": ", tipos, " tipos ( ", conEventos,
             " con rasgos de evento ) · ", props, " modelos ( ",
-            propios, " propios ) · ", acts, " actividades vigiladas.\n" )
+            propios, " propios ) · ", acts, " actividades vigiladas · ",
+            ghosts, " modelos de fantasma · lector de props horneados OK.\n" )
 
         return
 
@@ -225,8 +269,9 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
         " · propios " .. ( propios and ( propiosVivos .. " de " .. propios .. " vivos en PropData" ) or "NO EXISTE" ) ..
         " · ActUniverse " .. ( acts and ( acts .. " actividades" ) or "NO EXISTE" ) ..
         " · PushActLog " .. ( pushOk and "OK" or "NO EXISTE" ) ..
-        " · GhostModels " .. ( ghosts and ( ghostsConHuesos .. " de " .. ghosts .. " con sus 5 largos" ) or "NO EXISTE" ) ..
+        " · GhostModels " .. ( ghosts and ( ghosts .. " modelos" ) or "NO EXISTE" ) ..
         " · EsGhostModel/ParesUtiles " .. ( ghostFnOk and "OK" or "NO EXISTE" ) ..
+        " · lector de props horneados " .. ( bspOk and "OK" or "NO EXISTE" ) ..
         ".  Los tipos los necesita la cordura ( threshold por tipo ), PropData corrige la masa " ..
         "de los props, y el actlog es el instrumento de la pose T." ..
         ( ( propios and propiosVivos < propios ) and
