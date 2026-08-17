@@ -14,28 +14,45 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-17): EL `+USE` APAGA LA RADIO, LA RADIO SUENA ENTERA Y LAS LLAVES SE MUDAN
-> A UN PESTILLO. Escrito y verificado offline, SIN PASADA EN JUEGO.** Detalle en el CHANGELOG **(41)**.
+> A UN PESTILLO. CERRADO EN JUEGO, 13 de 13, commit `ce9deca` y pusheado.** Detalle en el CHANGELOG
+> **(41)**, con los números de cada mecanismo. La planilla
+> `dev/checks/phantasmagoria-use-y-llaves.html` corrió entera **incluidas las cuatro filas que el
+> bloque de props horneados había dejado sin correr** — las tres perillas nuevas en `0` las hicieron
+> medibles hoy. El autor: *«en cuanto a comportamiento todo bien»*.
 >
-> **LO PRIMERO DEL CHAT SIGUIENTE: correr `dev/checks/phantasmagoria-use-y-llaves.html`, TRECE filas.**
-> Las cuatro primeras (**A1–A4**) son del bloque de props horneados y **quedaron sin correr**; van
-> primero, con las tres perillas nuevas en `0` — puestas ahí, el motor se comporta exactamente como
-> antes de este bloque. Si se encimaran, cualquier rojo de las nuevas tendría **dos sospechosos**.
->
-> Lo que cambió, en una línea cada uno: `phantasmagoria_ghost_evuse` (hook `KeyPress`/`IN_USE` en el
-> servidor, **sólo distancia y sin mirada**, porque el objeto es invisible) · la familia radio pierde
-> `largo` y gana `dur` medida por clip (`dev/duracion_ogg.py`, instrumento nuevo con auto-control) ·
+> Lo que quedó corriendo: `phantasmagoria_ghost_evuse` (hook `KeyPress`/`IN_USE` en el servidor, **sólo
+> distancia y sin mirada**, porque el objeto es invisible; 128 u) · la familia radio sin `largo` y con
+> `dur` medida por clip (`dev/duracion_ogg.py`, instrumento nuevo con auto-control) ·
 > `phantasmagoria_ghost_evllaves` (sin sujeto el evento `prop` no suena, **y la línea sigue saliendo**)
-> · `phantasmagoria_ghost_evpestillo` (`Fire( "Lock" )`, tope 2, vida 45 s, `phantasmagoria_ghost_pestillo soltar`).
+> · `phantasmagoria_ghost_evpestillo` (`Fire( "Lock" )`, tope 2, vida 45 s, y
+> `phantasmagoria_ghost_pestillo soltar` como salida de emergencia).
 >
-> ⚠ **El corte que se sacó decapitaba 6 de 6** (clips de 26,78 a 60,78 s contra un corte de 6–14), y
-> **sacarlo sin el interruptor habría sido un defecto y no un arreglo**: un clip de 60 s se solapa con
-> el evento siguiente, que es el motivo por el que `largo` existía.
-> ⚠ **Que `Fire( "Lock" )` funcione sobre las clases de este mapa NO está medido** — el engine es un
-> tercero y `AcceptInput` devuelve false en silencio. El código relee `m_bLocked` un tick después.
-> ⚠ **Frontera con nombre:** `ritual_chanting_loop` es un loop y la fila de «suena entera» no se corre
-> con él.
+> ⚠ **Tres filas dieron el veredicto correcto sin probarlo ellas solas** y está anotado en el
+> CHANGELOG en vez de acreditado: la A1 predecía `3 familias` desde el `.bsp` y salió `4` **porque el
+> fantasma spawneó a ~150 u del punto de la predicción** (una predicción atada a una posición no vale
+> para la habitación); la A3 trajo una de sus dos mitades y la otra la sostiene la A1; la 00 trajo dos
+> pulsaciones de seis, pero las dos de la mitad que decide.
+> ⚠ **Frontera con nombre:** `ritual_chanting_loop` es un loop y la fila de «suena entera» no se corrió
+> con él. Y el `+USE` es **sólo** para radio y teléfono, por decisión del autor.
 >
-> **DESPUÉS DE ESTO** sigue el pedido que el autor hizo hace tres rondas y que todavía no tiene línea
+> ### 🔜 LO SIGUIENTE, PEDIDO POR EL AUTOR AL CERRAR (tres cosas, ninguna escrita)
+>
+> 1. Que apretar `+USE` **emita un sonido de botón**, sobre el horneado y sobre el `prop_physics`, para
+>    que se note que apagaste el objeto. Candidatos suyos: `ui/button_toggle_1` y `_2`, *«ambos suenan
+>    como apretar un interruptor sutil»*. ⚠⚠ **LOS DOS SON ESTÉREO** — medido el 2026-08-17 con
+>    `dev/duracion_ogg.py`: 0,23 s y 0,35 s, **2 canales**. Source **no espacializa un estéreo**, así
+>    que van a sonar planos y en 2D. Pasan por `dev/mono_posicionales.py` **antes** de cablearse, o el
+>    bloque repite en silencio el defecto que la r3 pagó en quince archivos.
+> 2. Que al **destruir** un `prop_physics` que está sonando (la radio de cs_office, el teléfono) **el
+>    sonido pare**. Hoy el registro `SONANDO` poda por entidad inválida, pero **la poda sólo corre
+>    cuando alguien mira el registro**: falta el camino del borrado (`EntityRemoved`, o el `StopSound`
+>    en el momento).
+> 3. **Sacar `phone_vibrate.ogg` de la familia teléfono.** El autor: *«corresponde a un celular; `phone`
+>    como prop horneado o phys son generalmente teléfonos fijos, así que `phone_ring.ogg` está bien»*.
+>    ⚠ Es un cambio de **una línea en la lista y una en `dur`**, y la guarda de carga (3b) grita si se
+>    saca de una sola de las dos.
+>
+> **DESPUÉS DE ESO** sigue el pedido que el autor hizo hace tres rondas y que todavía no tiene línea
 > de investigación: **por qué el bot se queda pegado y después se despeja solo, y por qué a veces
 > quiere pasar a través de un vidrio** (ver el punto 2 de la lista de abajo, que sigue vigente).
 

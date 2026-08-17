@@ -9,9 +9,42 @@ que se **midió**, no lo que se planea.
 
 ## 2026-08-17 (41) — **`+USE` apaga la radio, la radio suena entera, y las llaves se mudan a una puerta con pestillo. El corte que se saca decapitaba 6 de 6, y sacarlo sin el interruptor habría sido un defecto y no un arreglo.**
 
-Tres pedidos del autor, textuales, que él llamó *«minúsculos»*. **Dos lo son.** Escrito y verificado
-offline; **sin pasada en juego** — la planilla es `dev/checks/phantasmagoria-use-y-llaves.html` y lleva
-**trece filas**, porque incluye las **cuatro del bloque anterior que quedaron sin correr**.
+Tres pedidos del autor, textuales, que él llamó *«minúsculos»*. **Dos lo son.**
+
+### ✅ CERRADO EN JUEGO EL MISMO DÍA — 13 de 13, sin una falla
+
+`dev/checks/phantasmagoria-use-y-llaves.html` corrió entera, incluidas las **cuatro filas del bloque
+anterior que habían quedado sin correr** (las perillas en `0` las hicieron medibles hoy). El autor:
+*«en cuanto a comportamiento todo bien»*. Los números que cierran cada mecanismo:
+
+    +USE          teclas 24 · apagados 2 · lejos 15 · tarde 5
+    emisores      vivos 4 = conteo real 4 durante los clips · vivos 0 = 0 en reposo · creados 38
+    salteados     83   ( el barrido no se cuenta a sí mismo )
+    censo         418 / 1588 y 8 modelos / 11 instancias, igual que el .py
+    llaves        con la convar en 0 suenan; en 1 sale `NO SALIO / sin sujeto -- ...` y NO se oye nada
+
+El `lejos 15` es el que hace valer al `apagados 2`: sin él, *«se apagó»* no distingue el mecanismo de
+un clip que se terminaba solo. Y el `vivos 4 = 4` con **cuatro relojes a la vez** es la prueba de que
+el registro cuenta también a los emisores **no apagables** — si sólo hubiera guardado los del `+USE`,
+la fila de la fuga habría dicho `0` con cuatro emisores vivos en el mapa.
+
+⚠ **TRES FILAS DIERON EL VEREDICTO CORRECTO SIN PROBARLO ELLAS SOLAS, y eso se anota en vez de
+cobrarse el verde entero.** Vale distinguir *el veredicto es correcto* de *la fila lo probó*:
+
+- **A1** predecía `( 3 familia(s) con sujeto )` desde el `.bsp` y salió **4**. Por el criterio literal
+  era rojo; no lo es: la predicción estaba atada a **(−512 −425 272)** y el fantasma spawneó a
+  **(−609 −291 224)**, a ~150 u, con lo que entra una cuarta familia al radio de 450 u. *Una
+  predicción calculada para una posición no es una predicción para la habitación* — el número que la
+  fila tenía que comparar debía salir del censo **en la posición real**, no de una constante escrita.
+- **A3** pedía dos mitades (gana el `prop_physics`, borrado gana el horneado) y la corrida trajo la
+  primera. La segunda la sostiene **A1**, donde la radio y el teléfono horneados salieron nombrados
+  sin ningún prop real cerca.
+- **00** pedía seis pulsaciones en dos escenas y trajo dos, las dos **`mirando worldspawn`** — que es
+  justo la mitad rara, la que decide. La otra la sostiene el `teclas 24` de la fila 02.
+
+⚠ Y una que no es de este bloque pero quedó a la vista: el hook de prueba `pruebaUse` **no aparece
+removido** en el registro de la corrida. Muere solo al cambiar de mapa, pero mientras viva imprime una
+línea por cada `E` de la sesión.
 
 ### ⭐⭐ El corte de la radio no era un caso borde: decapitaba **6 de 6**
 
@@ -118,12 +151,31 @@ argumento de que *«un loop cortado se oye como una radio que arranca y para»* 
 corte, y **sin sostener ahora que no lo hay**. No se saca (lo pidió el autor por su nombre), pero la
 fila de «la radio suena entera» no se corre con él.
 
+### Lo que el cierre deja pedido para el bloque siguiente
+
+Tres cosas, textuales del autor, **ninguna escrita en esta ronda**:
+
+1. Que apretar `+USE` sobre el horneado o el `prop_physics` **emita un sonido de botón**, para que el
+   jugador sepa que apagó algo. Candidatos suyos: `ui/button_toggle_1` y `_2`, *«ambos suenan como
+   apretar un interruptor sutil»*. ⚠ **Los dos son ESTÉREO** (medido hoy con `dev/duracion_ogg.py`:
+   0,23 s y 0,35 s, **2 canales**), así que van a sonar **planos y en 2D** — Source no espacializa un
+   estéreo. Pasan por `dev/mono_posicionales.py` **antes** de cablearse, o el bloque repite en silencio
+   el defecto que la r3 pagó en quince archivos.
+2. Que al **destruir** un `prop_physics` que está sonando (la radio de cs_office, el teléfono) **el
+   sonido pare**. Hoy el registro poda por entidad inválida, pero la poda sólo corre cuando alguien
+   mira el registro: hace falta el camino del borrado.
+3. **Sacar `phone_vibrate.ogg` de la familia teléfono.** El autor: *«corresponde a un celular; `phone`
+   como prop horneado o phys son generalmente teléfonos fijos, así que `phone_ring.ogg` está bien»*.
+   Es el mismo criterio que mudó las alarmas de auto en la r1: *el sonido tiene que nombrar al objeto
+   que está ahí.*
+
 **Verificación offline:** `luacheck 36/36` · `sintaxis 36/36` (lupa, un Lua real) ·
 `auditar_returns_de_hooks 0 de 28` (el `KeyPress` nuevo ya en el denominador) · **164 rutas de sonido
 citadas, 0 faltantes en disco** · `dev/duracion_ogg.py` reproduce 4 de 4 valores previos. Y el
 generador de la planilla estrena su **guarda de largo de 255**, con su propio auto-control: mide los 19
 comandos de las trece filas (el más largo, **154**) y se probó que **puede ponerse roja**, tanto sobre
-el comando principal como sobre los que viven adentro de una nota.
+el comando principal como sobre los que viven adentro de una nota. En la corrida real **ninguna línea
+se truncó**, que era lo que la guarda existía para evitar.
 
 ## 2026-08-17 (40) — **Tres constantes de la nena leídas para los tres modelos: el hull, el alto de malla y la pose de reposo. Y el camino que el plan elegía para la pose del brazo NO PUEDE arreglarla.**
 
