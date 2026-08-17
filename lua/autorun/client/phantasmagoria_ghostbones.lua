@@ -1435,6 +1435,31 @@ concommand.Add( "ph_ghost_costura", cmd_costura, nil,
 	⚠ RESTAURA la manipulacion al salir. Un instrumento que deja al sujeto
 	manipulado convierte la proxima medicion de cualquier otro en basura.
 
+	⚠⚠⚠ EL SUJETO QUE YA VIENE POSADO, QUE ES COMO ESTE COMANDO MINTIO UNA VEZ.
+	`ManipulateBoneAngles` no acumula: REEMPLAZA. Si la articulacion ya trae una
+	manipulacion puesta --Finger Poser, por ejemplo-- ponerle `Angle(0,30,0)`
+	no la rota 30 grados: la lleva DE la pose del autor A 30 grados, y lo que se
+	mide es la diferencia entre dos angulos cualesquiera. El 2026-08-11, sobre
+	la OldCrone posada en "point", eso salio asi:
+
+	    L_Finger2  x2.49    L_Finger21 x2.48    L_Finger3  x2.49
+	    L_Finger31 x2.49    L_Finger4  x2.48    L_Finger41 x2.48
+
+	Seis filas que parecen un defecto y son una pose: invirtiendo la formula,
+	`ang = 2*asin(razon*sin(15))` da 80,1 grados en las seis, o sea que la pose
+	tenia -50,0 +/- 0,2 en las seis. Y las NUEVE filas raras eran de la mano
+	izquierda, que era la unica posada; la derecha dio 10 de 10.
+
+	*Un numero fuera de rango no distingue un modelo roto de un modelo posado*,
+	y el comando no tenia como saberlo porque no miraba. Ahora mira: una
+	articulacion con manipulacion previa se declara POSADA, **no se toca ni para
+	probarla ni para restaurarla**, y no entra al veredicto. Las demas se miden
+	igual, que es lo que salvo esa corrida.
+
+	⚠ Y de paso, un efecto que este comando tenia y era destructivo: restauraba
+	con `Angle(0,0,0)`, o sea que **le borraba la pose al autor** en vez de
+	devolverla. Ahora guarda el valor previo y lo repone.
+
 	⚠⚠ Y LO QUE EL ARNES **NO** PUEDE DECIR DE ESTE COMANDO. `luaharness.py` lo
 	corre con 0 fallas, y ese verde vale MENOS de lo que parece: el sujeto del
 	banco tiene diez huesos y ninguno es de dedo, asi que las 20 filas salen por
@@ -1457,6 +1482,15 @@ local CADENA_DEDOS = {
 	{ "Finger3",  "Finger31" }, { "Finger31", "Finger32" },
 	{ "Finger4",  "Finger41" }, { "Finger41", "Finger42" },
 }
+
+-- Una articulacion "posada" es la que ya trae manipulacion de otro (Finger
+-- Poser). El umbral es de RUIDO, no de criterio: el motor devuelve exactamente
+-- lo que se le puso, asi que cualquier cosa distinta de cero es de alguien.
+local function manipulado( e, i )
+	local a = e:GetManipulateBoneAngles( i )
+	if not a then return false end
+	return math.abs( a.p ) > 0.01 or math.abs( a.y ) > 0.01 or math.abs( a.r ) > 0.01
+end
 
 local function cmd_dedos()
 	local sujetos = {}
@@ -1488,7 +1522,7 @@ local function cmd_dedos()
 		print( "[ph_dedos] --- " .. ( ficha and ficha.nombre or "?" ) ..
 			"  " .. tostring( e ) .. " ---" )
 
-		local obedecen, ceros, raros, sinLeer = 0, 0, 0, 0
+		local obedecen, ceros, raros, sinLeer, posados = 0, 0, 0, 0, 0
 		local peorNom, peorRaz = "-", 1
 
 		for _, lado in ipairs( { "L", "R" } ) do
@@ -1499,6 +1533,17 @@ local function cmd_dedos()
 
 				if not iA or not iB then
 					sinLeer = sinLeer + 1
+
+				elseif manipulado( e, iA ) then
+					-- Ya la posaron. Medirla daria un numero con forma de medicion
+					-- y sin su significado (ver el aviso de arriba), asi que no se
+					-- la toca --ni para probar ni para restaurar-- y no entra al
+					-- veredicto. Se imprime el angulo para que se pueda reconocer
+					-- la pose en vez de confundirla con un defecto.
+					posados = posados + 1
+					local a = e:GetManipulateBoneAngles( iA )
+					print( string.format( "[ph_dedos]   %s_%-9s POSADO (%.1f %.1f %.1f) -- no se mide ni se toca",
+						lado, par[ 1 ], a.p, a.y, a.r ) )
 
 				else
 					e:SetupBones()
@@ -1517,6 +1562,13 @@ local function cmd_dedos()
 						local largo = pA:Distance( antes )
 						local esperado = 2 * largo * seno
 
+						-- Lo que habia puesto, para REPONERLO. Aca siempre es cero
+						-- --las posadas se saltearon arriba-- pero se guarda igual:
+						-- si mañana alguien saca ese filtro, esta linea es la que
+						-- evita que el comando le borre la pose al autor.
+						local previo = e:GetManipulateBoneAngles( iA ) or Angle( 0, 0, 0 )
+						previo = Angle( previo.p, previo.y, previo.r )
+
 						e:ManipulateBoneAngles( iA, Angle( 0, GRADOS_PRUEBA, 0 ) )
 						e:InvalidateBoneCache()
 						e:SetupBones()
@@ -1524,7 +1576,7 @@ local function cmd_dedos()
 						local m2 = e:GetBoneMatrix( iB )
 						local movio = m2 and antes:Distance( m2:GetTranslation() ) or -1
 
-						e:ManipulateBoneAngles( iA, Angle( 0, 0, 0 ) )
+						e:ManipulateBoneAngles( iA, previo )
 						e:InvalidateBoneCache()
 						e:SetupBones()
 
@@ -1566,11 +1618,22 @@ local function cmd_dedos()
 		local medidos = obedecen + ceros + raros
 		print( string.format( "[ph_dedos]   %d obedecen · %d NO se movieron · %d fuera de rango",
 			obedecen, ceros, raros ) )
-		print( string.format( "[ph_dedos]   medidos %d de 20 · sin leer %d · peor razon x%.2f (%s)",
-			medidos, sinLeer, peorRaz, peorNom ) )
+		print( string.format( "[ph_dedos]   medidos %d de 20 · sin leer %d · posados %d · peor razon x%.2f (%s)",
+			medidos, sinLeer, posados, peorRaz, peorNom ) )
+
+		if posados > 0 then
+			print( string.format( "[ph_dedos]   >> %d articulacion(es) YA VENIAN POSADAS y quedaron afuera:",
+				posados ) )
+			print( "[ph_dedos]      el criterio geometrico sale de arrancar en reposo, y sobre una" )
+			print( "[ph_dedos]      pose puesta el numero no significa lo que dice. El veredicto de" )
+			print( "[ph_dedos]      abajo habla SOLO de las " .. medidos .. " que se midieron." )
+		end
 
 		if medidos == 0 then
 			print( "[ph_dedos]   >> SIN CORRER: no se midio una sola articulacion." )
+			if posados > 0 then
+				print( "[ph_dedos]   >> Estaban todas posadas: spawnear uno limpio para medir." )
+			end
 		elseif ceros == medidos then
 			print( "[ph_dedos]   >> NINGUNO OBEDECE: el motor no aplica la manipulacion aca." )
 		elseif obedecen == medidos then
@@ -1581,7 +1644,11 @@ local function cmd_dedos()
 		end
 	end
 
-	print( "[ph_dedos] manipulacion RESTAURADA en los " .. #sujetos .. " sujeto(s)." )
+	-- No dice "restaurada" a secas: lo que hace es reponer el valor que cada
+	-- articulacion tenia, y a las posadas no las toco. La diferencia importa
+	-- porque la version vieja ponia cero y eso BORRABA la pose del autor.
+	print( "[ph_dedos] repuesto el valor previo de cada articulacion medida en los "
+		.. #sujetos .. " sujeto(s); las posadas no se tocaron." )
 end
 
 concommand.Add( "ph_ghost_dedos", cmd_dedos, nil,
