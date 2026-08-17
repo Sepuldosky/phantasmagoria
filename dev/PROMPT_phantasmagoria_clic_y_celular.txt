@@ -1,0 +1,386 @@
+PROMPT — Phantasmagoria · EL CLIC DEL INTERRUPTOR, el prop roto que sigue sonando,
+y el celular que no era un celular (2026-08-17)
+
+> Bloque siguiente al del `+USE`, que CERRO EN JUEGO 13 de 13 ( CHANGELOG 41 ) y
+> ya esta commiteado y pusheado ( 0aa6730 -> ce9deca -> 781eac6 ).
+>
+> Los tres pedidos son del autor, textuales, y los dio AL CERRAR el bloque
+> anterior. **UNO DE LOS TRES PUEDE NO EXISTIR**, y el §3 dice por que: la
+> afirmacion en la que se apoya -- *"una entidad que se va se lleva su canal"* --
+> esta escrita en cuatro lugares del repo y **nunca se midio**.
+>
+> DESPUES de este bloque sigue el que el autor pidio hace CUATRO rondas y que
+> todavia no tiene linea de investigacion: **por que el bot se queda pegado y
+> despues se despeja solo, y por que a veces quiere pasar a traves de un vidrio**
+> ( pista suya: la base Terminator tendria convars para ver el *thinking* del
+> NPC; NO esta medido que existan ). Ver ESTADO.md.
+
+
+===============================================================================
+1 · QUE SE QUIERE, EN UNA LINEA
+===============================================================================
+
+Que apretar `+USE` **suene a interruptor** cuando apagaste algo, que **romper**
+la radio o el telefono **corte el sonido**, y que la familia telefono deje de
+sonar a **celular** cuando el prop es un telefono fijo.
+
+Textual del autor:
+
+  *"Agregar un cambio minusculo en que al apretar el horneado o el physics, este
+  emita un sonido de boton para demostrar que apagaste el objeto. ( En ui estan
+  candidatos para ese sonido: button_toggle_1 y 2, ambos suenan como apretar un
+  interruptor sutil, funcionan para simular apagar un objeto )"*
+
+  *"Al destruir un prop_physics que haga estos ruidos, sea una radio de cs
+  office o un phone de cs office, el sonido debe parar."*
+
+  *"Tambien el ruido ( phone_vibrate.ogg ) corresponde a un celular; phone como
+  prop horneado o phys son generalmente telefonos fijos, asi que phone_ring.ogg
+  esta bien, quita phone_vibrate.ogg"*
+
+
+===============================================================================
+2 · LO QUE YA ESTA MEDIDO. NO SE VUELVE A MEDIR.
+===============================================================================
+
+-------------------------------------------------------------------------------
+LOS DOS CLIPS DEL CLIC SON **ESTEREO**, Y HAY UN TERCERO QUE YA ES MONO
+-------------------------------------------------------------------------------
+Medido el 2026-08-17 con `dev/duracion_ogg.py` ( granule del ultimo page /
+samplerate, leido del binario ). La corrida quedo calibrada en la misma sesion
+contra los cuatro clips de radio, que reprodujeron a 0,004 s:
+
+    ui/button_toggle_1.ogg    0,23 s    44100    **2 CANALES**
+    ui/button_toggle_2.ogg    0,35 s    44100    **2 CANALES**
+    ui/button_click.ogg       0,30 s    44100      1 canal
+
+⚠⚠ **Source NO espacializa un estereo: lo tira en 2D.** Cableados como estan,
+el clic se oiria igual de fuerte en toda la casa y no *desde el objeto que
+apagaste* -- que es justamente lo que el sonido viene a comunicar. Es el defecto
+que la r3 pago en QUINCE archivos, y esta vez se ve antes de escribir la linea.
+
+⚠ **`button_click` YA es mono y suena distinto.** No se cambia el pedido del
+autor por conveniencia tecnica: el eligio los toggles de oido y esa eleccion es
+suya. Pero la alternativa existe, cuesta cero conversion, y hay que ofrecersela
+**diciendo que suena diferente**, no presentandola como equivalente.
+
+-------------------------------------------------------------------------------
+LOS TRES CLIPS DE `ui/` TIENEN **CERO** CONSUMIDORES
+-------------------------------------------------------------------------------
+`rg --no-ignore "button_toggle|button_click" lua/` da **0 hits sobre los 36
+`.lua`**. O sea que convertirlos a mono **no le rompe nada a nadie**: no hay una
+UI que los este usando en 2D a proposito. ( Ese era el riesgo real y por eso se
+conto: un clip de interfaz *tiene* que ser 2D, y pasarlo a mono para un uso
+posicional le arruinaria el otro. Aca no hay otro. )
+
+-------------------------------------------------------------------------------
+`mono_posicionales.py` **NO VA A VER** ESTOS DOS CLIPS, Y ES A PROPOSITO
+-------------------------------------------------------------------------------
+Su lista **se deriva del Lua** -- lee `PROP_CONSUJETO` de `server_events.lua` --
+y lo dice en su encabezado: *"Las rutas se sacan del Lua y NO se escriben a
+mano: si manana entra una familia nueva, este script la ve sola. Una lista
+copiada a mano es una medicion vieja el dia que alguien edita el otro archivo."*
+
+Los clips del clic **no son una familia**: viven en el bloque del `+USE`. Asi
+que hay que **ampliar el extractor**, no pegarle una lista a mano. Si se le pega
+una lista, la proxima vez que alguien agregue un clip el script va a seguir
+diciendo OK sobre un universo que ya no es el suyo.
+
+Su red de contencion ya existe y hay que respetarla: backup a `dev/other/OLD/`,
+sha256 ANTES de tocar, y re-lectura del disco al final. ⚠ **`sound/` esta
+GITIGNOREADO**: git no es la red aca. Un `.ogg` pasado a mono **no vuelve** a
+estereo desde el mono -- el backup es la unica copia.
+
+-------------------------------------------------------------------------------
+`phone_vibrate` TIENE TRES CITAS Y LAS TRES SON DEL MISMO BLOQUE
+-------------------------------------------------------------------------------
+    server_events.lua:969   el comentario que explica la familia
+    server_events.lua:986   la entrada de `dur` ( 1.11 )
+    server_events.lua:990   la entrada de `sonidos`
+
+Sacarlo son **dos lineas de codigo y un renglon de comentario**. Y hay control:
+la **guarda 3b** del final del archivo compara `sonidos` contra `dur` en las dos
+direcciones, asi que sacarlo de una sola de las dos **grita al cargar**. No hay
+que inventar un chequeo: hay que comprobar que ese grita cuando tiene que gritar.
+
+⚠ **CONSECUENCIA QUE HAY QUE ACEPTAR DE FRENTE:** la familia telefono queda con
+**UN** clip, o sea que un telefono siempre suena igual. Con 3,46 s y sonando de
+a un evento cada 25-90 s no molesta, pero es una decision y va dicha.
+
+⚠ **El `.ogg` no se borra del disco.** Queda sin consumidor, y esta bien: el dia
+que haya un celular de verdad ( un prop de smartphone ) es el clip que le toca.
+Lo que NO puede pasar es que quede citado y sin archivo -- eso enmudece sin
+error, y es el chequeo de rutas de asset del §7.
+
+
+===============================================================================
+3 · LA PRECONDICION. SE MIDE PRIMERO — Y PUEDE BORRAR UNO DE LOS TRES PEDIDOS
+===============================================================================
+
+-------------------------------------------------------------------------------
+⚠⚠⚠ P1 · ¿BORRAR LA ENTIDAD **CALLA** EL SONIDO QUE ESTABA EMITIENDO?
+-------------------------------------------------------------------------------
+Esta frase esta escrita **cuatro veces** en el repo y **NUNCA SE MIDIO**:
+
+    server_events.lua:218    "borrar el emisor ES un corte: una entidad que se
+                              va se lleva su canal"
+    server_events.lua:876    idem, justificando donde vive `dur`
+    server_events.lua:3409   idem ( es la mas vieja: viene del bloque de props
+                              horneados, o sea que ya se propago de una ronda a
+                              la siguiente )
+    dev/duracion_ogg.py:8    en el encabezado del instrumento
+    CHANGELOG.md (41)        como titulo de una seccion
+
+Nacio como **razon** en un comentario y se cito como si fuera un resultado. *Un
+comentario mentiroso se propaga al lector que lo cita*, y aca el lector escribio
+codigo con el.
+
+**Y decide DOS cosas de este bloque a la vez:**
+
+  · si es CIERTA  -> romper el prop **ya corta el sonido solo**, y el pedido 2
+                     del autor se reduce a limpiar el registro. El bloque se
+                     achica.
+  · si es FALSA   -> ( a ) el pedido 2 es un defecto real y hay que escribirlo;
+                     ( b ) `EMISOR_MARGEN` no protege de nada, porque no habia
+                     nada de que proteger; ( c ) **hay que corregir los cinco
+                     lugares de arriba**, no solo el codigo. Una nota medio
+                     cierta es peor que ninguna.
+
+    ( 1 )  lua_run PHT={} PHT.e=ents.Create("info_target") PHT.e:SetPos(Entity(1):GetPos()+Vector(0,0,20)) PHT.e:Spawn() print("emisor #"..PHT.e:EntIndex())
+
+    ( 2 )  lua_run PHT.e:EmitSound("phantasmagoria/prop/clock_tick.ogg",75,100) print("emitiendo desde #"..PHT.e:EntIndex())
+
+    ( 3 )  a los ~10 s, con el tic-tac todavia sonando:
+           lua_run SafeRemoveEntity(PHT.e) print("BORRADO -- escuchar AHORA: si sigue el tic-tac, la afirmacion es FALSA")
+
+  ( 145, 113 y 111 caracteres MEDIDOS: los tres entran en los 255 -- ver §7 )
+
+⚠⚠ **SE MIDE CON `clock_tick`, QUE DURA 46,55 s, Y NO CON UN CLIP CORTO.** Un
+sonido que se termina solo pasa por un borrado que funciono: es la trampa 4 del
+bloque anterior, del otro lado.
+
+-------------------------------------------------------------------------------
+P1b · ¿Y **ROMPER** UN PROP ES EL MISMO CAMINO QUE BORRARLO?
+-------------------------------------------------------------------------------
+No esta dicho que si, y por eso es una fila aparte: un `prop_physics` que se
+rompe puede **spawnear pedazos y sacarse a si mismo** en otro momento del frame,
+o quedar vivo con otro modelo. El pedido del autor dice **destruir**, asi que el
+camino que hay que medir es el suyo -- romperlo a tiros o a golpes -- y no el
+del `remover` del toolgun, que es un `Remove()` limpio.
+
+Se dispara `phantasmagoria_ghost_event prop` hasta que suene DESDE una radio
+`prop_physics` spawneada a mano, y **se la rompe mientras suena**.
+
+  · Se calla al romperse            -> VERDE, y el pedido 2 ya esta hecho.
+  · Sigue sonando                   -> ROJO, y **es el pedido 2**: hay defecto.
+  · Se calla al borrarla con el remover pero NO al romperla -> son DOS caminos
+    distintos y el arreglo tiene que enganchar en el que el jugador usa.
+
+⚠ **Y SI P1b SALE ROJA, HAY UNA SEGUNDA PRECONDICION ADENTRO DEL ARREGLO**, que
+hay que medir antes de dar la fila por cerrada: `StopSound` **sobre una entidad
+que se esta yendo** puede llegar tarde. El hook candidato es `EntityRemoved`
+( el addon no tiene ninguno hoy ), y ahi la entidad ya esta en camino de salida.
+*Un arreglo cuyo mecanismo no esta medido es una hipotesis con forma de commit.*
+
+
+===============================================================================
+4 · LO QUE SE ESCRIBE
+===============================================================================
+
+TRES PIEZAS, y son independientes: si una sale mal, las otras dos cierran igual.
+El orden de arriba a abajo es de mas barata a mas cara.
+
+① EL CELULAR QUE NO ERA — sacar `phone_vibrate` de la familia telefono.
+   Dos lineas y el comentario. El control ya existe y es la **guarda 3b**: hay
+   que verla NO gritar despues del cambio, y verla gritar si se saca de una sola
+   de las dos tablas ( vale probarlo a proposito una vez y volver atras --
+   *una perilla que nadie puede mover no es un control* ).
+
+② EL CLIC DEL INTERRUPTOR.
+   Primero MONO -- ampliando el extractor de `mono_posicionales.py`, no con una
+   lista a mano -- y despues el cableado, que es una linea adentro de
+   `apagarCerca` en `server_events.lua`.
+
+   ⚠⚠ **EL CLIC SUENA **SOLO** CUANDO SE APAGO ALGO. NUNCA EN LOS OTROS TRES
+   DESENLACES.** El `+USE` tiene cuatro salidas y tres de ellas no apagan nada
+   ( `lejos`, `tarde`, y no haber candidato ). Un clic en cualquiera de esas:
+
+     · le miente al jugador, que es lo contrario de lo que el sonido viene a
+       hacer -- el autor lo pidio *"para demostrar que apagaste el objeto"*;
+     · y **arruina la fila del control negativo**, porque el que corre la
+       planilla oye el clic desde lejos y marca verde. *Un instrumento que
+       confirma sin haber medido no es un instrumento: es un adorno que
+       acredita.*
+
+   ⚠ Va en la **posicion del objeto** ( `sound.Play` en su origen, o `EmitSound`
+   sobre el que quedo vivo ), no en el jugador: el clic tiene que llegar desde
+   donde estaba el ruido, y para eso hace falta el mono de arriba.
+
+   ⚠ **SIN PERILLA NUEVA, y el motivo va escrito:** es una adicion y no un
+   recorte, asi que su ausencia se distingue sola -- el contador `apagados` del
+   reporte dice cuantas veces tendria que haber sonado. Un banco que se achica
+   necesita perilla; uno que crece, no.
+
+③ QUE ROMPER EL PROP CORTE EL SONIDO — **y esto depende de P1b**.
+   Si P1b sale VERDE, lo unico que queda es la limpieza del registro `SONANDO`,
+   que hoy poda **solo cuando alguien lo mira** ( en `EV.prop`, en el `+USE` y en
+   el reporte ). No es un bug audible, pero deja entradas invalidas contadas
+   hasta la proxima lectura.
+   Si sale ROJA, entra el hook -- con la segunda precondicion del §3 medida
+   antes, y con la trampa 1 del bloque anterior puesta: **el hook no devuelve
+   nada, nunca**, y `auditar_returns_de_hooks.py` antes de cerrar.
+
+
+===============================================================================
+5 · LAS TRAMPAS QUE YA SE VEN DESDE ACA
+===============================================================================
+
+⚠ TRAMPA 1 — **EL CLIC QUE SUENA SIN HABER APAGADO NADA SE COME EL CONTROL
+NEGATIVO.** Es la peor de este bloque y esta explicada arriba. La fila que la
+mide se corre **desde lejos**, con la radio sonando: no tiene que oirse nada.
+
+⚠ TRAMPA 2 — **UNA CONVERSION A MONO NO SE DESHACE.** `sound/` esta
+gitignoreado, asi que el backup de `dev/other/OLD/` es la unica copia. Y hay que
+comprobar que el backup se hizo **antes** y que la re-lectura del disco confirma
+1 canal **y la misma duracion** ( 0,23 y 0,35 ): una conversion que ademas
+recorta el clip se ve igual de bien en la consola.
+
+⚠ TRAMPA 3 — **P1 PUEDE VOLVER FALSA UNA FRASE QUE YA ESTA EN CINCO LUGARES.**
+Si sale roja, no alcanza con arreglar el codigo: hay que corregir los cinco, en
+el mismo commit. *Si la prosa y el codigo discrepan, el proximo lector va a
+copiar la prosa* -- ya paso exactamente asi con esta frase.
+
+⚠ TRAMPA 4 — **ROMPER Y BORRAR NO SON EL MISMO CAMINO**, y una fila que mide uno
+y acredita al otro deja el pedido del autor sin cerrar.
+
+⚠ TRAMPA 5 — **LA FAMILIA TELEFONO QUEDA CON UN SOLO CLIP.** Si algun dia alguien
+mira `dur` y ve una sola entrada, va a parecer que falta algo. Que el comentario
+diga que es una decision y de quien es.
+
+⚠ TRAMPA 6 — **EL EXTRACTOR AMPLIADO TIENE QUE SEGUIR VIENDO LAS FAMILIAS.**
+Tocar `rutas_de_consujeto()` para que ademas lea el banco del clic puede dejar de
+ver `PROP_CONSUJETO` sin que nada avise: el script diria *"ya estan todas en
+mono"* -- que es el resultado exacto de no haber mirado. **El denominador
+impreso es el control**: tiene que seguir diciendo cuantas rutas encontro.
+
+
+===============================================================================
+6 · LAS FILAS DE LA PLANILLA
+===============================================================================
+
+Planilla NUEVA en `dev/checks/phantasmagoria-clic-y-celular.html`. Se COPIA de
+`dev/checks/phantasmagoria-use-y-llaves.html` -- esa ya esta CORRIDA 13/13 y
+tiene las respuestas del autor adentro, no se edita.
+
+⚠ **SE COPIA DE ESA Y NO DE LA DE PROPS HORNEADOS**: la nueva ya trae la
+**guarda de largo de 255** en el generador, con su auto-control.
+
+Se reemplazan: el array `CHECKS`, el `<header>`, la constante `STORE` ( si no,
+las dos comparten localStorage y se pisan los tildes ), la 1ra linea de
+`buildReport()` y el `<title>`; y se BORRA EL FOOTER VIEJO.
+
+  00  P1 — borrar la entidad CALLA el sonido. Con `clock_tick` ( 46,55 s ) y
+      borrando temprano. Roja = una frase que esta en cinco lugares es falsa.
+  01  P1b — ROMPER un `prop_physics` que esta sonando lo calla. El camino del
+      autor, no el del remover.
+  02  Los dos clips quedaron MONO **y con la misma duracion**, releidos del
+      disco. Y el denominador del extractor sigue viendo las familias.
+  03  El clic suena al apagar, **y se oye DESDE el objeto** ( caminar y girar ).
+  04  CONTROL NEGATIVO — apretando `E` LEJOS, con la radio sonando: **no se oye
+      ningun clic** y `lejos` sube. Es la fila de la trampa 1.
+  05  La familia telefono suena `phone_ring` y nunca `phone_vibrate` en ocho
+      tiradas, **y la guarda 3b no grita al cargar**.
+  06  NO ROMPER LO QUE ANDABA — el `+USE` sigue apagando, `E` sigue abriendo
+      puertas, y el pestillo sigue trabando y soltando.
+
+⚠ Un comando POR LINEA: dos concommands en la misma linea corren en el mismo
+frame y este repo ya cerro tres filas verdes con el numero anterior.
+
+
+===============================================================================
+7 · METODO (lo que este workspace ya pago)
+===============================================================================
+
+· ⚠⚠ **LA CONSOLA DE SOURCE CORTA EN 255 CARACTERES Y NO AVISA.** Medido el
+  2026-08-11: se mandaron 559, entraron 255, y lo que llego fue
+  `'<name>' expected near '<eof>'` -- un error de SINTAXIS DE LUA en el punto del
+  corte, o sea un rojo que parece del codigo y es del transporte. **Compilar la
+  linea NO PUEDE VER ESTE DEFECTO**, porque el prefijo truncado tambien compila.
+  El generador de la planilla nueva ya mide el largo de cada comando y lo pinta
+  en rojo si pasa; el estado se guarda en una tabla global ( `PHT` ) para poder
+  partir en lineas cortas.
+· El **Grep del harness TRUNCA EN SILENCIO** sobre este workspace ( sub-reporto
+  el universo 14x ). Todo censo con `rg --no-ignore` acotado y CON EL
+  DENOMINADOR IMPRESO.
+· Antes de escribir cualquier check, leer
+  `memory/controles-que-premian-su-modo-de-falla.md`. La asimetria que ordena
+  todo es la n42: **un falso ROJO se descubre la primera vez que se usa; un
+  falso VERDE se descubre en el juego, y mientras tanto ACREDITA**. La n55 salio
+  del bloque anterior y aplica directo aca: **un numero esperado que depende de
+  algo que el que corre no controla puntua ESO y no el mecanismo**.
+· LOS CUATRO CHEQUES, con el comando exacto, TODOS antes de cerrar:
+
+    cd phantasmagoria
+    find lua -name '*.lua' -print0 | xargs -0 python dev/luacheck_gmod.py
+    python dev/parsear_sintaxis_glua.py lua
+    python dev/auditar_returns_de_hooks.py lua
+    # y que toda ruta de asset citada resuelva en disco
+
+  Al dia el 2026-08-17: luacheck 36/36 · sintaxis 36/36 · hooks 0/28 · sonido
+  164 rutas 0 faltantes.
+
+· ⚠ `luacheck_gmod.py` **NO PARSEA SINTAXIS** ( dio OK sobre un `if/else/end`
+  desbalanceado ) y **SIN ARGUMENTOS revisa CERO archivos y sale 0**: verde sin
+  medir. Va siempre con el `find ... | xargs`. El que compila de verdad es
+  `parsear_sintaxis_glua.py`, que usa `lupa` ( un Lua real ) y trae su propio
+  auto-control.
+· `dev/duracion_ogg.py` mide duracion y CANALES leyendo el binario, y **se niega
+  a decir OK** si en la corrida no entro ningun clip con valor previo: dice
+  PARCIAL. Para calibrarlo, correrlo primero sobre `sound/phantasmagoria/prop/radio`.
+· Toda ruta de asset citada tiene que resolver en disco. Mover o borrar un
+  archivo deja la cita colgada y **enmudece sin error**.
+· **Nunca `git add -A`:** hay chats paralelos sobre el mismo repo y la falla es
+  SIMETRICA. `lua/autorun/client/phantasmagoria_eq_check.lua` esta modificado por
+  otra sesion -- **no stagearlo**. Stagear rutas explicitas, `git commit -F- --
+  rutas`, y **mirar `git log` DESPUES**. ⚠ Un archivo NUEVO necesita
+  `git add -- <ruta>` antes.
+· Commits SIN `Co-Authored-By`.
+· El autor es CHILENO: escribirle de **tu**, sin voseo. Vale tambien para este
+  archivo, que lo lee el.
+
+
+===============================================================================
+8 · ESTADO DE LO QUE VIENE ANTES
+===============================================================================
+
+· El bloque del `+USE` **CERRO EN JUEGO 13 de 13** ( CHANGELOG 41, commits
+  `ce9deca` y `781eac6`, pusheados ). El autor: *"en cuanto a comportamiento todo
+  bien"*.
+  `+USE`: teclas 24 · apagados 2 · lejos 15 · tarde 5.
+  Emisores: vivos 4 = conteo real 4 durante los clips · 0 = 0 en reposo ·
+  creados 38 · salteados 83.
+  Censo: 418 / 1588 y 8 modelos / 11 instancias, igual que el `.py`.
+  Pestillo: traba, suena, se lista con `m_bLocked=true` y se suelta.
+
+· ⚠ **TRES FILAS DIERON EL VEREDICTO CORRECTO SIN PROBARLO ELLAS SOLAS**, y esta
+  anotado en el CHANGELOG en vez de acreditado. La que deja trabajo posible:
+  **la A1 predecia `3 familia(s) con sujeto` calculadas del `.bsp` para el punto
+  (-512 -425 272) y salio `4`**, porque el fantasma spawneo a ~150 u de ahi.
+  No es un rojo. El arreglo, si alguna vez se quiere esa fila incontestable:
+  que `phantasmagoria_ghost_estaticos` imprima **cuantas familias reclaman las
+  reglas EN LA POSICION DEL FANTASMA**, al lado de lo que el evento vio. Convierte
+  dos numeros escritos en una comparacion. **No esta en la lista del autor**:
+  es una frontera abierta, no una tarea.
+
+· ⚠ En la corrida quedo vivo el hook de prueba `pruebaUse` de la fila 00 ( no
+  aparece removido en el registro ). Muere al cambiar de mapa. Para sacarlo:
+  `lua_run hook.Remove("KeyPress","pruebaUse") print("hook de prueba sacado")`
+
+· Fronteras que siguen abiertas a proposito, y ninguna es de este bloque:
+  el `+USE` es **solo** para radio y telefono ( el reloj, el inodoro y el
+  televisor no tienen interruptor ) · el televisor y el reloj **siguen con
+  corte** ( `tv_noise` 10,03 s, `clock_tick` 46,55 s ) porque nadie los pidio
+  enteros · `ritual_chanting_loop` es un **loop** y la fila de "la radio suena
+  entera" no se corre con el · con una familia con sujeto presente, el banco
+  ambiente ( las llaves ) **sigue entrando al sorteo**, que es lo que el autor
+  pidio: lo que se saco es que suenen SIN sujeto.
