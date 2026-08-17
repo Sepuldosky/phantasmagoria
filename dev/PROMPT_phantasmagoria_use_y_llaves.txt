@@ -1,0 +1,380 @@
+PROMPT — Phantasmagoria · APAGAR LA RADIO CON +USE, y las llaves que suenan sin
+llaves (2026-08-17)
+
+> Bloque siguiente al de los props HORNEADOS, que quedo CORRIENDO EN JUEGO
+> ( CHANGELOG 39 ) y ya esta commiteado y pusheado ( 0aa6730 ).
+>
+> Los tres pedidos son del autor, textuales, y el los llamo "minusculos". DOS DE
+> LOS TRES LO SON. El tercero -- que la radio suene completa -- NO, y el §2 dice
+> por que: no se puede sacar el corte sin poner antes el interruptor, o vuelve
+> el defecto que la r3 cerro.
+>
+> DESPUES de este bloque sigue el que el autor pidio hace dos rondas y todavia
+> no tiene linea de investigacion: **por que el bot se queda pegado y despues se
+> despeja solo, y por que a veces quiere pasar a traves de un vidrio** ( pista
+> suya: la base Terminator tendria convars para ver el *thinking* del NPC; NO
+> esta medido que existan ). Ver ESTADO.md.
+
+
+===============================================================================
+1 · QUE SE QUIERE, EN UNA LINEA
+===============================================================================
+
+Que el jugador pueda **apagar con `+USE`** el trasto horneado que esta sonando
+-- radio y telefono, no todos --, que la radio en consecuencia **suene entera**
+en vez de cortarse a los 6-14 s, y que el evento `prop` **deje de sonar a llaves
+cuando no hay ningun objeto elegible cerca**.
+
+Textual del autor:
+
+  *"acabar con el ruido de llaves al aplicar el evento de prop sin props
+  elegibles ( podemos hacer que el bot cierre puertas con pestillo y ahi aplicar
+  esos sonidos )"*
+
+  *"quiero que veas si se puede apagar el prop horneado apretando +USE cerca de
+  donde esta sonando el ruido para poder apagar las radios y telefonos ( solo
+  esos por ahora, ya que no quiero que apagues con un temporizador las radios,
+  deja que suenen completos los audios )"*
+
+
+===============================================================================
+2 · LO QUE YA ESTA MEDIDO. NO SE VUELVE A MEDIR — Y DOS COSAS CAMBIAN EL PEDIDO
+===============================================================================
+
+-------------------------------------------------------------------------------
+⚠⚠ EL CORTE DE LA RADIO DECAPITA **6 DE 6**. NO ES UN CASO BORDE.
+-------------------------------------------------------------------------------
+Las tres familias que declaran `largo` en `PROP_CONSUJETO`, medidas contra sus
+propios clips ( duracion leida del granule del .ogg, no del nombre ):
+
+    una radio      corte  6-14 s   6 clips de 26,78 a 60,78 s   -> 6 de 6 decapitados
+    un televisor   corte   4-9 s   4 clips de  0,25 a 10,03 s   -> 1 de 4
+    un reloj       corte  5-12 s  67 clips de  0,55 a 46,55 s   -> 6 de 67
+
+La radio **no tiene un solo clip que alcance a terminar**. Y el final es la
+parte que importa: medido con planitud espectral ( control: ruido blanco 0,557
+contra tono puro 0,000 ), **tres de los cuatro clips principales terminan en
+ruido de banda ancha** -- la estatica y el apagado --
+
+    creepy_music          final 0,076   cola  ##*+#:*=
+    creepy_music_old      final 0,183   cola  +#**##      ( arranque 0,016 )
+    creepy_music_slowdown final 0,095   cola  =*-=.:.:#*-
+    creepy_montage        al reves: arranca ruidoso y termina tonal
+
+...y el corte cae **en el medio tonal** en los cuatro. O sea que `StopSound`
+siempre se come el apagado, y la promesa escrita en el codigo -- *"un radioruido
+que arranca y para solo es lo que hace una radio poseida"* -- se cumple a medias
+desde que se escribio.
+
+-------------------------------------------------------------------------------
+⚠⚠ EL TELEFONO NO TIENE CORTE, Y DURA 3,46 s. EL `+USE` AHI CASI NO TIENE QUE
+   APAGAR.
+-------------------------------------------------------------------------------
+El autor pidio el `+USE` para *"las radios y telefonos"*. Medido:
+
+    un telefono    SIN `largo`   2 clips: phone_ring 3,46 s · phone_vibrate 1,11 s
+
+La familia telefono **nunca se corta** porque nunca hizo falta: sus dos clips se
+terminan solos antes de que nadie llegue a apretar nada. Ponerle `+USE` no esta
+mal -- es coherente y cuesta cero, porque el mecanismo es el mismo -- **pero no
+resuelve ningun sintoma**, y si la fila de la planilla se escribe como "apagar
+el telefono con +USE" va a ser casi imposible de correr: hay que apretar dentro
+de una ventana de 3,46 s. *Una fila que solo se puede aprobar con reflejos no
+mide el mecanismo, mide al que la corre.*
+
+**El sujeto de verdad de este bloque es la radio.** El telefono entra de arrastre.
+
+-------------------------------------------------------------------------------
+EL `+USE` NO PUEDE IR POR DONDE UNO ESPERARIA, Y ESO YA ESTA AVERIGUADO
+-------------------------------------------------------------------------------
+Las dos vias obvias estan **las dos** cerradas, y por motivos distintos:
+
+  · `PlayerUse` sobre el prop -> un `prop_static` NO ES UNA ENTIDAD. No hay a
+    quien usar. Es la misma razon por la que existe todo el bloque anterior.
+  · `PlayerUse` sobre el emisor -> el emisor es un `info_target`: sin modelo y
+    sin colision, asi que el trace de uso **no le pega**. `PlayerUse` se dispara
+    por entidad y esa entidad nunca va a ser el sujeto de un trace.
+
+La via que queda: enganchar **`KeyPress` con `IN_USE`** en el servidor y
+resolver a mano contra la lista de emisores vivos. El addon **no tiene ningun
+`hook.Add( "KeyPress" )` todavia** ( medido: 0 en los 36 `.lua`; lo unico
+parecido es un `ply:KeyDown( IN_USE )` en `phantasmagoria_trucktv_screen.lua:2027`,
+que es de CLIENTE y para otra cosa ). En `dev/other/` hay **8 archivos de
+terceros** que si lo usan -- ARC9, Glide, ZBase, quick loadouts -- de donde
+copiar la TECNICA. ⚠ De un tercero se porta la tecnica, no el cableado.
+
+-------------------------------------------------------------------------------
+LO QUE SUENA HOY CUANDO NO HAY SUJETO
+-------------------------------------------------------------------------------
+`SND.prop` son **8 clips y los ocho son llaves**:
+
+    key_pickup_1 · key_pickup_4 · key_lock_1 · key_lock_2 · key_lock_3
+    key_unlock_1 · key_unlock_2 · key_unlock_3
+
+Son llaves DE VERDAD ( las dos que no lo eran, `key_1` y `key_2`, resultaron ser
+el presentador britanico y se mudaron a `voice/` en la r3 ). El autor no dice
+que suenen mal: dice que **suenan donde no corresponde**, y propone reubicarlas
+en una mecanica que si tiene llaves -- que el bot **cierre puertas con pestillo**.
+
+Para eso ya hay con que, y no hay que inventarlo:
+
+    server_doors.lua:281,293   lee  door:GetInternalVariable( "m_bLocked" )
+    server_doors.lua:1036      hace door:Fire( "Unlock" )
+    server_doors.lua:69        convar phantasmagoria_ghost_doorunlock
+
+O sea que el addon **ya sabe leer si una puerta esta trabada y ya sabe
+destrabarla**. El pestillo es el gemelo -- `Fire( "Lock" )` -- y `DOOR_CLASSES`
+ya existe. ⚠ Que `Fire( "Lock" )` funcione sobre las clases de este mapa NO esta
+medido: el engine es un tercero.
+
+-------------------------------------------------------------------------------
+EL EMISOR, TAL COMO QUEDO EN EL BLOQUE ANTERIOR
+-------------------------------------------------------------------------------
+    server_events.lua   EMISORES = { vivos, creados, salteados }
+                        EMISOR_VIDA = 20   ( familias sin `largo` )
+                        vida real = fam.largo[2] + 2  cuando la familia corta
+                        marca      ent.PhantasmagoriaEmisor = true
+                        limpieza   SafeRemoveEntityDelayed
+
+Medido en juego el 2026-08-17: `creados 7 · vivos 0 · el conteo real del mapa
+tambien 0 · salteados 2`.
+
+
+===============================================================================
+3 · LA PRECONDICION. SE MIDE PRIMERO.
+===============================================================================
+
+-------------------------------------------------------------------------------
+P1 · ¿`KeyPress` CON `IN_USE` LLEGA AL SERVIDOR CUANDO EL JUGADOR NO USA NADA?
+-------------------------------------------------------------------------------
+Es del engine, que es un tercero ( COR-5: deteccion, nunca asuncion ). El caso
+que importa es justamente el raro: apretar `E` **mirando al aire**, sin ninguna
+entidad usable delante. Si el engine se comiera el evento en ese caso, todo el
+bloque cambia de forma.
+
+    lua_run hook.Add("KeyPress","pruebaUse",function(p,k) if k==IN_USE then print("USE de "..p:Nick().." mirando "..tostring(p:GetEyeTrace().Entity)) end end)
+
+  ( 154 caracteres MEDIDOS, entra en los 255 de la consola -- ver §7 )
+
+Apretar `E`: **tres veces mirando una pared vacia** y **tres veces mirando una
+puerta**. Las dos escenas, no una.
+
+  · Imprime en las SEIS                    -> VERDE, seguir.
+  · Imprime solo mirando la puerta         -> ROJO: el hook depende de que haya
+    sujeto usable, y entonces hay que buscar del lado del cliente ( un
+    concommand con `+use` bindeado, o `StartCommand` ).
+  · No imprime nunca                       -> ROJO BLOQUEANTE: el hook no corre
+    en este realm. Sacar el hook con
+    `lua_run hook.Remove("KeyPress","pruebaUse")` antes de seguir.
+
+⚠ SACAR EL HOOK DE PRUEBA AL TERMINAR. Un hook de prueba que queda vivo imprime
+una linea por cada `E` de toda la sesion y **ensucia la bitacora justo cuando se
+la va a leer** -- este repo ya perdio 38 de 40 renglones de un reporte por una
+rafaga parecida.
+
+
+===============================================================================
+4 · LO QUE SE ESCRIBE
+===============================================================================
+
+TRES PIEZAS, y son independientes: si una sale mal, las otras dos cierran igual.
+
+① EL INTERRUPTOR — `+USE` apaga el emisor que esta sonando.
+   Hook `KeyPress`/`IN_USE` en el servidor. Al dispararse: recorrer los emisores
+   vivos, quedarse con el mas cercano al jugador dentro de un radio, y si esta
+   dentro, `StopSound` + `SafeRemoveEntity`.
+
+   ⚠ EL CRITERIO DE "CERCA" TIENE QUE SER UNA DECISION Y NO UN NUMERO SUELTO.
+   Dos formas y hay que elegir a proposito: **solo distancia** ( se apaga
+   parandose al lado, mires donde mires ) o **distancia + mirada** ( hay que
+   apuntarle ). La segunda es mas "realista" y es peor de jugar, porque el
+   objeto es INVISIBLE: no hay nada a que apuntar. **Preferir distancia sola**,
+   y decirlo.
+
+   ⚠ Y SOLO LAS FAMILIAS QUE EL AUTOR PIDIO. El emisor tiene que recordar de que
+   familia salio; sin eso, el `+USE` apagaria tambien el inodoro y el reloj, que
+   nadie pidio.
+
+② QUE LA RADIO SUENE ENTERA — y esto NO es borrar el `largo`.
+   ⚠⚠ SACAR EL CORTE Y PONER EL INTERRUPTOR SON **UN SOLO CAMBIO**. Sin corte y
+   sin interruptor, un clip de hasta 60,78 s se solapa con el evento siguiente,
+   que es **literal el defecto que la r3 pago** y el motivo por el que el `largo`
+   existe. Si ① sale rojo, ② NO se hace.
+
+   ⚠ Y HAY UNA SEGUNDA MITAD QUE SE OLVIDA: el emisor hoy vive
+   `fam.largo[2] + 2` segundos. Si el clip pasa a sonar entero, **borrar el
+   emisor lo decapita igual, por otra puerta** -- una entidad que se va se lleva
+   su canal. La vida del emisor tiene que cubrir el clip COMPLETO.
+
+   Eso pide saber cuanto dura cada clip, y `SoundDuration` no es confiable sobre
+   `.ogg` del lado del servidor. **Ya estan medidos, escribirlos en la tabla:**
+
+       creepy_montage         41,41 s      creepy_music           33,71 s
+       creepy_music_old       26,78 s      creepy_music_slowdown  42,23 s
+
+   ( los otros dos clips de la familia llegan a 60,78 s; medirlos con el mismo
+   metodo antes de escribirlos, no copiar este parrafo )
+
+   *Una constante que decide comportamiento tiene que existir UNA vez*: la
+   duracion va al lado del clip, no repetida en el timer y en la vida del emisor.
+
+③ LAS LLAVES — que dejen de sonar sin sujeto, y que aparezcan donde si hay.
+   Dos mitades, y la segunda es la que las salva de perderse:
+   · en `EV.prop`, sin familia con sujeto -> **no sonar nada** ( el evento
+     devuelve `false` con motivo, que ya es un camino que el codigo tiene ).
+   · el pestillo: que el evento de puertas pueda **trabar** una puerta con
+     `Fire( "Lock" )` y ahi si sonar `key_lock_*`; y `key_unlock_*` al destrabar,
+     que ya existe en `server_doors.lua:1036`.
+
+   ⚠ CON PERILLA, porque un banco que se achica y uno que se rompe se oyen
+   igual, y este bloque ya tuvo un banco mudo entero con el instrumento diciendo
+   `OK`.
+
+
+===============================================================================
+5 · LAS TRAMPAS QUE YA SE VEN DESDE ACA
+===============================================================================
+
+⚠ TRAMPA 1 — `+USE` YA HACE COSAS. `E` abre puertas, agarra props, entra a
+vehiculos y lo consumen addons de terceros. Un hook nuevo que **devuelva un
+valor** corta la cadena para los de mas abajo en la fila -- y eso en este taller
+ya se pago dos veces ( `Corpus.OnReady`, y el `return` de `PlayerSpawn` que se
+saltea `GM:PlayerSpawn` ENTERO ). **El hook no devuelve nada. Nunca.** Y
+`auditar_returns_de_hooks.py` antes de cerrar.
+
+⚠ TRAMPA 2 — APAGAR LA RADIO NO PUEDE APAGAR EL EVENTO. Si el `+USE` borra el
+emisor pero el scheduler cree que el evento sigue en curso, el proximo evento se
+puede saltear. Y al reves: si apagarla no cuenta como "termino", el contador de
+emisores vivos no vuelve a cero y la fila de la fuga sale roja **por un motivo
+que no es una fuga**.
+
+⚠ TRAMPA 3 — EL CONTADOR `vivos` SE DECREMENTA HOY EN UN `timer.Simple`. Si el
+`+USE` borra el emisor antes, el timer viejo **igual va a correr** y el contador
+puede quedar por debajo de cero o descontar de mas. El bloque anterior ya dejo
+el antidoto puesto: el comando compara el contador contra el **conteo real** de
+emisores en el mapa. Si esos dos numeros se separan, el que miente es el
+contador -- y hay que arreglarlo, no re-leerlo.
+
+⚠ TRAMPA 4 — MEDIR "SE APAGO" CON UN CLIP CORTO ES UN FALSO VERDE DE MANUAL. Un
+sonido que se termino solo pasa por un `+USE` que funciono. La fila se corre con
+un clip de radio ( 26,78 s el mas corto ) y apretando `E` **temprano**.
+
+⚠ TRAMPA 5 — SIN SUJETO Y SIN LLAVES, EL EVENTO NO IMPRIME NADA. Y un vacio no
+es una medicion: la linea tiene que seguir saliendo, diciendo que no habia
+sujeto. Si el evento se vuelve mudo, la fila del control negativo **no puede
+distinguir "no habia nada" de "el evento no corrio"**.
+
+⚠ TRAMPA 6 — EL PESTILLO PUEDE ENCERRAR AL JUGADOR. Trabar una puerta es una
+mecanica con consecuencia, no un sonido: si el bot traba la unica salida de un
+cuarto, eso no es un susto, es un softlock. Que tenga limite y que se pueda
+destrabar.
+
+
+===============================================================================
+6 · LAS FILAS DE LA PLANILLA
+===============================================================================
+
+Planilla NUEVA en `dev/checks/phantasmagoria-use-y-llaves.html`. Se COPIA de
+`dev/checks/phantasmagoria-props-horneados.html` -- esa ya esta CORRIDA y tiene
+las respuestas del autor adentro, no se edita.
+Se reemplazan: el array `CHECKS`, el `<header>`, la constante `STORE` ( si no,
+las dos comparten localStorage y se pisan los tildes ), la 1ra linea de
+`buildReport()` y el `<title>`; y se BORRA EL FOOTER VIEJO.
+⚠ El generador tiene que llevar la **guarda de largo de 255** ( ver §7 ).
+
+  00  P1 — `KeyPress`/`IN_USE` llega al server mirando al aire Y mirando una
+      puerta. Roja = el bloque cambia de forma.
+  01  El `+USE` apaga una radio horneada sonando. Con un clip de radio y
+      apretando TEMPRANO ( trampa 4 ).
+  02  CONTROL NEGATIVO — el `+USE` lejos del emisor **no** lo apaga. Sin esta
+      fila, "se apago" no distingue el mecanismo de que el clip se termino.
+  03  NO ROMPER LO QUE ANDABA — `E` sigue abriendo puertas, agarrando props y
+      entrando a vehiculos. Es la fila de la trampa 1.
+  04  La radio suena ENTERA: del arranque a la estatica del final. Se oye el
+      apagado, que es lo que el corte se comia.
+  05  El emisor sobrevive al clip entero y DESPUES se va: `vivos` vuelve a cero
+      y coincide con el conteo real.
+  06  Sin sujeto no suena nada, Y LA LINEA SIGUE SALIENDO con el motivo
+      ( trampa 5 ).
+  07  El bot traba una puerta, suena `key_lock_*`, y la puerta **se puede
+      destrabar** ( trampa 6 ).
+
+⚠ Un comando POR LINEA: dos concommands en la misma linea corren en el mismo
+frame y este repo ya cerro tres filas verdes con el numero anterior.
+
+
+===============================================================================
+7 · METODO (lo que este workspace ya pago)
+===============================================================================
+
+· ⚠⚠ **LA CONSOLA DE SOURCE CORTA EN 255 CARACTERES Y NO AVISA.** Medido el
+  2026-08-11: se mandaron 559, entraron 255, se perdieron 304, y lo que llego
+  fue `'<name>' expected near '<eof>'` -- un error de SINTAXIS DE LUA en el punto
+  del corte, o sea un rojo que parece del codigo y es del transporte.
+  **Compilar la linea NO PUEDE VER ESTE DEFECTO**, porque el prefijo truncado
+  tambien compila: el control de sintaxis mide la sintaxis, no el largo. Se mide
+  el largo aparte, y el estado se guarda en una tabla global ( `PHT` ) para
+  partir en lineas cortas.
+· El **Grep del harness TRUNCA EN SILENCIO** sobre este workspace ( sub-reporto
+  el universo 14x ). Todo censo con `rg --no-ignore` acotado y CON EL
+  DENOMINADOR IMPRESO.
+· Antes de escribir cualquier check, leer
+  `memory/controles-que-premian-su-modo-de-falla.md`. La asimetria que ordena
+  todo es la n42: **un falso ROJO se descubre la primera vez que se usa; un
+  falso VERDE se descubre en el juego, y mientras tanto ACREDITA**.
+· LOS CUATRO CHEQUES, con el comando exacto, TODOS antes de cerrar:
+
+    cd phantasmagoria
+    find lua -name '*.lua' -print0 | xargs -0 python dev/luacheck_gmod.py
+    python dev/parsear_sintaxis_glua.py lua
+    python dev/auditar_returns_de_hooks.py lua
+    # y que toda ruta de asset citada resuelva en disco
+
+  Al dia el 2026-08-17: luacheck 36/36 · sintaxis 36/36 · hooks 0/27 · sonido
+  164 rutas 0 faltantes.
+
+· ⚠ `luacheck_gmod.py` **NO PARSEA SINTAXIS** ( dio OK sobre un `if/else/end`
+  desbalanceado ) y **SIN ARGUMENTOS revisa CERO archivos y sale 0**: verde sin
+  medir. Va siempre con el `find ... | xargs`. El que compila de verdad es
+  `parsear_sintaxis_glua.py`, que usa `lupa` ( un Lua real, asi que atrapa hasta
+  el limite de locals ) y trae su propio auto-control.
+· `auditar_returns_de_hooks.py` antes de cerrar, y en ESTE bloque es la
+  herramienta central: ver trampa 1.
+· Toda ruta de asset citada tiene que resolver en disco. Mover un archivo deja la
+  cita colgada y **enmudece sin error**. ⚠ Y el universo son las rutas que el Lua
+  CITA, no la carpeta: contar por substring da 39 "voice" y las 39 son
+  `paranormal_voice/`.
+· **Nunca `git add -A`:** hay chats paralelos sobre el mismo repo y la falla es
+  SIMETRICA. Durante el bloque anterior la otra sesion metio CUATRO commits.
+  `lua/autorun/client/phantasmagoria_eq_check.lua` esta modificado por ella --
+  no stagearlo. Stagear rutas explicitas, `git commit -F- -- rutas`, y **mirar
+  `git log` DESPUES**. ⚠ Un archivo NUEVO necesita `git add -- <ruta>` antes:
+  `git commit -- rutas` no alcanza lo que git todavia no conoce.
+· Commits SIN `Co-Authored-By`.
+
+
+===============================================================================
+8 · ESTADO DE LO QUE VIENE ANTES
+===============================================================================
+
+· Props horneados CORRIENDO EN JUEGO ( CHANGELOG 39, commit 0aa6730 ).
+  P1 verde las cuatro mitades · P2 verde las tres.
+  `phantasmagoria_ghost_estaticos`: 418 modelos / 1588 instancias, coincide con
+  `dev/censo_props_horneados.py`; 8 modelos / 11 instancias reclamadas.
+  Emisores: creados 7 · vivos 0 ( y el conteo real del mapa tambien 0 ) ·
+  salteados 2.
+· Los cuatro falsos positivos ARREGLADOS: de 12/19 a 8/11, sin perder ninguno
+  bueno. Vetos nuevos: `radio_antenna`, `phone_book`, `toiletpaper`.
+· ⚠ FILAS QUE QUEDARON SIN CORRER del bloque anterior, y **no se pueden dar por
+  buenas**: la 03 ( que la radio horneada suene, con el fantasma en la sala ),
+  la 04 con el mecanismo puesto, y la 05 ( el A/B real-contra-horneado, con
+  `phantasmagoria_ghost_evhorneados 0` de control ). La perilla existe justo
+  para eso. Correrlas ANTES de encimar este bloque, o cualquier rojo de aca va a
+  tener dos sospechosos.
+· La prediccion calculada del `.bsp` para la sala de la radio ( fantasma en
+  -512 -425 272, radio 450 u ): **3 familias + ambiente = 25 % cada una** --
+  radio a 0 u, reloj a 35 u, telefono a 46 u. La linea tiene que decir
+  `( 3 familia(s) con sujeto en el radio )`.
+· Frontera abierta a proposito: el `+USE` **solo** para radio y telefono. El
+  reloj, el inodoro y el televisor siguen sin interruptor, y eso es una decision
+  del autor y no un olvido.
