@@ -30,6 +30,13 @@ RETORNO_ES_DEFECTO = {
     "EntityRemoved", "PlayerSpawnedProp", "PlayerDisconnected", "PostCleanupMap",
     "PreDrawOpaqueRenderables", "PostDrawTranslucentRenderables", "PreRender",
     "PhysgunDrop", "PlayerDeath",
+    # KeyPress NO tiene semantica de retorno: `hook.Call` aborta la cadena con
+    # cualquier valor, asi que un `return true` desde aca se lleva puestos a los
+    # hooks de mas abajo en la fila -- y de `E` cuelgan abrir puertas, agarrar
+    # props y entrar a vehiculos, en este addon y en los de terceros. Se agrego al
+    # escribir el +USE del bloque 2026-08-17: sin la entrada, ese hook caia en
+    # "revisar" y el auditor no podia NOMBRAR el defecto que existe para detectar.
+    "KeyPress", "KeyRelease",
 }
 
 RE_HOOK = re.compile(r'hook\.Add\s*\(\s*"([A-Za-z_0-9]+)"\s*,')

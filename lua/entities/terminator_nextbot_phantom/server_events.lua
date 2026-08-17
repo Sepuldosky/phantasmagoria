@@ -205,11 +205,73 @@ local cvHorneados = CreateConVar( "phantasmagoria_ghost_evhorneados", "1", FCVAR
     ".bsp ) cuando ninguna entidad real cubre la familia. Las entidades reales SIEMPRE tienen " ..
     "prioridad. 0 = CONTROL, solo entidades ( el comportamiento previo ) · 1 = tambien horneados.", 0, 1 )
 
--- Cuanto vive un emisor de un prop horneado cuando la familia NO declara corte.
--- Es una tanda fija y generosa a proposito: `SoundDuration` no es confiable
--- sobre `.ogg` del lado del servidor, y el clip mas largo de las familias
--- cortas esta bien por debajo de esto.
+-- Cuanto vive un emisor de un prop horneado cuando la familia NO declara corte
+-- NI duracion. Es una tanda fija y generosa a proposito: `SoundDuration` no es
+-- confiable sobre `.ogg` del lado del servidor, y el clip mas largo de las
+-- familias cortas esta bien por debajo de esto.
+--
+-- ⚠ Las familias que declaran `dur` NO pasan por aca: su emisor vive lo que dura
+-- el clip mas el margen de abajo. Ver el bloque `entero` de la radio.
 local EMISOR_VIDA = 20
+
+-- El colchon entre el final del clip y el borrado del emisor. Existe porque
+-- **borrar el emisor ES un corte**: una entidad que se va se lleva su canal, asi
+-- que un emisor que muere en el segundo exacto del final decapita el ultimo
+-- suspiro del clip -- que es justo la parte que este bloque vino a rescatar.
+local EMISOR_MARGEN = 2
+
+---------------------------------------------------------------------------
+-- EL INTERRUPTOR: +USE APAGA EL TRASTO QUE ESTA SONANDO
+---------------------------------------------------------------------------
+-- Pedido del autor, literal: *"quiero que veas si se puede apagar el prop
+-- horneado apretando +USE cerca de donde esta sonando el ruido para poder apagar
+-- las radios y telefonos ( solo esos por ahora, ya que no quiero que apagues con
+-- un temporizador las radios, deja que suenen completos los audios )"*.
+--
+-- ⚠⚠ ESTA PERILLA Y LA DE ABAJO SON **UN SOLO CAMBIO** Y NO DOS. Sacarle el
+-- corte a la radio sin el interruptor deja un clip de hasta 60,78 s solapandose
+-- con el evento siguiente, que es literal el defecto que la r3 pago y el motivo
+-- por el que existia `largo`. Por eso el default de las dos es 1 y por eso el
+-- control ( las dos en 0 ) devuelve el comportamiento anterior COMPLETO.
+local cvUse = CreateConVar( "phantasmagoria_ghost_evuse", "1", FCVAR_ARCHIVE,
+    "El jugador apaga con +USE el trasto que esta sonando ( solo las familias marcadas `apagable`: " ..
+    "radio y telefono ). 0 = CONTROL, +USE no apaga nada · 1 = apaga el mas cercano dentro del radio.", 0, 1 )
+
+-- ⚠ EL CRITERIO DE "CERCA" ES UNA DECISION Y ESTA TOMADA A PROPOSITO: **solo
+-- distancia, sin mirada**. Las dos formas se consideraron; pedir que le apuntes
+-- pierde porque **el objeto es INVISIBLE** -- el emisor es un `info_target` sin
+-- modelo, y el prop horneado no es una entidad --, o sea que no hay nada a que
+-- apuntar y el jugador tendria que adivinar el pixel. Un criterio de mirada
+-- sobre un sujeto que no se dibuja no es realismo: es una loteria.
+--
+-- 128 u son ~2,4 m con la conversion de Diseno 1 ( 1 m = 52,5 u ): hay que
+-- entrar al cuarto y ponerse al lado, no alcanza con pasar por el pasillo.
+local cvUseRad = CreateConVar( "phantasmagoria_ghost_evuseradius", "128", FCVAR_ARCHIVE,
+    "Radio en unidades dentro del cual el +USE de un jugador apaga un trasto que esta sonando. " ..
+    "Es SOLO distancia: no hace falta apuntarle, porque el objeto es invisible.", 16, 1024 )
+
+-- LAS LLAVES QUE SUENAN SIN LLAVES. El autor: *"acabar con el ruido de llaves al
+-- aplicar el evento de prop sin props elegibles ( podemos hacer que el bot
+-- cierre puertas con pestillo y ahi aplicar esos sonidos )"*.
+--
+-- ⚠ CON PERILLA, y no es un lujo: un banco que se achica y uno que se rompe se
+-- oyen IGUAL. Con esto en 0 el banco ambiente vuelve a sonar como antes, asi que
+-- "ya no suenan llaves" se puede distinguir de "el evento se quedo mudo".
+local cvLlaves = CreateConVar( "phantasmagoria_ghost_evllaves", "1", FCVAR_ARCHIVE,
+    "Sin ninguna familia con sujeto, el evento `prop` NO suena el banco ambiente ( las llaves ) y " ..
+    "dice por que. 0 = CONTROL, las llaves suenan igual ( el comportamiento previo ) · 1 = callado.", 0, 1 )
+
+-- EL PESTILLO. La otra mitad del pedido: las llaves no se borran, se mudan a una
+-- mecanica que SI tiene llaves.
+--
+-- ⚠⚠ TRABAR UNA PUERTA ES UNA MECANICA CON CONSECUENCIA, NO UN SONIDO. Si el bot
+-- traba la unica salida de un cuarto, eso no es un susto: es un softlock. Los
+-- tres limites viven abajo, en el bloque del pestillo, y son parte del diseno y
+-- no del tuning: tope de puertas trabadas a la vez, vida maxima del pestillo, y
+-- un comando para soltarlas todas.
+local cvPestillo = CreateConVar( "phantasmagoria_ghost_evpestillo", "1", FCVAR_ARCHIVE,
+    "El evento de puertas puede TRABAR una puerta cerrada ( Fire 'Lock' ) y ahi suenan las llaves. " ..
+    "0 = CONTROL, nunca traba ( el comportamiento previo ) · 1 = puede trabar, con tope y con vida.", 0, 1 )
 
 -- ⚠ LOS CONTADORES SON DEL INSTRUMENTO Y SON TRES, NO UNO.
 --   `vivos`      la fila de la FUGA: tiene que subir durante el clip y VOLVER a
@@ -220,7 +282,88 @@ local EMISOR_VIDA = 20
 --   `salteados`  cuantas veces el barrido se encontro un emisor y lo salteo. Va
 --                con NUMERO y no con silencio -- "no aparecio el emisor entre
 --                los sujetos" se cumple igual si el barrido no corrio nunca.
-local EMISORES = { vivos = 0, creados = 0, salteados = 0 }
+--
+-- ⚠⚠ `vivos` YA NO SE INCREMENTA NI SE DECREMENTA A MANO, Y ESO ES EL ARREGLO DE
+-- UNA TRAMPA QUE SE VEIA DESDE ANTES DE ESCRIBIR EL +USE. Antes el descuento
+-- vivia en un `timer.Simple( vida + 0.5 )`: si el +USE borra el emisor A LOS DOS
+-- SEGUNDOS, ese timer igual iba a correr treinta segundos despues y a descontar
+-- de un contador que ya no tenia a quien contar. El numero se habria separado
+-- del conteo real del mapa, y **la fila de la fuga habria salido roja por un
+-- motivo que no es una fuga**.
+--
+-- Ahora `vivos` se DERIVA del registro `SONANDO` en el momento de leerlo. Un
+-- contador que se calcula no se puede desincronizar: no hay dos escrituras que
+-- puedan quedar en desacuerdo, porque hay una sola lectura.
+--
+-- ⚠ El conteo REAL de emisores en el mapa se sigue imprimiendo al lado, y sigue
+-- siendo un instrumento distinto: el registro dice lo que este archivo CREE, el
+-- barrido de entidades dice lo que HAY. Si se separan, el que miente es el
+-- registro. Derivar uno no vuelve redundante al otro -- lo vuelve comparable.
+local EMISORES = { creados = 0, salteados = 0 }
+
+-- ⚠ LOS CONTADORES DEL +USE, Y SON CUATRO PORQUE HAY CUATRO DESENLACES DISTINTOS
+-- Y TRES DE ELLOS SE VEN IGUAL DESDE AFUERA ( "apreté E y no pasó nada" ):
+--   `teclas`    todas las pulsaciones de IN_USE que el hook vio. Es la
+--               acreditacion de que el hook ESTA VIVO -- sin este numero, la
+--               fila del control negativo no distingue "no habia nada cerca" de
+--               "el hook no corre en este realm", que es justo lo que P1 mide.
+--   `apagados`  cuantas veces apago algo de verdad.
+--   `lejos`     cuantas veces habia algo sonando y apagable, pero fuera del
+--               radio. ESTE es el numero de la fila del control negativo: un
+--               cero ahi no prueba nada, un uno prueba que el filtro decidio.
+--   `tarde`     cuantas veces el candidato mas cercano ya habia terminado su
+--               clip. Va aparte porque apagar un silencio se lee como exito y es
+--               el falso verde de la trampa 4.
+local USE = { teclas = 0, apagados = 0, lejos = 0, tarde = 0, ultimoLog = 0 }
+
+-- ⚠ LA VENTANA DEL LOG DEL +USE, Y ES UNA VENTANA DE TIEMPO Y NO UN FILTRO DE
+-- REPETIDOS. `E` se aprieta muchas veces seguidas -- para abrir puertas, para
+-- agarrar cosas -- y con una radio sonando lejos cada pulsacion escribiria un
+-- renglon: la bitacora quedaria tapada justo en la corrida que hay que leer.
+-- Pero un filtro "no repitas lo mismo" borraria el episodio que alguien esta
+-- reproduciendo a proposito ( ese defecto ya se pago acá, con el physgun ), asi
+-- que lo que se limita es la FRECUENCIA. **Los contadores suben SIEMPRE**: lo
+-- que se rate-limita es la prosa, nunca el numero que la fila lee.
+local USE_LOG_CADA = 2
+
+-- LO QUE ESTA SONANDO AHORA POR EL EVENTO `prop`.
+--
+-- Cada entrada: { ent, snd, fam, emisor, hasta, quien }. `emisor` dice si la
+-- entidad la creamos nosotros ( y por lo tanto se puede borrar ) o si es un prop
+-- de verdad del mapa ( y entonces al +USE **solo** le toca callarlo: borrar la
+-- radio de otro no es apagarla ).
+--
+-- ⚠ `hasta` NO es decoracion: sin el, el +USE sobre un emisor cuyo clip ya
+-- termino imprimiria "apagado" habiendo apagado un silencio. Es la trampa 4 del
+-- lado del instrumento -- *un sonido que se termino solo pasa por un +USE que
+-- funciono*.
+local SONANDO = {}
+
+-- La poda. Corre en los tres lugares donde alguien mira el registro ( el evento,
+-- el +USE y el reporte ) y NO en un timer: un timer mas seria un escritor mas
+-- sobre el mismo estado, y este bloque acaba de sacar uno justamente por eso.
+--
+-- ⚠ SE PODA POR ENTIDAD INVALIDA Y **NO** POR `hasta`. Una entrada vencida sigue
+-- valiendo mientras el emisor exista: es la que deja decir *"lo que tenias mas
+-- cerca ya habia terminado"* en vez de *"no habia nada"*, y esas dos frases son
+-- diagnosticos distintos. El vencimiento lo mira quien decide, no la poda.
+--
+-- Devuelve cuantas quedaron y cuantas se cayeron, porque un registro que se
+-- vacia solo y uno que nunca se lleno **se leen igual en una foto**.
+local function podarSonando()
+    local caidas = 0
+
+    for i = #SONANDO, 1, -1 do
+        if not IsValid( SONANDO[ i ].ent ) then
+            table.remove( SONANDO, i )
+            caidas = caidas + 1
+
+        end
+    end
+
+    return #SONANDO, caidas
+
+end
 
 ---------------------------------------------------------------------------
 -- LAS OCHO CATEGORIAS
@@ -481,16 +624,36 @@ SND.furniture = {
 -- menos de un segundo. Son mas que dos a proposito: un banco de fallback que se
 -- repite se nota mas que uno que varia. Si `lock`/`unlock` se pisan con la
 -- familia de puertas, se recorta a los `pickup` y no hace falta tocar nada mas.
-SND.prop = {
+-- ⚠⚠ LAS OCHO SE DECLARAN EN TRES BANCOS Y `SND.prop` SE ARMA CON ELLOS, y no
+-- es cosmetica: el bloque del pestillo ( 2026-08-17 ) le da a `key_lock_*` y
+-- `key_unlock_*` un consumidor donde SI hay una llave, y el banco ambiente sigue
+-- existiendo para el CONTROL ( `phantasmagoria_ghost_evllaves 0` ). Escritas dos
+-- veces, el dia que alguien agregue un `key_lock_4` va a entrar en un solo lado
+-- y el otro banco va a quedar callado sin que nada lo diga.
+-- *Una lista que decide comportamiento tiene que existir UNA vez.*
+SND.key_pickup = {
     "phantasmagoria/prop/key_pickup_1.ogg",
     "phantasmagoria/prop/key_pickup_4.ogg",
+}
+
+SND.key_lock = {
     "phantasmagoria/prop/key_lock_1.ogg",
     "phantasmagoria/prop/key_lock_2.ogg",
     "phantasmagoria/prop/key_lock_3.ogg",
+}
+
+SND.key_unlock = {
     "phantasmagoria/prop/key_unlock_1.ogg",
     "phantasmagoria/prop/key_unlock_2.ogg",
     "phantasmagoria/prop/key_unlock_3.ogg",
 }
+
+SND.prop = {}
+
+for _, banco in ipairs( { SND.key_pickup, SND.key_lock, SND.key_unlock } ) do
+    for _, ruta in ipairs( banco ) do SND.prop[ #SND.prop + 1 ] = ruta end
+
+end
 
 -- Sonidos que NOMBRAN un objeto, y por eso no se sortean si el objeto no esta.
 -- El sonido sale DE la entidad ( `EmitSound` ), no de un punto: una alarma que
@@ -678,7 +841,69 @@ local PROP_CONSUJETO = {
 --   la direccion en la que un cero significa algo. )
     {
         que     = "una radio",
-        largo   = { 6, 14 },   -- segundos de emision antes del StopSound
+
+        -----------------------------------------------------------------------
+        -- ⚠⚠ ACA VIVIA `largo = { 6, 14 }` Y LA RONDA DEL +USE LO SACO. QUEDA
+        -- ESCRITO PARA QUE NO SE REESCRIBA.
+        -----------------------------------------------------------------------
+        -- Pedido del autor: *"no quiero que apagues con un temporizador las
+        -- radios, deja que suenen completos los audios"*. Y no era una
+        -- preferencia: **el corte decapitaba 6 de 6**. Medidas las duraciones
+        -- contra los clips y no contra el nombre ( `dev/duracion_ogg.py`, que
+        -- reproduce a 0,004 s los cuatro valores que ya existian ):
+        --
+        --     corte 6-14 s   ·   clips de 26,78 a 60,78 s   ->  6 de 6 cortados
+        --
+        -- No hay UN clip de esta familia que alcance a terminar. Y el final es la
+        -- parte que importa: medido con planitud espectral, tres de los cuatro
+        -- clips principales **terminan en ruido de banda ancha** -- la estatica y
+        -- el apagado -- mientras el corte caia en el medio tonal. O sea que
+        -- `StopSound` se comia siempre el apagado, y la promesa escrita quince
+        -- lineas mas arriba -- *"un radioruido que arranca y para solo es lo que
+        -- hace una radio poseida"* -- se cumplia a medias desde el dia que se
+        -- escribio.
+        --
+        -- ⚠ SACAR EL CORTE SIN PONER EL INTERRUPTOR HABRIA SIDO UN DEFECTO Y NO
+        -- UN ARREGLO: un clip de 60,78 s se solapa con el evento siguiente, que
+        -- es el motivo por el que `largo` existia. Las dos mitades son el mismo
+        -- cambio -- ver `cvUse` arriba.
+        entero   = true,
+        apagable = true,
+
+        -- ⚠ LA SEGUNDA MITAD QUE SE OLVIDA. El emisor vivia `largo[2] + 2`
+        -- segundos; si el clip pasa a sonar entero y el emisor se va antes,
+        -- **borrarlo lo decapita igual, por otra puerta** -- una entidad que se
+        -- va se lleva su canal. Por eso la duracion vive ACA, al lado del clip, y
+        -- de aca salen las dos cosas que dependen de ella ( la vida del emisor y
+        -- la ventana del +USE ): *una constante que decide comportamiento tiene
+        -- que existir UNA vez*.
+        --
+        -- Medidas con `dev/duracion_ogg.py` ( granule del ultimo page / rate,
+        -- leido del binario ). Las cuatro primeras ya estaban medidas con otro
+        -- instrumento y son el AUTO-CONTROL del lector: reprodujeron a 0,004 s.
+        -- Las dos ultimas son nuevas de esta ronda y salieron de la misma corrida
+        -- calibrada. Los seis clips son MONO, que es la precondicion de que
+        -- suenen DESDE el objeto ( Source no espacializa un estereo ).
+        dur = {
+            [ "phantasmagoria/prop/radio/creepy_music.ogg" ]          = 33.71,
+            [ "phantasmagoria/prop/radio/creepy_music_old.ogg" ]      = 26.78,
+            [ "phantasmagoria/prop/radio/creepy_music_slowdown.ogg" ] = 42.23,
+            [ "phantasmagoria/prop/radio/creepy_montage.ogg" ]        = 41.41,
+            [ "phantasmagoria/prop/radio/creepy_radio_easteregg_helpmewithend.ogg" ] = 60.78,
+            [ "phantasmagoria/prop/radio/ritual_chanting_loop.ogg" ]  = 32.75,
+        },
+
+        -- ⚠ UNO DE LOS SEIS ES UN LOOP Y HAY QUE DECIRLO EN VEZ DE DESCUBRIRLO
+        -- EN JUEGO. `ritual_chanting_loop` mide 32,75 s de audio, pero si el
+        -- motor lo trata como bucle no tiene "final": lo que lo corta pasa a ser
+        -- la muerte del emisor a los 34,75 s, o sea el corte por otra puerta.
+        -- Entro a la familia en la r3 con el argumento de que *"un loop cortado
+        -- se oye como una radio que arranca y para"* -- que era cierto cuando
+        -- habia corte y **queda sin sostener ahora que no lo hay**.
+        -- No se saca en esta ronda: sacarlo seria decidir por el autor sobre un
+        -- clip que el pidio expresamente. Queda como frontera abierta y con
+        -- nombre, para que la fila de "la radio suena entera" **no se corra con
+        -- este clip** y para que un rojo suyo no se lea como un rojo del bloque.
         -- ⚠ LOS DOS DE ABAJO LOS PIDIO EL AUTOR EXPLICITAMENTE ( r3, 2026-08-10 ):
         -- *"Agrega creepy_radio_easteregg_helpmewithend.ogg y ritual_chanting_loop
         -- al roster de los sonidos de radio"*. Los dos motivos por los que estaban
@@ -738,6 +963,28 @@ local PROP_CONSUJETO = {
     -- radio y phone."*
     {
         que     = "un telefono",
+
+        -- ⚠ EL AUTOR PIDIO EL +USE PARA *"las radios y telefonos"*, Y EN ESTA
+        -- FAMILIA CASI NO TIENE NADA QUE APAGAR. Medido: `phone_ring` dura
+        -- **3,46 s** y `phone_vibrate` **1,11 s** -- por eso esta familia nunca
+        -- tuvo `largo`, nunca hizo falta cortarla. Ponerle el interruptor es
+        -- coherente y cuesta cero ( el mecanismo es el mismo ), **pero no
+        -- resuelve ningun sintoma**: para llegar a apretar hay que estar al lado
+        -- y dentro de una ventana de tres segundos y medio.
+        -- *Una fila que solo se puede aprobar con reflejos no mide el mecanismo,
+        -- mide al que la corre.* El sujeto de verdad del bloque es la radio; el
+        -- telefono entra de arrastre, y esta escrito para que nadie le pida a la
+        -- planilla una fila que no se puede correr.
+        --
+        -- `entero` no le cambia el sonido -- ya sonaba completo -- pero le
+        -- ajusta la vida del emisor: pasa de los 20 s fijos a 5,46 s, o sea deja
+        -- de haber un `info_target` mudo dando vueltas dieciseis segundos.
+        entero   = true,
+        apagable = true,
+        dur = {
+            [ "phantasmagoria/prop/phone_ring.ogg" ]    = 3.46,
+            [ "phantasmagoria/prop/phone_vibrate.ogg" ] = 1.11,
+        },
         sonidos = {
             "phantasmagoria/prop/phone_ring.ogg",
             "phantasmagoria/prop/phone_vibrate.ogg",
@@ -1070,6 +1317,41 @@ local function elegir( t )
     if n <= 0 then return nil end
 
     return t[ math.random( n ) ]
+
+end
+
+---------------------------------------------------------------------------
+-- LAS LLAVES, PARA EL QUE TENGA UNA PUERTA
+---------------------------------------------------------------------------
+-- Se EXPORTA porque tiene dos consumidores en dos archivos: el pestillo de acá y
+-- el destrabado de `server_doors.lua:1036`, que existe desde la ronda de las
+-- puertas y hasta hoy era mudo. Los bancos se quedan donde viven todos los demas
+-- ( este archivo es el dueno del catalogo de sonido de eventos ) y lo que viaja
+-- es la funcion, no la tabla.
+--
+-- ⚠ `server_doors.lua` se incluye ANTES que este archivo, asi que alla la
+-- referencia tiene que ser tardia -- se llama en runtime, no al cargar. Alla hay
+-- un `isfunction` con aviso de una sola vez: sin el, un dia que este archivo no
+-- cargue el destrabado se quedaria mudo Y sin decir por que, que es la forma de
+-- falla que este bloque entero vino a corregir.
+--
+-- Devuelve la ruta que sono ( o nil ), y ese retorno NO es decorativo: es lo que
+-- deja que quien llama escriba en la bitacora QUE clip sono, en vez de afirmar
+-- que sono alguno.
+function PHANTASMAGORIA.SonarLlave( tipo, pos, nivel )
+    local banco = ( tipo == "lock" and SND.key_lock )
+        or ( tipo == "unlock" and SND.key_unlock )
+        or SND.key_pickup
+
+    local snd = elegir( banco )
+    if not snd or not isvector( pos ) then return nil end
+
+    -- 68 de nivel y no los 75 de un prop: una llave en una cerradura es un ruido
+    -- chico, y este sonido va a sonar a la distancia de una puerta y no a la de
+    -- una habitacion.
+    sound.Play( snd, pos, nivel or 68, math.random( 96, 104 ) )
+
+    return snd
 
 end
 
@@ -1935,6 +2217,101 @@ end
 -- no previene nada. Aca se consulta antes y se escribe en el mismo lugar.
 local DOOR_COOLDOWN = 45
 
+---------------------------------------------------------------------------
+-- EL PESTILLO -- las llaves, mudadas a una mecanica que SI tiene llaves
+---------------------------------------------------------------------------
+-- El autor, en la misma frase en que pidio sacarlas del ambiente: *"( podemos
+-- hacer que el bot cierre puertas con pestillo y ahi aplicar esos sonidos )"*.
+--
+-- Y ya habia con que, sin inventar nada: `server_doors.lua` **lee** si una puerta
+-- esta trabada ( `door:GetInternalVariable( "m_bLocked" )`, :281 y :293 ) y ya
+-- **destraba** ( `door:Fire( "Unlock" )`, :1036, detras de la convar
+-- `phantasmagoria_ghost_doorunlock` ). El pestillo es el gemelo de eso.
+--
+-- ⚠⚠ QUE `Fire( "Lock" )` FUNCIONE SOBRE LAS CLASES DE ESTE MAPA **NO ESTA
+-- MEDIDO**: el engine es un tercero, y `Entity:Fire` con un input que la clase no
+-- acepta **no tira error** -- `AcceptInput` devuelve false en silencio. Es
+-- exactamente el pecado que este archivo ya documenta en `point_spotlight` y en
+-- el encabezado de `EV.door`. Por eso no se afirma que trabo: se **relee
+-- `m_bLocked` un tick despues** y la bitacora dice cual de las dos cosas paso.
+--
+-- ⚠⚠⚠ Y TRABAR UNA PUERTA ES UNA MECANICA CON CONSECUENCIA, NO UN SONIDO: si el
+-- bot traba la unica salida de un cuarto, eso no es un susto, es un softlock. Los
+-- tres limites son parte del diseno y estan puestos ANTES de la primera corrida,
+-- no despues de que alguien quede encerrado:
+--
+--   PESTILLO_MAX    cuantas puede haber trabadas A LA VEZ por el fantasma. Con
+--                   dos, siempre queda camino en una casa de 65 puertas.
+--   PESTILLO_VIDA   segundos hasta que se suelta sola. Es el limite que de verdad
+--                   protege: aunque las dos trabadas fueran las dos salidas del
+--                   mismo cuarto, la espera tiene techo y es corta.
+--   el comando      `phantasmagoria_ghost_pestillo soltar` las abre todas ya. Es
+--                   la salida de emergencia del que esta jugando.
+--
+-- ⚠ Y NO SE TRABA UNA PUERTA QUE YA VENIA TRABADA. No es un caso raro: el mapa
+-- trae puertas con llave y el fantasma las destraba para pasar. Sin esta regla, el
+-- pestillo se acreditaria el trabado de otro y despues **la soltaria**, o sea que
+-- el mecanismo "trabar puertas" terminaria DESTRABANDO el mapa.
+local PESTILLO_MAX  = 2
+local PESTILLO_VIDA = 45
+
+-- Array y no diccionario por entidad: hay que poder recorrerlo en orden y podarlo
+-- sin que una entidad borrada deje una clave colgada.
+local PESTILLOS = {}
+
+local function podarPestillos()
+    for i = #PESTILLOS, 1, -1 do
+        if not IsValid( PESTILLOS[ i ].door ) then table.remove( PESTILLOS, i ) end
+
+    end
+
+    return #PESTILLOS
+
+end
+
+local function trabada( door )
+    return door:GetInternalVariable( "m_bLocked" ) == true
+
+end
+
+-- ⚠ LOS DOS ENUMS ESTAN INVERTIDOS ENTRE LAS DOS FAMILIAS, y eso ya esta medido
+-- en `server_doors.lua:238-264`: `prop_door_rotating` usa `m_eDoorState` ( 0
+-- cerrada ) y `func_door*` usa `m_toggle_state`, donde **0 es ABIERTA**. Copiar
+-- una sola de las dos lecturas haria que el pestillo trabara puertas abiertas en
+-- la mitad de las clases -- y una puerta abierta y trabada no se ve distinta
+-- hasta que alguien intenta cerrarla.
+local function cerrada( door )
+    if door:GetClass() == "prop_door_rotating" then
+        local s = door:GetInternalVariable( "m_eDoorState" )
+        return s == 0 or s == 3
+
+    end
+
+    local s = door:GetInternalVariable( "m_toggle_state" )
+    return s == 1 or s == 3
+
+end
+
+local function soltarPestillo( p, motivo )
+    if not IsValid( p.door ) then return false end
+
+    p.door:Fire( "Unlock" )
+
+    if isfunction( PHANTASMAGORIA.SonarLlave ) then
+        PHANTASMAGORIA.SonarLlave( "unlock", p.door:WorldSpaceCenter() )
+
+    end
+
+    anotar( string.format( "pestillo SUELTO -- %s #%d ( %s )",
+        p.door:GetClass(), p.door:EntIndex(), motivo ) )
+
+    return true
+
+end
+
+---------------------------------------------------------------------------
+-- EL EVENTO DE PUERTAS
+---------------------------------------------------------------------------
 EV.door = function( ghost, radio )
     local st  = estado( ghost )
     local now = CurTime()
@@ -1963,6 +2340,122 @@ EV.door = function( ghost, radio )
     -- a entidades muertas que crece con la partida.
     for ent, hasta in pairs( st.doorHasta ) do
         if not IsValid( ent ) or hasta < now - DOOR_COOLDOWN then st.doorHasta[ ent ] = nil end
+
+    end
+
+    ---------------------------------------------------------------------------
+    -- ¿TRABAR EN VEZ DE ABRIR?
+    ---------------------------------------------------------------------------
+    -- Se decide ACA, antes de la guarda de `Use2`, y a proposito: el pestillo no
+    -- pasa por `Use2` -- es un `Fire` directo --, asi que una base que no lo
+    -- exponga no tiene por que apagar tambien esta mitad.
+    --
+    -- ⚠ LAS CUATRO CONDICIONES SE COMPRUEBAN EN ESTE ORDEN Y CADA UNA DICE QUE
+    -- NO POR SU CUENTA. Un solo `if` con cuatro `and` habria dado un "no trabo"
+    -- que no distingue el tope alcanzado de la puerta abierta -- y ahi la fila de
+    -- la planilla no puede saber si el mecanismo esta apagado o si nunca le toco
+    -- un sujeto valido.
+    -- ⚠ ES UN LOCAL DE ESTA LLAMADA Y NO UN CAMPO DE `st`, A PROPOSITO. Guardado
+    -- en el estado del fantasma, el motivo del ultimo "no trabo" sobreviviria a
+    -- la llamada que lo produjo y se imprimiria al lado del disparo siguiente:
+    -- una FOTO VIEJA puesta junto a un veredicto nuevo, que es la familia de
+    -- defecto que este archivo ya pago en el comando de disparo forzado.
+    local pestilloNo
+
+    if cvPestillo:GetBool() then
+        local puestos = podarPestillos()
+        local noPorque
+
+        if puestos >= PESTILLO_MAX then
+            noPorque = "ya hay " .. puestos .. " puerta(s) trabada(s), que es el tope"
+
+        elseif not cerrada( door ) then
+            noPorque = "la puerta elegida no esta cerrada"
+
+        elseif trabada( door ) then
+            noPorque = "la puerta ya venia trabada ( no es nuestra, y soltarla seria destrabar el mapa )"
+
+        elseif math.random( 1, 3 ) > 1 then
+            -- ⚠ UNO DE CADA TRES Y NO SIEMPRE. Con el pestillo en todas, el
+            -- evento de puertas dejaria de abrir -- que es lo que el autor usa
+            -- para VER donde esta el fantasma adentro de la casa ( es un
+            -- instrumento de observacion suyo, y esta escrito asi en
+            -- server_doors.lua ). El sorteo va con numero en la bitacora para que
+            -- "no salio" no se confunda con "no funciona".
+            noPorque = "el sorteo salio abrir ( el pestillo es 1 de cada 3 )"
+
+        end
+
+        if not noPorque then
+            st.doorHasta[ door ] = now + DOOR_COOLDOWN
+
+            door:Fire( "Lock" )
+
+            if isfunction( PHANTASMAGORIA.SonarLlave ) then
+                PHANTASMAGORIA.SonarLlave( "lock", door:WorldSpaceCenter() )
+
+            end
+
+            local p = { door = door, hasta = now + PESTILLO_VIDA }
+            PESTILLOS[ #PESTILLOS + 1 ] = p
+
+            -- ⚠ MEDIR EL DESTINO. `Fire( "Lock" )` sobre una clase que no acepta
+            -- el input **no avisa**: `AcceptInput` devuelve false en silencio. El
+            -- veredicto llega diferido porque el estado cambia en el tick
+            -- siguiente, y el retorno de este frame dice "INTENTADO", que es lo
+            -- unico cierto ahora.
+            local yoAhora = quien( ghost )
+
+            timer.Simple( 0.25, function()
+                if not IsValid( door ) then return end
+
+                if trabada( door ) then
+                    anotar( string.format( "%s pestillo CONFIRMADO -- %s #%d trabada ( m_bLocked true ); " ..
+                        "se suelta sola en %d s", yoAhora, door:GetClass(), door:EntIndex(), PESTILLO_VIDA ) )
+
+                else
+                    -- No quedo trabada: se saca del registro. Dejarla adentro
+                    -- ocuparia una de las dos plazas del tope Y le sonaria un
+                    -- `key_unlock` a los 45 s a una puerta que nunca se trabo.
+                    for i = #PESTILLOS, 1, -1 do
+                        if PESTILLOS[ i ] == p then table.remove( PESTILLOS, i ) end
+
+                    end
+
+                    anotar( string.format( "%s pestillo SIN EFECTO -- %s #%d NO quedo trabada. " ..
+                        "Fire( 'Lock' ) no lo acepta esta clase, o algo la destrabo en el mismo tick",
+                        yoAhora, door:GetClass(), door:EntIndex() ) )
+
+                end
+            end )
+
+            -- La soltada automatica. Comprueba que el pestillo siga siendo NUESTRO
+            -- antes de tocar nada: si lo sacamos del registro ( porque no trabo, o
+            -- porque el comando lo solto ), este timer no tiene que hacer sonar
+            -- una llave sobre una puerta ajena.
+            timer.Simple( PESTILLO_VIDA, function()
+                for i = #PESTILLOS, 1, -1 do
+                    if PESTILLOS[ i ] == p then
+                        table.remove( PESTILLOS, i )
+                        soltarPestillo( p, "se cumplio la vida de " .. PESTILLO_VIDA .. " s" )
+
+                    end
+                end
+            end )
+
+            return true, "puerta " .. door:GetClass() .. " #" .. door:EntIndex() .. " a " ..
+                math.Round( ghost:GetPos():Distance( door:WorldSpaceCenter() ) ) ..
+                " u -- PESTILLO INTENTADO con llaves ( " .. ( puestos + 1 ) .. "/" .. PESTILLO_MAX ..
+                " trabadas; el efecto se confirma en la bitacora a los 0,25 s )"
+
+        end
+
+        -- Se anota el NO, porque un pestillo que nunca sale y uno que no existe
+        -- se ven igual desde afuera.
+        pestilloNo = noPorque
+
+    else
+        pestilloNo = "phantasmagoria_ghost_evpestillo esta en 0 ( control )"
 
     end
 
@@ -2064,7 +2557,8 @@ EV.door = function( ghost, radio )
 
     return true, "puerta " .. door:GetClass() .. " #" .. door:EntIndex() .. " a " .. dist ..
         " u -- INTENTADA ( estado " .. tostring( estadoAntes ) ..
-        "; el efecto se confirma en la bitacora a los 0,25 s )"
+        "; el efecto se confirma en la bitacora a los 0,25 s )" ..
+        ( pestilloNo and ( "  [ sin pestillo: " .. pestilloNo .. " ]" ) or "" )
 
 end
 
@@ -2619,6 +3113,11 @@ EV.prop = function( ghost, radio )
     -- siete de ellos redundantes. Se invierten los bucles: la esfera se pide una
     -- vez y cada entidad se clasifica contra todas las familias en la misma
     -- pasada.
+    -- La poda del registro de lo que suena. Va acá y no en un timer: este es el
+    -- unico camino que agrega entradas, asi que es el lugar natural para sacar
+    -- las que ya no tienen entidad.
+    podarSonando()
+
     local esfera = ents.FindInSphere( ghost:GetPos(), radio )
     local hallado, cuantas = {}, 0
 
@@ -2723,17 +3222,49 @@ EV.prop = function( ghost, radio )
 
     if #SND.prop > 0 then opciones[ #opciones + 1 ] = { ambiente = true } end
 
+    -- ⚠ SE CUENTA APARTE Y NO SE DEDUCE DE `#opciones`. Hasta esta ronda el
+    -- detalle imprimia `#opciones - 1` asumiendo que el ambiente siempre estaba
+    -- adentro; con el banco ambiente vacio ese numero se corria en uno y nadie
+    -- lo habria notado, porque un "3" y un "4" se leen los dos como un dato.
+    local conSujeto = 0
+
     for i, fam in ipairs( PROP_CONSUJETO ) do
         if IsValid( hallado[ i ] ) then
             opciones[ #opciones + 1 ] = { fam = fam, ent = hallado[ i ] }
+            conSujeto = conSujeto + 1
 
         elseif horneado[ i ] then
             -- Un horneado pesa lo mismo que una entidad real: la prioridad ya
             -- se ejercio arriba ( solo entran las familias que quedaron sin
             -- sujeto ), asi que darle menos peso aca lo penalizaria DOS veces.
             opciones[ #opciones + 1 ] = { fam = fam, est = horneado[ i ] }
+            conSujeto = conSujeto + 1
 
         end
+    end
+
+    ---------------------------------------------------------------------------
+    -- LAS LLAVES QUE SONABAN SIN LLAVES
+    ---------------------------------------------------------------------------
+    -- El autor: *"acabar con el ruido de llaves al aplicar el evento de prop sin
+    -- props elegibles"*. `SND.prop` son ocho clips y **los ocho son llaves** ( las
+    -- dos que no lo eran, `key_1` y `key_2`, resultaron ser el presentador
+    -- britanico y se mudaron a `voice/` en la r3 ). No suenan mal: suenan **donde
+    -- no corresponde**, que es justo el cuarto donde no hay nada que las explique.
+    --
+    -- ⚠⚠ Y LA LINEA TIENE QUE SEGUIR SALIENDO. Un evento que se vuelve mudo hace
+    -- que la fila del control negativo no pueda distinguir *"no habia sujeto"* de
+    -- *"el evento no corrio"*, que es la trampa 5 de este bloque y una vieja
+    -- conocida del taller: **un vacio no es una medicion**. Por eso esto sale por
+    -- el camino `return false, motivo`, que `phantom_FireEvent` YA imprime como
+    -- `SIN SUJETO -- <motivo>` en la bitacora ( no es un camino nuevo: es el que
+    -- el codigo tenia ).
+    if conSujeto <= 0 and cvLlaves:GetBool() then
+        return false, "sin ningun objeto reconocible a " .. math.Round( radio ) ..
+            " u  ( 0 familia(s) con sujeto en el radio; el banco ambiente NO suena porque " ..
+            "phantasmagoria_ghost_evllaves esta en 1 -- las llaves se mudaron al pestillo de " ..
+            "las puertas. Con la convar en 0 vuelven a sonar aca, que es el control )"
+
     end
 
     if #opciones <= 0 then
@@ -2789,7 +3320,6 @@ EV.prop = function( ghost, radio )
             ent = emisor
 
             EMISORES.creados = EMISORES.creados + 1
-            EMISORES.vivos   = EMISORES.vivos + 1
 
         end
 
@@ -2797,21 +3327,82 @@ EV.prop = function( ghost, radio )
 
         -- ⚠ EL CLIP LARGO SE CORTA, Y POR ESO ESTA FAMILIA EMITE EN LA ENTIDAD.
         -- `sound.Play` no devuelve nada que se pueda apagar; `EmitSound` ata el
-        -- canal a la entidad y `StopSound` lo suelta. Sin esto, la radio suena
-        -- 42 segundos y se solapa con el evento siguiente.
-        local corte = ""
+        -- canal a la entidad y `StopSound` lo suelta.
+        --
+        -- ⚠⚠ SON TRES CAMINOS Y NO DOS, Y EL DEL MEDIO ES NUEVO:
+        --   `fam.largo`   corta con StopSound a los pocos segundos ( el televisor
+        --                 y el reloj: `tv_noise` dura 10,03 s y `clock_tick`
+        --                 46,55 s, y sin corte se comen el evento siguiente ).
+        --   `fam.entero`  NO corta: suena hasta el final, y el que lo apaga es el
+        --                 jugador con +USE. La radio y el telefono.
+        --   ninguno       clips de menos de un segundo y medio: no hay nada que
+        --                 cortar y el emisor vive la tanda fija.
+        -- `finClip` es CUANDO deja de oirse, y se calcula por camino en vez de
+        -- reusar un solo numero: es lo que separa "esto todavia suena" de "esto
+        -- ya termino" cuando alguien aprieta +USE, y las dos cosas se ven igual
+        -- desde afuera. Donde no se conoce, se guarda una COTA SUPERIOR y esta
+        -- dicho -- una cota no es una medicion, pero un `hasta` inventado corto
+        -- convertiria un +USE valido en un "ya habia terminado".
+        local corte, dur, finClip = "", nil, EMISOR_VIDA
 
-        if fam.largo then
-            local dur = math.Rand( fam.largo[ 1 ], fam.largo[ 2 ] )
+        if fam.entero then
+            dur = fam.dur and fam.dur[ snd ]
 
-            timer.Simple( dur, function()
+            -- ⚠ SI FALTA LA DURACION SE DICE, NO SE ADIVINA. La guarda del final
+            -- del archivo grita al cargar si una familia `entero` tiene un clip
+            -- sin medir, pero si igual llegara hasta aca, un numero inventado
+            -- seria peor que ninguno: la vida del emisor decide si el clip se
+            -- oye entero, o sea que un default silencioso volveria a decapitar
+            -- por la puerta que este bloque vino a cerrar.
+            finClip = dur or EMISOR_VIDA
+            corte   = dur and ( ", ENTERO: " .. string.format( "%.2f", dur ) .. " s" )
+                or ", ENTERO pero SIN DURACION DECLARADA ( el emisor vive la tanda fija; ver la guarda 3b )"
+
+        elseif fam.largo then
+            local cuando = math.Rand( fam.largo[ 1 ], fam.largo[ 2 ] )
+
+            timer.Simple( cuando, function()
                 if not IsValid( ent ) then return end
                 ent:StopSound( snd )
 
             end )
 
-            corte = ", cortado a los " .. string.format( "%.1f", dur ) .. " s"
+            finClip = cuando
+            corte   = ", cortado a los " .. string.format( "%.1f", cuando ) .. " s"
 
+        end
+
+        ---------------------------------------------------------------------
+        -- EL REGISTRO DE LO QUE SUENA -- de aca come el +USE
+        ---------------------------------------------------------------------
+        -- ⚠ ENTRAN LOS DOS: el emisor de un horneado Y el prop de verdad. Sacar
+        -- el corte de la radio le saca el corte TAMBIEN a la radio
+        -- `prop_physics` que alguien spawnee, y esa no tiene emisor -- si el
+        -- registro solo mirara emisores, el jugador tendria una radio real
+        -- sonando sesenta segundos y ningun modo de callarla.
+        -- *Un cambio que alcanza a dos clases de sujeto necesita un interruptor
+        -- que alcance a las dos.*
+        --
+        -- ⚠⚠ Y AL PROP DE VERDAD **NO SE LO BORRA**: `emisor` es lo que autoriza
+        -- el `SafeRemoveEntity` de mas abajo. Apagar la radio de otro es callarla,
+        -- no hacerla desaparecer.
+        --
+        -- ⚠ LA CONDICION TIENE DOS MITADES Y NINGUNA SOBRA. `fam.apagable` es
+        -- para el +USE; `IsValid( emisor )` es para el CONTADOR, porque de este
+        -- mismo registro sale `vivos` -- y si solo entraran las familias
+        -- apagables, los emisores del reloj y del televisor quedarian fuera de la
+        -- cuenta y **la fila de la fuga diria 0 con emisores vivos en el mapa**.
+        -- El mismo registro sirve a dos consumidores con criterios distintos, y
+        -- cada uno filtra lo suyo al leer.
+        if fam.apagable or IsValid( emisor ) then
+            SONANDO[ #SONANDO + 1 ] = {
+                ent    = ent,
+                snd    = snd,
+                fam    = fam,
+                emisor = IsValid( emisor ),
+                hasta  = CurTime() + finClip,
+                nombre = fam.que,
+            }
         end
 
         -- ⚠ LIMPIAR EL EMISOR, Y NO ANTES DE TIEMPO. Si se lo borra mientras
@@ -2819,20 +3410,25 @@ EV.prop = function( ghost, radio )
         -- canal. Si se lo deja, el mapa se llena: en la prueba a mano de P2
         -- quedaron cuatro `info_target` vivos en cuatro comandos.
         --
-        -- La vida se mide desde el corte cuando la familia lo tiene, y si no,
-        -- de una tanda fija generosa: `SoundDuration` no es confiable sobre
-        -- `.ogg` del lado del servidor, asi que no se le pregunta -- se le da
-        -- margen. Un emisor de mas durante diez segundos no molesta a nadie; uno
-        -- que no se va nunca, si.
+        -- Las tres vidas, en el mismo orden que los tres caminos de arriba:
+        --   con `dur` medida   el clip entero mas `EMISOR_MARGEN`;
+        --   con `largo`        el corte mas el margen;
+        --   sin ninguno        la tanda fija generosa.
         if IsValid( emisor ) then
-            local vida = fam.largo and ( fam.largo[ 2 ] + 2 ) or EMISOR_VIDA
+            local vida = ( dur and ( dur + EMISOR_MARGEN ) )
+                or ( fam.largo and ( fam.largo[ 2 ] + EMISOR_MARGEN ) )
+                or EMISOR_VIDA
 
             SafeRemoveEntityDelayed( emisor, vida )
 
-            timer.Simple( vida + 0.5, function()
-                EMISORES.vivos = math.max( 0, EMISORES.vivos - 1 )
+            -- ⚠ ACA VIVIA UN `timer.Simple( vida + 0.5 )` QUE DESCONTABA
+            -- `EMISORES.vivos`, Y SE FUE POR LA TRAMPA 3 DE ESTE BLOQUE: con el
+            -- +USE borrando el emisor antes de tiempo, ese timer iba a correr
+            -- igual y a descontar de un contador que ya no tenia a quien contar.
+            -- El numero se habria separado del conteo real del mapa y la fila de
+            -- la fuga habria salido roja sin fuga. Hoy `vivos` se DERIVA del
+            -- registro -- ver el bloque EMISORES arriba.
 
-            end )
         end
 
         -- El sujeto se NOMBRA distinto segun de donde salio, y no es cosmetico:
@@ -2854,7 +3450,8 @@ EV.prop = function( ghost, radio )
         return true, ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) ..
             " DESDE " .. fam.que .. " ( " .. quien .. " ) a " ..
             math.Round( ghost:GetPos():Distance( ent:GetPos() ) ) .. " u" .. corte ..
-            "  ( " .. ( #opciones - 1 ) .. " familia(s) con sujeto en el radio )"
+            ( fam.apagable and "  [ se apaga con +USE a " .. cvUseRad:GetInt() .. " u ]" or "" ) ..
+            "  ( " .. conSujeto .. " familia(s) con sujeto en el radio )"
 
     end
 
@@ -2876,9 +3473,154 @@ EV.prop = function( ghost, radio )
     -- el mecanismo funcionando; la segunda es el sorteo.
     return true, ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) .. " a " ..
         math.Round( ghost:GetPos():Distance( pos ) ) .. " u" ..
-        "  ( ambiente; " .. ( #opciones - 1 ) .. " familia(s) con sujeto en el radio )"
+        "  ( ambiente; " .. conSujeto .. " familia(s) con sujeto en el radio" ..
+        ( cvLlaves:GetBool() and "" or "; llaves EN CONTROL -- phantasmagoria_ghost_evllaves 0" ) .. " )"
 
 end
+
+---------------------------------------------------------------------------
+-- EL INTERRUPTOR: +USE APAGA LO QUE ESTA SONANDO
+---------------------------------------------------------------------------
+-- ⚠⚠ LAS DOS VIAS OBVIAS ESTAN CERRADAS, Y POR MOTIVOS DISTINTOS. Se averiguo
+-- antes de escribir una linea:
+--
+--   `PlayerUse` sobre el prop     un `prop_static` NO ES UNA ENTIDAD. No hay a
+--                                 quien usar -- es la misma razon por la que
+--                                 existe todo el bloque de los horneados.
+--   `PlayerUse` sobre el emisor   el emisor es un `info_target`: sin modelo y
+--                                 sin colision, asi que el trace de uso no le
+--                                 pega. `PlayerUse` se dispara POR ENTIDAD, y
+--                                 esa entidad nunca va a ser el sujeto de un
+--                                 trace.
+--
+-- Queda `KeyPress` con `IN_USE` y resolver a mano contra el registro. El addon
+-- no tenia ningun `hook.Add( "KeyPress" )` ( medido: 0 en los 36 `.lua`; lo unico
+-- parecido es un `ply:KeyDown( IN_USE )` de CLIENTE en el trucktv, que es para
+-- otra cosa ). La tecnica se leyo de los 8 archivos de terceros que si lo usan
+-- -- ARC9, Glide, ZBase, quick loadouts. ⚠ De un tercero se porta la TECNICA, no
+-- el cableado.
+--
+-- ⚠⚠⚠ ESTE HOOK NO DEVUELVE NADA. NUNCA. `E` ya abre puertas, agarra props,
+-- entra a vehiculos y lo consumen addons de terceros; `hook.Call` **aborta la
+-- cadena** cuando un hook devuelve un valor, o sea que un `return` de aca se
+-- lleva puestos a los de mas abajo en la fila. En este taller eso se pago dos
+-- veces: `Corpus.OnReady` y el `return` de `PlayerSpawn` que se saltea
+-- `GM:PlayerSpawn` ENTERO -- y con el, playermodel y loadout. Las salidas
+-- tempranas de acá abajo son todas `return` PELADO, y `dev/auditar_returns_de_hooks.py`
+-- lo comprueba en cada cierre.
+local function apagarCerca( ply )
+    podarSonando()
+
+    local desde = ply:WorldSpaceCenter()
+    local now   = CurTime()
+    local radio = cvUseRad:GetInt()
+
+    -- Se busca el mas cercano ENTRE LOS QUE TODAVIA SUENAN, y aparte el mas
+    -- cercano entre los que ya terminaron. Los dos numeros hacen falta: sin el
+    -- segundo, apretar al lado de un emisor cuyo clip ya se acabo imprimiria
+    -- "no habia nada cerca", que manda a buscar un defecto de distancia donde lo
+    -- que hubo fue llegar tarde.
+    local mejor, mejorD, tardeD
+
+    for i = 1, #SONANDO do
+        local s = SONANDO[ i ]
+
+        -- El filtro de familia se aplica ACA, al leer, y no al escribir: en el
+        -- registro tambien viven los emisores del reloj y del televisor, que
+        -- estan para el contador y **no** para el interruptor. El autor pidio
+        -- *"solo esos por ahora"* y esa frontera es suya, no del mecanismo.
+        if s.fam.apagable then
+            local d = desde:Distance( s.ent:WorldSpaceCenter() )
+
+            if s.hasta > now then
+                if not mejorD or d < mejorD then mejor, mejorD = s, d end
+
+            elseif not tardeD or d < tardeD then
+                tardeD = d
+
+            end
+        end
+    end
+
+    -- Solo se habla si habia ALGO: un `E` en un mapa en silencio no escribe nada.
+    -- Y si habia, se habla como mucho una vez cada `USE_LOG_CADA` segundos.
+    local puedeHablar = ( now - USE.ultimoLog ) >= USE_LOG_CADA
+
+    if not mejor then
+        if tardeD then
+            USE.tarde = USE.tarde + 1
+
+            if puedeHablar then
+                USE.ultimoLog = now
+
+                anotar( string.format( "+USE de %s: lo mas cercano ( a %d u ) YA HABIA TERMINADO su clip. " ..
+                    "No se apago nada, y eso NO es una falla del radio", ply:Nick(), math.Round( tardeD ) ) )
+
+            end
+        end
+
+        return false
+
+    end
+
+    if mejorD > radio then
+        USE.lejos = USE.lejos + 1
+
+        if puedeHablar then
+            USE.ultimoLog = now
+
+            anotar( string.format( "+USE de %s: %s sonando a %d u, FUERA del radio de %d u. No se apago -- " ..
+                "es el control negativo del interruptor", ply:Nick(), mejor.nombre,
+                math.Round( mejorD ), radio ) )
+
+        end
+
+        return false
+
+    end
+
+    -- Apagar es callar SIEMPRE y borrar SOLO SI el emisor es nuestro.
+    mejor.ent:StopSound( mejor.snd )
+
+    local clase = mejor.ent:GetClass() .. " #" .. mejor.ent:EntIndex()
+
+    if mejor.emisor then SafeRemoveEntity( mejor.ent ) end
+
+    -- Se saca del registro en el acto y no en la poda siguiente: para un prop de
+    -- verdad la entidad sigue siendo valida, asi que la poda no lo sacaria nunca
+    -- y un segundo +USE "apagaria" un silencio.
+    for i = #SONANDO, 1, -1 do
+        if SONANDO[ i ] == mejor then table.remove( SONANDO, i ) end
+
+    end
+
+    USE.apagados = USE.apagados + 1
+
+    anotar( string.format( "+USE de %s APAGO %s ( %s%s ) a %d u, faltandole %.1f s de clip",
+        ply:Nick(), mejor.nombre, clase, mejor.emisor and ", emisor nuestro: BORRADO" or ", prop del mapa: solo callado",
+        math.Round( mejorD ), math.max( 0, mejor.hasta - now ) ) )
+
+    return true
+
+end
+
+hook.Add( "KeyPress", "phantasmagoria_prop_use", function( ply, key )
+    if key ~= IN_USE then return end
+
+    -- ⚠ EL CONTADOR SUBE ANTES QUE CUALQUIER PERILLA, y es a proposito: es la
+    -- acreditacion de que el hook LLEGA AL SERVIDOR. Si subiera despues del
+    -- `cvUse`, una convar en 0 y un hook que no corre imprimirian el mismo cero,
+    -- y esa es exactamente la pregunta que la precondicion P1 vino a contestar.
+    USE.teclas = USE.teclas + 1
+
+    if not cvUse:GetBool() then return end
+    if not IsValid( ply ) or not ply:IsPlayer() then return end
+
+    apagarCerca( ply )
+
+    -- Y no se devuelve nada. Ver el aviso de arriba.
+
+end )
 
 ---------------------------------------------------------------------------
 -- furniture -- el armario que se abre solo
@@ -3346,10 +4088,22 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_estaticos", function( ply )
 
     end
 
+    -- `vivos` se DERIVA del registro y no de un contador que alguien mantiene a
+    -- mano: ver el bloque EMISORES arriba y la trampa 3 del bloque del +USE.
+    local _, caidas = podarSonando()
+    local vivos, sonando, vencidos = 0, 0, 0
+    local now = CurTime()
+
+    for i = 1, #SONANDO do
+        if SONANDO[ i ].emisor then vivos = vivos + 1 end
+        if SONANDO[ i ].hasta > now then sonando = sonando + 1 else vencidos = vencidos + 1 end
+
+    end
+
     say( "" )
-    say( "  EMISORES ( las filas 06 y 07 )" )
-    say( "    vivos ahora      " .. EMISORES.vivos .. "   ( contados en el mapa: " .. reales ..
-        ( EMISORES.vivos == reales and " -- coinciden )" or " -- ⚠ NO COINCIDEN, el contador miente )" ) )
+    say( "  EMISORES ( las filas de la fuga y del salteo )" )
+    say( "    vivos ahora      " .. vivos .. "   ( contados en el mapa: " .. reales ..
+        ( vivos == reales and " -- coinciden )" or " -- ⚠ NO COINCIDEN, el registro miente )" ) )
     say( "    creados en total " .. EMISORES.creados ..
         ( EMISORES.creados == 0 and "   ( todavia ninguno: un 'vivos 0' aca no acredita nada )" or "" ) )
     say( "    salteados por el barrido " .. EMISORES.salteados ..
@@ -3357,7 +4111,122 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_estaticos", function( ply )
     say( "    horneados en el sorteo   " .. ( cvHorneados:GetBool() and "1 ( encendido )"
         or "0 ( APAGADO -- control: el evento se comporta como antes del bloque )" ) )
 
+    -- ⚠ EL REGISTRO SE IMPRIME ENTERO Y CON SUS DOS ESTADOS. Un "3 sonando" sin
+    -- la lista no dice QUE suena, y un emisor cuyo clip ya termino ( `vencido` )
+    -- no es lo mismo que uno sonando: apretar +USE al lado del segundo no apaga
+    -- nada y eso NO es una falla del radio.
+    say( "" )
+    say( "  REGISTRO DE LO QUE SUENA   " .. #SONANDO .. " entrada(s)  ( " .. sonando ..
+        " sonando · " .. vencidos .. " ya terminado(s) · " .. caidas .. " podada(s) en esta lectura )" )
+
+    if #SONANDO <= 0 then
+        say( "    vacio. Con `creados " .. EMISORES.creados .. "` esto se lee como " ..
+            ( EMISORES.creados > 0 and "'todo se limpio', que es lo que se espera en reposo."
+              or "'todavia no sono nada', que NO acredita el mecanismo." ) )
+
+    else
+        for i = 1, #SONANDO do
+            local s = SONANDO[ i ]
+            say( string.format( "    %-14s %-22s %s%s  quedan %.1f s", s.nombre,
+                IsValid( s.ent ) and ( s.ent:GetClass() .. " #" .. s.ent:EntIndex() ) or "( invalida )",
+                s.emisor and "emisor nuestro" or "prop DEL MAPA",
+                s.fam.apagable and " · apagable con +USE" or " · NO apagable",
+                math.max( 0, s.hasta - now ) ) )
+
+        end
+    end
+
+    -- LAS FILAS DEL +USE. Los cuatro contadores estan porque los cuatro
+    -- desenlaces se ven igual desde afuera: "apreté E y no pasó nada".
+    say( "" )
+    say( "  +USE ( el interruptor )   " .. ( cvUse:GetBool() and ( "encendido, radio " ..
+        cvUseRad:GetInt() .. " u" ) or "0 ( APAGADO -- control )" ) )
+    say( "    teclas IN_USE vistas por el hook  " .. USE.teclas ..
+        ( USE.teclas == 0 and "   ⚠ CERO: o nadie apreto E, o el hook NO llega al servidor ( la P1 )"
+          or "   ( el hook llega al servidor: esto es la P1 medida sin instrumento aparte )" ) )
+    say( "    apagados de verdad                " .. USE.apagados )
+    say( "    habia algo pero FUERA del radio   " .. USE.lejos ..
+        "   ( este es el numero del control negativo; un 0 no prueba que el filtro decida )" )
+    say( "    lo mas cercano YA HABIA TERMINADO " .. USE.tarde ..
+        "   ( apagar un silencio se lee como exito: es la trampa 4 )" )
+
+    -- EL PESTILLO. Se imprime aca y no solo en su comando porque la fila que
+    -- pregunta "el evento prop dejo de sonar a llaves" y la que pregunta "las
+    -- llaves aparecieron donde si hay" son la misma decision partida en dos.
+    local trabadas = podarPestillos()
+
+    say( "" )
+    say( "  PESTILLO   " .. ( cvPestillo:GetBool() and "encendido" or "0 ( APAGADO -- control )" ) ..
+        " · trabadas ahora " .. trabadas .. "/" .. PESTILLO_MAX ..
+        " · vida " .. PESTILLO_VIDA .. " s · soltar todas: phantasmagoria_ghost_pestillo soltar" )
+    say( "  LLAVES SIN SUJETO   " .. ( cvLlaves:GetBool()
+        and "el evento `prop` NO suena el banco ambiente sin ninguna familia con sujeto"
+        or "0 ( CONTROL -- el banco ambiente suena igual, como antes del bloque )" ) )
+
 end, "Censa los prop_static horneados del mapa y que reclamarian las familias de sonido." )
+
+---------------------------------------------------------------------------
+-- INSTRUMENTO Y SALIDA DE EMERGENCIA DEL PESTILLO
+---------------------------------------------------------------------------
+-- ⚠ ESTE COMANDO NO ES UN LUJO NI UN DEBUG: es el limite de diseno numero tres
+-- del pestillo. Trabar una puerta es la unica mecanica de este bloque que puede
+-- dejar a alguien encerrado, y una mecanica con esa consecuencia necesita una
+-- salida que no dependa de esperar 45 segundos ni de que el fantasma colabore.
+--
+-- ⚠⚠ Y LISTA ANTES DE SOLTAR. Un comando que solo suelta no deja medir nada: la
+-- fila del pestillo necesita ver CUALES estan trabadas y cuanto les queda, y esa
+-- lectura tiene que poder hacerse SIN cambiar el estado -- si la unica forma de
+-- saber que habia dos trabadas fuera soltarlas, el instrumento destruiria lo que
+-- mide, que es el defecto nº 48 del catalogo del taller.
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_pestillo", function( ply, _, args )
+    if not adminOnly( ply ) then return end
+
+    local say = PHANTASMAGORIA.MakeSay( ply )
+    local now = CurTime()
+    local n   = podarPestillos()
+
+    say( "===== PESTILLO ( las puertas que el fantasma trabo ) =====" )
+    say( "  perilla      phantasmagoria_ghost_evpestillo = " .. ( cvPestillo:GetBool() and "1" or "0 ( control )" ) )
+    say( "  tope         " .. n .. " de " .. PESTILLO_MAX .. " trabada(s) a la vez · vida " ..
+        PESTILLO_VIDA .. " s" )
+
+    if n <= 0 then
+        say( "  ninguna trabada AHORA." )
+        say( "  ⚠ esto no distingue 'el pestillo no salio' de 'ya se soltaron': mirar el renglon" )
+        say( "    `pestillo CONFIRMADO` / `SIN EFECTO` en phantasmagoria_ghost_events." )
+
+    else
+        for i = 1, n do
+            local p = PESTILLOS[ i ]
+
+            -- Se relee `m_bLocked` en vez de creerle al registro: el registro dice
+            -- lo que pedimos, la puerta dice lo que hay. Si se separan, el
+            -- hallazgo es la separacion.
+            say( string.format( "    %s #%d   m_bLocked=%s   le quedan %.0f s",
+                p.door:GetClass(), p.door:EntIndex(), tostring( trabada( p.door ) ),
+                math.max( 0, p.hasta - now ) ) )
+
+        end
+    end
+
+    if args and args[ 1 ] == "soltar" then
+        local sueltas = 0
+
+        for i = n, 1, -1 do
+            local p = PESTILLOS[ i ]
+            table.remove( PESTILLOS, i )
+            if soltarPestillo( p, "a mano, por comando" ) then sueltas = sueltas + 1 end
+
+        end
+
+        say( "  -> SOLTADAS " .. sueltas .. " de " .. n .. "." )
+
+    else
+        say( "  ( para abrirlas todas: phantasmagoria_ghost_pestillo soltar )" )
+
+    end
+
+end, "Lista las puertas que el fantasma trabo con pestillo; con 'soltar' las destraba todas." )
 
 PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args )
     if not adminOnly( ply ) then return end
@@ -3417,8 +4286,18 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
 
         end )
 
+        -- ⚠ LOS CUATRO DEL +USE SI SE BORRAN, PORQUE SON DEL INSTRUMENTO Y DE
+        -- NADIE MAS: nadie se comporta distinto porque `teclas` valga 0 o 900. Lo
+        -- que NO se toca es `SONANDO` ni `PESTILLOS`, que son COMPORTAMIENTO --
+        -- vaciar el registro dejaria una radio sonando que el +USE ya no puede
+        -- apagar, y vaciar los pestillos dejaria puertas trabadas sin quien las
+        -- suelte. *Un boton que limpia el instrumento no puede tocar el mundo.*
+        USE.teclas, USE.apagados, USE.lejos, USE.tarde = 0, 0, 0, 0
+
         say( "[Phantasmagoria] bitacora y contadores borrados en " .. ( n - #sinMotor ) .. " fantasma(s)." )
         say( "                 la cuarentena de puertas NO se toca ( es comportamiento )." )
+        say( "                 los cuatro contadores del +USE SI se borran ( son del instrumento )." )
+        say( "                 el registro de lo que suena y los pestillos NO: son el mundo." )
         -- ⚠ ESTA LINEA DECIA "el reloj NO se toca" Y LA LINEA DE ARRIBA LO
         -- REPROGRAMA. Reprogramar es lo correcto -- si no, la primera muestra de
         -- la medicion seria el resto del intervalo en vuelo, que esta sesgado
@@ -3453,6 +4332,22 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
     say( "  en el hunt  phantasmagoria_ghost_evhunt = " .. cvHunt:GetInt() ..
         ( cvHunt:GetInt() == 0 and "  ( CONTROL: cazando no hay eventos )"
           or "  ( los multiplicadores `hunt` del tipo deciden )" ) )
+
+    -- ⚠ LAS TRES DEL BLOQUE DEL +USE SE IMPRIMEN ACA AUNQUE TENGAN SU PROPIO
+    -- RENGLON EN `phantasmagoria_ghost_estaticos`. El operador lee ESTE comando
+    -- para saber en que estado esta el motor antes de una corrida, y una perilla
+    -- que solo se ve en otro comando es una perilla que va a estar en el valor
+    -- equivocado durante una fila entera -- ya paso en este mismo repo con
+    -- `opendoors`, que dio un verde exacto sobre cero comportamiento.
+    say( "  +USE        phantasmagoria_ghost_evuse = " .. cvUse:GetInt() ..
+        ( cvUse:GetBool() and ( "  ( apaga radio y telefono a " .. cvUseRad:GetInt() .. " u )" )
+          or "  ( CONTROL: +USE no apaga nada )" ) )
+    say( "  llaves      phantasmagoria_ghost_evllaves = " .. cvLlaves:GetInt() ..
+        ( cvLlaves:GetBool() and "  ( sin sujeto el evento `prop` NO suena, y dice por que )"
+          or "  ( CONTROL: el banco ambiente suena igual que antes del bloque )" ) )
+    say( "  pestillo    phantasmagoria_ghost_evpestillo = " .. cvPestillo:GetInt() ..
+        ( cvPestillo:GetBool() and ( "  ( puede trabar hasta " .. PESTILLO_MAX .. ", vida " ..
+          PESTILLO_VIDA .. " s )" ) or "  ( CONTROL: nunca traba )" ) )
 
     say( "" )
     say( "  categorias  ( convar · rasgo del tipo se ve en la ficha de cada fantasma )" )
@@ -3917,6 +4812,69 @@ do
     if #sin > 0 then
         ErrorNoHalt( "[Phantasmagoria] categoria(s) declarada(s) en CATS y SIN implementacion en EV: " ..
             table.concat( sin, ", " ) .. ". Tienen convar, flag y linea de reporte, y no hacen nada.\n" )
+
+    end
+end
+
+-- ( 3b ) LAS FAMILIAS `entero` TIENEN QUE TENER MEDIDO CADA CLIP, Y NINGUNO DE MAS.
+-- Es la guarda del bloque del +USE, y las dos direcciones importan por motivos
+-- distintos:
+--
+--   · un clip SIN duracion cae en la tanda fija de `EMISOR_VIDA`, o sea que el
+--     emisor se muere a los 20 s y **decapita el clip por la otra puerta** --
+--     exactamente el defecto que sacarle el `largo` a la radio vino a cerrar. No
+--     tira ningun error: se oye una radio que se corta, que es lo que se oia
+--     antes, y la ronda se cierra creyendo que el arreglo entro.
+--   · una duracion HUERFANA ( medida para un clip que ya no esta en la lista ) es
+--     una nota mentirosa esperando lector: el proximo que agregue un clip la va a
+--     copiar como si describiera algo.
+--
+-- ⚠ LA LISTA SE SACA CONTANDO LAS ASIGNACIONES Y NO LEYENDO LA PROSA QUE LAS
+-- DESCRIBE. Esta guarda recorre `PROP_CONSUJETO` de verdad; la guarda gemela de
+-- MyClassTask que esta veinte lineas mas abajo existe porque una version anterior
+-- copio la lista de un comentario y quedo gritando por una clave que nunca hubo.
+do
+    local faltan, sobran = {}, {}
+
+    for _, fam in ipairs( PROP_CONSUJETO ) do
+        if fam.entero then
+            local declarados = {}
+
+            for _, ruta in ipairs( fam.sonidos or {} ) do
+                declarados[ ruta ] = true
+
+                if not ( fam.dur and fam.dur[ ruta ] ) then
+                    faltan[ #faltan + 1 ] = fam.que .. " -> " .. ruta
+
+                end
+            end
+
+            for ruta in pairs( fam.dur or {} ) do
+                if not declarados[ ruta ] then
+                    sobran[ #sobran + 1 ] = fam.que .. " -> " .. ruta
+
+                end
+            end
+        end
+
+        -- `apagable` sin `entero` no es fatal, pero si es una incoherencia que se
+        -- paga tarde: la ventana del +USE sale de `dur`, asi que una familia
+        -- apagable sin duraciones se apaga bien mientras el clip suena y despues
+        -- queda "apagable" durante los 20 s de la tanda fija -- o sea que el
+        -- jugador apagaria un silencio y el instrumento lo contaria como exito.
+        if fam.apagable and not fam.entero then
+            faltan[ #faltan + 1 ] = fam.que .. " -> es `apagable` y NO es `entero` ( sin duraciones, " ..
+                "la ventana del +USE es la tanda fija y no el clip )"
+
+        end
+    end
+
+    if #faltan > 0 or #sobran > 0 then
+        ErrorNoHalt( "[Phantasmagoria] duraciones de clip mal declaradas en PROP_CONSUJETO. " ..
+            "SIN DURACION ( el emisor los va a decapitar a los " .. EMISOR_VIDA .. " s ): " ..
+            ( #faltan > 0 and table.concat( faltan, " | " ) or "ninguno" ) ..
+            "   ·   HUERFANAS ( duracion de un clip que ya no esta en la familia ): " ..
+            ( #sobran > 0 and table.concat( sobran, " | " ) or "ninguna" ) .. "\n" )
 
     end
 end

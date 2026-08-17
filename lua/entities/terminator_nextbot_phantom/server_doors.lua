@@ -1036,6 +1036,32 @@ function ENT:phantom_DoorThink()
         door:Fire( "Unlock" )
         st.unlock = st.unlock + 1
 
+        -- ⚠ ESTE DESTRABADO ERA MUDO, Y LO ES DESDE QUE SE ESCRIBIO. Cambia un
+        -- estado PERMANENTE del mapa -- es la unica cosa de este archivo que no
+        -- se deshace sola, y por eso tiene convar propia -- y no dejaba ni un
+        -- ruido: el jugador se encontraba una puerta con llave abierta y no tenia
+        -- forma de saber cuando ni quien. La ronda del +USE ( 2026-08-17 ) le
+        -- pone las llaves que sobraban del banco ambiente, que es literal lo que
+        -- el autor propuso: *"podemos hacer que el bot cierre puertas con
+        -- pestillo y ahi aplicar esos sonidos"*.
+        --
+        -- ⚠⚠ LA REFERENCIA ES TARDIA A PROPOSITO: `server_events.lua` se incluye
+        -- DESPUES que este archivo, asi que la funcion no existe al cargar --
+        -- existe al llamar. Y el `isfunction` avisa UNA sola vez en vez de callar:
+        -- si algun dia ese archivo no carga, "no sono la llave" y "no hay llave
+        -- que sonar" tienen que poder distinguirse. Un aviso por destrabado
+        -- taparia la bitacora justo en el momento en que hay que leerla.
+        if isfunction( PHANTASMAGORIA.SonarLlave ) then
+            PHANTASMAGORIA.SonarLlave( "unlock", door:WorldSpaceCenter() )
+
+        elseif not PHANTASMAGORIA.avisoLlaveMudo then
+            PHANTASMAGORIA.avisoLlaveMudo = true
+
+            ErrorNoHalt( "[Phantasmagoria] PHANTASMAGORIA.SonarLlave NO existe: el destrabado de puertas " ..
+                "va a ser MUDO toda la partida. Deberia venir de server_events.lua, que es el ultimo " ..
+                "include de server.lua -- si ese archivo no cargo, faltan tambien los ocho eventos.\n" )
+
+        end
     end
 
     door.phantom_nextTry = now + RETRY_EVERY

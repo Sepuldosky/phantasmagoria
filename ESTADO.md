@@ -13,6 +13,33 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-17): EL `+USE` APAGA LA RADIO, LA RADIO SUENA ENTERA Y LAS LLAVES SE MUDAN
+> A UN PESTILLO. Escrito y verificado offline, SIN PASADA EN JUEGO.** Detalle en el CHANGELOG **(41)**.
+>
+> **LO PRIMERO DEL CHAT SIGUIENTE: correr `dev/checks/phantasmagoria-use-y-llaves.html`, TRECE filas.**
+> Las cuatro primeras (**A1–A4**) son del bloque de props horneados y **quedaron sin correr**; van
+> primero, con las tres perillas nuevas en `0` — puestas ahí, el motor se comporta exactamente como
+> antes de este bloque. Si se encimaran, cualquier rojo de las nuevas tendría **dos sospechosos**.
+>
+> Lo que cambió, en una línea cada uno: `phantasmagoria_ghost_evuse` (hook `KeyPress`/`IN_USE` en el
+> servidor, **sólo distancia y sin mirada**, porque el objeto es invisible) · la familia radio pierde
+> `largo` y gana `dur` medida por clip (`dev/duracion_ogg.py`, instrumento nuevo con auto-control) ·
+> `phantasmagoria_ghost_evllaves` (sin sujeto el evento `prop` no suena, **y la línea sigue saliendo**)
+> · `phantasmagoria_ghost_evpestillo` (`Fire( "Lock" )`, tope 2, vida 45 s, `phantasmagoria_ghost_pestillo soltar`).
+>
+> ⚠ **El corte que se sacó decapitaba 6 de 6** (clips de 26,78 a 60,78 s contra un corte de 6–14), y
+> **sacarlo sin el interruptor habría sido un defecto y no un arreglo**: un clip de 60 s se solapa con
+> el evento siguiente, que es el motivo por el que `largo` existía.
+> ⚠ **Que `Fire( "Lock" )` funcione sobre las clases de este mapa NO está medido** — el engine es un
+> tercero y `AcceptInput` devuelve false en silencio. El código relee `m_bLocked` un tick después.
+> ⚠ **Frontera con nombre:** `ritual_chanting_loop` es un loop y la fila de «suena entera» no se corre
+> con él.
+>
+> **DESPUÉS DE ESTO** sigue el pedido que el autor hizo hace tres rondas y que todavía no tiene línea
+> de investigación: **por qué el bot se queda pegado y después se despeja solo, y por qué a veces
+> quiere pasar a través de un vidrio** (ver el punto 2 de la lista de abajo, que sigue vigente).
+
+
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-10). LA r3 CERRÓ 14/14 MEDIDO y el bloque de las PUERTAS PARENTEADAS
 > CERRÓ EN JUEGO.** Detalle en el CHANGELOG, entradas **(37)** y **(38)**. Lo de abajo, escrito el
 > 2026-08-09, describe la r3 *antes* de correrla: sigue valiendo como explicación de por qué se hizo

@@ -7,6 +7,124 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-17 (41) — **`+USE` apaga la radio, la radio suena entera, y las llaves se mudan a una puerta con pestillo. El corte que se saca decapitaba 6 de 6, y sacarlo sin el interruptor habría sido un defecto y no un arreglo.**
+
+Tres pedidos del autor, textuales, que él llamó *«minúsculos»*. **Dos lo son.** Escrito y verificado
+offline; **sin pasada en juego** — la planilla es `dev/checks/phantasmagoria-use-y-llaves.html` y lleva
+**trece filas**, porque incluye las **cuatro del bloque anterior que quedaron sin correr**.
+
+### ⭐⭐ El corte de la radio no era un caso borde: decapitaba **6 de 6**
+
+`largo = { 6, 14 }` contra clips de **26,78 a 60,78 s**. No había *un* clip de la familia que alcanzara
+a terminar. Y el final es la parte que importa: medido con planitud espectral, tres de los cuatro clips
+principales **terminan en ruido de banda ancha** —la estática y el apagado— mientras el corte caía
+siempre en el medio tonal. O sea que `StopSound` se comía el apagado, y la promesa escrita en el propio
+código —*«un radioruido que arranca y para solo es lo que hace una radio poseída»*— se cumplía a medias
+**desde el día que se escribió**.
+
+Las seis duraciones salen de `dev/duracion_ogg.py`, que es un instrumento nuevo y **versionado**:
+lee el `granule` del último page Ogg y el samplerate del header Vorbis, y trae su **auto-control** —
+remide los cuatro clips que ya estaban medidos con otra herramienta y **reproduce a 0,004 s**. Sin ese
+control, un lector recién escrito imprime números plausibles sobre cualquier cosa. Los dos nuevos:
+
+    creepy_music 33,71 · creepy_music_old 26,78 · creepy_music_slowdown 42,23
+    creepy_montage 41,41 · creepy_radio_easteregg_helpmewithend 60,78 · ritual_chanting_loop 32,75
+
+De yapa el instrumento cuenta canales, y confirma que **los seis son mono** — que es la precondición de
+que suenen *desde* el objeto. Y su verdicto se **niega a decir OK** si en la corrida no entró ningún
+clip de control: dice `PARCIAL`. Una corrida sin calibrar publicando números es la nº 14 del catálogo.
+
+### ⭐⭐⭐ Sacar el corte y poner el interruptor son **UN SOLO CAMBIO**
+
+Sin corte y sin interruptor, un clip de 60,78 s se solapa con el evento siguiente — que es **literal el
+defecto que la r3 pagó** y el motivo por el que `largo` existía. Por eso las dos mitades entran juntas.
+
+Las dos vías obvias para el `+USE` estaban **las dos** cerradas, y por motivos distintos: `PlayerUse`
+sobre el prop no existe (**un `prop_static` no es una entidad**) y `PlayerUse` sobre el emisor tampoco
+(**es un `info_target` sin modelo ni colisión**, así que el trace de uso no le pega). Queda `KeyPress`
+con `IN_USE` en el servidor, resuelto a mano contra un registro. El addon **no tenía ningún**
+`hook.Add( "KeyPress" )` — medido, 0 en los 36 `.lua`.
+
+⚠ **El hook no devuelve nada, nunca.** `hook.Call` aborta la cadena con cualquier valor, y de `E`
+cuelgan abrir puertas, agarrar props y entrar a vehículos, nuestros y de terceros. Este taller ya pagó
+eso dos veces (`Corpus.OnReady`, y el `return` de `PlayerSpawn` que se saltea `GM:PlayerSpawn` entero).
+`dev/auditar_returns_de_hooks.py` **aprendió a nombrarlo**: `KeyPress` y `KeyRelease` entran en
+`RETORNO_ES_DEFECTO`, porque sin la entrada el hook nuevo caía en `revisar` y el auditor no podía
+nombrar el defecto que existe para detectar.
+
+El criterio de «cerca» es una **decisión y no un número suelto**: **sólo distancia, sin mirada**. Pedir
+que le apunten pierde porque **el objeto es invisible** — no hay nada a que apuntar, y sería una
+lotería y no realismo. 128 u, o sea entrar al cuarto.
+
+### ⭐ La segunda mitad que se olvida: **borrar el emisor también decapita**
+
+Una entidad que se va se lleva su canal, así que un emisor que muere a los 20 s corta un clip de 33
+por la otra puerta — y la línea del reporte seguiría diciendo `ENTERO`. Ahora la vida del emisor sale
+de la duración medida más un margen, y **la duración vive al lado del clip**: *una constante que decide
+comportamiento tiene que existir una vez*. Con su guarda de carga, que mira **las dos direcciones** —
+un clip sin duración (que decapitaría en silencio) y una duración huérfana (que es una nota mentirosa
+esperando lector).
+
+### ⭐ La trampa 3 se disolvió por construcción en vez de parchearse
+
+`EMISORES.vivos` se descontaba en un `timer.Simple( vida + 0.5 )`. Con el `+USE` borrando el emisor a
+los dos segundos, **ese timer iba a correr igual** y a descontar de un contador que ya no tenía a quién
+contar: el número se habría separado del conteo real del mapa y **la fila de la fuga habría salido roja
+sin que hubiera fuga**. Hoy `vivos` se **deriva** del registro al leerlo. Un contador que se calcula no
+se puede desincronizar, porque no hay dos escrituras que puedan quedar en desacuerdo. El conteo real de
+entidades sigue imprimiéndose al lado: derivar uno no vuelve redundante al otro, lo vuelve comparable.
+
+### Las llaves: no se borran, se mudan
+
+`SND.prop` son ocho clips y **los ocho son llaves** de verdad (las dos que no lo eran eran el
+presentador británico, y se fueron en la r3). No suenan mal: suenan **donde no corresponde**. Con
+`phantasmagoria_ghost_evllaves 1`, sin ninguna familia con sujeto el evento `prop` **no suena** y sale
+por el camino `return false` **que el código ya tenía**, o sea que la bitácora sigue imprimiendo
+`SIN SUJETO -- <motivo>`. ⚠ Eso no es un detalle: si el evento se volviera mudo, la fila del control
+negativo **no podría distinguir «no había sujeto» de «el evento no corrió»**.
+
+Y aparecen donde sí hay: el evento de puertas puede **trabar** una puerta cerrada con `Fire( "Lock" )`
+y ahí suenan las `key_lock_*`; el **destrabado que ya existía** (`server_doors.lua:1036`, desde la
+ronda de las puertas) deja de ser **mudo** y suena `key_unlock_*`. Los ocho clips se declaran ahora en
+tres bancos y `SND.prop` se arma con ellos, para que agregar un `key_lock_4` no entre en un solo lado.
+
+⚠ **Que `Fire( "Lock" )` funcione sobre las clases de este mapa NO está medido**: el engine es un
+tercero y `Entity:Fire` con un input que la clase no acepta **no tira error** — `AcceptInput` devuelve
+false en silencio. Por eso el código **relee `m_bLocked` un tick después** y la bitácora dice
+`pestillo CONFIRMADO` o `pestillo SIN EFECTO`.
+
+⚠⚠ **Trabar una puerta es una mecánica con consecuencia y no un sonido**: si el bot traba la única
+salida de un cuarto, eso no es un susto, es un softlock. Los tres límites están puestos **antes de la
+primera corrida**: tope de **2** a la vez, **45 s** de vida, y `phantasmagoria_ghost_pestillo soltar`.
+Y no se traba una puerta **que ya venía trabada**: sin esa regla, el mecanismo «trabar puertas»
+terminaría **destrabando el mapa**, porque a los 45 s soltaría un pestillo que no era suyo.
+
+### Lo que el teléfono no es
+
+El autor pidió el `+USE` para *«las radios y teléfonos»*. Medido: `phone_ring` **3,46 s** y
+`phone_vibrate` **1,11 s** — esa familia **nunca se cortó** porque nunca hizo falta. El interruptor le
+entra igual (mismo mecanismo, cuesta cero) **pero no resuelve ningún síntoma**, y por eso **no hay
+ninguna fila que pida apagar un teléfono**: *una fila que sólo se puede aprobar con reflejos no mide el
+mecanismo, mide al que la corre.* El sujeto de verdad del bloque es la radio.
+
+### La planilla lleva las cuatro filas que el bloque anterior no corrió
+
+Y **las tres perillas nuevas existen para que se puedan correr hoy**: puestas en 0, el motor se comporta
+exactamente como antes de este bloque. Lo único que no tiene control es que la radio ahora suena entera
+— dicho en el encabezado, con el argumento de por qué ninguna de esas cuatro filas lo mide.
+
+⚠ **Frontera con nombre:** `ritual_chanting_loop` es un **loop**. Entró a la familia en la r3 con el
+argumento de que *«un loop cortado se oye como una radio que arranca y para»* — cierto cuando había
+corte, y **sin sostener ahora que no lo hay**. No se saca (lo pidió el autor por su nombre), pero la
+fila de «la radio suena entera» no se corre con él.
+
+**Verificación offline:** `luacheck 36/36` · `sintaxis 36/36` (lupa, un Lua real) ·
+`auditar_returns_de_hooks 0 de 28` (el `KeyPress` nuevo ya en el denominador) · **164 rutas de sonido
+citadas, 0 faltantes en disco** · `dev/duracion_ogg.py` reproduce 4 de 4 valores previos. Y el
+generador de la planilla estrena su **guarda de largo de 255**, con su propio auto-control: mide los 19
+comandos de las trece filas (el más largo, **154**) y se probó que **puede ponerse roja**, tanto sobre
+el comando principal como sobre los que viven adentro de una nota.
+
 ## 2026-08-17 (40) — **Tres constantes de la nena leídas para los tres modelos: el hull, el alto de malla y la pose de reposo. Y el camino que el plan elegía para la pose del brazo NO PUEDE arreglarla.**
 
 Dos cabos del `dev/PROMPT_fantasmas_r6.txt`. El primero es una regresión y está cerrado offline; el
