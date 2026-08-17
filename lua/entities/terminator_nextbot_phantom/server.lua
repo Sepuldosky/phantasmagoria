@@ -136,14 +136,16 @@ local MODEL_CANDIDATES = {
     es la del bot; vacia mantiene el orden de MODEL_CANDIDATES, que es lo que
     habia.
 
-    ⚠ SE RESUELVE UNA SOLA VEZ, AL CARGAR ESTE ARCHIVO -- `local chosen =
-    pickModel()` corre a nivel de archivo y su resultado va a `ENT.Models`, que
-    es de la CLASE. O sea que **cambiar la convar no afecta al proximo spawn:
-    hay que recargar el mapa**. Este comentario decia lo contrario ( "se resuelve
-    en cada spawn, no se cachea" ) y era falso; se corrige en vez de dejarlo,
-    porque una perilla que el autor cree caliente y esta fria se lee como "el
-    modelo nuevo se ve igual de mal" cuando lo que salio fue el viejo.
-    FCVAR_ARCHIVE la guarda, asi que ponerla y cambiar de mapa alcanza.
+    ⚠ HISTORIA DE ESTE COMENTARIO, PORQUE YA MINTIO DOS VECES Y DE FORMAS
+    OPUESTAS. Decia "se resuelve en cada spawn, no se cachea": era falso, y el
+    2026-08-17 el autor puso `ghost_male`, spawneo y salio la nena. Se corrigio
+    a "hay que recargar el mapa", que era cierto pero describia un defecto en vez
+    de arreglarlo. Ahora es cierto Y no hace falta recargar: la resolucion vive
+    en `aplicarModeloDelBot()` y un `cvars.AddChangeCallback` la rehace, con
+    aviso por consola de en que quedo.
+
+    Toma efecto en el PROXIMO spawn; los fantasmas ya vivos no cambian.
+    FCVAR_ARCHIVE la guarda entre sesiones.
 ]]
 local cvBotModelo = CreateConVar( "phantasmagoria_bot_modelo", "", FCVAR_ARCHIVE,
     "Fuerza el modelo del NextBot ( ghost_girl, ghost_male, ghost_oldcrone ). " ..
@@ -201,23 +203,20 @@ local function pickModel()
 
 end
 
-local chosen, porConvar = pickModel()
+-- Los resuelve `aplicarModeloDelBot()`, al final de esta seccion y otra vez cada
+-- vez que cambia la convar. Se DECLARAN aca porque los leen las funciones de
+-- spawn de mas abajo, que cierran sobre ellos.
+local chosen, porConvar
 
--- ⚠ Solo avisa de una CAIDA, no de una eleccion. Sin el `not porConvar`,
--- forzar ghost_male imprimia "el modelo ghost_girl.mdl no esta montado" -- que
--- es falso y manda a buscar un problema de montaje que no existe. *Un aviso que
--- no distingue "se rompio" de "lo pediste" gasta una pasada.*
-if not porConvar and chosen ~= MODEL_CANDIDATES[ 1 ] then
-    ghostPrint( "el modelo ", MODEL_CANDIDATES[ 1 ].mdl, " no esta montado. Uso ", chosen.mdl, " en su lugar.\n" )
-
-end
-
-ENT.Models = { chosen.mdl }
-
+-- ⚠ `ENT.Models` y `ENT.ModelSkin` NO se escriben aca: los escribe
+-- `aplicarModeloDelBot()`, mas abajo, que es el UNICO lugar donde se aplica el
+-- modelo. Estaban aca y la tabla de traduccion de actividades se aplicaba 80
+-- lineas despues, o sea que el modelo se decidia en dos sitios y sólo uno podia
+-- rehacerse cuando cambia la convar. Ver el comentario de esa funcion.
+--
 -- Nil cuando el modelo no declara skin propio: shared.lua:2989 solo lo aplica
 -- "if isnumber( myTbl.ModelSkin )", asi que nil deja el 0 del modelo y no
 -- inventa un indice que ese .mdl puede no tener.
-ENT.ModelSkin = chosen.skin
 
 -- Si el elegido salio del TALLER, se sabe aca y lo miran los dos bloques de
 -- abajo ( el hull y la traduccion de actividades ). Los dos son correcciones
@@ -231,7 +230,7 @@ ENT.ModelSkin = chosen.skin
 -- mal y la culpa habria caido sobre el port. *Un criterio que dice "es el
 -- primero de la lista" cuando quiere decir "es de los nuestros" acierta hasta
 -- el dia que hay un segundo.*
-local esNuestroModelo = chosen.nuestro == true
+local esNuestroModelo = false
 
 ---------------------------------------------------------------------------
 -- ⚠ QUE ACTIVIDAD LLEGA AL MODELO, Y NO ES LA QUE DICE LA TABLA DE MOVIMIENTO
@@ -270,9 +269,10 @@ local esNuestroModelo = chosen.nuestro == true
 --     arma es ACT_HL2MP_JUMP y no una recarga. Da igual para nosotros -- un bot
 --     sin arma no recarga nunca -- pero se deja escrito para no "arreglarlo"
 --     despues creyendo que es nuestro.
-if esNuestroModelo then
-    ENT.IdleActivity = ACT_HL2MP_IDLE
-    ENT.IdleActivityTranslations = {
+local IDLE_NUESTRA = ACT_HL2MP_IDLE
+local TRADUCCIONES_NUESTRAS
+do
+    TRADUCCIONES_NUESTRAS = {
         [ ACT_MP_STAND_IDLE ]                = ACT_HL2MP_IDLE,
         [ ACT_MP_WALK ]                      = ACT_HL2MP_WALK,
         [ ACT_MP_RUN ]                       = ACT_HL2MP_RUN,
@@ -291,6 +291,71 @@ if esNuestroModelo then
     }
 
 end
+
+---------------------------------------------------------------------------
+-- DONDE SE APLICA EL MODELO, QUE AHORA ES UN SOLO LUGAR
+---------------------------------------------------------------------------
+--[[
+    ⚠ EL DEFECTO QUE ESTO ARREGLA, MEDIDO EN JUEGO EL 2026-08-17. El autor puso
+    `phantasmagoria_bot_modelo ghost_male`, spawneo desde el spawnmenu y salio la
+    NENA -- y sin el aviso `modelo FORZADO`, que es la pista de que `pickModel()`
+    ni se llamo. La causa: corria UNA sola vez, a nivel de archivo, y su
+    resultado quedaba en `ENT.Models`, que es de la CLASE. La convar se leia al
+    cargar y nunca mas, asi que la perilla solo servia antes de que el archivo
+    existiera.
+
+    Y habia una razon estructural para que nadie lo notara: el modelo se aplicaba
+    en DOS sitios separados por ochenta lineas --`Models`/`ModelSkin` arriba, la
+    tabla de actividades abajo-- asi que no habia un lugar al que volver a
+    llamar. Primero se junta, despues se puede rehacer. *Una decision que se
+    aplica en dos lugares no se puede deshacer en ninguno.*
+
+    Se escribe en la tabla de la CLASE a proposito: la base lee `self.Models`
+    cuando construye cada instancia --por eso nuestro `ENT.Models` de la carga
+    funcionaba, siendo que la base ya habia corrido-- asi que reescribirla
+    alcanza para el PROXIMO spawn. Los fantasmas ya vivos no cambian, que es lo
+    correcto: nadie pidio mutarlos.
+]]
+
+-- `ENT` deja de existir cuando termina de cargar el archivo, y el callback de la
+-- convar corre despues. Sin esta referencia el callback no tendria a quien
+-- escribirle.
+local CLASE = ENT
+
+local function aplicarModeloDelBot()
+    chosen, porConvar = pickModel()
+    esNuestroModelo = chosen.nuestro == true
+
+    CLASE.Models    = { chosen.mdl }
+    CLASE.ModelSkin = chosen.skin
+
+    -- nil devuelve las de la base, que es lo que corresponde a un modelo ajeno:
+    -- nuestras 7 actividades no existen ahi y traducirle a ellas lo romperia.
+    CLASE.IdleActivity             = esNuestroModelo and IDLE_NUESTRA or nil
+    CLASE.IdleActivityTranslations = esNuestroModelo and TRADUCCIONES_NUESTRAS or nil
+
+    -- ⚠ Solo avisa de una CAIDA, no de una eleccion. Sin el `not porConvar`,
+    -- forzar ghost_male imprimia "el modelo ghost_girl.mdl no esta montado" --
+    -- falso, y manda a buscar un problema de montaje que no existe.
+    if not porConvar and chosen ~= MODEL_CANDIDATES[ 1 ] then
+        ghostPrint( "el modelo ", MODEL_CANDIDATES[ 1 ].mdl, " no esta montado. Uso ",
+            chosen.mdl, " en su lugar.\n" )
+
+    end
+end
+
+aplicarModeloDelBot()
+
+-- La perilla, ahora caliente. Se dice en que queda y DESDE CUANDO: un cambio que
+-- no avisa se lee como "no funciono" y ya costo una pasada entera.
+cvars.AddChangeCallback( "phantasmagoria_bot_modelo", function()
+    aplicarModeloDelBot()
+    ghostPrint( "phantasmagoria_bot_modelo cambio -> el PROXIMO fantasma sale con ",
+        chosen.mdl, esNuestroModelo and "  ( con hull y actividades nuestras )"
+            or "  ( AJENO: sin hull ni actividades nuestras )",
+        ".  Los que ya estan vivos no cambian.\n" )
+
+end, "phantasmagoria_modelo_del_bot" )
 
 ---------------------------------------------------------------------------
 -- ⚠ EL HULL CON EL QUE CAMINA, QUE LO PONE LA BASE Y NO EL MODELO
