@@ -69,7 +69,12 @@ local MODEL_CANDIDATES = {
     -- limpio util.IsValidModel da false y pickModel cae al cadaver de abajo,
     -- avisando por ghostPrint. Eso es a proposito y no es un defecto: el que
     -- clona el repo tiene un fantasma que funciona, no un error.
-    { mdl = "models/phantasmagoria/ghost_girl.mdl" },
+    --
+    -- `nuestro`: sale del TALLER, o sea que tiene las 7 actividades portadas a
+    -- nuestro esqueleto y pide el hull del fantasma. Lo miran los dos bloques de
+    -- abajo. NO es lo mismo que "es el primero de la lista" -- ver el comentario
+    -- de `esNuestroModelo`.
+    { mdl = "models/phantasmagoria/ghost_girl.mdl", nuestro = true },
 
     -- LOS OTROS DOS DEL TALLER ( 2026-08-10 ), para que el bot no tenga solo a
     -- la nena. Mismo pipeline, mismos 53/56 huesos ValveBiped, mismo ragdoll de
@@ -82,11 +87,11 @@ local MODEL_CANDIDATES = {
     --
     -- Ghost_Male: 72.29 u, o sea del tamano de un playermodel ( male_07 mide
     -- 72.00 ), asi que el hull {-16,-16,0},{16,16,72} le entra sin tocar nada.
-    { mdl = "models/phantasmagoria/ghost_male.mdl" },
+    { mdl = "models/phantasmagoria/ghost_male.mdl", nuestro = true },
 
     -- Ghost_OldCrone: 68.98 u. Es la primera de la familia CATRig ( son 8
     -- entidades ) y la primera con TRES materiales y el pelo TRANSLUCIDO.
-    { mdl = "models/phantasmagoria/ghost_oldcrone.mdl" },
+    { mdl = "models/phantasmagoria/ghost_oldcrone.mdl", nuestro = true },
 
     -- EL DE PRUEBAS, por pedido del autor ( 2026-08-06 ): el cadaver de HL2.
     -- Es el mismo que usa HIM sobre ESTA MISMA BASE ( him/.../homeless/shared.lua:12 ),
@@ -129,8 +134,16 @@ local MODEL_CANDIDATES = {
 
     Son dos mecanismos distintos y hasta hoy solo uno tenia perilla. Esta convar
     es la del bot; vacia mantiene el orden de MODEL_CANDIDATES, que es lo que
-    habia. Se resuelve en cada spawn --no se cachea-- para que cambiarla afecte
-    al proximo fantasma sin recargar el mapa.
+    habia.
+
+    ⚠ SE RESUELVE UNA SOLA VEZ, AL CARGAR ESTE ARCHIVO -- `local chosen =
+    pickModel()` corre a nivel de archivo y su resultado va a `ENT.Models`, que
+    es de la CLASE. O sea que **cambiar la convar no afecta al proximo spawn:
+    hay que recargar el mapa**. Este comentario decia lo contrario ( "se resuelve
+    en cada spawn, no se cachea" ) y era falso; se corrige en vez de dejarlo,
+    porque una perilla que el autor cree caliente y esta fria se lee como "el
+    modelo nuevo se ve igual de mal" cuando lo que salio fue el viejo.
+    FCVAR_ARCHIVE la guarda, asi que ponerla y cambiar de mapa alcanza.
 ]]
 local cvBotModelo = CreateConVar( "phantasmagoria_bot_modelo", "", FCVAR_ARCHIVE,
     "Fuerza el modelo del NextBot ( ghost_girl, ghost_male, ghost_oldcrone ). " ..
@@ -142,9 +155,29 @@ local function pickModel()
     if forzado ~= "" then
         local ruta = "models/phantasmagoria/" .. forzado .. ".mdl"
 
+        -- ⚠ SE BUSCA EN LA LISTA, no se arma una entrada nueva. Devolver
+        -- `{ mdl = ruta }` pelado --que es lo que hacia-- perdia el `skin` y el
+        -- `nuestro` de la entrada, y sin `nuestro` el bot sale SIN la traduccion
+        -- de actividades y SIN el hull del fantasma. O sea que forzar un modelo
+        -- del taller lo rompia, en silencio, con las dos correcciones que ese
+        -- modelo necesita: *la perilla para probar un modelo apagaba lo que
+        -- habia que probar.*
+        for _, cand in ipairs( MODEL_CANDIDATES ) do
+            if cand.mdl == ruta and util.IsValidModel( ruta ) then
+                ghostPrint( "modelo FORZADO por phantasmagoria_bot_modelo: " .. ruta )
+                return cand, true
+
+            end
+        end
+
         if util.IsValidModel( ruta ) then
-            ghostPrint( "modelo FORZADO por phantasmagoria_bot_modelo: " .. ruta )
-            return { mdl = ruta }
+            -- Existe pero no esta en la lista: se usa igual --el autor lo pidio
+            -- por nombre-- pero SIN las correcciones, y diciendolo. Callarselo
+            -- seria el mismo defecto de arriba con otra ropa.
+            ghostPrint( "modelo FORZADO por phantasmagoria_bot_modelo: " .. ruta ..
+                " -- NO esta en MODEL_CANDIDATES, asi que va sin la traduccion de" ..
+                " actividades ni el hull del fantasma." )
+            return { mdl = ruta }, true
 
         end
 
@@ -168,9 +201,13 @@ local function pickModel()
 
 end
 
-local chosen = pickModel()
+local chosen, porConvar = pickModel()
 
-if chosen ~= MODEL_CANDIDATES[ 1 ] then
+-- ⚠ Solo avisa de una CAIDA, no de una eleccion. Sin el `not porConvar`,
+-- forzar ghost_male imprimia "el modelo ghost_girl.mdl no esta montado" -- que
+-- es falso y manda a buscar un problema de montaje que no existe. *Un aviso que
+-- no distingue "se rompio" de "lo pediste" gasta una pasada.*
+if not porConvar and chosen ~= MODEL_CANDIDATES[ 1 ] then
     ghostPrint( "el modelo ", MODEL_CANDIDATES[ 1 ].mdl, " no esta montado. Uso ", chosen.mdl, " en su lugar.\n" )
 
 end
@@ -182,11 +219,19 @@ ENT.Models = { chosen.mdl }
 -- inventa un indice que ese .mdl puede no tener.
 ENT.ModelSkin = chosen.skin
 
--- Si el elegido es el fantasma, se sabe aca y lo miran los dos bloques de abajo
--- ( el hull y la traduccion de actividades ). Los dos son correcciones para ESTE
--- modelo y aplicarselas al cadaver de HL2 -- que mide 76 u y trae las de m_anm
--- sin portar -- seria romperlo.
-local esNuestroModelo = chosen.mdl == MODEL_CANDIDATES[ 1 ].mdl
+-- Si el elegido salio del TALLER, se sabe aca y lo miran los dos bloques de
+-- abajo ( el hull y la traduccion de actividades ). Los dos son correcciones
+-- para NUESTROS modelos y aplicarselas al cadaver de HL2 -- que mide 76 u y trae
+-- las de m_anm sin portar -- seria romperlo.
+--
+-- ⚠ ANTES DECIA `chosen.mdl == MODEL_CANDIDATES[ 1 ].mdl`, o sea "es la nena".
+-- El Male y la OldCrone salen del MISMO pipeline --mismos huesos ValveBiped,
+-- mismo ragdoll de 15 solidos, mismas 7 actividades + ACT_LAND-- y con esa
+-- linea corrian SIN las dos correcciones que necesitan. El bot se habria visto
+-- mal y la culpa habria caido sobre el port. *Un criterio que dice "es el
+-- primero de la lista" cuando quiere decir "es de los nuestros" acierta hasta
+-- el dia que hay un segundo.*
+local esNuestroModelo = chosen.nuestro == true
 
 ---------------------------------------------------------------------------
 -- ⚠ QUE ACTIVIDAD LLEGA AL MODELO, Y NO ES LA QUE DICE LA TABLA DE MOVIMIENTO
