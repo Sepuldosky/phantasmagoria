@@ -508,6 +508,21 @@ concommand.Add( "ph_ghost_land", cmd_land, nil,
 	    manos separadas              25.23 u
 	    eje de caderas ( R - L )     (-7.468, -0.081, 0)  -> sobre el eje X
 
+	⚠ ESOS DOS PRIMEROS NÚMEROS SON **DE LA NENA**, y estuvieron clavados acá
+	como `REPOSO_BRAZO, REPOSO_MANOS` e impresos para cualquier modelo — el mismo
+	defecto que el `MALLA_ALTO` del server, en el instrumento en vez de en el
+	sujeto. Y uno de los dos no es decorativo: `pareceReposo` compara
+	`manosMax > REPOSO_MANOS * 0.9`, y **el Male tiene las manos a 43,49 u en su
+	propio reposo**. Con el umbral de la nena ( 22,7 ) el ⭐ de abajo se prende
+	solo sobre un Male sano — *un control que fabrica el síntoma que busca*, y
+	justo sobre los dos modelos que están por probarse por primera vez.
+
+	Ahora salen de la ficha del modelo ( `reposoBrazo` / `reposoManos` en
+	lua/phantasmagoria/ghost_models.lua ), medidos por
+	`dev/phastools/ghostbrazo_off.py`. Si la ficha no los trae, la comparación
+	**no se hace** y se dice: comparar contra el cuerpo equivocado es peor que no
+	comparar.
+
 	Una idle real mantiene las manos MUCHO más juntas, así que la separación es
 	el discriminante barato. Se imprimen los dos y el comando no elige por el
 	lector: dice el valor de reposo al lado del medido.
@@ -527,8 +542,6 @@ concommand.Add( "ph_ghost_land", cmd_land, nil,
 	dos cosas en la misma muestra. (No sería la primera vez en este arco: la r17
 	ya juntó otros dos que se habían reportado como distintos.)
 ]]
-local REPOSO_BRAZO, REPOSO_MANOS = 46.5, 25.23
-
 local MUESTRAS_FACING, PASO_FACING = 50, 0.05
 
 local function horiz( v )
@@ -782,12 +795,32 @@ local function cmd_facing()
 		-- LA POSE, que se mide siempre (no necesita que camine). Los `or -1` de
 		-- antes eran centinelas impresos en columnas de grados y de unidades: con
 		-- la guarda de arriba no pueden llegar, y si llegaran ahora es un bug.
-		print( string.format( "[ph_facing]   brazo izq, MAXIMO de la ventana  %5.1f gr de la " ..
-			"vertical   ( la pose de reposo del .smd da %.1f )", brazoMax, REPOSO_BRAZO ) )
-		print( string.format( "[ph_facing]   manos, separacion MAXIMA         %5.2f u" ..
-			"                 ( la pose de reposo da %.2f )", manosMax, REPOSO_MANOS ) )
+		-- ⚠ EL REPOSO ES DEL MODELO QUE SE ESTA MIRANDO, no de la nena. Y si la
+		-- ficha no lo trae se dice: una comparacion contra el cuerpo equivocado
+		-- se lee igual que una buena.
+		local ficha = PHANTASMAGORIA.EsGhostModel( sujeto:GetModel() )
+		local repBrazo = ficha and ficha.reposoBrazo or nil
+		local repManos = ficha and ficha.reposoManos or nil
 
-		local pareceReposo = manosMax > REPOSO_MANOS * 0.9
+		print( string.format( "[ph_facing]   brazo izq, MAXIMO de la ventana  %5.1f gr de la " ..
+			"vertical   %s", brazoMax,
+			repBrazo and string.format( "( el reposo de ESTE modelo da %.1f )", repBrazo )
+				or "( su ficha no trae `reposoBrazo`: no hay contra que compararlo )" ) )
+		print( string.format( "[ph_facing]   manos, separacion MAXIMA         %5.2f u" ..
+			"                 %s", manosMax,
+			repManos and string.format( "( el reposo de ESTE modelo da %.2f )", repManos )
+				or "( su ficha no trae `reposoManos`: no hay contra que compararlo )" ) )
+
+		-- Sin el numero de ESTE modelo la firma no se puede afirmar ni negar, y
+		-- `false` diria "no parece reposo", que es una conclusion que nadie midio.
+		local pareceReposo = repManos ~= nil and manosMax > repManos * 0.9
+
+		if repManos == nil then
+			print( "[ph_facing]   >> la firma de la pose de reposo NO SE EVALUA en este modelo: " ..
+				"le falta `reposoManos` en ghost_models.lua." )
+
+		end
+
 		if pareceReposo then
 			print( "[ph_facing]   >> ⚠ LAS MANOS LLEGARON A LA SEPARACION DE LA POSE DE REPOSO. " ..
 				"Eso es la pose T MEDIDA, no una impresion." )

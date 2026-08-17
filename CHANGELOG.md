@@ -7,6 +7,142 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-17 (40) — **Tres constantes de la nena leídas para los tres modelos: el hull, el alto de malla y la pose de reposo. Y el camino que el plan elegía para la pose del brazo NO PUEDE arreglarla.**
+
+Dos cabos del `dev/PROMPT_fantasmas_r6.txt`. El primero es una regresión y está cerrado offline; el
+segundo era una compuerta que pedía una pasada en juego, y se contestó **calculándola**.
+
+### ⭐ El hull de los adultos era el de la nena — y el número ya existía en el addon
+
+En juego, con la OldCrone: `spawn #442 hull 20x20x45 malla 44.94 de alto`. Los dos números son de la
+nena. A un cuerpo de **68,98 u** se le puso una caja de **45** —le cubre el 65 %— y la línea de
+diagnóstico afirmaba un alto de malla que no era el de ese modelo.
+
+**Cómo llegó, que es la parte que vale.** Hasta el `1a16191` el flag `esNuestroModelo` decía *«es la
+nena»*, así que los adultos corrían con el 32x32x72 de la base: mal, pero de otra manera. Al arreglar
+ese flag —y había que arreglarlo, apagaba también las actividades— el hull de la nena pasó a los tres.
+*Un arreglo correcto puede destapar una constante escondida detrás del defecto que arregló.*
+
+Y el remate: **`lua/phantasmagoria/ghost_models.lua` ya tenía `altura` medida por modelo desde el
+2026-08-10**. Los `local HULL_ALTO / HULL_ANCHO / MALLA_ALTO` eran una **segunda casa** para un número
+que decide geometría. Ahora hay una sola, y se consulta **en el spawn** y no al cargar el archivo: que
+ese autorun compartido haya corrido antes que la entidad no está garantizado en ningún lado.
+
+La regla es una y vale para cualquier modelo del taller — el alto es la altura medida, el ancho se
+escala con el mismo factor `altura / 72` que ya producía el 20x20x45:
+
+    modelo            altura   hull
+    ghost_girl        44,94    20x20x45   <- IDÉNTICO a lo que ya corría
+    ghost_male        72,29    32x32x72
+    ghost_oldcrone    68,98    30x30x69
+
+Las tres alturas se **remidieron hoy** con `vvdbounds.py` sobre los `.vvd` **montados** y reproducen
+(44,941 · 72,291 · 68,979). El ancho sigue sin salir de la malla y eso no cambió: los bbox en X de los
+tres (30,4 / 51,9 / 42,5) están dominados por los brazos de la pose de reposo. Lo que sí se mira es que
+la relación no se descoloque: `bbox_X / ancho del hull` da **1,52 / 1,62 / 1,42**.
+
+El comentario del Male decía que *«el hull de la base le entra sin tocar nada»*. Era una hipótesis
+escrita; ahora es un resultado: la regla, aplicada a su 72,29, devuelve 32x32x72 exactamente. **La
+predicción se cumplió, pero el número no sale de la predicción.**
+
+**Verificación**, sin poder cargar el archivo (`luaharness` no construye este sujeto, §R5.3):
+`dev/hull_por_modelo.py` ejecuta el bloque **REAL** —`hullDelModelo()` extraído del server y el
+registro entero— y da **11/11**, con los degenerados de fábrica (GetModel nil y vacío, modelo fuera del
+registro, ficha sin `altura`, y **el registro NO cargado**, que tiene que devolver nil y no tirar). Su
+control negativo `--romper` reinyecta el defecto y el arnés se pone rojo **con la nena en verde** y los
+dos adultos en rojo: exactamente como se comportó la regresión de verdad, y por eso nadie la vio.
+
+### ⭐⭐ La compuerta del cabo 2 se contestó SIN el motor — y refutó el camino que el plan elegía
+
+El prompt pedía correr `ph_ghost_facing` con el Male y la nena antes de tocar `mdlseq2smd.py`. Ese
+número —`brazo izq, MÁXIMO de la ventana`— es geometría pura: la posición de dos huesos y el eje
+vertical. **Se calcula del `.smd` que se compiló**, y el ángulo contra Z es invariante a todo yaw, que
+es lo único que el archivo no sabe.
+
+`dev/phastools/ghostbrazo_off.py` lo hace, y trae **dos controles de distinta fuente**:
+
+    CONTROL 1  reproducir las constantes que el instrumento publica ( otra ronda, otro camino )
+               brazo 46,53 contra 46,50 publicado · manos 25,23 contra 25,23
+    CONTROL 2  reproducir el número que la OldCrone dio EN JUEGO
+               run_n calculado 119,2 gr  contra  119,0 gr medidos   dif 0,2
+
+Con eso, la compuerta:
+
+    modelo            walk_n    run_n     idle     veredicto del autor
+    ghost_girl          48,7     65,9     33,8     CERRADA en juego, 22 rondas
+    ghost_male          56,3     85,5     46,9     «luce perfecto»
+    ghost_oldcrone      65,4    119,2     48,8     «las manos a la altura de la cara»
+
+**No dan lo mismo, y ordenan igual que los tres veredictos del autor.** El mecanismo está confirmado.
+
+### ⭐⭐ Pero el camino (A) del plan multiplica por la identidad
+
+El plan era conjugar en `mdlseq2smd.py` (`A_nuestra = L_nuestra · inv(L_hl2) · A_hl2`) en vez de copiar
+crudo. `dev/phastools/ghostretarget_off.py` lo **simula sobre los SMD que ya están en disco**, sin tocar
+la herramienta ni recompilar:
+
+    brazo izq MÁXIMO, run_n       HOY    con (A)   HL2 en su rig
+    ghost_girl                   65,9      65,9        52,9
+    ghost_male                   85,5      85,6        52,9
+    ghost_oldcrone              119,2     119,3        52,9
+
+No mueve nada. Y la causa se midió en vez de discutirse, separando las **dos** cosas que un reposo puede
+tener distintas:
+
+    cadena del brazo izq    reposo: ROTACIÓN      reposo: DIRECCIÓN DEL HIJO
+                            ( la arregla A )       ( no la arregla A )
+    ghost_girl                0,1 · 0,4 · 0,0         9,3 · 4,1 · 25,7
+    ghost_male                0,1 · 0,4 · 0,0         2,0 · 15,2 · 23,3
+    ghost_oldcrone            0,1 · 0,4 · 0,0        27,9 · 8,4 · 48,2
+
+**Los dos reposos ya tienen la misma rotación local**, así que `L_nuestra · inv(L_hl2)` ES la identidad.
+Lo que difiere es **dónde está el hijo** en el marco del padre, y la dirección de un miembro es `R · p`:
+la conjugación corrige la `R` y el error vive en la `p`. La segunda columna reproduce exacto la tabla de
+`ghostpose_off.py`, que era la evidencia del mecanismo — o sea que **la evidencia era correcta y el
+arreglo que se le adjudicó no la toca.**
+
+El control que lo hace creíble es `--identidad`: conjugar usando `L_hl2` de los dos lados tiene que dar
+lo de hoy, y da **dif 0,0000** en los tres. Un orden de multiplicación invertido o una transpuesta de
+más habrían dado un número plausible igual.
+
+El único camino que alcanza esa magnitud es **(B)**: girar el **marco local** de esos huesos con
+`smdreorient.py` —que es el arreglo de los dedos un nivel más arriba— porque girar el marco **sí**
+cambia la `p` del hijo sin mover nada en el mundo, y ese es su invariante. Toca el esqueleto: bloque
+propio.
+
+### El instrumento de la compuerta publicaba dos constantes de la nena, y una era un umbral
+
+`ph_ghost_facing` tenía `REPOSO_BRAZO, REPOSO_MANOS = 46.5, 25.23` clavados e impresos para cualquier
+modelo — el mismo defecto que el `MALLA_ALTO` del server, pero adentro del instrumento. Y uno de los dos
+no es decorativo: `pareceReposo` compara `manosMax > REPOSO_MANOS * 0.9`, y **el Male tiene las manos a
+43,49 u en su propio reposo**. Con el umbral de la nena (22,7) el ⭐ *«EL CUERPO ESTÁ DIBUJADO EN LA POSE
+DE REPOSO»* se prende solo sobre un Male sano: *un control que fabrica el síntoma que busca*, y justo
+sobre los dos modelos que están por probarse por primera vez.
+
+Ahora salen de la ficha (`reposoBrazo` / `reposoManos`), medidos de una sola corrida:
+
+    modelo            brazo vs vertical   manos separadas
+    ghost_girl              46,53 gr           25,23 u
+    ghost_male              56,56 gr           43,49 u
+    ghost_oldcrone          53,85 gr           36,91 u
+
+Y si la ficha no los trae, la comparación **no se hace** y se dice: `false` habría afirmado *«no parece
+reposo»*, que es una conclusión que nadie midió.
+
+### La falda tiesa: NO es un defecto, y ya estaba medido
+
+Los pesos del material `clothes` siguen a las piernas (ruedo a pies y gemelos, cintura al `Pelvis`). Lo
+que no puede hacer es moverse por inercia: Source no simula tela, eso pide `$jigglebone` y **huesos de
+falda que el rig no tiene**. Bloque propio, y no se tocó nada.
+
+### Lo que falta
+
+La pasada en juego: spawnear los tres y leer la línea del spawn (`hull` y `malla` tienen que ser los de
+cada uno), y `ph_ghost_facing` con el Male y la nena para confirmar los 65,9 y 85,5 predichos — la
+OldCrone ya confirmó su 119 a 0,2 gr.
+
+---
+
 ## 2026-08-17 (39) — **Los props HORNEADOS del mapa suenan. Un emisor invisible y sin modelo, y el jugador le atribuye el sonido al prop que hay al lado.**
 
 La pregunta del autor era *«algunos modelos están baked en el mapa, me pregunto si serán posibles de

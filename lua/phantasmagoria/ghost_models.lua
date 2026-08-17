@@ -92,6 +92,35 @@ PHANTASMAGORIA.ParesHueso = {
 -- da 9.64x el volumen del ciudadano porque el casco convexo de su habito
 -- encierra aire de los tobillos al pecho, asi que la densidad de Valve daria
 -- 867 kg. Se le puso $mass 50 a mano y el archivo quedo en 54.02.
+-- ---------------------------------------------------------------------------
+-- `reposoBrazo` y `reposoManos`: LA POSE DE REPOSO DE CADA UNO
+-- ---------------------------------------------------------------------------
+-- `reposoBrazo` es el angulo del brazo izquierdo ( hombro -> mano ) contra la
+-- VERTICAL y `reposoManos` la separacion entre las dos manos, las dos en el
+-- primer cuadro del `_ref.smd`, que es la pose que studiomdl usa de reposo.
+-- Salen de `dev/phastools/ghostbrazo_off.py`, que compone la cadena de huesos
+-- del SMD igual que el motor.
+--
+-- ⚠ POR QUE ESTAN ACA Y NO EN EL INSTRUMENTO. `ph_ghost_facing` los tenia
+-- clavados como `REPOSO_BRAZO, REPOSO_MANOS = 46.5, 25.23` -- los de la NENA --
+-- y los imprimia para cualquier modelo. Uno de los dos no es decorativo: la
+-- linea `⭐ EL CUERPO ESTA DIBUJADO EN LA POSE DE REPOSO` se dispara con
+-- `manosMax > reposoManos * 0.9`, y el Male tiene las manos a 43,49 u en su
+-- PROPIO reposo. Con el umbral de la nena ( 22,7 ) esa alarma se prende sola
+-- sobre un Male sano: *un control que fabrica el sintoma que busca*, y encima
+-- sobre los dos modelos que estan por probarse por primera vez.
+--
+-- El 46,5 que estaba escrito es este mismo 46,53 redondeado; los tres numeros
+-- se recalcularon de una sola corrida para que salgan del mismo camino.
+--
+--     modelo            brazo vs vertical   manos separadas
+--     ghost_girl              46,53 gr           25,23 u
+--     ghost_male              56,56 gr           43,49 u
+--     ghost_oldcrone          53,85 gr           36,91 u
+--
+-- ⚠ Y NO SON UN VEREDICTO. Un reposo mas abierto no es un defecto: es como esta
+-- autorado el asset. Sirven para que la comparacion sea contra el cuerpo que se
+-- esta mirando.
 PHANTASMAGORIA.GhostModels = {
 	{
 		mdl     = "models/phantasmagoria/ghost_girl.mdl",
@@ -101,6 +130,8 @@ PHANTASMAGORIA.GhostModels = {
 		nuestro = { 6.70, 6.09, 9.72, 9.61, 3.47 },
 		masa    = 36.58,
 		volumen = 2278.19,
+		reposoBrazo = 46.53,
+		reposoManos = 25.23,
 	},
 	{
 		mdl     = "models/phantasmagoria/ghost_male.mdl",
@@ -110,6 +141,8 @@ PHANTASMAGORIA.GhostModels = {
 		nuestro = { 9.43, 11.15, 20.45, 18.31, 2.18 },
 		masa    = 58.04,
 		volumen = 4170.73,
+		reposoBrazo = 56.56,
+		reposoManos = 43.49,
 	},
 	{
 		mdl     = "models/phantasmagoria/ghost_oldcrone.mdl",
@@ -119,6 +152,8 @@ PHANTASMAGORIA.GhostModels = {
 		nuestro = { 8.44, 10.58, 12.77, 18.18, 4.62 },
 		masa    = 54.02,
 		volumen = 64424.50,
+		reposoBrazo = 53.85,
+		reposoManos = 36.91,
 	},
 }
 
