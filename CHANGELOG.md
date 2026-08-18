@@ -178,7 +178,9 @@ este repo ya pagó una vez, y esa vez llegó pusheada.
 Tres cabos del `dev/PROMPT_fantasmas_sexo_modelo_y_voz.txt`. Detalle completo en
 `dev/HANDOFF_fantasmas_male_oldcrone.md` §R7.
 
-### ✅ PASADA EN JUEGO EL MISMO DÍA — 5 de 12 filas cerradas, y una de ellas venía del bloque anterior
+### ✅ PASADA EN JUEGO EL MISMO DÍA — 3 de 13 filas PASAN, y una de ellas venía del bloque anterior
+
+(3 más quedaron a medias, 1 se retiró como criterio y 6 siguen sin correr. El desglose sale de contar la tabla, no de una cuenta a mano — la primera versión de esta línea decía «5 de 12» y estaba mal en las dos mitades.)
 
     fila 01   variedad de modelo   3 spawns, 3 modelos distintos ( y otra tanda igual )
     fila 04   el filtro tipo -> cuerpo   `ghost_type banshee` + 20 spawns, NI UNO el Male
