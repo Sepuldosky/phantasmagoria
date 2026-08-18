@@ -289,6 +289,67 @@ Tres cabos del `dev/PROMPT_fantasmas_sexo_modelo_y_voz.txt`, más la pasada de c
 `dev/PROMPT_fantasmas_r7_cierre.txt`. Detalle completo en
 `dev/HANDOFF_fantasmas_male_oldcrone.md` §R7 y §R7b.
 
+### ✅✅✅ RE-CORRIDA, mismo día — **3 de 3**, y el arreglo de `dd9e634` se ejerció por primera vez
+
+Las dos filas que habían salido verdes sin poder fallar volvieron a correr, más el control negativo, y
+**pasaron las tres**. La ronda 7 queda en **11 de 14 filas cerradas en juego**, 1 retirada como
+criterio y 2 abiertas (el motivo `[ pre-elegido en Initialize ]` de la fila 08, y el fantasma ajeno de
+la 11). Detalle en `dev/HANDOFF_fantasmas_male_oldcrone.md` §R7c.
+
+⭐ **El descarte de la voz, medido — y el sujeto de control es él mismo un minuto antes.** Un solo
+fantasma, nadie más vivo, la misma serie de punta a punta:
+
+    spawn #98  serie 23  ghost_male.mdl  tipo obambo
+    ] ghost_event sound   ->  voice_2_mutters_01                     <- voz 2, cuerpo de hombre
+    ] ghost_type banshee  ->  #98 la voz 2 se DESCARTA ( cambio de tipo a banshee )
+    ] ghost_event sound   ->  voice_1_mutterings_01                  <- voz 1
+        ficha:  tipo 1 ( fija: femenina )  modelo 2 ( grave )  resuelta 1  por: la fija el TIPO banshee
+
+Sin `phantom_ResetVoice`, el `phantom_evVoice = 2` cacheado habría sobrevivido y el sonido siguiente
+habría sido otro `voice_2_*`. El cuerpo no cambió, la serie no cambió, y lo único que se movió entre
+las dos mitades es el tipo.
+
+⭐ **Y la corrida enseñó algo mejor que el arreglo que se le había puesto a la fila.** La planilla
+partía la precondición en una fila propia con botón, para que no se pudiera saltear. El autor no la usó
+como puerta y **la fila se sostiene igual**, porque `phantom_ResetVoice` devuelve `nil` y no imprime
+nada si no hay voz guardada: la línea `la voz 2 se DESCARTA` **no puede existir** sobre un fantasma que
+no habló, y además **nombra el valor viejo**. Prueba la precondición, el mecanismo y el valor previo,
+los tres de una.
+
+> **El mejor arreglo para una precondición salteable no es moverla a la secuencia que se ejecuta: es
+> una salida que no se puede producir sin ella.** Y estaba escrito en el código desde el principio —el
+> encabezado de la función dice *«devuelve la voz que se descartó, para que quien llame pueda
+> DECIRLO»*—, sólo que al escribir la fila no se vio que esa propiedad ya resolvía el problema.
+
+**El control negativo del tipo cerró con TRES lecturas** donde la fila pedía dos: la línea de spawn
+(`tipo NINGUNO`), el encabezado de `phantasmagoria_ghost_type` (`asignacion al spawnear: APAGADA`) y la
+ficha del propio fantasma, que **nombra la convar como causa**. Y de yapa excluyó la hipótesis nula por
+partida doble: había un `override: 'banshee'` **en pie** y el fantasma salió igual sin tipo —
+`phantom_ResolveType` chequea `cvAssign` en su primera línea y sale antes de mirar el override, que es
+el comportamiento documentado y es la primera vez que se ve en juego.
+
+### ⚠ Un defecto propio en la fila re-escrita: el «seis» era un resto del criterio que se había retirado
+
+La fila pedía **seis** spawns; el autor corrió **uno** y anotó *«no es necesario matar, ahí mismo dice
+que no tiene tipo»*. **Tiene razón.** `tipo NINGUNO` no es un sorteo —`phantom_ResolveType` arranca con
+un `if not cvAssign:GetBool() then … return end`, determinista—, así que un spawn lo mide entero. El
+«seis» venía de la fila vieja, cuyo criterio tenía dos mitades, y la otra —la variedad de modelos— sí
+es un sorteo y sí necesita N. Al re-escribirla se degradó la variedad a *dato y no criterio*… y se
+dejó el tamaño de muestra que **sólo esa mitad justificaba**.
+
+> **Cuando se degrada la mitad de un criterio, el tamaño de muestra que esa mitad justificaba se va con
+> ella.** Un N que sobrevive al motivo por el que existía es un número que nadie volvió a derivar.
+
+### Ofrecido y NO escrito, para que lo decida el autor
+
+`phantasmagoria_ghost_type <key>` afirma sin condición que el override *«alcanza a los fantasmas vivos
+Y a los que spawneen despues»* (`server_type.lua:684`). Con `typeassign 0` eso es **falso**, y la
+re-corrida es la demostración en vivo. El comportamiento es el correcto; lo que sobre-promete es el
+aviso, y sería una condición de una línea sobre `cvAssign:GetBool()`.
+
+**Cero líneas de código tocadas en las dos pasadas de cierre.** Arneses verificados en la misma
+jornada: `dev/voz_y_modelo.py` 53/53 y `dev/hull_por_modelo.py` 11/11.
+
 ### ✅✅ CIERRE, 2026-08-18 — la planilla de lo que faltaba: **5 filas cerraron, y DOS salieron verdes sin poder fallar**
 
 El autor corrió las 7 filas pendientes y reportó **6 PASA · 0 FALLA · 1 SIN CORRER**. Releído contra el
