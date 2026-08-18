@@ -178,9 +178,9 @@ este repo ya pagó una vez, y esa vez llegó pusheada.
 Tres cabos del `dev/PROMPT_fantasmas_sexo_modelo_y_voz.txt`. Detalle completo en
 `dev/HANDOFF_fantasmas_male_oldcrone.md` §R7.
 
-### ✅ PASADA EN JUEGO EL MISMO DÍA — 6 de 13 filas PASAN, y la cadena de la voz cerró en las DOS direcciones
+### ✅ PASADA EN JUEGO EL MISMO DÍA — 7 de 14 filas PASAN, y la cadena de la voz cerró en las DOS direcciones
 
-(2 quedan a medias, 1 se retiró como criterio y 4 siguen sin correr. El desglose sale de contar la tabla, no
+(4 quedan a medias, 1 se retiró como criterio y 2 siguen sin correr. El desglose sale de contar la tabla, no
 de una cuenta a mano — la primera versión de esta línea decía «5 de 12» y estaba mal en las dos mitades.)
 
 ⭐ **El par que cierra la prioridad, y las dos mitades salieron de UNA sola tanda**, con
@@ -197,6 +197,37 @@ contraria; el par no. Diez ejemplos.
 sorteo y al filtro. Se escribió para que las filas del hull siguieran corriéndose, y terminó siendo la
 única puerta al estado —banshee con cuerpo de hombre— que este mismo bloque vuelve imposible por todos los
 otros caminos.
+
+### ⚠ Y LA PASADA DESTAPÓ UN DEFECTO QUE NINGUNA RELECTURA HABÍA VISTO: la voz sobrevivía al cambio de tipo
+
+`phantasmagoria_ghost_type banshee` sobre un fantasma **vivo que ya había hablado** le cambiaba el tipo y
+**no** la voz: `phantom_EventVoice()` cachea en `phantom_evVoice` y nada la invalidaba. El resultado es el
+estado que la fuente prohíbe — un *"Can only be female"* hablando grave — producido **por la perilla que
+existe para probar justamente eso**. Catálogo nº 26: *una perilla que no alcanza a los sujetos que ya
+existen se lee como «el mecanismo no existe», que es la conclusión inversa a la verdadera.*
+
+Arreglado con `ENT:phantom_ResetVoice()`, colgado de la **puerta única** (`phantom_SetType`) al lado de
+`phantom_ApplyTypeSpeed` y por el mismo motivo: SetType tiene dos entradas y `ResolveType` sólo cubre una.
+En el spawn no hace nada — la voz todavía no se resolvió — y el descarte **se dice por consola**, porque un
+cambio silencioso en algo que el jugador oye es indistinguible de un bug.
+
+No rompe la decisión de la r2: la voz se sigue sorteando UNA vez por fantasma. Lo que se agrega es que un
+cambio en **la entrada que la decide** la vuelva a resolver, que es lo contrario de sortear clip por clip.
+
+El arnés pasa a **53 comprobaciones** con un cuarto defecto reinyectable (`--romper revoz`) y un grupo G.
+
+⭐ **Y el arnés auditó al que lo escribió**: `orden` se declaró tiñendo sólo el grupo E, el arnés contestó
+*«EL CONTROL SE PASA: G se puso rojo y ese defecto no lo toca»* — y **tenía razón el arnés**: la fila de G
+comprueba que un banshee vivo pase a voz 1, o sea que depende del mismo orden de prioridad. El error estaba
+en el alcance declarado. *La mitad del control que pide DÓNDE también audita al que la escribe.*
+
+También cerró **08b** (el tipo cambia en fantasmas vivos ⇒ la key pre-elegida se consume y se borra) y la
+mitad del Male de la fila **11**: `ph_ghost_facing` dio **85,0 y 85,5** contra los **85,5 predichos offline**
+desde el SMD por `ghostbrazo_off.py`, sin el motor. Y la segunda corrida marcó `manos 23,53 u`: con el umbral
+viejo de la nena (25,23 × 0,9 = 22,70) **la alarma falsa habría saltado**, y con el del Male (43,49 × 0,9 =
+39,14) no salta. El falso positivo que la entrada nº 50 predijo se reprodujo en vivo y quedó suprimido.
+
+Planilla: **7 de 14 PASAN**, 4 a medias, 1 retirada, 2 sin correr.
 
     fila 01   variedad de modelo   3 spawns, 3 modelos distintos ( y otra tanda igual )
     fila 04   el filtro tipo -> cuerpo   `ghost_type banshee` + 20 spawns, NI UNO el Male

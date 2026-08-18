@@ -252,6 +252,21 @@ function ENT:phantom_SetType( key, motivo )
     -- archivo se incluye ANTES que server_speed.lua, y aunque en tiempo de
     -- ejecucion el metodo ya exista, un include roto tiene que decir QUE falto
     -- en vez de tirar un error por spawn.
+    -- ⚠ Y LA VOZ, POR EL MISMO MOTIVO Y EN EL MISMO LUGAR. El tipo es el PRIMER
+    -- eslabon de la prioridad `tipo > modelo > sorteo`, asi que cambiarlo puede
+    -- cambiar la voz -- y `phantom_evVoice` esta cacheada por fantasma. Medido
+    -- en juego el 2026-08-17: `phantasmagoria_ghost_type banshee` sobre un
+    -- fantasma que ya habia hablado le cambiaba el tipo y no la voz, con lo cual
+    -- quedaba un "Can only be female" hablando grave.
+    --
+    -- Va ACA y no en phantom_ResolveType por lo mismo que la velocidad: SetType
+    -- tiene DOS entradas y ResolveType solo cubre una. En el spawn esto no hace
+    -- nada, porque la voz todavia no se resolvio.
+    if self.phantom_ResetVoice then
+        self:phantom_ResetVoice( "cambio de tipo a " .. tostring( self.phantom_TypeKey ) )
+
+    end
+
     if self.phantom_ApplyTypeSpeed then
         self:phantom_ApplyTypeSpeed( "phantom_SetType -> " .. tostring( motivo ) )
 

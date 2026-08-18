@@ -1692,6 +1692,58 @@ function ENT:phantom_EventVoice()
 
 end
 
+--[[
+    ⚠ LA VOZ SE INVALIDA CUANDO CAMBIA EL TIPO, Y ESTE METODO EXISTE PARA ESO.
+
+    Medido en juego el 2026-08-17: `phantasmagoria_ghost_type banshee` sobre un
+    fantasma VIVO que ya habia hablado le cambiaba el tipo y **no** la voz. El
+    resultado es el estado que la fuente prohibe -- tipo "Can only be female" con
+    voz grave -- producido por la perilla que existe justamente para probar eso.
+
+    Es el nº 26 del catalogo de controles: *una perilla que no alcanza a los
+    sujetos que ya existen se lee como "el control no funciona" o, peor, como "el
+    mecanismo no existe"* -- que es la conclusion inversa a la verdadera, porque
+    en el spawn el mecanismo anda.
+
+    ⚠ NO ROMPE LA DECISION DE LA r2. La voz se sigue sorteando UNA vez por
+    fantasma y guardando; lo que se agrega es que un cambio de TIPO --que es el
+    primer eslabon de la prioridad-- la vuelva a resolver. Sortear clip por clip
+    seguiria estando mal; re-resolver cuando cambia la entrada que la decide es
+    lo contrario de eso.
+
+    ⚠ Y NO ES UN CAMINO NUEVO EN EL SPAWN: ahi `phantom_SetType` corre ANTES del
+    primer evento de sonido, asi que `phantom_evVoice` es nil y esto no hace
+    nada. El unico que lo ejerce es el andamio de consola.
+
+    Devuelve la voz que se descarto ( o nil ), para que quien llame pueda DECIRLO.
+    Un cambio silencioso en un valor que el jugador oye es indistinguible de un
+    bug ( catalogo nº 49: *los avisos que valen son los que distinguen entre las
+    causas* ).
+]]
+function ENT:phantom_ResetVoice( motivo )
+    local vieja = self.phantom_evVoice
+    if not vieja then return nil end
+
+    self.phantom_evVoice    = nil
+    self.phantom_evVoiceWhy = nil
+
+    -- `PHANTASMAGORIA.Print` y no `ghostPrint`: este archivo no tiene el local de
+    -- server.lua, porque include() corre otro chunk y un local no cruza. Con
+    -- guarda, para que un include roto no se convierta en un error de Lua
+    -- adentro de un cambio de tipo.
+    local decir = istable( PHANTASMAGORIA ) and PHANTASMAGORIA.Print
+
+    if isfunction( decir ) then
+        decir( "#", self:EntIndex(), " la voz ", vieja, " se DESCARTA ( ",
+            tostring( motivo or "sin motivo declarado" ),
+            " ). Se vuelve a resolver en el proximo evento de sonido.\n" )
+
+    end
+
+    return vieja
+
+end
+
 -- ¿Esta categoria puede correr? Devuelve DOS cosas y la segunda es el motivo,
 -- porque "no tira cosas" tiene causas distintas que desde afuera se ven igual:
 -- la convar maestra, la convar de la categoria, el flag del NPC, el peso del

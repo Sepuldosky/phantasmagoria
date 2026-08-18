@@ -12,8 +12,9 @@ reescribirlos:
     lua/phantasmagoria/ghost_models.lua     el registro + VozDelModelo
     .../server.lua        MODEL_CANDIDATES, pickModel, poolDelBot,
                           aplicarModeloDelBot, sexoQueExigeElTipo, ENT:Initialize
-    .../server_events.lua ENT:phantom_EventVoice
-    .../server_type.lua   ENT:phantom_PreelegirTipo, ENT:phantom_ResolveType
+    .../server_events.lua ENT:phantom_EventVoice, ENT:phantom_ResetVoice
+    .../server_type.lua   ENT:phantom_SetType, ENT:phantom_PreelegirTipo,
+                          ENT:phantom_ResolveType
 
 ⚠ LOS RASGOS NO SON UNA MAQUETA. `ghost_types.lua` y `ghost_flags.lua` se cargan
 enteros y se fusionan con su propio `AplicarRasgosDeEvento`, asi que cuando este
@@ -30,7 +31,8 @@ degenerados de fabrica y una perilla `--romper`.
 
 QUE DEFECTO VIGILA
 ------------------
-Tres, y son los tres cabos del bloque del 2026-08-17:
+Cuatro. Los tres cabos del bloque del 2026-08-17 y uno que salió de la pasada en
+juego:
 
   pool    `CLASE.Models = { chosen.mdl }` -- una lista de UNO, o sea que los
           seis fantasmas de la partida salian con el mismo cuerpo aunque la base
@@ -40,15 +42,24 @@ Tres, y son los tres cabos del bloque del 2026-08-17:
           tipo > modelo > sorteo y el ORDEN es la decision: al reves, un Banshee
           --"Can only be female"-- hablaria grave.
   filtro  con el sorteo prendido un Banshee podia salir con el CUERPO del Male.
+  revoz   `phantasmagoria_ghost_type banshee` sobre un fantasma VIVO que ya habia
+          hablado le cambiaba el tipo y NO la voz: quedaba un "Can only be
+          female" hablando grave. Catalogo nº 26 -- *una perilla que no alcanza
+          a los sujetos que ya existen*. Encontrado en juego, no leyendo codigo.
 
 EL CONTROL DEL PROPIO ARNES ( --romper )
 ----------------------------------------
-`--romper pool|orden|filtro|todos` le vuelve a meter cada defecto al bloque
+`--romper pool|orden|filtro|revoz|todos` le vuelve a meter cada defecto al bloque
 extraido y el arnes TIENE que ponerse rojo, cada uno en SUS filas y no en todas:
 si `--romper orden` pusiera rojo tambien al pool, no estaria discriminando, y un
 arnes acoplado de mas acredita igual que uno flojo. Sin esta perilla un verde de
 aca no prueba que pueda haber un rojo -- *y una perilla que nadie puede mover no
 es un control.*
+
+⚠ Y esa mitad audita tambien al que la escribe: `orden` se declaro tiniendo solo
+{E}, el arnes contesto "EL CONTROL SE PASA: G se puso rojo", y **tenia razon el
+arnes** -- la fila de G depende del mismo orden de prioridad. El error estaba en
+el alcance declarado, no en el instrumento.
 
 ⚠ LO QUE ESTE ARNES NO MIDE, y hay que decirlo porque su verde se lee como
 cobertura:
@@ -88,7 +99,10 @@ BLOQUES = [
      "\n---------------------------------------------------------------------------\n"
      "-- ⚠ EL HULL CON EL QUE CAMINA"),
     (EVENTS, "function ENT:phantom_EventVoice()", "\n-- ¿Esta categoria puede correr?"),
-    (TIPOS, "function ENT:phantom_PreelegirTipo()",
+    # ⚠ Arranca en `phantom_SetType` y no en `phantom_PreelegirTipo`: la PUERTA
+    # UNICA es la que invalida la voz cuando cambia el tipo, y sin ella el grupo
+    # G mediria un doble mio en vez del cableado real.
+    (TIPOS, "function ENT:phantom_SetType( key, motivo )",
      "\n---------------------------------------------------------------------------\n"
      "-- La linea que va en los instrumentos"),
 ]
@@ -107,12 +121,19 @@ DEFECTOS = {
     "filtro": ("                self.Models = compatibles",
                "                local _ = compatibles",
                "el cuerpo no se filtra por el tipo"),
+    "revoz": ("    if self.phantom_ResetVoice then",
+              "    if false then",
+              "la voz cacheada sobrevive a un cambio de tipo"),
 }
 
 # Que GRUPO de filas tiene que ponerse rojo con cada defecto. Es la mitad del
 # control que suele faltar: "hubo rojo" no distingue un arnes que discrimina de
 # uno que se cae entero ante cualquier cambio.
-ALCANCE = {"pool": {"B", "D"}, "orden": {"E"}, "filtro": {"D"}}
+# ⚠ `orden` tiñe E **y G**: la fila de G comprueba que un banshee vivo pase a voz 1,
+# o sea que depende del mismo orden de prioridad. Se declaró sólo {E} y el propio arnés lo
+# atajo con su "EL CONTROL SE PASA" -- el error estaba en el alcance declarado, no en el
+# instrumento. *La mitad del control que pide DONDE tambien audita al que la escribe.*
+ALCANCE = {"pool": {"B", "D"}, "orden": {"E", "G"}, "filtro": {"D"}, "revoz": {"G"}}
 
 BOOT = r"""
 -- Stubs. Los de tipo son los de GMod al pie de la letra; los demas son andamio y
@@ -209,6 +230,13 @@ cvAssign = { GetBool = function() return __typeassign ~= false end }
 EXPORTS = """
 _G.__ENT = ENT
 _G.__sexoQueExigeElTipo = sexoQueExigeElTipo
+
+-- ⚠ `PHANTASMAGORIA.Print` la pone `server.lua` en su linea 23, FUERA del rango
+-- que este arnes extrae, y `server_events.lua` la usa. Sin esta linea el arnes
+-- corre con la mesa a medio poner y la fila del aviso sale roja sobre codigo
+-- sano -- de hecho salio, la primera vez que se corrio el grupo G. *Un stub que
+-- falta no se ve como un stub que falta: se ve como un defecto del sujeto.*
+PHANTASMAGORIA.Print = ghostPrint
 """
 
 
@@ -545,9 +573,65 @@ def main():
            "el control negativo del tipo no se toca")
 
     # =====================================================================
+    print("\n  ( G ) la voz cacheada se INVALIDA al cambiar el tipo -- phantom_SetType real")
+    # ⚠ EL DEFECTO QUE VIGILA, MEDIDO EN JUEGO EL 2026-08-17: `ghost_type banshee`
+    # sobre un fantasma vivo que ya habia hablado le cambiaba el tipo y NO la voz,
+    # y quedaba un "Can only be female" con voz grave. Catalogo nº 26.
+    L.execute("math.random = function() return 1 end")
+    L.execute("""
+        __v = setmetatable( { __mdl = "%s", phantom_TypeKey = "spirit" },
+                            { __index = __ENT } )
+        __v.GetModel    = function( self ) return self.__mdl end
+        __v.SetNWString = function() end
+        __v.EntIndex    = function() return 777 end
+        __v.phantom_EventFlags = function( self )
+            local f = self.phantom_TypeKey and PHANTASMAGORIA.Types[ self.phantom_TypeKey ]
+            return ( f and f.events ) or PHANTASMAGORIA.EventDefaults
+        end
+    """ % MALE)
+    t.fila("G", "    cuerpo de hombre + spirit: la voz sale del MODELO",
+           lua("__v:phantom_EventVoice()"), 2)
+
+    L.execute("__salida = {}")
+    L.execute('__v:phantom_SetType( "banshee", "andamio de consola" )')
+    d = dicho()
+    t.fila("G", "  * `ghost_type banshee` sobre ese fantasma VIVO: se re-resuelve",
+           lua("__v:phantom_EventVoice()"), 1,
+           "antes quedaba un 'Can only be female' hablando grave")
+    t.fila("G", "    ... y el descarte se DICE, no pasa callado",
+           ("se DESCARTA" in d and "cambio de tipo a banshee" in d), True)
+    t.fila("G", "    y el motivo nuevo dice que la fija el tipo",
+           g["__v"]["phantom_evVoiceWhy"].startswith("la fija el TIPO"), True)
+
+    # Degenerado, y es EL caso del spawn: ahi `phantom_SetType` corre antes del
+    # primer evento de sonido, asi que tiene que ser un no-op silencioso.
+    L.execute("__salida = {}")
+    L.execute("""
+        __w = setmetatable( {}, { __index = __ENT } )
+        __w.EntIndex = function() return 778 end
+    """)
+    t.fila("G", "    degenerado: resetear una voz que nunca se resolvio ( el spawn )",
+           lua("__w:phantom_ResetVoice( 'x' )"), None)
+    t.fila("G", "    ... y no imprime: en el spawn no pasa nada que contar",
+           len(arr(g["__salida"])), 0)
+
+    # Y la guarda del `PHANTASMAGORIA.Print` ausente: sin consola, la voz igual
+    # tiene que invalidarse. Callarse es aceptable; no invalidar, no.
+    L.execute("__print = PHANTASMAGORIA.Print; PHANTASMAGORIA.Print = nil")
+    L.execute("__v.phantom_evVoice = 2; __v.phantom_TypeKey = 'spirit'")
+    try:
+        devuelto = lua("__v:phantom_ResetVoice( 'sin consola' )")
+        rota = False
+    except Exception:                                            # noqa: BLE001
+        devuelto, rota = "TIRO", True
+    L.execute("PHANTASMAGORIA.Print = __print")
+    t.fila("G", "    degenerado: sin PHANTASMAGORIA.Print, invalida igual y no tira",
+           (devuelto == 2 and g["__v"]["phantom_evVoice"] is None and not rota), True)
+
+    # =====================================================================
     print("\n  %d comprobaciones, %d falla(s)." % (t.n, t.fallas))
     print("  grupos:  A modelo->sexo · B pool · C tipo->sexo · D cuerpo por tipo · "
-          "E voz · F pre-eleccion")
+          "E voz · F pre-eleccion · G re-voz")
 
     if rotos:
         pedidas = set().union(*[ALCANCE[c] for c in rotos])
