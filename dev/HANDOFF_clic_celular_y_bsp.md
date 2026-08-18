@@ -125,8 +125,15 @@ cabecera, y si falla degrada a `ok = false` con motivo. Es la rama de FALLA de l
 
 ## 5 · La planilla — 8 filas, en este orden
 
-`dev/checks/phantasmagoria-clic-y-celular.html` (⚠ vive en el `dev/` de la **raíz del workspace**, que
-**no** es un repo git, así que no está versionada).
+`dev/checks/phantasmagoria-clic-y-celular.html` — ⚠ vive en el `dev/` de la **raíz del workspace**, que
+**no** es un repo git, así que **no está versionada y no viaja con el push**. Está en el disco de la
+máquina del autor, y **su estado (los tildes y las notas) vive en el localStorage del navegador**, con
+la clave `phantasmagoria-clic-y-celular`.
+
+⚠ **Hubo una corrida que no se pudo terminar**, y está guardada en
+[CORRIDA_clic_y_celular_parcial.md](CORRIDA_clic_y_celular_parcial.md): las 7 filas quedaron sin
+correr porque el evento `prop` reventaba en `gm_uh_house`. Ese error es el que originó la fila **P0** y
+el CHANGELOG (44). **La fila 00 hay que rehacerla desde el primer comando.**
 
 | # | qué mide |
 |---|---|
