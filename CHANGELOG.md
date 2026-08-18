@@ -175,9 +175,44 @@ este repo ya pagó una vez, y esa vez llegó pusheada.
 
 ## 2026-08-17 (42) — **Cada fantasma con su cuerpo y su voz. La base sorteaba desde siempre y nuestro código le pasaba una lista de UNO; y la puerta que hacía cara la parte difícil resultó ser un `Initialize` que este addon nunca había escrito.**
 
-Tres cabos del `dev/PROMPT_fantasmas_sexo_modelo_y_voz.txt`. **Escrito y medido offline; la pasada
-en juego NO se hizo** y su planilla de 10 filas está en `dev/HANDOFF_fantasmas_male_oldcrone.md`
-§R7.5. Detalle completo en §R7.
+Tres cabos del `dev/PROMPT_fantasmas_sexo_modelo_y_voz.txt`. Detalle completo en
+`dev/HANDOFF_fantasmas_male_oldcrone.md` §R7.
+
+### ✅ PASADA EN JUEGO EL MISMO DÍA — 5 de 12 filas cerradas, y una de ellas venía del bloque anterior
+
+    fila 01   variedad de modelo   3 spawns, 3 modelos distintos ( y otra tanda igual )
+    fila 04   el filtro tipo -> cuerpo   `ghost_type banshee` + 20 spawns, NI UNO el Male
+    fila 10   hull y malla por modelo    44.94/20x20x45 · 72.29/32x32x72 · 68.98/30x30x69
+
+La **04** cierra con margen: bajo la hipótesis nula —sin filtro, sorteo uniforme sobre tres— veinte
+spawns sin un solo Male tienen probabilidad `(2/3)²⁰ ≈ 3 en 10.000`. Y arrastra un corolario que no
+hay que volver a medir: **el filtro sólo se dispara si la pre-elección del tipo corrió**, o sea que el
+`ENT:Initialize()` nuevo —el que corre ANTES de que la base sortee el modelo— funciona en juego.
+
+La **10** son las filas 01-03 de §R6.4, del bloque anterior, que **nunca se habían corrido**. Los tres
+números dan exactamente lo calculado offline, con la nena —el control que NO tenía que cambiar—
+idéntica a lo que corrió las 22 rondas. Y un segundo cálculo, de otra parte del código, que tenía que
+concordar y concuerda: la columna de ojos da **40 · 64 · 61** = `round( alto − (alto/72)·8 )` para los
+tres altos.
+
+### ⚠ Y EL HALLAZGO DE MÉTODO: EL ARREGLO DEL CABO 3 DEJÓ SIN PODER FALLAR A LA FILA DEL CABO 2
+
+La fila que probaba la prioridad decía *«forzar un Banshee y oírlo femenino, porque el TIPO manda
+sobre el modelo»*. Era discriminante cuando se escribió —con el modelo suelto, «manda el tipo» daba
+voz 1 y «manda el modelo» daba voz 2— y **el filtro del cabo 3 la mató**: garantiza que todo Banshee
+salga con cuerpo femenino, o sea voz 1 **también por modelo**. Las dos hipótesis predicen lo mismo y
+la fila sale verde **con el orden invertido**.
+
+La fila describe bien el mecanismo, cita bien la fuente y pasa; lo único que perdió es la capacidad
+de salir roja. El arreglo es de la FILA: el estado que hace falta —un Banshee con cuerpo de hombre—
+sigue siendo alcanzable **porque la perilla le gana al filtro** (`bot_modelo ghost_male` deja el pool
+en uno). Queda como fila **05b**, y la vieja pasa a **dato anotado y no criterio de PASA**.
+
+*Cuando un bloque agrega una restricción, la pregunta no es sólo qué filas nuevas hacen falta sino
+**qué filas viejas dejaron de poder alcanzar su caso**.* Catálogo de controles, entrada 61.
+
+**Lo que falta**: 05b (la única que prueba el orden de prioridad), 02, 03, 06/07 con su `por:`, 08b y
+09, más las filas 04-07 de §R6.4. Planilla completa en §R7.5.
 
 ### Lo que se midió
 
