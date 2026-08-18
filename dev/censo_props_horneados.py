@@ -151,21 +151,72 @@ def censo_sprp(bsp):
     ver, fo, fl = sprp
     print("sprp version               : %d   ( offset %d, len %d )" % (ver, fo, fl))
 
-    p = fo
-    ndict = struct.unpack_from("<i", bsp, p)[0]; p += 4
+    # ⚠⚠ EL LUMP PUEDE VENIR COMPRIMIDO, Y ESTE SCRIPT SE COLGABA CON ESO.
+    # Medido el 2026-08-18 en `gm_uh_house`: el `sprp` arranca con la firma
+    # `LZMA`, y leer esos cuatro bytes como entero da **1095588428**. El `for _
+    # in range(ndict)` de abajo se ponia a llenar una lista de mil noventa y
+    # cinco millones de entradas: no reventaba, **se colgaba**.
+    #
+    # ⚠ Y ESA ES LA PARTE QUE HAY QUE MIRAR. El gemelo en Lua, con el MISMO
+    # numero, tiro `table overflow` en el acto. Un crash se ve; un cuelgue se
+    # lee como *"todavia esta trabajando"*, o sea que el mismo defecto es peor
+    # aca. *La cara que pone una falla depende del lenguaje, no de su gravedad.*
+    s = bsp[fo:fo + fl]
+
+    if s[:4] == b"LZMA":
+        # Cabecera de lump comprimido de Source: 'LZMA' + descomprimido (u32) +
+        # comprimido (u32) + 5 bytes de propiedades LZMA1, y despues el stream.
+        # ⚠ En un lump comprimido el `filelen` de la tabla de game lumps trae el
+        # tamano DESCOMPRIMIDO, asi que el slice de arriba se pasa de largo y hay
+        # que quedarse con `comp` bytes contados desde el byte 17.
+        import lzma
+        real, comp = struct.unpack_from("<II", s, 4)
+        print("sprp COMPRIMIDO            : %d -> %d bytes ( LZMA )" % (comp, real))
+        crudo = s[12:17] + struct.pack("<Q", real) + s[17:17 + comp]
+        try:
+            s = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE).decompress(crudo)
+        except Exception as e:
+            raise SystemExit("el sprp esta comprimido y no se pudo abrir: %s" % e)
+        if len(s) != real:
+            raise SystemExit("descomprimio %d bytes y la cabecera declara %d: no es el lump"
+                             % (len(s), real))
+
+    def cuenta_valida(n, quedan, porcada):
+        """⚠ LAS DOS MITADES. La guarda original miraba `n < 0` y nada mas, asi
+        que un numero absurdamente GRANDE pasaba entero. El techo no es una
+        constante inventada: es el tramo que se tiene en la mano dividido por lo
+        que ocupa cada entrada."""
+        return 0 <= n <= (quedan // porcada)
+
+    p = 0
+    ndict = struct.unpack_from("<i", s, p)[0]; p += 4
+    if not cuenta_valida(ndict, len(s) - 4, 128):
+        raise SystemExit("dictEntries = %d y en los %d bytes del sprp entran como mucho %d "
+                         "rutas de 128 -> eso no es una cantidad, es basura con forma de numero"
+                         % (ndict, len(s), (len(s) - 4) // 128))
+
     modelos = []
     for _ in range(ndict):
-        modelos.append(bsp[p:p + 128].split(b"\x00")[0].decode("ascii", "replace").lower())
+        modelos.append(s[p:p + 128].split(b"\x00")[0].decode("ascii", "replace").lower())
         p += 128
-    nleaf = struct.unpack_from("<i", bsp, p)[0]; p += 4
+
+    nleaf = struct.unpack_from("<i", s, p)[0]; p += 4
+    if not cuenta_valida(nleaf, len(s) - p, 2):
+        raise SystemExit("leafEntries = %d y quedan %d bytes -> la lectura no esta donde deberia"
+                         % (nleaf, len(s) - p))
     p += nleaf * 2
-    nprops = struct.unpack_from("<i", bsp, p)[0]; p += 4
+
+    nprops = struct.unpack_from("<i", s, p)[0]; p += 4
+    if not cuenta_valida(nprops, len(s) - p, 26):
+        raise SystemExit("entryCount = %d y quedan %d bytes, o sea como mucho %d entradas de 26 "
+                         "-> la lectura no esta donde deberia"
+                         % (nprops, len(s) - p, (len(s) - p) // 26))
 
     # EL PASO SE CALCULA, NO SE ASUME. StaticPropLump_t cambia de tamano con la
     # version del lump ( 56 en v4, 72 en v10, ... ) y hay mapas con versiones
     # intermedias. Lo que NO cambia entre v4 y v11 es el arranque de la
     # estructura: Origin (12) + Angles (12), o sea que PropType vive en +24.
-    resto = (fo + fl) - p
+    resto = len(s) - p
     paso = resto // nprops if nprops else 0
     print("modelos distintos ( dict ) : %d" % ndict)
     print("instancias prop_static     : %d" % nprops)
@@ -174,7 +225,7 @@ def censo_sprp(bsp):
 
     cuenta = collections.Counter()
     for i in range(nprops):
-        t = struct.unpack_from("<H", bsp, p + i * paso + 24)[0]
+        t = struct.unpack_from("<H", s, p + i * paso + 24)[0]
         # AUTO-CONTROL: un indice fuera del diccionario significa que la lectura
         # se desalineo, y a partir de ahi todo lo que se cuente es ruido con
         # forma de dato. Se aborta en vez de reportar.

@@ -148,6 +148,46 @@ local function f32( s, i )
 end
 
 ---------------------------------------------------------------------------
+-- ⚠⚠ TODA CANTIDAD LEIDA DEL ARCHIVO SE ACOTA CONTRA LO QUE EL TRAMO PUEDE
+-- CONTENER, Y NO SOLO CONTRA EL CERO
+---------------------------------------------------------------------------
+-- LO QUE COSTO, medido el 2026-08-18 en `gm_uh_house`: las guardas de este
+-- parser miraban **un solo lado** ( `if not n or n < 0` ). Un numero
+-- absurdamente GRANDE pasaba entero, y el `for i = 1, ndict` de mas abajo
+-- reviento con `table overflow` en la linea del `modelos[ i ] = nom`.
+--
+-- ⚠ EL ERROR NO SE PARECIA A LO QUE ERA. Subio por `EstaticosEnEsfera` ->
+-- `EV.prop` -> `phantom_FireEvent` -> el concommand, o sea que el sintoma fue
+-- **el evento `prop` inservible en cada disparo**, con una pila de nueve marcos
+-- que apunta al consumidor y no a la causa. Un parser que TIRA en vez de
+-- devolver `ok = false` convierte "este mapa no se puede leer" en "el addon esta
+-- roto".
+--
+-- ⚠⚠ Y LA ASIMETRIA ES LA DE SIEMPRE: este archivo ya tenia tres auto-controles
+-- finisimos contra la DESALINEACION -- la forma de la ruta, el sobrante en cero,
+-- el PropType fuera del diccionario -- y ninguno contra un numero que no puede
+-- ser una cantidad. *Los controles se escribieron para el modo de falla que ya
+-- se habia visto.* El que faltaba era el barato.
+--
+-- EL LIMITE NO ES UNA CONSTANTE INVENTADA: es el tramo que YA se leyo dividido
+-- por lo que ocupa cada entrada. Un diccionario de N rutas ocupa N*128 bytes; si
+-- no entran en el `sprp` que se tiene en la mano, ese N no es un N -- es basura
+-- con forma de numero, y decirlo asi es mas util que un `table overflow`.
+local function cuentaValida( n, quedan, porcada )
+    return n and n >= 0 and n <= math.floor( quedan / porcada )
+
+end
+
+--- El techo que se le pudo poner, para poder IMPRIMIRLO al lado del valor malo.
+-- Un mensaje que dice "el numero es absurdo" sin decir contra que se lo comparo
+-- manda a adivinar; con el techo, el que lo lee ve de una si el problema es el
+-- numero o el tramo.
+local function techo( quedan, porcada )
+    return math.floor( quedan / porcada )
+
+end
+
+---------------------------------------------------------------------------
 -- El parseo
 ---------------------------------------------------------------------------
 local LUMP_GAME_LUMP = 35
@@ -219,8 +259,12 @@ local function parsear()
 
     out.gamelumps = ngl
 
+    -- ⚠ El recorrido se acota a lo que `tabla` puede contener. Hoy el `break` de
+    -- adentro alcanzaba ( `i32` devuelve nil pasado el final ), pero eso es una
+    -- propiedad del lector y no del limite: escrito asi, el limite esta dicho.
+    local maxgl = techo( #tabla - 4, 16 )
     local sv, sofs, slen
-    for i = 0, ngl - 1 do
+    for i = 0, math.min( ngl, maxgl ) - 1 do
         local base = 5 + i * 16
         local id = i32( tabla, base )
         if not id then break end
@@ -242,10 +286,103 @@ local function parsear()
 
     out.sprp_version = sv
 
+    -- ⚠⚠ EL TRAMO QUE SE VA A LEER SE ACOTA CONTRA EL TAMANO DEL ARCHIVO ANTES
+    -- DE LEERLO. `f:Read( slen )` con un `slen` basura intenta armar una string
+    -- de Lua de ese tamano -- y el docstring de arriba dice, con todas las
+    -- letras, que este mapa mide 340 MB y que por eso NO se lee entero. Un
+    -- offset o un largo corridos convertirian esa promesa en lo contrario, sin
+    -- una sola linea de aviso.
+    if sofs < 0 or slen < 0 or ( out.bytes and ( sofs + slen ) > out.bytes ) then
+        f:Close()
+        out.error = "el game lump `sprp` dice vivir en " .. tostring( sofs ) .. "+" ..
+            tostring( slen ) .. " bytes y el archivo mide " .. tostring( out.bytes ) ..
+            ": la tabla de game lumps no dice donde esta el sprp de este mapa"
+        return out
+
+    end
+
     -- 3 · el `sprp` entero. Son ~173 KB, no 340 MB.
     f:Seek( sofs )
     local s = f:Read( slen )
     f:Close()
+
+    -----------------------------------------------------------------------
+    -- ⚠⚠ EL LUMP PUEDE VENIR COMPRIMIDO, Y ASI ES COMO SE DESCUBRIO
+    -----------------------------------------------------------------------
+    -- El 2026-08-18, en `gm_uh_house`, el parser reviento con `table overflow`
+    -- porque leyo `dictEntries = 1095588428`. Ese numero, escrito de vuelta como
+    -- cuatro bytes, es **'LZMA'**: no era una cantidad mal leida, eran los bytes
+    -- de la firma de compresion interpretados como entero.
+    --
+    -- *Un campo numerico que no es un numero se lee como un numero enorme, y un
+    -- numero enorme no se distingue de un dato valido mirando solo su signo.* Es
+    -- lo que las guardas de arriba miraban antes.
+    --
+    -- Source comprime lumps con una cabecera propia de 17 bytes:
+    --     'LZMA' (4) · tamano descomprimido (u32) · tamano comprimido (u32) ·
+    --     5 bytes de propiedades LZMA1
+    -- y despues el stream crudo. ⚠ Y OJO CON `slen`: en un lump comprimido el
+    -- `filelen` de la tabla de game lumps trae el tamano **DESCOMPRIMIDO**, asi
+    -- que el `f:Read( slen )` de arriba lee de mas y se mete en el lump vecino.
+    -- No es un problema mientras el archivo de con los bytes -- lo que importa
+    -- esta en los primeros 17 + comprimido --, pero por eso el chequeo de "no
+    -- entra" se hace DESPUES de saber si esta comprimido y no antes.
+    --
+    -- ⚠⚠ ESTE CAMINO SE VERIFICA A SI MISMO Y POR ESO NO ES UNA APUESTA. Que
+    -- `util.Decompress` acepte la cabecera "alone" ( propiedades + tamano en 8
+    -- bytes + stream ) **no se pudo medir sin el juego**; lo que si se midio, con
+    -- `dev/bsp_statics_offline.py` y el `lzma` de Python, es que **el dato esta
+    -- ahi**: 15005 bytes se abren en 78334 y dan 188 modelos / 702 props con
+    -- `sobrantes 0`. Asi que si la API contesta, el resultado pasa igual por los
+    -- tres auto-controles de alineacion de mas abajo; y si no contesta, esto
+    -- devuelve `ok = false` con motivo, que es exactamente donde estabamos.
+    if s and #s >= 17 and string.sub( s, 1, 4 ) == "LZMA" then
+        local real = i32( s, 5 )
+        local comp = i32( s, 9 )
+        out.comprimido = true
+
+        if not real or not comp or real <= 0 or comp <= 0 or #s < 17 + comp then
+            out.error = "el sprp esta comprimido ( LZMA ) y la cabecera no cierra: dice " ..
+                tostring( comp ) .. " bytes comprimidos y hay " .. ( #s - 17 )
+            return out
+
+        end
+
+        if not util or not util.Decompress then
+            out.error = "el sprp esta comprimido ( LZMA, " .. comp .. " -> " .. real ..
+                " bytes ) y `util.Decompress` no existe en esta build"
+            return out
+
+        end
+
+        -- La cabecera "alone": 5 bytes de propiedades + el tamano descomprimido
+        -- en 8 bytes little endian. `real` entra en 32 bits, asi que los cuatro
+        -- de arriba van en cero.
+        local props8 = string.sub( s, 13, 17 ) .. string.char(
+            real % 256,
+            math.floor( real / 256 ) % 256,
+            math.floor( real / 65536 ) % 256,
+            math.floor( real / 16777216 ) % 256,
+            0, 0, 0, 0 )
+
+        local abierto = util.Decompress( props8 .. string.sub( s, 18, 17 + comp ) )
+
+        -- ⚠ NO ALCANZA CON QUE DEVUELVA ALGO. `util.Decompress` sobre basura
+        -- puede devolver una string corta en vez de nil, y una string corta
+        -- parseada como sprp da numeros creibles. El largo declarado en la
+        -- cabecera es un testigo independiente del descompresor: si no coinciden,
+        -- lo que salio no es el lump.
+        if not abierto or #abierto ~= real then
+            out.error = "el sprp esta comprimido ( LZMA ) y `util.Decompress` devolvio " ..
+                ( abierto and ( #abierto .. " bytes" ) or "nil" ) .. " en vez de los " .. real ..
+                " que declara la cabecera: no se puede leer este mapa"
+            return out
+
+        end
+
+        s, slen = abierto, real
+
+    end
 
     if not s or #s < slen then
         out.error = "el sprp no entra: se leyeron " .. ( s and #s or 0 ) .. " de " .. slen .. " bytes"
@@ -256,8 +393,11 @@ local function parsear()
     -- dictEntries (int) · dictEntries * 128 bytes de ruta de modelo
     local p = 1
     local ndict = i32( s, p ); p = p + 4
-    if not ndict or ndict < 0 then
-        out.error = "dictEntries ilegible"
+    if not cuentaValida( ndict, #s - 4, 128 ) then
+        out.error = "dictEntries = " .. tostring( ndict ) .. ", y en los " .. #s ..
+            " bytes del sprp entran como mucho " .. techo( #s - 4, 128 ) ..
+            " rutas de 128 bytes -> eso no es una cantidad, es basura con forma de numero " ..
+            "( el sprp puede estar comprimido, o la tabla de game lumps apuntar a otro lado )"
         return out
 
     end
@@ -298,8 +438,10 @@ local function parsear()
 
     -- leafEntries (int) · leafEntries * u16
     local nleaf = i32( s, p ); p = p + 4
-    if not nleaf or nleaf < 0 then
-        out.error = "leafEntries ilegible"
+    if not cuentaValida( nleaf, #s - ( p - 1 ), 2 ) then
+        out.error = "leafEntries = " .. tostring( nleaf ) .. ", y despues del diccionario " ..
+            "quedan " .. ( #s - ( p - 1 ) ) .. " bytes, o sea como mucho " ..
+            techo( #s - ( p - 1 ), 2 ) .. " entradas de 2 -> la lectura no esta donde deberia"
         return out
 
     end
@@ -307,9 +449,16 @@ local function parsear()
     p = p + nleaf * 2
 
     -- entryCount (int) · entryCount * StaticPropLump_t
+    -- El minimo por entrada son los 26 bytes de Origin+Angles+PropType, que es
+    -- lo que el chequeo de `paso` de abajo ya exige. Aca se usa el mismo numero
+    -- para acotar la CANTIDAD, que es lo que evita el `for` gigante: las dos
+    -- mitades del mismo criterio, y por eso el 26 esta una sola vez en el texto.
     local nprops = i32( s, p ); p = p + 4
-    if not nprops or nprops < 0 then
-        out.error = "entryCount ilegible"
+    if not cuentaValida( nprops, #s - ( p - 1 ), 26 ) then
+        out.error = "entryCount = " .. tostring( nprops ) .. ", y quedan " ..
+            ( #s - ( p - 1 ) ) .. " bytes, o sea como mucho " .. techo( #s - ( p - 1 ), 26 ) ..
+            " entradas de 26 ( el minimo de Origin+Angles+PropType ) -> la lectura no esta " ..
+            "donde deberia"
         return out
 
     end
@@ -390,7 +539,41 @@ end
 function PHANTASMAGORIA.Estaticos()
     if cache and cache.mapa == game.GetMap() then return cache end
 
-    cache = parsear()
+    -- ⚠⚠ EL PARSEO VA ADENTRO DE UN `pcall`, Y NO PORQUE SE ESPEREN ERRORES:
+    -- PORQUE EL CONTRATO DE ESTA FUNCION ES EL DE ARRIBA -- *"devuelve la tabla
+    -- SIEMPRE, con `ok = false` y un `error` legible"* -- y un error de Lua
+    -- adentro de `parsear` lo rompe **hacia arriba**: se lleva puesto al
+    -- consumidor, al evento y al concommand que lo disparo.
+    --
+    -- Paso el 2026-08-18 en `gm_uh_house`, con un `table overflow`: la pila
+    -- llegaba hasta `concommand.lua` y el evento `prop` quedaba inservible EN
+    -- CADA DISPARO. El parser tenia todos sus errores previstos escritos como
+    -- `out.error`, asi que la unica forma de que apareciera un error de Lua era
+    -- justamente la que nadie previo -- que es la que el `pcall` cubre.
+    --
+    -- ⚠ Y LA FALLA SE CACHEA. Antes, al tirar error la asignacion `cache = ...`
+    -- **nunca ocurria**, asi que el mapa se re-parseaba y re-reventaba en cada
+    -- evento: un archivo que no se puede leer no se vuelve legible por releerlo.
+    -- Guardar el fracaso es lo que convierte un error por disparo en uno por
+    -- mapa, y ademas deja que `phantasmagoria_ghost_estaticos` lo IMPRIMA en vez
+    -- de reventar el tambien.
+    local ok, res = pcall( parsear )
+
+    if ok then
+        cache = res
+
+    else
+        cache = {
+            ok      = false,
+            mapa    = game.GetMap(),
+            modelos = {},
+            props   = {},
+            error   = "el parseo del .bsp tiro un error de Lua y se atajo para no cortar la " ..
+                "cadena del evento: " .. tostring( res ),
+        }
+
+    end
+
     return cache
 
 end

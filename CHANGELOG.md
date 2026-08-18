@@ -7,6 +7,116 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-18 (44) — **`table overflow` en `gm_uh_house`: el parser leía la firma `LZMA` como si fuera una cantidad. Dos defectos y no uno, el gemelo en Python tenía el mismo con otra cara, y el arnés nuevo se disfrazó de hallazgo sobre el mapa.**
+
+El autor cargó la planilla del bloque anterior en `gm_uh_house` y no pudo correr **ni una fila**: el
+evento `prop` tiraba un error de Lua en cada disparo.
+
+    [phantasmagoria] .../bsp_statics.lua:271: table overflow
+      1. parsear  2. Estaticos  3. EstaticosEnEsfera  4. fn (EV.prop)
+      5. phantom_FireEvent  6. fn  7. EachGhost  8. unknown  9. concommand.lua:60
+
+### ⭐⭐ La causa, medida y exacta: no era un número mal leído, **eran cuatro letras**
+
+`dictEntries = 1095588428`. Ese número, escrito de vuelta como cuatro bytes little endian, es
+**`LZMA`**. El game lump `sprp` de ese mapa viene **comprimido**, y el parser leyó la firma de
+compresión como si fuera la cantidad de rutas del diccionario.
+
+*Un campo numérico que no es un número se lee como un número enorme* — y un número enorme no se
+distingue de un dato válido mirando sólo su signo, que es lo único que este parser miraba.
+
+### ⚠⚠ Y son **dos** defectos, con la misma raíz y consecuencias distintas
+
+**( 1 ) Todas las guardas de conteo miraban un solo lado.** `if not n or n < 0` rechaza el negativo y
+deja pasar el absurdo. El límite correcto no es una constante inventada: es **el tramo que ya se leyó
+dividido por lo que ocupa cada entrada** — un diccionario de N rutas ocupa `N*128` bytes, y si no
+entran en el `sprp` que se tiene en la mano, ese N no es un N. Puestas las dos mitades en
+`dictEntries`, `leafEntries`, `entryCount`, el recorrido de game lumps y el propio `sofs+slen` contra
+el tamaño del archivo.
+
+⚠ **Lo que vuelve esto una entrada y no un parche:** este archivo ya tenía **tres auto-controles
+finísimos** contra la desalineación — la forma de la ruta (`models/…mdl`), el sobrante en cero, el
+`PropType` fuera del diccionario — y **ninguno** contra un número que no puede ser una cantidad. *Los
+controles se habían escrito para el modo de falla que ya se había visto.* El que faltaba era el
+barato.
+
+**( 2 ) `parsear` podía tirar, y eso rompe el contrato que el propio archivo tiene escrito.**
+`Estaticos()` promete, con todas las letras, *«devuelve la tabla SIEMPRE, con `ok = false` y un
+`error` legible… no devuelve nil»*. Un error de Lua adentro se lleva puesto al consumidor, al evento y
+al concommand — nueve marcos de pila que **apuntan al consumidor y no a la causa**, y un evento `prop`
+inservible. Ahora va en `pcall`. ⚠ Y **la falla se cachea**: antes, al tirar, la asignación
+`cache = parsear()` nunca ocurría, así que el mapa se **re-parseaba y re-reventaba en cada disparo**.
+Un archivo que no se puede leer no se vuelve legible por releerlo.
+
+### ⚠⚠ El instrumento gemelo tenía el mismo defecto, y en Python es **peor**
+
+`dev/censo_props_horneados.py` — el `.py` que valida al Lua — hacía `for _ in range(ndict)` sin
+ninguna guarda. Con el mismo 1095588428 no revienta: **se cuelga**, llenando una lista de mil noventa
+y cinco millones de entradas. Se lo corrió y hubo que matarlo.
+
+*La cara que pone una falla depende del lenguaje, no de su gravedad.* Un crash se ve; **un cuelgue se
+lee como «todavía está trabajando»**. El mismo defecto, en el instrumento que existe para auditar al
+otro, es el que más tarda en descubrirse.
+
+### El lump comprimido, y por qué esto **no** es una apuesta
+
+Source comprime lumps con una cabecera propia de 17 bytes: `LZMA` + tamaño descomprimido + tamaño
+comprimido + 5 bytes de propiedades LZMA1. ⚠ Y **`filelen` de la tabla de game lumps trae el tamaño
+DESCOMPRIMIDO**, así que el `Read( slen )` se pasa de largo y se mete en el lump vecino.
+
+Lo que **sí** se midió sin el juego, con Python: **15005 bytes se abren en 78334**, y ahí adentro hay
+`188 modelos / 702 props`, `paso 72`, **`sobrantes 0`**, primer modelo
+`models/props/CS_Militia/circularsaw01.mdl`. O sea que el dato está y queda alineado.
+
+Lo que **no** se pudo medir sin el juego es **una sola cosa**: si el `util.Decompress` de GMod acepta
+la cabecera «alone» que el `.lua` le arma. Por eso el camino **se verifica a sí mismo** — compara el
+largo que sale contra el que declara la cabecera antes de creerle — y si falla degrada a `ok = false`
+con motivo, que es exactamente donde estábamos. Un `util.Decompress` sobre basura puede devolver una
+string corta en vez de `nil`, y una string corta parseada como `sprp` da **números creíbles**: el
+largo declarado es el testigo independiente del descompresor.
+
+    gm_funkis_night   418 modelos / 1588 props    ( sin cambios: es el CONTROL )
+    gm_uh_house       188 modelos /  702 props    sprp COMPRIMIDO, 11 modelos / 13 instancias reclamadas
+
+### ⭐ `dev/bsp_statics_offline.py` — el parser de `.bsp` deja de necesitar una partida
+
+**Carga el `.lua` del addon y lo ejecuta** en un Lua real, con `file.Open` / `game.GetMap` /
+`util.Decompress` apuntando a un `.bsp` de verdad. No lo reimplementa. Distingue **tres** salidas, que
+es lo que hacía falta: `ok`, `ok = false` con motivo (que es el parser haciendo su trabajo), y **error
+de Lua** (que es el rojo). Trae el control de `gm_funkis_night` y, sobre un mapa comprimido, un
+**control negativo**: con un descompresor que devuelve basura, el parser tiene que decir `ok = false`
+y **no** producir números.
+
+⚠⚠ **Y el arnés se equivocó primero, de la peor manera.** `lupa` decodificaba como UTF-8 cada string
+de Lua que cruzaba a Python — y acá las strings de Lua son **los bytes crudos del `.bsp`**. Reventó
+con `'utf-8' codec can't decode byte 0xfe`… y **el `pcall` que se acababa de agregar al addon lo
+atajó y lo imprimió como `ok = false` del mapa**. Un defecto del instrumento, disfrazado de hallazgo
+sobre el sujeto, servido por la red de contención recién puesta. El arnés ahora **separa los dos
+`ok = false`**: el que el parser decide, y el que sale de un error atajado — que no es una propiedad
+del mapa.
+
+⚠ Y una tercera del mismo rato: el control del generador de la planilla buscaba `418 / 1588` como
+resto del bloque viejo, y **la fila nueva cita ese número a propósito**. El marcador dejó de
+discriminar: se cambió el criterio, no se silenció el control.
+
+### Sobre el segundo pedido del autor, que sigue sin escribirse
+
+El autor agregó la mitad que faltaba: *«una radio phys que se rompa no detiene el sonido **ni permite
+pararlo**»*. **Esa segunda mitad queda confirmada leyendo el código, sin el motor:** `podarSonando()`
+tira la entrada del registro `SONANDO` cuando la entidad deja de ser válida, y `apagarCerca()` poda
+antes de buscar. O sea que **el registro suelta el único mango justo en el momento en que haría
+falta**: rota la radio, el `+USE` no tiene a quién apagar, ni ahora ni nunca.
+
+La otra mitad — si el sonido sobrevive al borrado de la entidad — sigue siendo la pregunta de las
+filas 00 y 01, y ahora se puede correr, porque el mapa ya no revienta.
+
+### Los chequeos
+
+    luacheck 36/36 · sintaxis real 36/36 · returns de hooks 0/28 · rutas de sonido 165/0 faltantes
+    guarda 3b callada y comprobada gritando · bsp offline: control 418/1588 + negativo del camino comprimido
+
+---
+
 ## 2026-08-17 (43) — **El clic del interruptor y el celular que no era un celular. Y el tercer pedido no se escribió: la afirmación en la que se apoya está en CINCO lugares del repo y nunca se midió.**
 
 Tres pedidos del autor, textuales, dados al cerrar el bloque del `+USE` ( entrada **41** ). **Dos están escritos y medidos

@@ -1,6 +1,6 @@
 # Phantasmagoria — Estado actual y handoff
 
-**Última actualización:** 2026-08-17
+**Última actualización:** 2026-08-18
 **Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
@@ -12,6 +12,47 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 ---
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
+
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-18): EL EVENTO `prop` REVENTABA EN `gm_uh_house` Y YA NO. La causa no
+> era un número mal leído: eran las cuatro letras `LZMA`.** Detalle en el CHANGELOG **(44)**.
+>
+> El `sprp` de ese mapa viene **comprimido**, y el parser leía la firma de compresión como si fuera la
+> cantidad de rutas del diccionario (`1095588428`). **Dos defectos, no uno:** todas las guardas de
+> conteo miraban **un solo lado** (`n < 0`, nunca «no entra en el tramo»), y `parsear` **podía tirar**,
+> rompiendo el contrato que el propio archivo tiene escrito — con lo que el error subía hasta el
+> concommand y el evento quedaba inservible **en cada disparo**, porque el fallo tampoco se cacheaba.
+>
+> ⚠ **El instrumento gemelo tenía el mismo defecto con otra cara:** `dev/censo_props_horneados.py` no
+> revienta con ese número, **se cuelga**. *Un crash se ve; un cuelgue se lee como «todavía está
+> trabajando».* Los dos arreglados, y los dos leen ahora el lump comprimido.
+>
+>     gm_funkis_night   418 / 1588   ( sin cambios: es el CONTROL )
+>     gm_uh_house       188 /  702   sprp COMPRIMIDO · 11 modelos / 13 instancias reclamadas
+>
+> ⚠⚠ **LO ÚNICO QUE NO SE PUDO MEDIR SIN EL JUEGO** es si el `util.Decompress` de GMod acepta la
+> cabecera que el `.lua` le arma. Que el **dato** está ahí sí se midió (15005 bytes se abren en 78334).
+> Por eso el camino **se verifica a sí mismo** contra el largo declarado en la cabecera, y si falla
+> degrada a `ok = false` con motivo. Es la fila **P0** de la planilla.
+>
+> **Instrumento nuevo:** `dev/bsp_statics_offline.py` **carga el `.lua` del addon y lo ejecuta** sobre
+> un `.bsp` del disco — el parser de mapas deja de necesitar una partida. Distingue `ok`, `ok = false`
+> con motivo, y **error de Lua**, que son tres cosas distintas.
+>
+> ⚠ **Y el arnés nuevo se equivocó primero, de la peor manera:** `lupa` decodificaba como UTF-8 los
+> bytes crudos del `.bsp`, y **el `pcall` recién agregado al addon atajó esa excepción y la imprimió
+> como `ok = false` del mapa**. Un defecto del instrumento disfrazado de hallazgo sobre el sujeto,
+> servido por la red de contención recién puesta. Ahora el arnés separa los dos `ok = false`.
+>
+> ### ⚠⚠ Y SOBRE EL SEGUNDO PEDIDO DEL AUTOR, que sigue sin escribirse
+>
+> El autor agregó la mitad que faltaba: *«una radio phys que se rompa no detiene el sonido **ni permite
+> pararlo**»*. **Esa segunda mitad está confirmada leyendo el código, sin el motor:** `podarSonando()`
+> tira la entrada de `SONANDO` cuando la entidad deja de ser válida, y `apagarCerca()` poda antes de
+> buscar — o sea que **el registro suelta el único mango justo cuando haría falta**. Rota la radio, el
+> `+USE` no tiene a quién apagar, ni ahora ni nunca.
+>
+> La otra mitad — si el sonido sobrevive al borrado de la entidad — sigue siendo la pregunta de las
+> filas **00 y 01**, y ahora se puede correr, porque el mapa ya no revienta.
 
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-17): EL CLIC DEL INTERRUPTOR Y EL CELULAR QUE NO ERA UN CELULAR.
 > ESCRITO, CHEQUEADO OFFLINE, Y *SIN CORRER EN JUEGO*.** Detalle en el CHANGELOG **(43)**. Planilla
