@@ -326,6 +326,48 @@ local USE = { teclas = 0, apagados = 0, lejos = 0, tarde = 0, ultimoLog = 0 }
 -- que se rate-limita es la prosa, nunca el numero que la fila lee.
 local USE_LOG_CADA = 2
 
+-- EL CLIC DEL INTERRUPTOR. Pedido del autor, textual: *"agregar un cambio
+-- minusculo en que al apretar el horneado o el physics, este emita un sonido de
+-- boton para demostrar que apagaste el objeto. ( En ui estan candidatos para ese
+-- sonido: button_toggle_1 y 2, ambos suenan como apretar un interruptor sutil,
+-- funcionan para simular apagar un objeto )"*.
+--
+-- ⚠⚠ SUENA **SOLO** EN EL DESENLACE QUE APAGO ALGO, NUNCA EN LOS OTROS TRES.
+-- El +USE tiene cuatro salidas y tres no apagan nada ( `lejos`, `tarde`, y no
+-- haber candidato ). Un clic en cualquiera de esas hace dos danos: le miente al
+-- jugador -- que es lo contrario de lo que el sonido viene a hacer -- y **se
+-- come el control negativo de la planilla**, porque el que la corre oye el clic
+-- desde el otro cuarto y marca verde sobre un filtro que nunca decidio. El
+-- cableado esta al final de `apagarCerca` a proposito, despues de los dos
+-- `return false`.
+--
+-- ⚠⚠ LOS DOS CLIPS ERAN **ESTEREO** ( 2 canales, medidos con
+-- `dev/duracion_ogg.py`: 0,23 s y 0,35 s ) Y PASARON POR
+-- `dev/mono_posicionales.py` ANTES de entrar aca. **Source no espacializa un
+-- estereo: lo tira en 2D**, asi que cableados como venian el clic se habria oido
+-- igual de fuerte en toda la casa y no DESDE el objeto que apagaste -- que es
+-- exactamente lo que el sonido viene a comunicar. Es el defecto que la r3 pago
+-- en quince archivos, visto esta vez antes de escribir la linea.
+--
+-- ⚠ `ui/button_click.ogg` YA ERA MONO y no se uso: suena distinto, y el autor
+-- eligio estos dos de oido. La conveniencia tecnica no decide por el.
+--
+-- ⚠ ESTA TABLA LA LEE `dev/mono_posicionales.py`, que saca sus rutas del Lua y
+-- no de una lista a mano. Las dos marcas de abajo son su delimitador: si
+-- desaparecen, el script **revienta** en vez de medir un universo vacio.
+local CLIC_APAGADO = {
+    "phantasmagoria/ui/button_toggle_1.ogg",
+    "phantasmagoria/ui/button_toggle_2.ogg",
+}
+-- FIN DE CLIC_APAGADO
+
+-- El nivel del clic, y es mas bajo que los 75 del resto del archivo a proposito:
+-- el que aprieta esta a `cvUseRad` unidades como mucho ( 128 por default ), y un
+-- clic que se oye desde el otro cuarto vuelve a ser un sonido 2D por otra
+-- puerta. 60 lo deja audible bien pasado el radio del interruptor sin llevarlo a
+-- toda la casa.
+local CLIC_NIVEL = 60
+
 -- LO QUE ESTA SONANDO AHORA POR EL EVENTO `prop`.
 --
 -- Cada entrada: { ent, snd, fam, emisor, hasta, quien }. `emisor` dice si la
@@ -966,7 +1008,7 @@ local PROP_CONSUJETO = {
 
         -- ⚠ EL AUTOR PIDIO EL +USE PARA *"las radios y telefonos"*, Y EN ESTA
         -- FAMILIA CASI NO TIENE NADA QUE APAGAR. Medido: `phone_ring` dura
-        -- **3,46 s** y `phone_vibrate` **1,11 s** -- por eso esta familia nunca
+        -- **3,46 s** -- por eso esta familia nunca
         -- tuvo `largo`, nunca hizo falta cortarla. Ponerle el interruptor es
         -- coherente y cuesta cero ( el mecanismo es el mismo ), **pero no
         -- resuelve ningun sintoma**: para llegar a apretar hay que estar al lado
@@ -979,15 +1021,38 @@ local PROP_CONSUJETO = {
         -- `entero` no le cambia el sonido -- ya sonaba completo -- pero le
         -- ajusta la vida del emisor: pasa de los 20 s fijos a 5,46 s, o sea deja
         -- de haber un `info_target` mudo dando vueltas dieciseis segundos.
+        --
+        -- ⚠⚠ ESTA FAMILIA TIENE **UN SOLO CLIP**, Y ES UNA DECISION DEL AUTOR Y
+        -- NO UN OLVIDO. Textual ( 2026-08-17 ): *"tambien el ruido
+        -- ( phone_vibrate.ogg ) corresponde a un celular; phone como prop
+        -- horneado o phys son generalmente telefonos fijos, asi que
+        -- phone_ring.ogg esta bien, quita phone_vibrate.ogg"*. Los modelos que
+        -- esta familia reclama -- `oldphone`, `phone_motel`, el `phone` de
+        -- cs_office -- son telefonos FIJOS, y un telefono fijo no vibra: el clip
+        -- no sonaba mal, sonaba a OTRO OBJETO.
+        --
+        -- LA CONSECUENCIA VA DICHA ACA EN VEZ DE DESCUBRIRSE EN JUEGO: **un
+        -- telefono ahora suena siempre igual**. Con 3,46 s y un evento cada
+        -- 25-90 s no molesta, pero el que abra esta tabla y vea UNA sola entrada
+        -- tiene que poder distinguir "falta algo" de "falta a proposito".
+        --
+        -- ⚠ EL `.ogg` NO SE BORRA DEL DISCO, y eso tambien es a proposito: queda
+        -- sin consumidor esperando el dia que haya un smartphone de verdad, que
+        -- es el prop al que le corresponde. Lo que NO puede pasar es lo del
+        -- reves -- una ruta CITADA sin archivo en disco **enmudece sin error** --
+        -- y por eso el cierre chequea que toda ruta resuelva.
+        --
+        -- El control de este cambio ya existia y no hubo que inventarlo: la
+        -- guarda ( 3b ) del final del archivo compara `sonidos` contra `dur` en
+        -- las DOS direcciones, asi que sacarlo de una sola de las dos tablas
+        -- grita al cargar.
         entero   = true,
         apagable = true,
         dur = {
-            [ "phantasmagoria/prop/phone_ring.ogg" ]    = 3.46,
-            [ "phantasmagoria/prop/phone_vibrate.ogg" ] = 1.11,
+            [ "phantasmagoria/prop/phone_ring.ogg" ] = 3.46,
         },
         sonidos = {
             "phantasmagoria/prop/phone_ring.ogg",
-            "phantasmagoria/prop/phone_vibrate.ogg",
         },
         modelo  = {
             exacto = { [ "oldphone" ] = true, [ "phone" ] = true, [ "phone_motel" ] = true },
@@ -1142,6 +1207,12 @@ SND.door = {
 -- Asi que la voz se sortea UNA VEZ por fantasma y se guarda. El rasgo `voice`
 -- del tipo la fija cuando la fuente lo dice: Banshee y Dayan son "Can only be
 -- female, ghost model and ghost name will reflect this".
+--
+-- ⚠ Y DESDE EL 2026-08-17 EL SORTEO NO ES LA SEGUNDA OPCION SINO LA TERCERA: en
+-- el medio esta EL MODELO. La prioridad es **tipo > modelo > sorteo** y vive en
+-- `phantom_EventVoice()`, mas abajo, con el porque del orden. Antes de esto la
+-- voz y el cuerpo se elegian por caminos que no se hablaban, asi que el
+-- Ghost_Male podia susurrar con voz de mujer.
 ---------------------------------------------------------------------------
 -- ⚠⚠ LA RESERVA: `whisper` SUENA SOLO, `voice` Y `humming` SE GUARDAN
 ---------------------------------------------------------------------------
@@ -1559,6 +1630,31 @@ function ENT:phantom_EventFlags()
 end
 
 -- La voz, sorteada una vez y guardada. Ver el bloque VOZ de arriba.
+--
+-- ⚠ LA PRIORIDAD ES **tipo > modelo > sorteo**, Y EL ORDEN ES LA DECISION.
+-- Escrito al reves --modelo antes que tipo-- un Banshee con el cuerpo del
+-- Ghost_Male hablaria con voz grave, que es exactamente lo que la fuente
+-- prohibe ( "Can only be female" ). El tipo es una regla del juego; el modelo es
+-- de que cuerpo salio el sonido. Cuando las dos hablan, gana la regla.
+--
+-- ⚠ Y LOS DOS ESLABONES USAN **EL MISMO CAMPO** `voice`, que es lo que hace que
+-- esto no sea un `if` disfrazado: el rasgo del tipo ( ghost_flags.lua ) y el
+-- campo `voz` de la ficha del modelo ( ghost_models.lua ) valen 1 o 2 con el
+-- mismo significado --el indice del archivo en el catalogo-- porque los dos
+-- salen de la misma frase de la fuente: *"Can only be female, ghost model and
+-- ghost name will reflect this"*. Un tipo que manana fije la 2 filtra el cuerpo
+-- solo, sin tocar esta funcion.
+--
+-- EL CASO DEGENERADO, que es el normal: tipo sin rasgo `voice` ( 28 de 30 ) y
+-- modelo sin ficha ( el cadaver de HL2, cualquier ajeno ), los dos a la vez.
+-- Cae al sorteo de siempre y NO tira. Ninguna de las dos ramas inventa un
+-- default: `flags.voice` vale 0 en el neutro y `VozDelModelo` devuelve nil.
+--
+-- ⚠ SE GUARDA EL MOTIVO, no solo el numero. "Salio voz 1" no distingue *la fijo
+-- el tipo* de *la fijo el modelo* de *la sorteo la moneda*, y las tres se ven
+-- igual en una consola. Sin el motivo, una fila que fuerza un Banshee con el
+-- Male y lo oye femenino no prueba nada: la moneda tambien da 1 la mitad de las
+-- veces. El reporte de `phantasmagoria_ghost_ev` lo imprime.
 function ENT:phantom_EventVoice()
     if self.phantom_evVoice then return self.phantom_evVoice end
 
@@ -1567,11 +1663,29 @@ function ENT:phantom_EventVoice()
 
     -- 0 ( o nil ) significa "sorteada". 1 y 2 la fijan.
     if fija == 1 or fija == 2 then
-        self.phantom_evVoice = fija
+        self.phantom_evVoice    = fija
+        self.phantom_evVoiceWhy = "la fija el TIPO " .. tostring( self.phantom_TypeKey ) ..
+            " ( rasgo voice = " .. fija .. " )"
 
     else
-        self.phantom_evVoice = math.random( 1, 2 )
+        -- El sexo del cuerpo. Con guarda por el mismo motivo que `hullDelModelo`:
+        -- el registro lo monta un autorun compartido y no hay nada escrito que
+        -- garantice que corrio antes que esta entidad. Si no esta, se sortea --
+        -- que es el comportamiento anterior a este bloque-- y se dice.
+        local delModelo = PHANTASMAGORIA and isfunction( PHANTASMAGORIA.VozDelModelo )
+            and PHANTASMAGORIA.VozDelModelo( self:GetModel() ) or nil
 
+        if delModelo then
+            self.phantom_evVoice    = delModelo
+            self.phantom_evVoiceWhy = "la fija el MODELO " .. tostring( self:GetModel() ) ..
+                " ( campo voz = " .. delModelo .. " )"
+
+        else
+            self.phantom_evVoice    = math.random( 1, 2 )
+            self.phantom_evVoiceWhy = "SORTEADA: ni el tipo " .. tostring( self.phantom_TypeKey ) ..
+                " ni el modelo " .. tostring( self:GetModel() ) .. " la declaran"
+
+        end
     end
 
     return self.phantom_evVoice
@@ -3579,12 +3693,33 @@ local function apagarCerca( ply )
 
     end
 
+    -- ⚠ LA POSICION SE GUARDA **ANTES** DE TOCAR NADA, y no es prolijidad: si el
+    -- emisor es nuestro, tres lineas mas abajo deja de existir, y preguntarle
+    -- despues por su posicion no devuelve la posicion -- devuelve un vector cero
+    -- o un error, o sea el clic sonando en el origen del mapa.
+    local donde = mejor.ent:WorldSpaceCenter()
+
     -- Apagar es callar SIEMPRE y borrar SOLO SI el emisor es nuestro.
     mejor.ent:StopSound( mejor.snd )
 
     local clase = mejor.ent:GetClass() .. " #" .. mejor.ent:EntIndex()
 
     if mejor.emisor then SafeRemoveEntity( mejor.ent ) end
+
+    -- EL CLIC DEL INTERRUPTOR, en el unico lugar donde de verdad se apago algo.
+    --
+    -- ⚠ VA EN LA POSICION DEL OBJETO Y NO EN EL JUGADOR: el clic tiene que
+    -- llegar DESDE donde estaba el ruido, que es lo que lo vuelve *"apagaste ese
+    -- trasto"* en vez de *"apretaste una tecla"*.
+    --
+    -- ⚠⚠ `sound.Play` Y NO `EmitSound`, Y LA RAZON ES LA DE ARRIBA AL REVES: el
+    -- sujeto puede ser un emisor nuestro que **acaba de dejar de existir**, y un
+    -- sonido colgado de una entidad se va con ella. `sound.Play` es un sonido del
+    -- mundo en un punto: no tiene de quien colgar. Ademas los dos casos -- emisor
+    -- nuestro y prop de verdad del mapa -- salen por la MISMA linea, asi que el
+    -- clic no suena distinto segun de quien fuera la radio.
+    sound.Play( CLIC_APAGADO[ math.random( #CLIC_APAGADO ) ], donde,
+        CLIC_NIVEL, math.random( 97, 103 ) )
 
     -- Se saca del registro en el acto y no en la poda siguiente: para un prop de
     -- verdad la entidad sigue siendo valida, asi que la poda no lo sacaria nunca
@@ -4407,12 +4542,32 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
         -- evento de sonido, asi que un check de "la Banshee es femenina"
         -- corrido antes de eso leia "sin sortear" sobre una Banshee correcta y
         -- se anotaba como un rojo.
-        local vozRasgo = flags.voice or 0
-        say( "    voz       rasgo " .. ( vozRasgo == 0 and "0 ( se sortea )" or
+        --
+        -- ⚠ Y DESDE ESTE BLOQUE SE IMPRIME **LA CADENA ENTERA**, no sus dos
+        -- puntas. Con la prioridad tipo > modelo > sorteo, un "resuelta 1" sobre
+        -- un Banshee no distingue *la fijo el tipo* de *salio 1 en la moneda*, y
+        -- la moneda acierta la mitad de las veces: una fila que lea solo el
+        -- resultado da VERDE sobre el mecanismo apagado en el 50 % de las
+        -- corridas. El `por:` es lo que la vuelve una medicion.
+        local vozRasgo  = flags.voice or 0
+        local vozModelo = PHANTASMAGORIA and isfunction( PHANTASMAGORIA.VozDelModelo )
+            and PHANTASMAGORIA.VozDelModelo( ghost:GetModel() ) or nil
+
+        say( "    voz       tipo " .. ( vozRasgo == 0 and "0 ( no la fija )" or
             ( vozRasgo .. ( vozRasgo == 1 and " ( fija: femenina )" or " ( fija: grave )" ) ) ) ..
+            "   modelo " .. ( vozModelo and
+                ( vozModelo .. ( vozModelo == 1 and " ( femenina )" or " ( grave )" ) )
+                or "no la declara" ) ..
             "   resuelta " .. ( ghost.phantom_evVoice and
                 ( ghost.phantom_evVoice .. ( ghost.phantom_evVoice == 1 and " ( femenina )" or " ( grave )" ) )
-                or "SIN SORTEAR ( se sortea en el primer evento de sonido )" ) )
+                or "SIN SORTEAR ( se resuelve en el primer evento de sonido )" ) )
+
+        -- El motivo va en su propia linea porque es lo unico que separa las tres
+        -- causas, y una linea que se corta no se lee.
+        if ghost.phantom_evVoice then
+            say( "              por: " .. tostring( ghost.phantom_evVoiceWhy or "( sin motivo declarado )" ) )
+
+        end
 
         -- ⚠ ESTAS DOS LINEAS SON LA ACREDITACION DEL SCHEDULER. Sin ellas, "no
         -- pasa nada" no distingue un motor apagado de un motor que corre y no

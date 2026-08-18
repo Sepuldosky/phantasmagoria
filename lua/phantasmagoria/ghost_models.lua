@@ -121,9 +121,40 @@ PHANTASMAGORIA.ParesHueso = {
 -- ⚠ Y NO SON UN VEREDICTO. Un reposo mas abierto no es un defecto: es como esta
 -- autorado el asset. Sirven para que la comparacion sea contra el cuerpo que se
 -- esta mirando.
+-- ---------------------------------------------------------------------------
+-- `voz`: EL SEXO DEL MODELO, QUE ES LO QUE LO ATA AL CATALOGO DE SONIDO
+-- ---------------------------------------------------------------------------
+-- 1 = femenina · 2 = grave. NO es un numero libre: es el INDICE DEL ARCHIVO en
+-- sound/phantasmagoria/ghost/, donde el catalogo trae `voice_1_*` / `voice_2_*`,
+-- `breathing_1_*` / `breathing_2_*` y `humming_1_*` / `humming_2_*`. O sea que
+-- el 1 y el 2 no los elegimos: los trae el asset ( about.txt ).
+--
+-- ⚠ POR QUE VIVE ACA Y NO EN `MODEL_CANDIDATES`. El sexo es propio del MODELO,
+-- igual que `altura`, `masa` y `reposoBrazo`, y este archivo es la unica casa de
+-- eso. La lista del bot es OTRA cosa -- es que candidatos puede usar el NextBot,
+-- y ahi entran modelos ajenos que no tienen ficha. Escribirlo alla seria la
+-- segunda casa que la r6 acaba de borrar para `altura`, con otra ropa.
+--
+-- ⚠ Y NO MANDA SOBRE EL TIPO. La prioridad es tipo > modelo > sorteo: si el tipo
+-- fija la voz -- Banshee y Dayan, que la fuente marca "Can only be female" --
+-- manda el tipo. Este campo solo decide cuando el tipo no dice nada, que son 28
+-- de los 30. Al reves, un Banshee con el cuerpo del Male hablaria con voz grave,
+-- que es exactamente lo que la fuente prohibe.
+--
+--     ghost_girl      1   femenina
+--     ghost_oldcrone  1   femenina
+--     ghost_male      2   grave
+--
+-- ⚠ LA NENA Y LA VIEJA COMPARTEN BANCO, Y ES UNA DECISION DEL AUTOR ( 2026-08-17 ),
+-- no un cabo suelto. El catalogo tiene DOS voces y no tres, asi que una nena de
+-- 44,94 u y una anciana de 68,98 u suenan igual. Se pregunto y la respuesta fue
+-- que asi es en Phasmophobia: la voz no se diferencia por edad -- el unico tipo
+-- que envejece es Thaye y lo demuestra con sus ACCIONES. No se le inventa un
+-- tercer banco al catalogo ni se le mete un pitch.
 PHANTASMAGORIA.GhostModels = {
 	{
 		mdl     = "models/phantasmagoria/ghost_girl.mdl",
+		voz     = 1,   -- femenina ( ver el bloque de arriba )
 		nombre  = "Ghost_Girl_1",
 		etiqueta = "la nena",
 		altura  = 44.94,
@@ -135,6 +166,7 @@ PHANTASMAGORIA.GhostModels = {
 	},
 	{
 		mdl     = "models/phantasmagoria/ghost_male.mdl",
+		voz     = 2,   -- grave ( ver el bloque de arriba )
 		nombre  = "Ghost_Male",
 		etiqueta = "el hombre adulto",
 		altura  = 72.29,
@@ -146,6 +178,7 @@ PHANTASMAGORIA.GhostModels = {
 	},
 	{
 		mdl     = "models/phantasmagoria/ghost_oldcrone.mdl",
+		voz     = 1,   -- femenina ( ver el bloque de arriba )
 		nombre  = "Ghost_OldCrone",
 		etiqueta = "la vieja",
 		altura  = 68.98,
@@ -189,6 +222,36 @@ function PHANTASMAGORIA.EsGhostModel( mdl )
 		if string.sub( mdl, 1, #base + 1 ) == base .. "_" then return f end
 
 	end
+
+	return nil
+
+end
+
+--[[
+	VozDelModelo( mdl ) -> 1, 2 o nil
+
+	El sexo del cuerpo, para el que decide la voz. Devuelve nil --y no un
+	default-- en los TRES casos en que no hay dato: modelo ajeno ( sin ficha ),
+	ficha sin `voz`, y `mdl` que no es una cadena. Los tres significan lo mismo
+	para el consumidor: *este modelo no declara sexo*, y de ahi se cae al sorteo.
+
+	⚠ NO SE DEVUELVE UN 1 POR DEFECTO, y no es una precaucion abstracta: un
+	default plausible en el lugar de un dato faltante hace que un cadaver de HL2
+	--o un modelo del taller al que se le olvido el campo-- hable siempre con voz
+	de mujer, y eso se ve exactamente igual que un mecanismo andando. Con nil, el
+	sorteo de siempre se hace cargo y el reporte puede decir POR QUE.
+
+	Se valida el valor y no solo su presencia: un `voz = 3` --el error de tipeo
+	natural el dia que alguien crea que hay un tercer banco-- indexaria `VOZ[3]`
+	en server_events.lua, que no existe, y el sintoma seria un fantasma MUDO. El
+	catalogo tiene dos ( sound/phantasmagoria/about.txt ) y esta guarda es donde
+	ese hecho se hace cumplir.
+]]
+function PHANTASMAGORIA.VozDelModelo( mdl )
+	local ficha = PHANTASMAGORIA.EsGhostModel( mdl )
+	local voz   = ficha and ficha.voz
+
+	if voz == 1 or voz == 2 then return voz end
 
 	return nil
 

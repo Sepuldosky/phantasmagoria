@@ -218,6 +218,12 @@ end
 -- spawn de mas abajo, que cierran sobre ellos.
 local chosen, porConvar
 
+-- El pool que quedo en la clase y como salio, para que el callback de la convar
+-- y el filtro por tipo del `Initialize` no lo tengan que volver a calcular --
+-- recalcularlo seria una SEGUNDA casa del mismo sorteo, y dos casas se
+-- desincronizan ( catalogo nº 52 ).
+local poolActual, poolComo
+
 -- ⚠ `ENT.Models` y `ENT.ModelSkin` NO se escriben aca: los escribe
 -- `aplicarModeloDelBot()`, mas abajo, que es el UNICO lugar donde se aplica el
 -- modelo. Estaban aca y la tabla de traduccion de actividades se aplicaba 80
@@ -332,12 +338,109 @@ end
 -- escribirle.
 local CLASE = ENT
 
+--[[
+    ⚠ LA LISTA DEL SORTEO, Y EL HALLAZGO ES QUE **LA BASE YA SORTEA**.
+
+    Leido en la fuente y no supuesto -- terminator_nextbot/shared.lua:2971-2987:
+
+        local models = myTbl.Models
+        local model
+        if models then
+            model = models[ math.random( #models ) ]
+        end
+        ...
+        self:SetModel( model )
+
+    O sea que la variedad por fantasma no hay que programarla: existe desde
+    siempre y lo que la apagaba era esta funcion, que escribia `{ chosen.mdl }`
+    -- una lista de UN elemento. Todos los fantasmas de la partida salian con el
+    mismo cuerpo por una decision que nadie tomo.
+
+    ⚠ CON LA CONVAR PUESTA LA LISTA SIGUE SIENDO DE UNO, y no es un detalle de
+    prolijidad: la planilla del hull ( handoff §R6.4, filas 01-04 ) fuerza un
+    modelo y lee la linea del spawn. Un sorteo que le gane a la perilla convierte
+    esas cuatro filas en «a veces sale el que pediste» y con ellas se cae el
+    UNICO control que el hull por modelo tiene -- y ese bloque todavia no se
+    corrio en juego. *Una perilla que existe para PROBAR algo no puede apagar lo
+    que va a probar* ( catalogo nº 49, que este mismo addon ya se cobro ).
+
+    ⚠ EL POOL TIENE QUE SER HOMOGENEO EN `nuestro` Y EN `skin`, Y ESO ES UNA
+    INVARIANTE Y NO UNA CASUALIDAD. `esNuestroModelo`, `IdleActivity`,
+    `IdleActivityTranslations` y `ModelSkin` son de la CLASE, y el sorteo es por
+    INSTANCIA: un pool que mezclara un modelo del taller con uno ajeno le
+    aplicaria a LOS DOS las correcciones del primero -- que es exactamente la
+    regresion del `1a16191` dada vuelta. Asi que el pool se arma solo con los del
+    taller, todos con `nuestro = true` y sin skin propio, y el que no cumpla
+    QUEDA AFUERA DICIENDOLO. Lo unico que no se puede hacer es dejarlo entrar en
+    silencio.
+
+    ⚠ Y SI NO HAY NINGUNO DEL TALLER MONTADO ( un clon limpio del repo: los .mdl
+    estan gitignoreados ) SE VUELVE A LA LISTA DE UNO, que es el camino de hoy.
+    No es una precaucion abstracta: una lista VACIA no da un modelo nulo, da
+    `models[ math.random( 0 ) ]`, y `math.random( 0 )` **tira** un error de Lua
+    ( "interval is empty" ) adentro del Initialize de la base, o sea antes de que
+    el fantasma exista. El prompt de este bloque decia que daba "otra cosa"; da
+    un error, y peor: en el camino que solo corre en las maquinas de otros.
+]]
+local function poolDelBot( elegido, forzado )
+    if forzado then
+        return { elegido.mdl }, "la convar fuerza un modelo: sin sorteo"
+
+    end
+
+    -- El sorteo es SOLO entre los del taller. Ver la invariante de arriba.
+    if elegido.nuestro ~= true then
+        return { elegido.mdl }, "no hay ningun modelo del taller montado: UNO solo, como antes de este bloque"
+
+    end
+
+    local pool, fuera = {}, {}
+
+    for _, cand in ipairs( MODEL_CANDIDATES ) do
+        if cand.nuestro == true and util.IsValidModel( cand.mdl ) then
+            if cand.skin == elegido.skin then
+                pool[ #pool + 1 ] = cand.mdl
+
+            else
+                -- Del taller y montado, pero con skin propio: no puede compartir
+                -- pool porque `ModelSkin` es de la clase. Se dice, porque
+                -- "salen menos modelos de los que hay" y "ese modelo no esta
+                -- montado" se leen exactamente igual en una consola muda.
+                fuera[ #fuera + 1 ] = cand.mdl
+
+            end
+        end
+    end
+
+    if #pool == 0 then
+        return { elegido.mdl }, "ningun candidato del taller paso el filtro: UNO solo"
+
+    end
+
+    return pool, "sorteo de la base entre " .. #pool .. " modelo(s) del taller", fuera
+
+end
+
 local function aplicarModeloDelBot()
     chosen, porConvar = pickModel()
     esNuestroModelo = chosen.nuestro == true
 
-    CLASE.Models    = { chosen.mdl }
+    local pool, comoSalio, fuera = poolDelBot( chosen, porConvar )
+    poolActual = pool
+    poolComo   = comoSalio
+
+    CLASE.Models    = pool
     CLASE.ModelSkin = chosen.skin
+
+    -- Lo que el pool DEJO AFUERA, que es informacion y no ruido: un modelo del
+    -- taller montado que no entra al sorteo es una variedad que el jugador no va
+    -- a ver, y sin esta linea no hay forma de distinguirlo de uno sin montar.
+    if fuera and #fuera > 0 then
+        ghostPrint( "estos modelos del taller estan montados y NO entran al sorteo porque ",
+            "declaran un skin propio y `ModelSkin` es de la clase: ", table.concat( fuera, ", " ),
+            ". Se pueden usar de a uno con phantasmagoria_bot_modelo.\n" )
+
+    end
 
     -- nil devuelve las de la base, que es lo que corresponde a un modelo ajeno:
     -- nuestras 7 actividades no existen ahi y traducirle a ellas lo romperia.
@@ -360,12 +463,124 @@ aplicarModeloDelBot()
 -- no avisa se lee como "no funciono" y ya costo una pasada entera.
 cvars.AddChangeCallback( "phantasmagoria_bot_modelo", function()
     aplicarModeloDelBot()
+    -- ⚠ SE DICE EL POOL ENTERO Y NO `chosen`. Con la convar vacia el proximo
+    -- fantasma NO sale necesariamente con `chosen`: sale con uno sorteado entre
+    -- estos, y nombrar solo al primero seria una afirmacion falsa impresa al
+    -- lado de una verdadera. *Los avisos que valen son los que distinguen entre
+    -- las causas.*
     ghostPrint( "phantasmagoria_bot_modelo cambio -> el PROXIMO fantasma sale con ",
-        chosen.mdl, esNuestroModelo and "  ( con hull y actividades nuestras )"
+        ( #poolActual == 1 and poolActual[ 1 ] or ( "UNO DE " .. table.concat( poolActual, ", " ) ) ),
+        esNuestroModelo and "  ( con hull y actividades nuestras )"
             or "  ( AJENO: sin hull ni actividades nuestras )",
+        "  [ ", tostring( poolComo ), " ]",
         ".  Los que ya estan vivos no cambian.\n" )
 
 end, "phantasmagoria_modelo_del_bot" )
+
+---------------------------------------------------------------------------
+-- EL CUERPO QUE LE TOCA A **ESTE** FANTASMA, Y NO A LA CLASE
+---------------------------------------------------------------------------
+--[[
+    Con el pool puesto, la base sortea un modelo por instancia. Falta la mitad
+    que el pool no puede expresar: un `banshee` --que la fuente marca *"Can only
+    be female, ghost model and ghost name will reflect this"*-- no puede salir
+    con el cuerpo del Ghost_Male.
+
+    ⚠ LOS DOS ESLABONES USAN EL MISMO CAMPO, y eso es lo que hace que esto no sea
+    un `if` con dos nombres. El rasgo `voice` del tipo ( ghost_flags.lua ) y el
+    campo `voz` de la ficha del modelo ( ghost_models.lua ) valen 1 o 2 con el
+    MISMO significado -- el indice del archivo en el catalogo de sonido -- porque
+    los dos salen de la misma frase de la fuente. No hay un dato nuevo de "sexo
+    del tipo" que mantener sincronizado con otro: hay uno solo, leido de los dos
+    lados. Un tipo que manana fije la voz 2 filtra el cuerpo solo.
+
+    ⚠ Y NO TOCA A LA CONVAR. Con `phantasmagoria_bot_modelo` puesta el pool es de
+    UNO y esta funcion no filtra nada: la perilla existe para probar un modelo, y
+    un fantasma que a veces sale con otro cuerpo "porque el tipo lo pedia" no
+    sirve para probar ninguno. Las filas 01-04 del handoff §R6.4 se siguen
+    corriendo igual.
+]]
+
+-- El sexo que el TIPO exige, o nil si no exige ninguno ( 28 de los 30 ).
+--
+-- Se le pregunta a `fila.events` y no a `fila`: los rasgos los FUSIONA
+-- ghost_flags.lua adentro de ese sub-diccionario ( AplicarRasgosDeEvento ), y
+-- `fila.voice` a secas no existe -- daria nil siempre, o sea un filtro que nunca
+-- filtra y no tira. *Un criterio que consulta el lugar equivocado no da error:
+-- da permiso.*
+local function sexoQueExigeElTipo( key )
+    local T    = istable( PHANTASMAGORIA ) and PHANTASMAGORIA.Types or nil
+    local fila = istable( T ) and key and T[ key ] or nil
+    local ev   = istable( fila ) and istable( fila.events ) and fila.events or nil
+    local v    = ev and ev.voice
+
+    if v == 1 or v == 2 then return v end
+
+    return nil
+
+end
+
+--[[
+    ⚠ POR QUE ESTE `Initialize` EXISTE, Y ES LA UNICA VENTANA QUE HAY.
+
+    La base elige el modelo adentro de SU `Initialize` ( shared.lua:2971, dentro
+    de la funcion que arranca en :2913 ), asi que cualquier cosa que quiera
+    condicionar esa eleccion tiene que correr ANTES de encadenar. No habia un
+    `Initialize` nuestro -- se verifico: cero definiciones en los 13 archivos de
+    la entidad -- y `AdditionalInitialize`, que es donde vive todo lo demas,
+    corre en :3011, o sea VEINTICUATRO LINEAS TARDE.
+
+    `self.Models` se escribe en la INSTANCIA a proposito. La base lee
+    `myTbl.Models` y `myTbl` es `self:GetTable()`, asi que el campo de la
+    instancia tapa al de la clase para ESTE fantasma y no para los otros. El pool
+    de la clase queda intacto, que es lo que tiene que pasar: el filtro es del
+    sujeto, no de la especie.
+
+    Y encadenar va AL FINAL y con `self.BaseClass`, que es el patron que este
+    addon ya usa en server_stuck.lua:1104.
+]]
+function ENT:Initialize()
+    -- Todo lo de abajo es condicional y NADA de esto puede tirar: un error acá
+    -- se lleva puesto el spawn entero y el sintoma seria "el fantasma no
+    -- aparece", que no se parece en nada a su causa.
+    local pool = poolActual
+
+    -- Un pool de uno no se puede filtrar, y el caso incluye a la convar puesta.
+    if istable( pool ) and #pool > 1 and isfunction( self.phantom_PreelegirTipo ) then
+        local key  = self:phantom_PreelegirTipo()
+        local sexo = sexoQueExigeElTipo( key )
+
+        if sexo then
+            local compatibles = {}
+
+            for _, mdl in ipairs( pool ) do
+                local voz = istable( PHANTASMAGORIA ) and isfunction( PHANTASMAGORIA.VozDelModelo )
+                    and PHANTASMAGORIA.VozDelModelo( mdl ) or nil
+
+                if voz == sexo then compatibles[ #compatibles + 1 ] = mdl end
+
+            end
+
+            if #compatibles > 0 then
+                self.Models = compatibles
+
+            else
+                -- ⚠ NUNCA UNA LISTA VACIA: `math.random( 0 )` TIRA. Y el aviso
+                -- separa las dos causas que desde afuera se ven igual --
+                -- "el filtro no anda" y "no hay ningun cuerpo de ese sexo
+                -- montado". La VOZ igual va a salir bien: la fija el tipo, que
+                -- es el primer eslabon de la prioridad.
+                ghostPrint( "el tipo ", tostring( key ), " pide un cuerpo de voz ", sexo,
+                    " y ninguno de los ", #pool, " modelos del sorteo la declara. ",
+                    "Sale con el cuerpo que toque; la voz igual va a ser la ", sexo, ".\n" )
+
+            end
+        end
+    end
+
+    return self.BaseClass.Initialize( self )
+
+end
 
 ---------------------------------------------------------------------------
 -- ⚠ EL HULL CON EL QUE CAMINA, QUE LO PONE LA BASE Y NO EL MODELO

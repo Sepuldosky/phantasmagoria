@@ -287,6 +287,57 @@ end
 
 -- Llamado desde AdditionalInitialize ( server.lua ). Aparte de el a proposito:
 -- asi el comando puede re-resolver un fantasma vivo sin duplicar la logica.
+--[[
+    ⚠ EL TIPO SE PRE-ELIGE EN `Initialize`, ANTES QUE EL CUERPO, Y ESE ORDEN ES
+    EL BLOQUE ENTERO DEL 2026-08-17.
+
+    La fuente dice de Banshee y Dayan: *"Can only be female, ghost model and
+    ghost name will reflect this"* -- o sea que el juego original ata
+    tipo -> modelo -> voz. Con el sorteo de modelo prendido, un Banshee podia
+    salir con el cuerpo del Ghost_Male.
+
+    El problema era de ORDEN y esta medido en la fuente de la base, no deducido:
+
+        shared.lua:2971  models[ math.random( #models ) ]   <- elige el cuerpo
+        shared.lua:2987  self:SetModel( model )
+        shared.lua:3011  AdditionalInitialize               <- corria phantom_ResolveType
+
+    o sea que el tipo se resolvia DESPUES del cuerpo y no podia condicionarlo.
+    Las dos salidas obvias eran malas: pisar el modelo con `SetModel` despues
+    deja el hull y el ragdoll calculados sobre el anterior, y mover
+    `phantom_ResolveType` entero mas temprano lo corre antes de que
+    `phantom_BaseRunSpeed` exista ( `phantom_ApplyTypeSpeed` lo lee ).
+
+    Lo que se hace en cambio: se PRE-ELIGE la key en `ENT:Initialize()` --nuestro
+    Initialize corre antes de encadenar al de la base, o sea antes del :2971-- y
+    `phantom_ResolveType` la CONSUME en su lugar de siempre. La puerta unica
+    (`phantom_SetType`) no se mueve, el orden de efectos no cambia, y lo unico
+    que se adelanta es el SORTEO.
+
+    ⚠ SE CONSUME UNA SOLA VEZ Y SE BORRA. Si quedara guardada, el comando que
+    re-resuelve un fantasma vivo ( `phantasmagoria_ghost_type auto` ) le
+    devolveria el MISMO tipo para siempre y se leeria como "el sorteo no
+    funciona": una cache de una decision es una decision que ya no se puede
+    volver a tomar.
+
+    ⚠ Y RESPETA `typeassign 0`. Con el control negativo puesto no se pre-elige
+    nada, asi que el cuerpo NO se filtra y el fantasma spawnea sin tipo -- que es
+    exactamente lo que ese control existe para producir. *Una perilla que apaga
+    el sujeto no puede quedar a medias.*
+]]
+function ENT:phantom_PreelegirTipo()
+    if not cvAssign:GetBool() then return nil end
+    if not istable( PHANTASMAGORIA ) or not isfunction( PHANTASMAGORIA.ResolveTypeKey ) then return nil end
+
+    local key, motivo = PHANTASMAGORIA.ResolveTypeKey( self )
+
+    self.phantom_TypePreKey = key
+    self.phantom_TypePreWhy = motivo
+
+    return key
+
+end
+
 function ENT:phantom_ResolveType()
     if not cvAssign:GetBool() then
         self:phantom_SetType( nil, "phantasmagoria_ghost_typeassign 0 ( CONTROL: no se asigna tipo )" )
@@ -294,7 +345,24 @@ function ENT:phantom_ResolveType()
 
     end
 
-    local key, motivo = PHANTASMAGORIA.ResolveTypeKey( self )
+    -- La pre-eleccion del Initialize, consumida y borrada. Ver el bloque de
+    -- arriba para por que existe y por que no se guarda.
+    local key, motivo = self.phantom_TypePreKey, self.phantom_TypePreWhy
+
+    self.phantom_TypePreKey = nil
+    self.phantom_TypePreWhy = nil
+
+    if key then
+        -- ⚠ EL MOTIVO DICE QUE VINO PRE-ELEGIDO. Sin esto, "sorteado entre los
+        -- 30" se imprime igual venga de donde venga, y la fila que prueba que el
+        -- cuerpo se filtro por el tipo no tiene como saber si el tipo existia
+        -- cuando el cuerpo se eligio.
+        motivo = tostring( motivo ) .. "  [ pre-elegido en Initialize, ANTES de que la base sorteara el cuerpo ]"
+
+    else
+        key, motivo = PHANTASMAGORIA.ResolveTypeKey( self )
+
+    end
 
     return self:phantom_SetType( key, motivo )
 

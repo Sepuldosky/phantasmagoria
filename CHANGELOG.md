@@ -7,6 +7,94 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-17 (42) — **Cada fantasma con su cuerpo y su voz. La base sorteaba desde siempre y nuestro código le pasaba una lista de UNO; y la puerta que hacía cara la parte difícil resultó ser un `Initialize` que este addon nunca había escrito.**
+
+Tres cabos del `dev/PROMPT_fantasmas_sexo_modelo_y_voz.txt`. **Escrito y medido offline; la pasada
+en juego NO se hizo** y su planilla de 10 filas está en `dev/HANDOFF_fantasmas_male_oldcrone.md`
+§R7.5. Detalle completo en §R7.
+
+### Lo que se midió
+
+    dev/voz_y_modelo.py       46 comprobaciones, 0 fallas
+                              --romper pool   -> 6 rojas, grupos B+D   ( y sólo B+D )
+                              --romper orden  -> 2 rojas, grupo  E     ( y sólo E )
+                              --romper filtro -> 2 rojas, grupo  D     ( y sólo D )
+    dev/hull_por_modelo.py    11/11, sin cambios: el bloque de la r6 sigue en pie
+    dev/luacheck_gmod.py      4 archivos OK, con sus dos controles versionados en la MISMA pasada
+                              ( _roto.lua FALLA · _sano.lua OK )
+    dev/auditar_returns_de_hooks.py   0 de 28 hook.Add con return fuera de la API
+
+El arnés carga **los 30 tipos de verdad**, fusionados por su propio `AplicarRasgosDeEvento`: cuando
+dice *«dos de los treinta fijan la voz»* está contando los treinta y no una maqueta mía.
+
+### Los tres cabos
+
+**El cuerpo por fantasma.** `terminator_nextbot/shared.lua:2971` sortea un modelo de `ENT.Models`
+**en cada instancia** — o sea que la variedad existía y lo que la apagaba era
+`CLASE.Models = { chosen.mdl }`, una lista de un elemento. Ahora va el pool de los modelos del taller
+montados. ⚠ **Con `phantasmagoria_bot_modelo` puesta la lista sigue siendo de UNO**: las filas 01-04
+del hull (§R6.4) fuerzan un modelo y leen la línea del spawn, y un sorteo que le gane a la perilla las
+convierte en *«a veces sale el que pediste»* — con lo que se cae el único control que ese bloque
+tiene, **y ese bloque todavía no se corrió en juego**.
+
+**El sexo del modelo.** Campo `voz` en `ghost_models.lua` (1 femenina · 2 grave), al lado de `altura`
+y `reposoBrazo`, que es la única casa de lo propio de cada modelo. No es un número libre: es **el
+índice del archivo** en el catálogo de sonido. La nena y la vieja comparten banco, **preguntado al
+autor antes de escribir nada**: en Phasmophobia la voz no se diferencia por edad, y el único tipo que
+envejece (Thaye) lo demuestra con sus acciones.
+
+**La prioridad tipo > modelo > sorteo**, en `phantom_EventVoice()`. Al revés, un Banshee con el cuerpo
+del Male hablaría grave, que es justo lo que la fuente prohíbe.
+
+### Tres cosas que valen fuera de este bloque
+
+⚠ **Los dos eslabones usan el MISMO campo, y por eso no hay nada que sincronizar.** El rasgo `voice`
+del tipo y el campo `voz` del modelo valen 1 o 2 con el mismo significado, porque salen de la misma
+frase de la fuente (*"Can only be female, ghost model and ghost name will reflect this"*). Un tipo que
+mañana fije la voz 2 filtra el cuerpo solo, sin tocar una línea. *Un segundo dato que hay que mantener
+de acuerdo con el primero es el que se desincroniza.*
+
+⚠ **La invariante que el prompt no nombró: `esNuestroModelo`, `IdleActivity*` y `ModelSkin` son de la
+CLASE y el sorteo es por INSTANCIA.** Un pool mezclado le aplicaría a un modelo ajeno las correcciones
+del nuestro — la regresión del `1a16191` dada vuelta. El pool se arma sólo con los `nuestro`, y **el
+que queda afuera se dice**: «salen menos modelos de los que hay» y «ese modelo no está montado» se
+leen igual en una consola muda.
+
+⚠ **Y una medición que corrigió al encargo: una lista vacía no da «otra cosa», TIRA.** El prompt decía
+que `models[ math.random( 0 ) ]` devolvía algo raro; `math.random( 0 )` levanta *"interval is empty"*
+adentro del `Initialize` de la base — antes de que el fantasma exista — y **sólo en el camino que
+corre en las máquinas de otros**, porque un clon limpio no tiene los `.mdl`. Por eso el pool cae a UNO
+cuando no hay ninguno del taller montado.
+
+### El cabo 3, que se creía caro y no lo era
+
+Que un `banshee` no salga con el cuerpo del Male exigía elegir el tipo **antes** que el modelo, y el
+prompt daba por sospechosas las dos salidas que veía (pisar el modelo con `SetModel` después, o mover
+`phantom_ResolveType` entero). Hay una tercera: la base elige el modelo **adentro de su propio
+`Initialize`** (`shared.lua:2913`, sorteo en `:2971`), y **este addon no tenía un `Initialize` propio**
+— cero definiciones en los 13 archivos de la entidad. Ahora lo tiene, escribe `self.Models` filtrado
+en la tabla de la **instancia** y recién después encadena. No hay `SetModel` a posteriori y el hull de
+la r6 no se toca.
+
+Lo único que se adelanta es el **sorteo** del tipo: `phantom_PreelegirTipo()` guarda la key y
+`phantom_ResolveType` **la consume y la borra**, en su lugar de siempre. ⚠ Si quedara guardada,
+`phantasmagoria_ghost_type auto` sobre un fantasma vivo le devolvería el mismo tipo para siempre:
+*una caché de una decisión es una decisión que ya no se puede volver a tomar.* Y `typeassign 0` sigue
+siendo el control negativo que era — sin tipo no hay filtro.
+
+### Del arnés
+
+⚠ **Su `--romper` no pide sólo que haya rojo: pide rojo EN SUS FILAS**, y falla si un defecto tiñe un
+grupo que no le toca. Un arnés que se cae entero ante cualquier cambio acredita igual que uno flojo.
+
+⚠ **Y una regla que se cobró escribiéndolo:** `ghost_types.lua` termina en `return
+PHANTASMAGORIA.Types`, un return de **archivo**. Concatenado con los otros bloques, ese return corta
+el chunk y todo lo que sigue no se carga — y si lo que queda colgado da la casualidad de ser
+sintácticamente válido, el arnés corre la mitad de los bloques y **cuenta verde igual**. Cada trozo se
+ejecuta como su propio chunk, que es lo que hace GMod entre archivos.
+
+---
+
 ## 2026-08-17 (41) — **`+USE` apaga la radio, la radio suena entera, y las llaves se mudan a una puerta con pestillo. El corte que se saca decapitaba 6 de 6, y sacarlo sin el interruptor habría sido un defecto y no un arreglo.**
 
 Tres pedidos del autor, textuales, que él llamó *«minúsculos»*. **Dos lo son.**
