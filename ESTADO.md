@@ -1,6 +1,6 @@
 # Phantasmagoria — Estado actual y handoff
 
-**Última actualización:** 2026-08-10
+**Última actualización:** 2026-08-17
 **Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
@@ -12,6 +12,67 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 ---
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
+
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-17): EL CLIC DEL INTERRUPTOR Y EL CELULAR QUE NO ERA UN CELULAR.
+> ESCRITO, CHEQUEADO OFFLINE, Y *SIN CORRER EN JUEGO*.** Detalle en el CHANGELOG **(43)**. Planilla
+> nueva: `dev/checks/phantasmagoria-clic-y-celular.html`, **siete filas**.
+>
+> **De los tres pedidos que el autor dio al cerrar el `+USE`, dos están escritos y el tercero no —
+> y eso último no es un olvido:**
+>
+> · ✅ **El clic.** Una línea al final de `apagarCerca`, en el **único** desenlace que apagó algo.
+>   ⚠⚠ Los dos clips **eran estéreo** (0,23 s y 0,35 s, 2 canales, medidos con `dev/duracion_ogg.py`)
+>   y **Source no espacializa un estéreo**: pasaron por `dev/mono_posicionales.py` **antes** del
+>   cableado, y quedaron en 1 canal con la misma duración (backup verificado por sha256 en
+>   `dev/other/OLD/` — `sound/` está gitignoreado, esa copia es la única). El extractor se **amplió**
+>   para ver el banco nuevo, no se le pegó una lista, y ahora imprime **el denominador por fuente**.
+>   Sin perilla: es una adición, no un recorte, y `apagados` dice cuántas veces tendría que haber
+>   sonado.
+> · ✅ **El celular.** `phone_vibrate` fuera de la familia teléfono (dos líneas y el comentario). La
+>   familia queda con **UN** clip — un teléfono siempre suena igual — y eso es decisión del autor, no
+>   un síntoma. El `.ogg` **queda en el disco**, sin consumidor, esperando un smartphone de verdad.
+> · ⛔ **Que romper el prop corte el sonido: NO SE ESCRIBIÓ.** Ver abajo.
+>
+> ### ⚠⚠⚠ LA PRECONDICIÓN QUE HAY QUE MEDIR PRIMERO — filas 00 y 01 de la planilla
+>
+> La frase *«borrar el emisor **ES** un corte: una entidad que se va se lleva su canal»* está escrita
+> en **cinco lugares** (`server_events.lua:218`, `:875`, `:3409`, `dev/duracion_ogg.py:8` y el
+> CHANGELOG (41)) y **NUNCA SE MIDIÓ**: nació como razón en un comentario y se citó después como si
+> fuera un resultado.
+>
+> · Si es **cierta** → romper el prop ya corta el sonido solo y **el pedido del autor ya está hecho**.
+> · Si es **falsa** → es un defecto real, `EMISOR_MARGEN` no protegió nunca de nada, y **hay que
+>   corregir los cinco lugares en el mismo commit** — *si la prosa y el código discrepan, el próximo
+>   lector copia la prosa*.
+>
+> Se mide con `clock_tick` (**46,55 s**, mono) y no con un clip corto. Y **romper no es borrar**: la
+> fila 01 es aparte porque un `prop_physics` que se rompe puede spawnear pedazos y sacarse a sí mismo
+> en otro momento del frame. Si la 01 sale roja, el arreglo tiene **una segunda precondición sin
+> medir** (si un `StopSound` sobre una entidad que se está yendo llega a tiempo) y dos candidatos:
+> `EntityRemoved` global o `ent:CallOnRemove` acotado a los props que nosotros hicimos sonar.
+> *Un arreglo cuyo mecanismo no está medido es una hipótesis con forma de commit.*
+>
+> **Chequeos offline al día:** luacheck 36/36 · sintaxis real 36/36 · returns de hooks **0/28** (este
+> bloque no agrega hooks) · **165 rutas de sonido citadas, 0 faltantes** (eran 164: +2 del clic, −1 de
+> `phone_vibrate`) · la guarda `( 3b )` **callada, y comprobada gritando** en dos casos rotos a
+> propósito.
+>
+> **Dos instrumentos nuevos y versionados:** `dev/rutas_de_sonido.py` (las «164 rutas» se rederivaban
+> a mano en cada ronda) y `dev/guarda_3b_offline.py` (**recorta la guarda del `.lua` y la ejecuta** en
+> un Lua real — no la reimplementa — y le mueve la perilla para ver que grita).
+>
+> ⚠⚠ **DOS SESIONES TOCARON `server_events.lua` EL MISMO DÍA.** Los cambios de este bloque quedaron
+> **adentro del commit `221c5e8`** («El cuerpo y la voz de cada fantasma»), que es de la otra sesión:
+> nadie pisó a nadie y no se perdió nada, pero **el mensaje del commit no menciona el clic ni el
+> teléfono**. Es la falla simétrica que este repo ya pagó una vez. Buscar el clic por `git log` no lo
+> va a encontrar: está en `221c5e8`.
+>
+> ### 🔜 DESPUÉS DE ESTO
+>
+> El pedido que el autor hizo hace **cuatro rondas** y que todavía no tiene línea de investigación:
+> **por qué el bot se queda pegado y después se despeja solo, y por qué a veces quiere pasar a través
+> de un vidrio** (ver el punto 2 de la lista de más abajo, que sigue vigente). Su pista: la base
+> Terminator tendría convars para ver el *thinking* del NPC. ⚠ **No está medido que existan.**
 
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-17): EL `+USE` APAGA LA RADIO, LA RADIO SUENA ENTERA Y LAS LLAVES SE MUDAN
 > A UN PESTILLO. CERRADO EN JUEGO, 13 de 13, commit `ce9deca` y pusheado.** Detalle en el CHANGELOG
@@ -35,7 +96,11 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 > ⚠ **Frontera con nombre:** `ritual_chanting_loop` es un loop y la fila de «suena entera» no se corrió
 > con él. Y el `+USE` es **sólo** para radio y teléfono, por decisión del autor.
 >
-> ### 🔜 LO SIGUIENTE, PEDIDO POR EL AUTOR AL CERRAR (tres cosas, ninguna escrita)
+> ### 🔜 LO SIGUIENTE, PEDIDO POR EL AUTOR AL CERRAR (tres cosas)
+>
+> ⚠ **ESTA LISTA YA NO ES EL ESTADO: se escribió el 2026-08-17 al cerrar el `+USE`, y el bloque de
+> arriba (CHANGELOG **43**) hizo la 1 y la 3. La 2 depende de una medición. Queda como estaba porque
+> explica POR QUÉ se hizo cada cosa.**
 >
 > 1. Que apretar `+USE` **emita un sonido de botón**, sobre el horneado y sobre el `prop_physics`, para
 >    que se note que apagaste el objeto. Candidatos suyos: `ui/button_toggle_1` y `_2`, *«ambos suenan

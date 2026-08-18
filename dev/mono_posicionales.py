@@ -11,8 +11,22 @@ promesa en silencio: se oian, y se oian igual desde cualquier lado.
 
 ALCANCE, Y ESTA ACOTADO A PROPOSITO
 -----------------------------------
-Se tocan **solo** los clips de `PROP_CONSUJETO`, que son los que esta ronda
-promete posicionales sobre un objeto NOMBRADO. NO se tocan los otros 30 estereo
+Se tocan los clips de las fuentes de `FUENTES`, que hoy son dos y las dos
+prometen sonar DESDE un punto del mapa:
+
+  · `PROP_CONSUJETO` -- las familias que suenan sobre un objeto NOMBRADO
+    ( la r3 de Diseno 21 );
+  · `CLIC_APAGADO`   -- los dos clips del clic del interruptor del `+USE`
+    ( 2026-08-17 ), que suenan en la posicion del trasto que se apago.
+
+⚠ LA AMPLIACION TIENE UNA TRAMPA Y POR ESO EL DENOMINADOR SE IMPRIME **POR
+FUENTE**. Tocar el extractor para que lea una fuente nueva puede dejar de ver la
+vieja sin que nada avise: el script diria *"ya estan todas en mono"*, que es el
+resultado exacto de no haber mirado. Las tres defensas: la marca de arranque se
+busca con `str.index`, que **revienta** en vez de devolver vacio; una fuente que
+aporta CERO rutas aborta la corrida; y el conteo va por fuente y no sumado.
+
+NO se tocan los otros 30 estereo del motor. NO se tocan los otros 30 estereo
 del motor -- `event/creak` ( 10 ), `event/impact` ( 9 ), `ghost/breathing` ( 8 )
 y `ghost/humming` ( 2 ) -- por dos motivos:
 
@@ -56,13 +70,45 @@ BACKUP = os.path.join(os.path.dirname(ADDON), "dev", "other", "OLD",
 # el dia que alguien edita el otro archivo.*
 LUA = os.path.join(ADDON, "lua", "entities", "terminator_nextbot_phantom", "server_events.lua")
 
+# ( nombre para imprimir, marca de arranque, marca de corte ). Las marcas son
+# texto que vive en el Lua: si alguien las borra, `str.index` tira ValueError y
+# la corrida muere ruidosa. Es a proposito -- el modo de falla barato es el que
+# se ve.
+FUENTES = [
+    ("PROP_CONSUJETO  ( familias con sujeto )",
+     "local PROP_CONSUJETO = {",
+     "-- ⚠ LA MITAD DE LA PREGUNTA"),
+    ("CLIC_APAGADO    ( el clic del +USE )",
+     "local CLIC_APAGADO = {",
+     "-- FIN DE CLIC_APAGADO"),
+]
 
-def rutas_de_consujeto():
+
+def rutas_del_lua():
+    """[( nombre, [rutas] )] -- una entrada por fuente, cada una con su denominador.
+
+    ⚠ NO devuelve una lista sola. El llamador tiene que poder imprimir cuantas
+    rutas aporto CADA fuente: un total que baja de 21 a 2 porque el extractor
+    dejo de ver una tabla se lee igual de bien que un total correcto.
+    """
     import re
     src = open(LUA, encoding="utf-8").read()
-    i = src.index("local PROP_CONSUJETO = {")
-    j = src.index("-- ⚠ LA MITAD DE LA PREGUNTA", i)
-    return re.findall(r'"(phantasmagoria/[^"]+\.ogg)"', src[i:j])
+    fuera = []
+
+    for nombre, ini, fin in FUENTES:
+        i = src.index(ini)          # ValueError si la marca ya no esta
+        j = src.index(fin, i)
+        rutas = re.findall(r'"(phantasmagoria/[^"]+\.ogg)"', src[i:j])
+
+        if not rutas:
+            raise ValueError(
+                "la fuente %s quedo en CERO rutas entre sus marcas. Un cero de un "
+                "lector que no leyo nada se imprime igual que un cero bueno: se "
+                "aborta en vez de medir un universo vacio." % nombre)
+
+        fuera.append((nombre, rutas))
+
+    return fuera
 
 
 def probe(full):
@@ -89,8 +135,28 @@ def main():
                     help="sin esto, solo se lista lo que haria")
     args = ap.parse_args()
 
-    rutas = rutas_de_consujeto()
-    print("PROP_CONSUJETO cita %d ruta(s) de sonido." % len(rutas))
+    fuentes = rutas_del_lua()
+
+    print("DENOMINADOR POR FUENTE ( leido del Lua, no escrito a mano ):")
+    rutas, vistas, repetidas = [], set(), []
+
+    for nombre, rs in fuentes:
+        print("  %-42s %2d ruta(s)" % (nombre, len(rs)))
+
+        for r in rs:
+            if r in vistas:
+                repetidas.append(r)
+                continue
+            vistas.add(r)
+            rutas.append(r)
+
+    print("  %-42s %2d ruta(s)" % ("TOTAL ( sin repetir )", len(rutas)))
+
+    # Una ruta en dos fuentes se convertiria dos veces: la segunda pasada leeria
+    # el archivo YA mono y no haria nada, pero el conteo de "convertidos" mentiria.
+    if repetidas:
+        print("  ( %d ruta(s) citada(s) en mas de una fuente, contadas una vez: %s )"
+              % (len(repetidas), ", ".join(sorted(set(repetidas)))))
 
     pendientes, ya_mono, faltan = [], [], []
 
@@ -132,6 +198,18 @@ def main():
     for r, full, ch, dur in pendientes:
         dest = os.path.join(BACKUP, r.replace("/", os.sep))
         os.makedirs(os.path.dirname(dest), exist_ok=True)
+
+        # ⚠ UN BACKUP QUE YA EXISTE NO SE PISA. `sound/` esta gitignoreado y una
+        # conversion a mono NO SE DESHACE: esta copia es la unica que hay. En el
+        # camino normal esto no puede pasar -- un archivo ya convertido cae en
+        # `ya_mono` y nunca llega aca --, asi que si pasa, algo no es lo que
+        # creemos y perder la copia buena seria irreversible.
+        if os.path.exists(dest):
+            print("  !! ya hay un backup de %s en dev/other/OLD/ y NO se pisa." % r)
+            print("     ( una conversion a mono no se deshace y sound/ esta gitignoreado:")
+            print("       esa copia es la unica. SE ABORTA sin tocar nada. )")
+            return 1
+
         shutil.copy2(full, dest)
 
         h_src, h_dst = sha256(full), sha256(dest)

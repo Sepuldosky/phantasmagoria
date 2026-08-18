@@ -7,6 +7,172 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-17 (43) — **El clic del interruptor y el celular que no era un celular. Y el tercer pedido no se escribió: la afirmación en la que se apoya está en CINCO lugares del repo y nunca se midió.**
+
+Tres pedidos del autor, textuales, dados al cerrar el bloque del `+USE` ( entrada **41** ). **Dos están escritos y medidos
+offline. El tercero no, y el motivo es el hallazgo de la entrada.**
+
+⚠ **SIN CORRER EN JUEGO.** Planilla nueva en `dev/checks/phantasmagoria-clic-y-celular.html`, siete
+filas, copiada de la del `+USE` (que ya trae la guarda de largo de 255 en el generador).
+
+### ⚠⚠⚠ La frase que decide el bloque está escrita cinco veces y **nunca se midió**
+
+> *«Borrar el emisor **ES** un corte: una entidad que se va se lleva su canal.»*
+
+Censadas hoy con `rg --no-ignore`, con denominador: **cinco sitios** —
+`server_events.lua:218`, `:875` y `:3409`, `dev/duracion_ogg.py:8` y `CHANGELOG (41)`. **Nació como
+razón en un comentario y se citó después como si fuera un resultado**; el `:3409` es el más viejo, o
+sea que ya se propagó de una ronda a la siguiente. *Un comentario mentiroso se propaga al lector que
+lo cita* — y acá el lector escribió código con él (`EMISOR_MARGEN` existe por esa frase).
+
+**Decide dos cosas a la vez, y por eso es la fila 00 y no una nota al pie:**
+
+- **si es cierta** → romper el prop **ya corta el sonido solo**, y el segundo pedido del autor está
+  hecho sin escribir una línea;
+- **si es falsa** → el pedido es un defecto real, `EMISOR_MARGEN` no protegió nunca de nada, y **hay
+  que corregir los cinco lugares en el mismo commit**, no sólo el código.
+
+Se mide con `clock_tick` (**46,55 s** medidos, mono) y **no** con un clip corto: *un sonido que se
+termina solo pasa por un borrado que funcionó*. La fila lleva **un cuarto comando que el prompt no
+pedía** y que es el que la vuelve una medición: `print(IsValid(PHT.e))` después del borrado. Sin él,
+*«el tic-tac sigue»* no distingue **el borrado no calla** de **el borrado no ocurrió**, y esas dos
+mandan a arreglar lugares distintos.
+
+Y la fila 01 es aparte a propósito: **romper no es borrar**. Un `prop_physics` que se rompe puede
+spawnear pedazos y sacarse a sí mismo en otro momento del frame, o quedar vivo con otro modelo. El
+pedido dice *«destruir»*, así que el camino que se mide es el suyo — a tiros — y no el `Remove()`
+limpio del remover, que entra como segunda mitad para distinguir los dos caminos.
+
+### ⚠⚠ Lo que **no** se escribió, y por qué está dicho en vez de tapado
+
+**El segundo pedido del autor no tiene código en este commit.** Si sale verde no hace falta ninguno;
+si sale rojo, el arreglo tiene **una segunda precondición sin medir** — si un `StopSound` sobre una
+entidad *que se está yendo* llega a tiempo — y dos candidatos con costos distintos: un
+`EntityRemoved` global (el addon no tiene ninguno, y correría por cada entidad que muere en el mapa) o
+un `ent:CallOnRemove` acotado a los props a los que **nosotros** hicimos sonar. *Un arreglo cuyo
+mecanismo no está medido es una hipótesis con forma de commit.*
+
+Queda anotada también la parte chica y no audible: la poda del registro `SONANDO` corre **sólo cuando
+alguien lo mira** (en `EV.prop`, en el `+USE` y en el reporte), así que quedan entradas inválidas
+contadas hasta la lectura siguiente.
+
+### ⭐⭐ El clic: los dos clips eran **estéreo**, y esta vez se vio **antes** de escribir la línea
+
+    ui/button_toggle_1.ogg    0,23 s    44100    2 CANALES
+    ui/button_toggle_2.ogg    0,35 s    44100    2 CANALES
+    ui/button_click.ogg       0,30 s    44100    1 canal    ( ya era mono, y NO se usó )
+
+**Source no espacializa un estéreo: lo tira en 2D.** Cableados como venían, el clic se habría oído
+igual de fuerte en toda la casa y **no desde el objeto que apagaste** — que es exactamente lo que el
+sonido viene a comunicar. Es el defecto que la r3 pagó en **quince archivos**, visto esta vez antes
+del cableado y no después.
+
+`button_click` ya era mono y habría costado cero, pero **suena distinto** y el autor eligió los
+toggles de oído: la conveniencia técnica no decide por él. Queda ofrecida, diciendo que suena
+diferente.
+
+**El extractor se amplió, no se le pegó una lista.** `dev/mono_posicionales.py` saca sus rutas del
+Lua; agregarle el banco del clic a mano habría sido *una medición vieja el día que alguien edita el
+otro archivo*. Ahora lee dos fuentes (`PROP_CONSUJETO` y `CLIC_APAGADO`) e imprime **el denominador
+por fuente**, que es el control de la trampa: tocar el extractor podía dejar de ver la tabla vieja sin
+que nada avisara, y el script habría dicho *«ya están todas en mono»* — **el resultado exacto de no
+haber mirado**. Tres defensas: la marca se busca con `str.index` (revienta, no devuelve vacío), una
+fuente con cero rutas **aborta**, y el conteo va partido.
+
+    PROP_CONSUJETO  30 rutas · CLIC_APAGADO 2 · TOTAL sin repetir 25 · ya mono 23 · estéreo 2
+    re-lectura del disco:  1 canal y delta 0,000 s en los dos
+
+**El backup es la única copia** (`sound/` está gitignoreado y una conversión a mono no se deshace):
+verificado por sha256 **antes** de tocar, y comprobado después contra un `sha256` tomado por fuera del
+script. Se le agregó una guarda: **un backup que ya existe no se pisa**.
+
+⚠ **Hallazgo lateral del dedupe:** `PROP_CONSUJETO` cita **30 rutas pero son 23 distintas** — `dur` y
+`sonidos` nombran los mismos clips desde el bloque del `+USE`. Sin dedupe, la próxima corrida habría
+**re-encodeado dos veces** el mismo `.ogg` (una pérdida de calidad silenciosa) y habría inflado el
+contador de convertidos. No pasó todavía porque cuando el script corrió en la r3 la tabla `dur` no
+existía.
+
+**El cableado, y dónde no va.** Una línea al final de `apagarCerca`, en el **único** desenlace que
+apagó algo. El `+USE` tiene **cuatro salidas y tres no apagan nada** (`lejos`, `tarde`, y no haber
+candidato); un clic en cualquiera de esas hace dos daños — le miente al jugador, que es lo contrario
+de lo que el autor pidió, y **se come el control negativo de la planilla**, porque el que la corre oye
+el clic desde el otro cuarto y marca verde sobre un filtro que nunca decidió. *Un instrumento que
+confirma sin haber medido no es un instrumento: es un adorno que acredita.* Es la fila 04.
+
+Dos decisiones más, con su motivo escrito: `sound.Play` en la **posición del objeto** y no `EmitSound`
+sobre él, porque el sujeto puede ser un emisor nuestro que **acaba de dejar de existir** y un sonido
+colgado de una entidad se va con ella — y así los dos casos (emisor nuestro y prop del mapa) salen por
+la misma línea. La posición se guarda **antes** de borrar nada. Y el nivel es **60** y no los 75 del
+resto: el que aprieta está a 128 u como mucho, y un clic que se oye desde el otro cuarto vuelve a ser
+2D por otra puerta.
+
+⚠ **Sin perilla, y el motivo va escrito:** es una **adición** y no un recorte, así que su ausencia se
+distingue sola — el contador `apagados` dice cuántas veces tendría que haber sonado. *Un banco que se
+achica necesita perilla; uno que crece, no.*
+
+### ⭐ El celular que no era: `phone_vibrate` fuera de la familia teléfono
+
+El autor: *«phone como prop horneado o phys son generalmente teléfonos fijos»*. Y los modelos que la
+familia reclama le dan la razón — `oldphone`, `phone_motel`, el `phone` de `cs_office` son fijos. El
+clip **no sonaba mal: sonaba a otro objeto.**
+
+Dos líneas y un comentario. **El control ya existía y no hubo que inventarlo:** la guarda `( 3b )`
+compara `sonidos` contra `dur` en las dos direcciones, así que sacarlo de una sola grita al cargar.
+
+⚠ **La consecuencia va dicha en vez de descubrirse:** la familia queda con **un solo clip**, o sea que
+un teléfono **siempre suena igual**. Con 3,46 s y un evento cada 25–90 s no molesta, pero el que abra
+la tabla y vea una sola entrada tiene que poder distinguir *«falta algo»* de *«falta a propósito»*.
+
+⚠ **El `.ogg` no se borró del disco** y eso también es a propósito: queda sin consumidor esperando un
+smartphone de verdad. Lo que no puede pasar es lo del revés — **una ruta citada sin archivo enmudece
+sin error**.
+
+### ⚠⚠ Dos instrumentos nuevos y versionados, y uno de ellos casi da un falso verde
+
+`dev/rutas_de_sonido.py` — las *«164 rutas de sonido citadas, 0 faltantes»* se citan en **cuatro
+entradas de este changelog** y se rederivaban **a mano en cada ronda**. *Un número que sobrevive a su
+instrumento es una frase que nadie puede refutar.* Ahora trae **denominador doble** (archivos leídos y
+rutas distintas) y un auto-control que le pregunta por una ruta inventada. Hoy da **165**, y el delta
+es exactamente lo que se tocó: **+2** del clic, **−1** de `phone_vibrate`.
+
+`dev/guarda_3b_offline.py` — corre **la guarda de verdad** fuera de GMod: la **recorta del `.lua` y la
+ejecuta** en un Lua real (`lupa`). No la reimplementa, porque dos copias de acuerdo entre sí no prueban
+nada del código que corre. Y le **mueve la perilla**: rompe la tabla a propósito de una dirección por
+vez (sacar el clip de `sonidos` dejando su `dur`, y al revés) y comprueba que grita en las dos. *Una
+guarda callada puede estarlo porque la tabla está bien o porque no corrió, y las dos se ven igual.*
+
+⚠⚠ **Y ese instrumento nuevo dio un falso verde en su primera versión, agarrado por mirar la salida y
+no el veredicto.** El criterio era *«el mensaje dice `HUERFANA`»* — pero el `ErrorNoHalt` de la guarda
+**nombra las dos categorías siempre**, lleve o no lleve algo cada lado (`SIN DURACION ( … ): ninguno ·
+HUERFANAS ( … ): ninguna`). Así que **los dos casos rotos pasaban leyendo la misma palabra**: el
+veredicto era correcto y el criterio no lo probaba. Se ve en que las dos filas imprimían **el mismo
+texto**. El discriminante real es **de qué lado del `·` cae el clip**, y ahora se imprimen los dos
+lados. Es el nº 42 del catálogo con otro disfraz: un control cuyo modo de falla lo satisface.
+
+⚠ Y un defecto de lector, del mismo rato: buscar el `do` del bloque **como substring** lo encuentra
+adentro de la primera palabra que lo contenga (`medido`, `cuando`, `direcciones`), y el recorte arranca
+en la mitad de un comentario. El síntoma fue un **error de sintaxis de Lua que parecía del addon y era
+del lector**.
+
+### Los chequeos, todos corridos con el código de este bloque puesto
+
+    luacheck                 36 / 36
+    sintaxis real (lupa)     36 / 36     con su auto-control: discrimina
+    returns de hooks          0 / 28     este bloque NO agrega hooks
+    rutas de sonido          165 citadas, 0 faltantes   ( eran 164: +2 −1 )
+    guarda 3b offline        callada, y grita en los 2 casos rotos a propósito
+    duracion_ogg              4 / 4 valores previos reproducidos ( calibrado )
+    largo de comandos        el más largo de la planilla mide 145 de 255
+
+⚠ **SIN COMMITEAR, y por una razón que hay que leer antes de commitear:** otra sesión está editando
+**el mismo `server_events.lua`** en paralelo ( el bloque de voz y cuerpo por tipo y por modelo de la entrada **42**, que se escribió mientras se
+escribía éste: `dev/voz_y_modelo.py`, `server.lua`, `server_type.lua` y `ghost_models.lua` ). Sus cambios y los de este
+bloque **conviven en el archivo** y ninguno pisó al otro, pero `git commit -- server_events.lua`
+se llevaría su trabajo a medio hacer bajo este mensaje — que es exactamente la falla simétrica que
+este repo ya pagó una vez, y esa vez llegó pusheada.
+
+---
+
 ## 2026-08-17 (42) — **Cada fantasma con su cuerpo y su voz. La base sorteaba desde siempre y nuestro código le pasaba una lista de UNO; y la puerta que hacía cara la parte difícil resultó ser un `Initialize` que este addon nunca había escrito.**
 
 Tres cabos del `dev/PROMPT_fantasmas_sexo_modelo_y_voz.txt`. **Escrito y medido offline; la pasada
