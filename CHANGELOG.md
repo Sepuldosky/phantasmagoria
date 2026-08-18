@@ -285,8 +285,85 @@ este repo ya pagó una vez, y esa vez llegó pusheada.
 
 ## 2026-08-17 (42) — **Cada fantasma con su cuerpo y su voz. La base sorteaba desde siempre y nuestro código le pasaba una lista de UNO; y la puerta que hacía cara la parte difícil resultó ser un `Initialize` que este addon nunca había escrito.**
 
-Tres cabos del `dev/PROMPT_fantasmas_sexo_modelo_y_voz.txt`. Detalle completo en
-`dev/HANDOFF_fantasmas_male_oldcrone.md` §R7.
+Tres cabos del `dev/PROMPT_fantasmas_sexo_modelo_y_voz.txt`, más la pasada de cierre del
+`dev/PROMPT_fantasmas_r7_cierre.txt`. Detalle completo en
+`dev/HANDOFF_fantasmas_male_oldcrone.md` §R7 y §R7b.
+
+### ✅✅ CIERRE, 2026-08-18 — la planilla de lo que faltaba: **5 filas cerraron, y DOS salieron verdes sin poder fallar**
+
+El autor corrió las 7 filas pendientes y reportó **6 PASA · 0 FALLA · 1 SIN CORRER**. Releído contra el
+código y contra la consola pegada, el veredicto es **5 PASA · 2 a re-correr** — y **ningún rojo del
+código**: las dos que se mueven llegaron a su casilla por un camino donde el mecanismo roto habría
+impreso exactamente lo mismo. Detalle en `dev/HANDOFF_fantasmas_male_oldcrone.md` §R7b.
+
+**Lo que cerró.** La voz por modelo sobre cuerpo femenino, con el `por:` nombrando el `.mdl` en dos
+modelos distintos (fila 07). La perilla del hull, que es el mejor control de la pasada porque es un A/B
+de una sola variable — `ghost_hull 0` da `32x32x72` y `ghost_hull 1` da `20x20x45` **sobre la misma
+nena**, y la columna `malla 44.94` no se mueve, que es lo que separa *«apaga nuestra caja»* de *«rompe
+la medición del modelo»*. Y la regresión final: cinco spawns con las perillas en default, tres modelos,
+cada hull el suyo, cinco tipos distintos y el banshee saliendo con la OldCrone.
+
+⭐ **Y la nena en marcha, que el autor había dejado sin marcar, PASA — con lo que la compuerta de la r6
+queda confirmada en juego en los tres modelos.** Tres ventanas de `ph_ghost_facing` dieron **64,1 · 65,8
+· 65,7** contra los **65,9 predichos offline** desde el SMD por `ghostbrazo_off.py`, sin el motor: dos de
+las tres aciertan a 0,1 y 0,2 grados. Con el Male (85,5 contra 85,5) y la OldCrone (119,2 contra 119,0),
+los tres modelos concuerdan. Y el reposo impreso dijo **46,5**, el de la nena — el modo de falla de la
+entrada nº 50 del catálogo, que este mismo instrumento ya se había cobrado una vez, **no se repitió**.
+
+### ⚠ LAS DOS QUE NO PODÍAN FALLAR — el detector de la ronda aplicado a la EJECUCIÓN y no a la redacción
+
+La ronda 7 dejó escrito el detector (*qué tendría que verse si el mecanismo estuviera al revés; si es
+«lo mismo», la fila es un dato*). Se había aplicado a cómo estaban **escritas** las filas. Aplicado a
+cómo se **corrieron**, agarra dos.
+
+**El descarte de la voz — el arreglo de `dd9e634` no se ejerció.** Entre el spawn y el
+`phantasmagoria_ghost_type banshee` no hubo ningún evento de sonido, así que `phantom_evVoice` estaba en
+`nil` y `phantom_ResetVoice` salió por su primera línea, muda, sin nada que descartar. Al revés: **sin
+el arreglo se vería lo mismo**, porque el primer sonido resuelve la voz de cero y el tipo manda igual.
+Lo que la fila midió es el estado 05b —banshee con cuerpo de hombre— que ya estaba cerrado con diez
+ejemplos.
+
+> ⭐ La precondición **estaba escrita y era la correcta** (*«hacerlo sonar y comprobar que dice
+> `resuelta 2 ( grave )`»*). Lo que falló es **dónde vivía**: en la prosa, mientras el bloque de comando
+> —lo que el botón copia y lo que uno ejecuta— empezaba directo en el cambio de tipo. **Una precondición
+> que hay que COMPROBAR, y no sólo poner, no sobrevive en la prosa**: si su lectura no está en la
+> secuencia que se ejecuta, se saltea, y al saltearse no deja rastro porque la fila sigue imprimiendo
+> algo plausible. En la planilla nueva es **una fila propia con su botón**, y su FALLA dice *PARAR ACÁ*.
+
+**El control negativo del tipo — se juzgó por la mitad que no discrimina.** La nota entera fue «Si hay
+modelos distintos», y la variedad de modelos sale **igual** con `typeassign 0` leída y con la convar
+ignorada, porque sólo 2 de los 30 tipos fijan un sexo. Lo que separa los dos mundos es que la línea de
+spawn diga `tipo NINGUNO` (`server.lua:1412`), más la lectura independiente de `phantasmagoria_ghost_type`
+sin argumentos (`server_type.lua:505`). Es la r5 con el signo cambiado: allá la pista fue una línea que
+**no** salía, acá es una línea que nadie miró.
+
+**No se tocó una línea de código**, y es a propósito: separado el defecto de la fila del defecto del
+código, los dos casos eran de la fila. Queda anotado —y **no** escrito, para que lo decida el autor— que
+`phantom_ResetVoice` sale muda cuando no hay voz que descartar, así que *«el arreglo no anda»* y *«no
+había nada que descartar»* se leen igual; el aviso que los separaría correría en **cada spawn**, así que
+sin acotarlo al camino de consola sería ruido por fantasma.
+
+### ⚠⚠ DOS DEFECTOS DEL INSTRUMENTO, y el segundo apareció auditando al auditor
+
+**La planilla copiaba `<br>` al portapapeles.** El campo `cmd` es **el único que se escapa** y **el único
+que se copia crudo**, así que el `<br>` con que se separaban varios comandos se pegó literal en la
+consola: `phantasmagoria_bot_modelo ghost_male<br>phantasmagoria_bot_modelo ""` entró como **un** comando
+y la convar se comió la cadena entera de nombre de modelo. Costó dos filas de la pasada. *Un campo que se
+COPIA no se puede auditar con las reglas de uno que se RENDERIZA* — el chequeo que balancea etiquetas de
+a pares no ve un `<br>`, que no cierra. Chequeo nuevo en `dev/auditar_planilla.py`, con su control
+corrido **antes** del arreglo: dispara sobre los 6 campos malos y sobre ningún otro, y en el barrido de
+las 82 planillas agrega exactamente 1 falla.
+
+⭐ **Y el chequeo de `STORE` no había acertado nunca.** Comparaba por **subcadena**, así que toda planilla
+`-rN` chocaba contra su continuación `-rNb` — que es justo la convención de nombres de este flujo.
+Censadas las 79 que declaran `STORE`: **11 alarmas en su vida, las 11 falsas, y 0 choques reales.** Ahora
+compara el `STORE` **declarado**, exacto: 0 alarmas sobre las 82, y con un choque inyectado a mano vuelve
+a disparar. Un control que nunca agarró nada y reprueba trabajo correcto en su caso más frecuente es la
+cara barata del catálogo (nº 42), pero la factura la paga igual: **enseña a ignorar su propia salida**.
+
+**Queda abierto de la ronda 7**: el descarte de la voz y el `typeassign 0` (planilla de re-corrida en
+`dev/checks/phantasmagoria-cuerpo-y-voz-r7b.html`, con el detector escrito en cada fila), el motivo
+`[ pre-elegido en Initialize ]` de la fila 08, y el fantasma ajeno de la fila 11.
 
 ### ✅ PASADA EN JUEGO EL MISMO DÍA — 7 de 14 filas PASAN, y la cadena de la voz cerró en las DOS direcciones
 
