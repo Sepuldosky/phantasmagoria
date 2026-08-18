@@ -178,9 +178,25 @@ este repo ya pagó una vez, y esa vez llegó pusheada.
 Tres cabos del `dev/PROMPT_fantasmas_sexo_modelo_y_voz.txt`. Detalle completo en
 `dev/HANDOFF_fantasmas_male_oldcrone.md` §R7.
 
-### ✅ PASADA EN JUEGO EL MISMO DÍA — 3 de 13 filas PASAN, y una de ellas venía del bloque anterior
+### ✅ PASADA EN JUEGO EL MISMO DÍA — 6 de 13 filas PASAN, y la cadena de la voz cerró en las DOS direcciones
 
-(3 más quedaron a medias, 1 se retiró como criterio y 6 siguen sin correr. El desglose sale de contar la tabla, no de una cuenta a mano — la primera versión de esta línea decía «5 de 12» y estaba mal en las dos mitades.)
+(2 quedan a medias, 1 se retiró como criterio y 4 siguen sin correr. El desglose sale de contar la tabla, no
+de una cuenta a mano — la primera versión de esta línea decía «5 de 12» y estaba mal en las dos mitades.)
+
+⭐ **El par que cierra la prioridad, y las dos mitades salieron de UNA sola tanda**, con
+`phantasmagoria_bot_modelo ghost_male` —cuerpo fijo, filtro apagado porque el pool es de uno— y tipos al azar:
+
+    tipo que NO fija la voz  +  cuerpo de hombre  ->  voz 2 ( grave )     <- manda el MODELO
+    banshee                  +  cuerpo de hombre  ->  voz 1 ( femenina )  <- manda el TIPO
+
+Con el cuerpo constante, lo único que cambia entre las dos líneas es el tipo: el cambio de voz **no puede
+atribuirse al modelo ni a la moneda**. Cualquiera de las dos sola habría sido compatible con la hipótesis
+contraria; el par no. Diez ejemplos.
+
+⚠ Y que esto se pudiera medir **depende de una decisión tomada por otro motivo**: que la perilla le gane al
+sorteo y al filtro. Se escribió para que las filas del hull siguieran corriéndose, y terminó siendo la
+única puerta al estado —banshee con cuerpo de hombre— que este mismo bloque vuelve imposible por todos los
+otros caminos.
 
     fila 01   variedad de modelo   3 spawns, 3 modelos distintos ( y otra tanda igual )
     fila 04   el filtro tipo -> cuerpo   `ghost_type banshee` + 20 spawns, NI UNO el Male
