@@ -54,7 +54,10 @@ Está entero en el **CHANGELOG (44)** y en el `§2 ③` del
 - Dos defectos: las guardas de conteo **miraban un solo lado**, y `parsear` **podía tirar** rompiendo
   su propio contrato escrito, sin cachear el fallo.
 - Arreglado, y con el lump comprimido leído: ese mapa tiene **188 modelos / 702 props**, con
-  **11 modelos / 13 instancias** que las familias reclaman.
+  **10 modelos / 12 instancias** que las familias reclaman. ⚠ Este documento decia
+  **11 / 13** hasta el 2026-08-18: ese era el numero del `.py`, que llevaba las reglas
+  de antes de los tres vetos del 2026-08-16 y seguia contando la ANTENA del skybox
+  como *una radio*. El addon corriendo en juego siempre dijo 10 / 12.
 
 ---
 

@@ -1,7 +1,27 @@
 # HANDOFF — el clic del interruptor, el celular que no era, y el `.bsp` que reventaba
 
 **Fecha:** 2026-08-18 · **Repo:** `phantasmagoria` · **Changelog:** entradas **(43)** y **(44)**
-**Planilla:** `dev/checks/phantasmagoria-clic-y-celular.html` — **8 filas, ninguna corrida en juego**
+**Planilla:** `dev/checks/phantasmagoria-clic-y-celular.html` — 8 filas
+
+> ⚠⚠⚠ **CORRIDA. Este documento quedó viejo el mismo día que se escribió.** El autor la corrió
+> entera: **6 pasa / 1 falla / 1 sin correr**, y el resultado está en
+> [CORRIDA_clic_y_celular_r1.md](CORRIDA_clic_y_celular_r1.md) con las dos correcciones de veredicto
+> (la **04** está verde y su propio criterio dice que no se corrió; la **01** está roja **sin sujeto
+> identificado**). Lo que sigue vale como historia del bloque; lo que hay que hacer ahora está en el
+> **CHANGELOG (48)**.
+>
+> ✅ **Y la r2 también se corrió, el 2026-08-19: 4/4 (la quinta era offline y ya estaba). El
+> bloque CIERRA.** El pedido 2 quedó medido en juego con el sujeto nombrado — `prop_physics #1067`,
+> `creepy_music` de 33,71 s, un tiro, `enganchados 1 / callados 1` — y con él la precondición que el
+> §4 daba por abierta: **un `StopSound` sobre una entidad que se está yendo sí llega a tiempo**, así
+> que el candidato de repuesto (emisor propio `SetParent`-eado) queda descartado por innecesario. El
+> control negativo del `+USE` también corrió de verdad esta vez (`lejos` 43, ningún clic). Está
+> entero en [CORRIDA_prop_roto_r2.md](CORRIDA_prop_roto_r2.md) y en el **CHANGELOG (51)**.
+>
+> Lo que cambió respecto de lo que dice el §4: **el pedido 2 ya tiene código**
+> (`ent:CallOnRemove` con `StopSound` explícito, más los contadores `ROTOS.enganchados` y
+> `ROTOS.callados`), y la frase del §3 **se midió**: vale sobre nuestro emisor y **no** como ley del
+> motor. Los cinco lugares quedaron acotados.
 
 > Este documento está escrito para retomar sin contexto previo. Lo que decide el bloque está en el
 > §3; lo que **no** se escribió y por qué, en el §4. Si vas a escribir un check, leé antes
@@ -67,7 +87,10 @@ arreglados. El instrumento gemelo (`censo_props_horneados.py`) tenía el mismo d
 cara: en Python se cuelga en vez de reventar**, y también quedó arreglado.
 
     gm_funkis_night   418 / 1588   ( sin cambios: es el CONTROL )
-    gm_uh_house       188 /  702   sprp COMPRIMIDO · 11 modelos / 13 instancias reclamadas
+    gm_uh_house       188 /  702   sprp COMPRIMIDO · 10 modelos / 12 instancias reclamadas
+    ( ⚠ se cito 11/13 hasta el 2026-08-18: era el numero del instrumento en
+      Python, que tenia las reglas de ANTES de los tres vetos del 2026-08-16.
+      El addon corriendo siempre dijo 10/12. Hoy el .py lee las reglas del .lua. )
 
 ---
 

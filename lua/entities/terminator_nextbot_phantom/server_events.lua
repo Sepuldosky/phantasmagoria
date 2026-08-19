@@ -215,9 +215,21 @@ local cvHorneados = CreateConVar( "phantasmagoria_ghost_evhorneados", "1", FCVAR
 local EMISOR_VIDA = 20
 
 -- El colchon entre el final del clip y el borrado del emisor. Existe porque
--- **borrar el emisor ES un corte**: una entidad que se va se lleva su canal, asi
--- que un emisor que muere en el segundo exacto del final decapita el ultimo
--- suspiro del clip -- que es justo la parte que este bloque vino a rescatar.
+-- **borrar NUESTRO emisor ES un corte**, asi que un emisor que muere en el
+-- segundo exacto del final decapita el ultimo suspiro del clip -- que es justo
+-- la parte que este bloque vino a rescatar.
+--
+-- ⚠⚠ MEDIDO EL 2026-08-18 ( fila 00 ), y hasta esa fecha esto era una razon
+-- escrita en un comentario que se citaba como si fuera un resultado. Vale para
+-- el `info_target` que creamos nosotros: se borro uno con `clock_tick` ( 46,55 s )
+-- sonando y el tic-tac se corto, con el `IsValid` de control diciendo que el
+-- borrado habia ocurrido de verdad.
+--
+-- ⚠⚠⚠ Y **NO** ES UNA LEY DEL MOTOR. La misma pasada midio el otro lado ( fila
+-- 01 ): romper, borrar o desintegrar un `prop_physics` que esta sonando **NO**
+-- corta su sonido. Por eso el prop de verdad lleva un `StopSound` explicito en
+-- su `CallOnRemove` y no se apoya en el borrado -- ver el bloque
+-- `EL PROP QUE SE ROMPE`. *La frase valia donde nacio y se habia mudado sola.*
 local EMISOR_MARGEN = 2
 
 ---------------------------------------------------------------------------
@@ -315,6 +327,30 @@ local EMISORES = { creados = 0, salteados = 0 }
 --               clip. Va aparte porque apagar un silencio se lee como exito y es
 --               el falso verde de la trampa 4.
 local USE = { teclas = 0, apagados = 0, lejos = 0, tarde = 0, ultimoLog = 0 }
+
+-- ⚠ LOS DOS CONTADORES DEL PROP QUE SE ROMPE. *"Rompi la radio y sigue
+-- sonando"* tiene **TRES** explicaciones que se oyen exactamente igual, y sin
+-- estos numeros la fila que lo mide no puede elegir entre ellas -- que es lo que
+-- le paso a la fila 01 del 2026-08-18, que salio roja sin diagnostico:
+--   `enganchados`  cuantos props de verdad se fueron a sonar CON su
+--                  `CallOnRemove` puesto. Si esto queda en 0, el sonido nunca
+--                  salio de un prop_physics: el sujeto era otro ( casi seguro un
+--                  emisor nuestro ), y la fila midio otra cosa.
+--   `callados`     cuantas veces ese hook CORRIO de verdad al morir el prop. Si
+--                  `enganchados` sube y `callados` no, el prop no se estaba
+--                  borrando; si suben los dos y el ruido sigue, el que no llega
+--                  a tiempo es el `StopSound` del motor -- y recien ahi hace
+--                  falta un mecanismo distinto.
+--
+-- ✅ MEDIDO EN JUEGO EL 2026-08-19 ( r2, filas 00 y 01 ), Y CERRO LA TERCERA:
+-- una radio `prop_physics` #1067 salio a sonar `creepy_music` ( 33,71 s ), se le
+-- pego un tiro y **el sonido paro**, con `enganchados 1` y `callados 1` en la
+-- misma lectura. O sea que un `StopSound` sobre una entidad **que se esta
+-- yendo** SI llega a tiempo -- que era la precondicion que este bloque
+-- declaraba sin medir. El candidato alternativo ( un emisor propio
+-- `SetParent`-eado al prop, para que el prop nunca sostenga el canal ) queda
+-- descartado por innecesario, no por malo.
+local ROTOS = { enganchados = 0, callados = 0 }
 
 -- ⚠ LA VENTANA DEL LOG DEL +USE, Y ES UNA VENTANA DE TIEMPO Y NO UN FILTRO DE
 -- REPETIDOS. `E` se aprieta muchas veces seguidas -- para abrir puertas, para
@@ -4648,9 +4684,80 @@ EV.prop = function( ghost, radio )
             }
         end
 
+        -----------------------------------------------------------------------
+        -- EL PROP QUE SE ROMPE -- pedido 2 del autor
+        -----------------------------------------------------------------------
+        -- Textual: *"al destruir un prop_physics que haga estos ruidos, sea una
+        -- radio de cs office o un phone de cs office, el sonido debe parar"*, y
+        -- despues la mitad que faltaba: *"una radio phys que se rompa no detiene
+        -- el sonido NI PERMITE PARARLO"*.
+        --
+        -- ⚠⚠ SON DOS DEFECTOS Y NO UNO, Y EL SEGUNDO ESTA CONFIRMADO LEYENDO EL
+        -- CODIGO, SIN EL MOTOR: `podarSonando()` tira la entrada de `SONANDO` en
+        -- cuanto la entidad deja de ser valida, y `apagarCerca()` poda **antes**
+        -- de buscar. O sea que el registro **suelta el unico mango justo en el
+        -- momento en que haria falta**: rota la radio, el +USE no tiene a quien
+        -- apagar, ni ahora ni nunca. Eso no dependia de ninguna medicion.
+        --
+        -- ⚠⚠⚠ Y POR ESO EL ARREGLO NO ES CONFIAR EN EL BORRADO. La frase
+        -- *"borrar el emisor ES un corte: una entidad que se va se lleva su
+        -- canal"* estuvo escrita en cinco lugares de este repo **sin medirse**,
+        -- y el 2026-08-18 se midio por fin, en las dos direcciones:
+        --
+        --     fila 00   borrar un `info_target` NUESTRO mientras suena
+        --               -> SI corta ( medido con clock_tick, 46,55 s )
+        --     fila 01   romper / borrar / desintegrar un `prop_physics`
+        --               -> NO corta: el sonido sigue
+        --
+        -- La frase valia para nuestro emisor y **no** como ley del motor. Asi que
+        -- aca se llama a `StopSound` A MANO, mientras la entidad todavia es
+        -- valida, en vez de esperar que el borrado lo haga.
+        --
+        -- ⚠ VA SOLO SOBRE PROPS DE VERDAD ( `not IsValid( emisor )` ). Sobre
+        -- nuestro emisor seria un defecto: lo borra `SafeRemoveEntityDelayed` en
+        -- el segundo exacto de `dur + EMISOR_MARGEN`, y un `StopSound` ahi
+        -- **decapitaria el ultimo suspiro del clip** -- que es justo lo que
+        -- `EMISOR_MARGEN` existe para rescatar.
+        --
+        -- ⚠⚠ EL NOMBRE DEL HOOK LLEVA EL CLIP ADENTRO, y no es cosmetico:
+        -- `CallOnRemove` indexa por nombre, asi que dos sonidos sobre la MISMA
+        -- radio con el mismo nombre dejarian **un solo** hook vivo y el primer
+        -- clip no se callaria nunca. Con el clip en el nombre, cada uno tiene el
+        -- suyo. ( Que el evento vuelva a elegir la misma radio antes de que
+        -- termine el clip anterior es raro, pero el sorteo no lo prohibe. )
+        if not IsValid( emisor ) then
+            ent:CallOnRemove( "phantasmagoria_prop_callar_" .. snd, function( e )
+                -- ⚠ EL CONTADOR SUBE ANTES QUE EL `StopSound`, igual que
+                -- `USE.teclas` en el hook del +USE y por el mismo motivo: es la
+                -- acreditacion de que **el hook corrio**. Sin este numero, "rompi
+                -- la radio y sigue sonando" no distingue *el StopSound no llego a
+                -- tiempo* de *nunca se engancho nada*, y las dos se oyen igual.
+                -- Esa confusion es la que dejo la fila 01 sin diagnostico.
+                ROTOS.callados = ROTOS.callados + 1
+
+                e:StopSound( snd )
+
+                -- Y se saca del registro en el acto. `podarSonando()` lo sacaria
+                -- igual en la lectura siguiente, pero dejarlo aca vuelve al
+                -- borrado y al callado **un solo evento**: no queda ninguna
+                -- ventana en la que el +USE crea tener un candidato que ya no
+                -- suena.
+                for i = #SONANDO, 1, -1 do
+                    if SONANDO[ i ].ent == e and SONANDO[ i ].snd == snd then
+                        table.remove( SONANDO, i )
+
+                    end
+                end
+            end )
+
+            ROTOS.enganchados = ROTOS.enganchados + 1
+
+        end
+
         -- ⚠ LIMPIAR EL EMISOR, Y NO ANTES DE TIEMPO. Si se lo borra mientras
-        -- suena, borrarlo ES el corte -- una entidad que se va se lleva su
-        -- canal. Si se lo deja, el mapa se llena: en la prueba a mano de P2
+        -- suena, borrarlo ES el corte -- medido sobre NUESTRO emisor el
+        -- 2026-08-18, fila 00; sobre un prop de verdad NO vale, ver
+        -- `EL PROP QUE SE ROMPE`. Si se lo deja, el mapa se llena: en la prueba a mano de P2
         -- quedaron cuatro `info_target` vivos en cuatro comandos.
         --
         -- Las tres vidas, en el mismo orden que los tres caminos de arriba:
@@ -5413,6 +5520,22 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_estaticos", function( ply )
         "   ( este es el numero del control negativo; un 0 no prueba que el filtro decida )" )
     say( "    lo mas cercano YA HABIA TERMINADO " .. USE.tarde ..
         "   ( apagar un silencio se lee como exito: es la trampa 4 )" )
+
+    -- EL PROP QUE SE ROMPE. Los dos numeros van juntos y en este orden porque
+    -- **el segundo no se puede leer sin el primero**: un `callados 0` con
+    -- `enganchados 0` no dice que el arreglo falle, dice que ningun prop de
+    -- verdad llego a sonar todavia -- y esa es exactamente la lectura que la
+    -- fila 01 no pudo hacer el 2026-08-18.
+    say( "" )
+    say( "  EL PROP QUE SE ROMPE ( pedido 2 )" )
+    say( "    props de verdad que salieron a sonar con su corte puesto  " .. ROTOS.enganchados ..
+        ( ROTOS.enganchados == 0
+          and "   ⚠ CERO: todavia no sono ningun prop_physics. Un 'rompi la radio y sigue sonando' con este numero en 0 midio OTRA COSA -- el sonido salia de un emisor nuestro"
+          or  "" ) )
+    say( "    de esos, cuantos se CALLARON al morir                     " .. ROTOS.callados ..
+        ( ROTOS.enganchados > 0 and ROTOS.callados == 0
+          and "   ⚠ con enganchados > 0, esto en 0 quiere decir que el prop no se estaba borrando ( romper != borrar )"
+          or  "" ) )
 
     -- EL PESTILLO. Se imprime aca y no solo en su comando porque la fila que
     -- pregunta "el evento prop dejo de sonar a llaves" y la que pregunta "las

@@ -26,57 +26,128 @@ QUE MIDE, en dos pasadas que no hay que confundir:
 USO:
     python dev/censo_props_horneados.py <ruta al .bsp o al .gma que lo contiene>
 
-⚠ LAS REGLAS DE §FAMILIAS ESTAN TRANSCRITAS A MANO desde el Lua y pueden quedar
-desfasadas: son una COPIA. El auto-control de abajo prueba que discriminan, no
-que esten al dia. Si se toca `PROP_CONSUJETO`, se toca esto -- y la forma de
-darse cuenta es que el conteo de familias aca no coincida con el del addon.
-"""
+⚠⚠ LAS REGLAS **NO SE TRANSCRIBEN**: se recortan del `.lua` y se ejecutan en un Lua
+real ( `lupa` ), igual que `guarda_3b_offline.py`. Antes eran una COPIA a mano, y
+la copia se desfaso. Este archivo lo pago, y esta es la factura ( 2026-08-18 ):
+
+    los tres vetos del 2026-08-16 ( `radio_antenna`, `phone_book`, `toiletpaper` )
+    entraron en `PROP_CONSUJETO` y NO entraron aca. Sobre gm_uh_house este censo
+    siguio reclamando `props_radiostation/radio_antenna01_skybox` como *una radio*
+    -- la ANTENA del skybox 3D -- y dio **11 modelos / 13 instancias** donde el
+    addon corriendo de verdad da **10 / 12**. Ese 11/13 llego a citarse en el
+    HANDOFF del bloque y en el CHANGELOG ( 44 ) como si fuera lo que el addon hace.
+
+Y el auto-control de abajo **no podia verlo**: probaba que las reglas DISCRIMINAN,
+que es una propiedad que una copia vieja conserva intacta. *Un control que audita
+al instrumento contra si mismo no puede descubrir que el instrumento quedo viejo.*
+Por eso ahora no hay copia que auditar, y el control tiene una segunda mitad que
+sale roja si la tabla que se cargo no es la de hoy."""
 import collections
+import io
 import os
+import re
 import struct
 import sys
 
+AQUI = os.path.dirname(os.path.abspath(__file__))
+ADDON = os.path.dirname(AQUI)
+
 # ---------------------------------------------------------------------------
-# Las reglas del addon. COPIA de PROP_CONSUJETO en server_events.lua.
-# El "vehiculo" no entra: se reconoce por IsVehicle() y un prop_static nunca
-# es un vehiculo.
+# Las reglas del addon -- RECORTADAS DEL .lua Y EJECUTADAS, no transcritas
 # ---------------------------------------------------------------------------
-FAMILIAS = {
-    "radio": dict(
-        exacto={"citizenradio", "radio_reference", "radionette01", "german_radio", "radio_box"},
-        parte=["radio"],
-        nunca=["radioprotector", "radio_diolator", "radio_p1",
-               "_p1", "_p2", "_p3", "_p4", "_gib", "broken", "destroyed"]),
-    "telefono": dict(
-        exacto={"oldphone", "phone", "phone_motel"}, parte=["phone"],
-        nunca=["myphone", "headphone", "microphone", "_p1", "_gib", "broken"]),
-    "televisor": dict(
-        exacto={"tv", "tvset", "tv_plasma"}, parte=["tv_", "_tv", "television"],
-        nunca=["_p1", "_p2", "_p3", "_p4", "_gib", "broken", "destroyed"]),
-    "piano":      dict(exacto=set(), parte=["piano"], nunca=["_gib", "broken"]),
-    "guitarra":   dict(exacto=set(), parte=["guitar"], nunca=["_gib", "broken"]),
-    "microondas": dict(exacto=set(), parte=["microwave"], nunca=[]),
-    "inodoro":    dict(exacto=set(), parte=["toilet"], nunca=[]),
-    "peluche":    dict(exacto=set(), parte=["teddy"], nunca=[]),
-    "reloj":      dict(exacto=set(), parte=["clock"], nunca=["_p1", "_gib", "broken"]),
-}
+# NO SE REIMPLEMENTA NADA. Se sacan del arbol tres cosas y se corren en un Lua
+# real: la tabla `PROP_CONSUJETO` ( server_events.lua ) y las dos funciones que
+# deciden, `BasenameDeRuta` y `NombreCoincide` ( bsp_statics.lua ). Dos copias
+# de acuerdo entre si no prueban nada del codigo que corre -- y este archivo es
+# justo el que lo pago: ver el aviso del encabezado.
+#
+# SI LAS MARCAS NO ESTAN, EL SCRIPT MUERE. Un recorte que sale vacio se ejecuta
+# sin error y reparte cero props en cero familias, que es exactamente el aspecto
+# de un mapa sin radios.
+LUA_EVENTS = os.path.join(ADDON, "lua", "entities", "terminator_nextbot_phantom",
+                          "server_events.lua")
+LUA_BSP = os.path.join(ADDON, "lua", "phantasmagoria", "bsp_statics.lua")
 
 
-def basename_de(ruta):
-    """El mismo basename que `basenameDe` del Lua: sin carpeta y sin .mdl."""
-    n = ruta.replace("\\", "/").split("/")[-1]
-    return n[:-4].lower() if n.lower().endswith(".mdl") else n.lower()
+def _recorte(src, arranque, etiqueta):
+    """Del `arranque` hasta la primera linea que sea exactamente `}` o `end`.
+
+    Los tres bloques son de nivel superior, asi que su cierre esta en la columna
+    0 y ninguna linea interna puede confundirse con el. Es el mismo lector que
+    usa `guarda_3b_offline.py`.
+    """
+    i = src.find(arranque)
+    if i < 0:
+        raise SystemExit(
+            "!! no se encontro la marca de %s en el .lua.\n"
+            "   El script muere en vez de repartir sobre una tabla vacia: un\n"
+            "   censo sin reglas dice 'ninguno' en todas las familias, y eso se\n"
+            "   lee igual que un mapa sin radios." % etiqueta)
+
+    resto = src[i:]
+    for m in re.finditer(r"^(\}|end)\s*$", resto, re.MULTILINE):
+        return resto[: m.end()]
+
+    raise SystemExit("!! no se encontro el cierre de %s." % etiqueta)
 
 
-def coincide(nom, regla):
-    """El mismo orden que `modeloCoincide`: primero `nunca`, despues `exacto`,
-    despues `parte`. El orden IMPORTA -- `nunca` gana."""
-    for mal in regla["nunca"]:
-        if mal in nom:
-            return False
-    if nom in regla["exacto"]:
-        return True
-    return any(p in nom for p in regla["parte"])
+def cargar_reglas():
+    """Devuelve ( familias, coincide, basename_de ) sacados del addon de verdad.
+
+    `familias` es { "una radio": <tabla lua de `modelo`> }, y solo trae las que
+    declaran `modelo`: las que se reconocen por `sujeto` ( el vehiculo ) no
+    aplican a un `prop_static` y quedan afuera **con su motivo impreso**, no por
+    olvido -- un cero sin explicar se lee como una familia que no reclamo nada.
+    """
+    try:
+        import lupa
+    except ImportError:
+        raise SystemExit(
+            "! falta lupa:  pip install lupa\n"
+            "  NO hay camino de respaldo, a proposito. El respaldo seria volver a\n"
+            "  transcribir las reglas a mano, que es el defecto que este bloque cerro.")
+
+    ev = io.open(LUA_EVENTS, encoding="utf-8").read()
+    bs = io.open(LUA_BSP, encoding="utf-8").read()
+
+    tabla = _recorte(ev, "local PROP_CONSUJETO = {", "PROP_CONSUJETO")
+    f_base = _recorte(bs, "function PHANTASMAGORIA.BasenameDeRuta( ruta )", "BasenameDeRuta")
+    f_coin = _recorte(bs, "function PHANTASMAGORIA.NombreCoincide( nom, regla )", "NombreCoincide")
+
+    lua = lupa.LuaRuntime(unpack_returned_tuples=True)
+    g = lua.globals()
+    g.PHANTASMAGORIA = lua.table()
+
+    # Los predicados de GMod que usan las dos funciones. Se dan DE VERDAD y no
+    # como `return true`: `NombreCoincide` los usa para RECHAZAR, asi que un stub
+    # complaciente le sacaria una de sus salidas y el control negativo de abajo
+    # pasaria a medir otra cosa.
+    tipo = lua.eval("function(t) return function(v) return type(v) == t end end")
+    g.isstring = tipo("string")
+    g.istable = tipo("table")
+    g.isfunction = tipo("function")
+
+    lua.execute(f_base + "\n" + f_coin + "\n" + tabla + "\n_CENSO_TABLA = PROP_CONSUJETO\n")
+
+    ph = g.PHANTASMAGORIA
+    familias, sin_modelo = {}, []
+
+    for fam in g._CENSO_TABLA.values():
+        if fam["modelo"] is not None:
+            familias[fam["que"]] = fam["modelo"]
+        else:
+            sin_modelo.append(fam["que"])
+
+    if not familias:
+        raise SystemExit("!! el recorte cargo 0 familias con `modelo`: no se reporta nada")
+
+    print("reglas                     : leidas del .lua ( no transcritas ) -- "
+          "%d familia(s) con `modelo`" % len(familias))
+    if sin_modelo:
+        print("  fuera por no declarar `modelo` ( se reconocen por `sujeto`, y un "
+              "prop_static no es\n  una entidad ): %s" % ", ".join(sin_modelo))
+
+    return familias, ph.NombreCoincide, ph.BasenameDeRuta
 
 
 # ---------------------------------------------------------------------------
@@ -256,19 +327,37 @@ def main():
 
     cuenta, ndict, nprops = censo_sprp(bsp)
 
-    # AUTO-CONTROL de la transcripcion de reglas. Si esto no discrimina, el
-    # reparto por familias de abajo no significa nada y no se imprime.
+    FAMILIAS, coincide, basename_de = cargar_reglas()
+
+    # AUTO-CONTROL de las reglas. DOS MITADES, y la segunda es la que faltaba.
+    #
+    #   DISCRIMINAN    que digan que si a un caso y que no a otro. Esto ya
+    #                  estaba, y es lo que dio verde mientras las reglas
+    #                  envejecian: discriminar es una propiedad que una copia
+    #                  vieja conserva intacta.
+    #   ESTAN AL DIA   los tres vetos del 2026-08-16, uno por uno. Estos SI se
+    #                  rompen si el recorte trajo una tabla vieja, y son lo unico
+    #                  que sale rojo si alguien apunta el script a otra copia del
+    #                  addon. Cada uno nombra su familia por el `que` del Lua,
+    #                  asi que renombrar una familia tampoco pasa en silencio.
     controles = [
-        (coincide("radionette01", FAMILIAS["radio"]), True, "radionette01 es radio"),
-        (coincide("radioprotector", FAMILIAS["radio"]), False, "radioprotector NO"),
-        (coincide("tv_plasma", FAMILIAS["televisor"]), True, "tv_plasma es tele"),
-        (coincide("tv_plasma_p1", FAMILIAS["televisor"]), False, "tv_plasma_p1 es un pedazo"),
+        (coincide("radionette01", FAMILIAS["una radio"]), True, "radionette01 es radio"),
+        (coincide("radioprotector", FAMILIAS["una radio"]), False, "radioprotector NO"),
+        (coincide("tv_plasma", FAMILIAS["un televisor"]), True, "tv_plasma es tele"),
+        (coincide("tv_plasma_p1", FAMILIAS["un televisor"]), False, "tv_plasma_p1 es un pedazo"),
+        (coincide("radio_antenna01_skybox", FAMILIAS["una radio"]), False,
+         "radio_antenna01_skybox es la ANTENA del skybox ( veto 2026-08-16 )"),
+        (coincide("phone_book", FAMILIAS["un telefono"]), False,
+         "phone_book es una GUIA telefonica ( veto 2026-08-16 )"),
+        (coincide("toiletpaperroll", FAMILIAS["un inodoro"]), False,
+         "toiletpaperroll es PAPEL ( veto 2026-08-16 )"),
     ]
-    malos = [t for got, want, t in controles if got != want]
+    malos = [t for got, want, t in controles if bool(got) != want]
     if malos:
         raise SystemExit("CONTROL de reglas FALLADO (%s): no se reporta nada"
                          % ", ".join(malos))
-    print("CONTROL de las reglas      : %d/%d -> discriminan" % (len(controles), len(controles)))
+    print("CONTROL de las reglas      : %d/%d -> discriminan Y estan al dia "
+          "( los 3 vetos del 2026-08-16 entre ellos )" % (len(controles), len(controles)))
 
     print("\n" + "=" * 74)
     print("LO QUE LAS FAMILIAS DEL ADDON RECLAMARIAN SOBRE ESTOS prop_static")

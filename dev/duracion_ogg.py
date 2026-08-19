@@ -5,8 +5,13 @@ POR QUE EXISTE
 --------------
 `SoundDuration` no es confiable sobre .ogg del lado del servidor de GMod, y la
 vida de un emisor de prop horneado tiene que cubrir el clip COMPLETO: si el
-emisor se va antes, borrarlo ES el corte -- una entidad que se va se lleva su
-canal --, o sea que el clip queda decapitado por otra puerta.
+emisor se va antes, borrarlo ES el corte -- MEDIDO el 2026-08-18 sobre el
+`info_target` que crea el addon --, o sea que el clip queda decapitado por otra
+puerta.
+
+⚠ Y solo sobre ESE emisor: la misma pasada midio que romper o borrar un
+`prop_physics` que suena NO corta su sonido. Lo que sigue vale para el emisor
+nuestro, que es de lo que este script calcula la vida.
 
 COMO MIDE
 ---------

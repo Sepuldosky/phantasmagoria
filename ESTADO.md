@@ -235,7 +235,10 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 > trabajando».* Los dos arreglados, y los dos leen ahora el lump comprimido.
 >
 >     gm_funkis_night   418 / 1588   ( sin cambios: es el CONTROL )
->     gm_uh_house       188 /  702   sprp COMPRIMIDO · 11 modelos / 13 instancias reclamadas
+>     gm_uh_house       188 /  702   sprp COMPRIMIDO · 10 modelos / 12 instancias reclamadas
+>     ( ⚠ se cito 11/13 hasta el 2026-08-18: era el numero del instrumento en
+>       Python, que tenia las reglas de ANTES de los tres vetos del 2026-08-16.
+>       El addon corriendo siempre dijo 10/12. Hoy el .py lee las reglas del .lua. )
 >
 > ⚠⚠ **LO ÚNICO QUE NO SE PUDO MEDIR SIN EL JUEGO** es si el `util.Decompress` de GMod acepta la
 > cabecera que el `.lua` le arma. Que el **dato** está ahí sí se midió (15005 bytes se abren en 78334).
@@ -284,41 +287,52 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 >
 > ### ⚠⚠⚠ LA PRECONDICIÓN QUE HAY QUE MEDIR PRIMERO — filas 00 y 01 de la planilla
 >
-> La frase *«borrar el emisor **ES** un corte: una entidad que se va se lleva su canal»* está escrita
-> en **cinco lugares** (`server_events.lua:218`, `:875`, `:3409`, `dev/duracion_ogg.py:8` y el
-> CHANGELOG (41)) y **NUNCA SE MIDIÓ**: nació como razón en un comentario y se citó después como si
-> fuera un resultado.
 >
-> · Si es **cierta** → romper el prop ya corta el sonido solo y **el pedido del autor ya está hecho**.
-> · Si es **falsa** → es un defecto real, `EMISOR_MARGEN` no protegió nunca de nada, y **hay que
->   corregir los cinco lugares en el mismo commit** — *si la prosa y el código discrepan, el próximo
->   lector copia la prosa*.
+> ✅ **LA FRASE DE LOS CINCO LUGARES SE MIDIÓ, Y LA RESPUESTA SON DOS.** *«Borrar el emisor **ES** un
+> corte: una entidad que se va se lleva su canal»* estaba en `server_events.lua:218`, `:875` y
+> `:3409`, en `dev/duracion_ogg.py:8` y en el CHANGELOG (41), y **nunca se había medido**: nació como
+> razón en un comentario y se citó después como si fuera un resultado.
 >
-> Se mide con `clock_tick` (**46,55 s**, mono) y no con un clip corto. Y **romper no es borrar**: la
-> fila 01 es aparte porque un `prop_physics` que se rompe puede spawnear pedazos y sacarse a sí mismo
-> en otro momento del frame. Si la 01 sale roja, el arreglo tiene **una segunda precondición sin
-> medir** (si un `StopSound` sobre una entidad que se está yendo llega a tiempo) y dos candidatos:
-> `EntityRemoved` global o `ent:CallOnRemove` acotado a los props que nosotros hicimos sonar.
-> *Un arreglo cuyo mecanismo no está medido es una hipótesis con forma de commit.*
+> · Sobre **nuestro** `info_target` es **cierta** (r1 fila 00: `clock_tick` de 46,55 s cortado por el
+>   borrado, con el `IsValid` de control diciendo que el borrado ocurrió).
+> · Como **ley del motor es falsa** (r1 fila 01, y confirmado en la r2: un `prop_physics` que suena
+>   sigue sonando después de romperlo).
 >
-> **Chequeos offline al día:** luacheck 36/36 · sintaxis real 36/36 · returns de hooks **0/28** (este
-> bloque no agrega hooks) · **165 rutas de sonido citadas, 0 faltantes** (eran 164: +2 del clic, −1 de
-> `phone_vibrate`) · la guarda `( 3b )` **callada, y comprobada gritando** en dos casos rotos a
-> propósito.
+> Valía donde nació y **se había mudado sola** a los otros cuatro lugares. Los cinco quedaron
+> **acotados al emisor**, con la fecha y el contraejemplo al lado — no borrados: *si la prosa y el
+> código discrepan, el próximo lector copia la prosa*.
 >
-> **Dos instrumentos nuevos y versionados:** `dev/rutas_de_sonido.py` (las «164 rutas» se rederivaban
-> a mano en cada ronda) y `dev/guarda_3b_offline.py` (**recorta la guarda del `.lua` y la ejecuta** en
-> un Lua real — no la reimplementa — y le mueve la perilla para ver que grita).
+> ✅ **Y EL PEDIDO 2 ESTÁ CERRADO EN JUEGO (r2, 2026-08-19).** El arreglo es un `ent:CallOnRemove`
+> acotado a los props a los que **nosotros** hicimos sonar, con un `StopSound` **explícito** — no se
+> apoya en el borrado, justamente porque el borrado es lo que estaba en duda. Con eso se cerró
+> también **la segunda precondición que nunca se había medido**: un `StopSound` sobre una entidad
+> *que se está yendo* **sí llega a tiempo**, así que el candidato alternativo (emisor propio
+> `SetParent`-eado al prop) **no hace falta**. Los dos contadores `ROTOS.enganchados` /
+> `ROTOS.callados` quedan en el reporte: son los que separan las tres causas de *«rompí la radio y
+> sigue sonando»*, que se oyen exactamente igual.
 >
-> ⚠⚠ **DOS SESIONES TOCARON `server_events.lua` EL MISMO DÍA.** Los cambios de este bloque quedaron
-> **adentro del commit `221c5e8`** («El cuerpo y la voz de cada fantasma»), que es de la otra sesión:
-> nadie pisó a nadie y no se perdió nada, pero **el mensaje del commit no menciona el clic ni el
-> teléfono**. Es la falla simétrica que este repo ya pagó una vez. Buscar el clic por `git log` no lo
-> va a encontrar: está en `221c5e8`.
+> **Chequeos offline al día:** luacheck 37/37 · sintaxis real 37/37 · returns de hooks **0/32** ·
+> **179 rutas de sonido citadas, 0 faltantes** · la guarda `( 3b )` **callada, y comprobada gritando**
+> en dos casos rotos a propósito · `bsp_statics_offline.py` reproduce el control **418/1588** y da
+> **188/702** · el censo de familias da **7/7 → discriminan Y están al día**, con sus dos negativos
+> ejercidos.
+>
+> **Instrumentos nuevos y versionados:** `dev/rutas_de_sonido.py`, `dev/guarda_3b_offline.py` y
+> `dev/bsp_statics_offline.py` (los tres **recortan el `.lua` del addon y lo ejecutan** en un Lua real
+> — no lo reimplementan). Y `dev/censo_props_horneados.py` **dejó de ser una copia**: ahora recorta
+> `PROP_CONSUJETO`, `BasenameDeRuta` y `NombreCoincide` del `.lua` y los ejecuta, porque su copia a
+> mano se desfasó y estuvo dos días dando **11 / 13** donde el addon daba **10 / 12**.
+>
+> ⚠⚠ **VARIAS SESIONES TOCARON `server_events.lua` Y `CHANGELOG.md` LOS MISMOS DÍAS.** Los cambios
+> del clic y el teléfono quedaron **adentro de `221c5e8`** («El cuerpo y la voz de cada fantasma»), y
+> la entrada (48) del changelog quedó **adentro de `f4d2057`** («la evidencia que se ve»): las dos son
+> de otras sesiones y **ninguna las menciona en su mensaje**. Nadie perdió trabajo, pero buscarlos por
+> `git log` no los encuentra. ⚠ Hay además **dos entradas numeradas (50)** en el CHANGELOG, de dos
+> sesiones distintas.
 >
 > ### 🔜 DESPUÉS DE ESTO
 >
-> El pedido que el autor hizo hace **cuatro rondas** y que todavía no tiene línea de investigación:
+> El pedido que el autor hizo hace **cinco rondas** y que todavía no tiene línea de investigación:
 > **por qué el bot se queda pegado y después se despeja solo, y por qué a veces quiere pasar a través
 > de un vidrio** (ver el punto 2 de la lista de más abajo, que sigue vigente). Su pista: la base
 > Terminator tendría convars para ver el *thinking* del NPC. ⚠ **No está medido que existan.**

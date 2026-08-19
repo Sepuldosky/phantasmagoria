@@ -7,6 +7,108 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-19 (51) — **El pedido 2 cerrado en juego: la radio rota deja de sonar. La r2 dio 4/4 con la única fila que faltaba corrida offline el día antes, y de paso cerró la precondición que el bloque anterior declaraba sin medir.**
+
+Corrida del autor sobre `dev/checks/phantasmagoria-prop-roto-r2.html`, guardada en
+[`dev/CORRIDA_prop_roto_r2.md`](dev/CORRIDA_prop_roto_r2.md). **Pasa 4 · Falla 0 · Sin correr 1 (de
+5)** — y la única sin correr es la offline, que ya se había corrido el 2026-08-18. **El bloque cierra
+5/5.**
+
+### ⭐ *«Al destruir un `prop_physics`… el sonido debe parar»* — hecho, y medido con el sujeto nombrado
+
+Lo que la r1 no pudo dar fue **un sujeto identificado**: su fila 01 salió roja sin que se supiera de
+quién colgaba el sonido. La fila 00 de esta ronda existía sólo para eso, y lo consiguió:
+
+    OK -- creepy_music DESDE una radio ( prop_physics #1067  modelo 'radio' ) a 70 u, ENTERO: 33.71 s
+
+`prop_physics`, con su `#NNN`, y con **33,71 s** de ventana. Después del tiro, en la misma lectura:
+
+    EL PROP QUE SE ROMPE ( pedido 2 )
+      props de verdad que salieron a sonar con su corte puesto  1
+      de esos, cuantos se CALLARON al morir                     1
+
+    EMISORES   creados en total 0        REGISTRO DE LO QUE SUENA   0 entrada(s)
+
+> Si paro el sonido al pegarle un tiro
+
+Los dos ceros de la segunda línea son la mitad que vuelve limpia la medición: **no había ningún
+emisor nuestro** que pudiera pasar por el sujeto. Exactamente **un** prop salió a sonar, se lo rompió,
+y el hook corrió.
+
+### ⭐⭐ Y con eso se cerró la precondición que el bloque anterior declaraba sin medir
+
+El CHANGELOG (48) y el HANDOFF decían, textual, que si la fila salía roja el arreglo tenía *«una
+segunda precondición sin medir — si un `StopSound` sobre una entidad que se está yendo llega a
+tiempo»*, con un candidato de repuesto (un emisor propio `SetParent`-eado al prop, para que el prop
+nunca sostuviera el canal).
+
+**Llega a tiempo.** El candidato de repuesto queda **descartado por innecesario, no por malo**, y eso
+está anotado en el código al lado de los contadores — no en un documento aparte, que es donde las
+precondiciones se pierden.
+
+*Los dos contadores valieron lo que costaron.* Sin ellos, «el sonido paró» sería una impresión; con
+ellos, `enganchados 1 / callados 1` dice **cuál** de los tres caminos se recorrió.
+
+### ⭐ El control negativo corrió de verdad, y esta vez con un sujeto que el interruptor sí atiende
+
+En la r1 esta fila estaba marcada verde con `lejos` en **0**, que su propio criterio declaraba «no se
+corrió» — no había ningún candidato `apagable` sonando, sólo microondas, televisor e inodoro. Acá:
+
+    REGISTRO DE LO QUE SUENA   1 entrada(s)
+      una radio      prop_physics #1067     prop DEL MAPA · apagable con +USE  quedan 6.3 s
+    +USE ( el interruptor )   encendido, radio 60 u
+      teclas IN_USE vistas por el hook  169
+      apagados de verdad                2
+      habia algo pero FUERA del radio   43
+      lo mas cercano YA HABIA TERMINADO 0
+
+> No se escucho nada y no se apago la radio en su musica
+
+Las cuatro mitades juntas: **ningún clic**, `lejos` **43**, la radio **siguió sonando**, `apagados`
+quieto — y el candidato era una **radio**, o sea una familia que el `+USE` de verdad mira. *El
+diagnóstico de la r1 era correcto: lo que faltaba era el sujeto, no el código.*
+
+### La fila 03 — el bloque no rompió nada
+
+> Apreté un prop_static de un teléfono, sí se apaga y suena el clic
+
+### ⚠ Frontera que la corrida dejó a la vista, y que no es una tarea
+
+En la lectura de la fila 02, `enganchados` marca **11** y `callados` **1**, con `apagados 2` y **una
+sola** entrada en el registro. Los números cierran, pero por un camino que conviene dejar escrito
+antes de que alguien lea ese 11 contra ese 1 como una fuga:
+
+- un `prop_physics` **vivo** que vuelve a sonar **acumula** entradas en `SONANDO` (la poda es por
+  `IsValid`, no por `hasta`). No es audible y no engaña al `+USE` — la entrada que todavía suena tiene
+  `hasta > now` y gana —, pero infla el conteo del registro;
+- el `CallOnRemove` **limpia todas** las entradas de ese prop con ese clip de una vez, y suma **uno**
+  a `callados`. Once enganches pueden terminar en un callado sin que falte nada;
+- el hook **se pisa a sí mismo** si el mismo prop vuelve a sonar el **mismo** clip, porque
+  `CallOnRemove` indexa por nombre. Como el nombre lleva el clip adentro, dos clips distintos sobre la
+  misma radio conviven; dos veces el mismo, no — y no hace falta, porque el que queda vivo hace lo
+  mismo.
+
+### ⚠⚠ Un borrado mío en `ESTADO.md`, agarrado antes de commitear
+
+Al acotar la frase de los cinco lugares el 2026-08-18, el recorte se comió **36 líneas** que no tenía
+que tocar: los chequeos al día, los dos instrumentos nuevos, el aviso de las sesiones paralelas y la
+sección **DESPUÉS DE ESTO** entera. El corte buscaba el próximo renglón en blanco, y en un bloque de
+cita (`>`) **no hay renglones en blanco** — hay renglones que son sólo `>`. Se restauró leyendo el
+archivo de `git show HEAD:` y se auditó el diff línea por línea antes del commit.
+
+*Un `git diff` leído entero antes de stagear es la única cosa que separa un cambio de una pérdida*, y
+en este repo esa lectura ya era obligatoria por otro motivo (las sesiones paralelas). Sirvió para las
+dos cosas.
+
+### Chequeos offline al día
+
+    sintaxis 37/37 · luacheck 37/37 · returns de hooks 0/32 · rutas de sonido 179 citadas / 0 faltantes
+    guarda 3b callada Y comprobada gritando en los dos casos rotos
+    bsp offline: 418/1588 ( control ) + 188/702, sobrantes 0, control negativo del LZMA OK
+    censo de familias: 7/7 -> discriminan Y estan al dia, con sus dos negativos ejercidos
+
+---
+
 ## 2026-08-18 (48) — **La planilla del clic cerró 6 pasa / 1 falla / 1 sin correr — y dos de esos seis no decían lo que parecían. El control negativo salió verde sin correrse, el rojo no dejó saber de qué era, y un tercer instrumento venía dando el número equivocado hace dos días.**
 
 Corrida del autor sobre `dev/checks/phantasmagoria-clic-y-celular.html`, guardada en
@@ -882,7 +984,10 @@ string corta en vez de `nil`, y una string corta parseada como `sprp` da **núme
 largo declarado es el testigo independiente del descompresor.
 
     gm_funkis_night   418 modelos / 1588 props    ( sin cambios: es el CONTROL )
-    gm_uh_house       188 modelos /  702 props    sprp COMPRIMIDO, 11 modelos / 13 instancias reclamadas
+    gm_uh_house       188 modelos /  702 props    sprp COMPRIMIDO, 10 modelos / 12 instancias reclamadas
+    ( ⚠ se cito 11/13 hasta el 2026-08-18: era el numero del instrumento en
+      Python, que tenia las reglas de ANTES de los tres vetos del 2026-08-16.
+      El addon corriendo siempre dijo 10/12. Hoy el .py lee las reglas del .lua. )
 
 ### ⭐ `dev/bsp_statics_offline.py` — el parser de `.bsp` deja de necesitar una partida
 
@@ -934,6 +1039,12 @@ filas, copiada de la del `+USE` (que ya trae la guarda de largo de 255 en el gen
 ### ⚠⚠⚠ La frase que decide el bloque está escrita cinco veces y **nunca se midió**
 
 > *«Borrar el emisor **ES** un corte: una entidad que se va se lleva su canal.»*
+>
+> ⚠ **MEDIDA el 2026-08-18, y quedo partida en dos.** Sobre **nuestro** `info_target`
+> es cierta ( fila 00: `clock_tick` de 46,55 s cortado por el borrado, con el `IsValid`
+> de control ). Como **ley del motor es falsa** ( fila 01: romper, borrar o desintegrar
+> un `prop_physics` que suena **no** lo calla ). La frase nacio como razon en un
+> comentario sobre el emisor y se cito despues sobre cualquier entidad.
 
 Censadas hoy con `rg --no-ignore`, con denominador: **cinco sitios** —
 `server_events.lua:218`, `:875` y `:3409`, `dev/duracion_ogg.py:8` y `CHANGELOG (41)`. **Nació como
