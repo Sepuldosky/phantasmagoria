@@ -1766,48 +1766,48 @@ local cvHuntVoz = CreateConVar( "phantasmagoria_ghost_huntvoz", "1", FCVAR_ARCHI
     "0 = CONTROL, el hunt vuelve a ser mudo ( el comportamiento previo al 2026-08-18 ) - 1 = puesta.", 0, 1 )
 
 ---------------------------------------------------------------------------
--- ⭐ 150, Y ES LA DECISION DEL AUTOR SOBRE LOS 12,3 LU -- r3 ( 2026-08-18 )
+-- ⭐ 80, Y ES LA SEGUNDA DECISION DEL AUTOR SOBRE EL MISMO NUMERO
 ---------------------------------------------------------------------------
--- Arrancó en 70 ( el de la voz ambiente ) y pasó a 80 en la r1: el susurro de
--- `EV.sound` es presencia de cuarto y la caceria tiene que oirse desde el otro
--- lado de la casa, porque es la senal con la que el jugador decide correr.
+-- ⚠⚠⚠ ESTE BLOQUE DECIA **150** Y LO DECIA CITANDO AL AUTOR. El 2026-08-19 el
+-- autor pidio **80**, o sea que la decision de la r3 queda REVERTIDA -- y el
+-- comentario se reescribe en vez de dejarse al lado del numero nuevo, porque un
+-- comentario viejo junto a su propia refutacion es la trampa que este taller ya
+-- pago dos veces.
 --
--- La r2 midio que el banco tiene **12,3 LU de dispersion** y dejo la pregunta
--- abierta en dos filas de la planilla: emparejar bajando desde el Lua
--- ( `huntvoznivelar` ), o normalizar los `.ogg`. El autor corrio las once filas
--- y contesto las dos que no: *"ahi digo que yo usaria el comando para
--- normalizar, pero pensandolo bien mejor no, el otro comando para aumentar el
--- volumen a 150 esta bien"*.
+-- LA HISTORIA DEL NUMERO, entera, porque las CUATRO paradas dicen cosas distintas
 --
--- O sea: **ni se tocan los assets ni se baja nada. Se sube el nivel.** Y el
--- default se mueve con el, porque una perilla `FCVAR_ARCHIVE` se guarda en la
--- maquina del que la tipeo y **no viaja en el `.gma`**: dejar el default en 80
--- habria hecho que la decision del autor valiera para su partida y para ninguna
--- otra. Es la misma razon por la que el modo `uno` es el default y no una
--- opcion.
+--   70   el de la voz ambiente ( `EV.sound` ). Presencia de cuarto.
+--   80   r1: la caceria tiene que oirse desde el otro lado de la casa, porque es
+--        la senal con la que el jugador decide correr. **Este es el de hoy.**
+--   150  r3: *"el otro comando para aumentar el volumen a 150 esta bien"*, elegido
+--        contra la alternativa de emparejar los clips desde el Lua o normalizar
+--        los `.ogg`.
+--   80   2026-08-19: el autor vuelve al 80.
 --
--- ⚠⚠ LO QUE ESTO **NO** ARREGLA, Y HAY QUE TENERLO ESCRITO. El SNDLVL multiplica
--- a los catorce clips por igual, asi que **la brecha de 12,3 LU sigue intacta**:
--- el flojo sigue siendo 10 dB mas flojo que el fuerte, solo que ahora los dos
--- llegan mucho mas lejos. Resuelve *"al clip flojo no lo escucho"* y no resuelve
--- *"unos suenan mas que otros"* -- son dos afirmaciones distintas y esta perilla
--- solo puede con la primera. Si algun dia la segunda molesta, las dos vias
--- siguen donde estaban: `phantasmagoria_ghost_huntvoznivelar 1` empareja hacia
--- abajo, y normalizar los `.ogg` es lo unico que empareja hacia arriba.
+-- ⚠ LO QUE **NO** CAMBIA CON ESTA REVERSION, y es lo que hay que no volver a
+-- discutir: la brecha de **12,3 LU de dispersion** del banco sigue intacta, igual
+-- que con 150. El SNDLVL multiplica a los catorce clips POR IGUAL, asi que nunca
+-- fue la perilla que podia emparejarlos -- ni subiendo ni bajando. Resuelve
+-- *"hasta donde llega"* y no *"unos suenan mas que otros"*, y son dos
+-- afirmaciones distintas. Si la segunda molesta algun dia, las dos vias siguen
+-- donde estaban: `phantasmagoria_ghost_huntvoznivelar 1` empareja hacia abajo, y
+-- normalizar los `.ogg` es lo unico que empareja hacia arriba.
 --
--- ⚠ Y TIENE UN EFECTO QUE EN UNA CASA NO SE VE: un SNDLVL de 150 esta en el
--- orden de un tren ( `SNDLVL_TRAIN` ), asi que la caida con la distancia es
--- minima y en un mapa ABIERTO la caceria se va a oir de muy lejos. Adentro de
--- una casa -- que es el sujeto de Phasmophobia y de este addon -- es justo lo
--- que se quiere. La perilla sigue a mano y el callback la aplica en vivo.
+-- ⚠ Y LO QUE EL 150 TENIA EN CONTRA ESTABA ESCRITO ACA DESDE LA r3, sin medirse:
+-- un SNDLVL de 150 esta en el orden de un tren ( `SNDLVL_TRAIN` ), asi que casi
+-- no se atenua con la distancia y **en un mapa abierto la caceria se oye de muy
+-- lejos**. El renglon decia que adentro de una casa eso era justo lo que se
+-- queria. El autor jugo con el puesto y volvio al 80: *la advertencia estaba bien
+-- y el veredicto era del juego, no del renglon.*
 --
--- El tope se corre de 150 a 180 para que el default no quede pegado al maximo:
--- una perilla cuyo valor elegido es tambien su techo no deja probar si el
--- problema era que faltaba mas.
-local cvHuntVozLvl = CreateConVar( "phantasmagoria_ghost_huntvozlvl", "150", FCVAR_ARCHIVE,
-    "SNDLVL de la voz de caceria. 70 es el de la voz ambiente ( EV.sound ), 80 se oye a traves de " ..
-    "un par de paredes, y 150 -- el elegido por el autor -- casi no se atenua con la distancia. " ..
-    "Sube el ALCANCE de los catorce clips POR IGUAL: no cambia la brecha de sonoridad entre ellos.",
+-- El tope se dejo en 180 y no se toca. Con el default en 80 sobra margen para
+-- volver a subirlo sin recompilar nada, que es justo lo que esta reversion
+-- necesito: la perilla estaba a mano y el callback la aplica en vivo.
+local cvHuntVozLvl = CreateConVar( "phantasmagoria_ghost_huntvozlvl", "80", FCVAR_ARCHIVE,
+    "SNDLVL de la voz de caceria. 70 es el de la voz ambiente ( EV.sound ), 80 -- el elegido por el " ..
+    "autor -- se oye a traves de un par de paredes, y 150 casi no se atenua con la distancia ( en un " ..
+    "mapa abierto se oye de lejisimos ). Sube el ALCANCE de los catorce clips POR IGUAL: no cambia " ..
+    "la brecha de sonoridad entre ellos.",
     50, 180 )
 
 -- ⚠ EL DEFAULT DE ESTA ES `auto` Y NO UN MODO, y no es lo mismo. `auto` significa

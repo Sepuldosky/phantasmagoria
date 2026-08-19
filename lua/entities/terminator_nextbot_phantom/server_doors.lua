@@ -152,18 +152,31 @@ local cvPhaseMask = CreateConVar( "phantasmagoria_ghost_phasemask", "1", FCVAR_A
 -- comportamiento de hoy identico, y ademas le da al autor las dos cosas por
 -- separado: "no abre nunca" y "abre a veces".
 --
--- ⚠ EL DEFAULT VA EN 0 Y NO EN UN NUMERO "LINDO". Un default distinto de 0
--- cambiaria el comportamiento de todas las corridas anteriores sin que nadie lo
--- pida. El numero lo elige el autor en juego -- y cuando lo elija hay que MOVER
--- EL DEFAULT en el mismo commit: una convar FCVAR_ARCHIVE guarda en la maquina
--- del que la tipeo y NO viaja en el .gma.
+-- ⭐ EL DEFAULT ES **0.1** Y LO ELIGIO EL AUTOR EN JUEGO, r1 del 2026-08-19.
+--
+-- Nacio en 0 a proposito -- para que la r1 pudiera medir que la perilla nueva no
+-- cambiaba nada -- y se movio en el momento en que el numero existio, no despues:
+-- una convar FCVAR_ARCHIVE se guarda en la maquina del que la tipeo y **NO viaja
+-- en el .gma**, asi que un default en 0 habria dejado la decision del autor
+-- valiendo para su partida y para ninguna otra. Es la misma razon por la que el
+-- SNDLVL de la voz de caceria mueve su default con la decision.
+--
+-- El numero sale de la fila 02: con `chance 0.30` salieron **4 de 17** encuentros
+-- y el autor anoto *"si abre unas pocas, good tal como quiero"*. 0.1 es un tercio
+-- de eso -- mas raro todavia --, que es lo que pidio: que la huella de puerta
+-- aparezca **de vez en cuando** y no que la puerta sea un evento constante.
+--
+-- ⚠ EL CONTROL NO SE PERDIO AL MOVER EL DEFAULT: sigue siendo `doorchance 0`, y
+-- la fila 00 de la r1 lo dejo medido ( `tiradas 0`, `atraveso 9`, `VETADAS 6`,
+-- `intentos 0` ). Lo que cambia es cual de los dos lados es el default, no que el
+-- otro exista.
 --
 -- ⚠ El nombre no puede chocar con ningun concommand: `phantasmagoria_ghost_doors`
 -- es el COMANDO del reporte, y cuando una convar y un concommand comparten
 -- nombre la consola resuelve la convar y el comando queda mudo ( eso costo la
 -- ronda 2 entera; ver el comentario de cvOpen ). `doorchance` no existe como
 -- comando.
-local cvChance = CreateConVar( "phantasmagoria_ghost_doorchance", "0", FCVAR_ARCHIVE,
+local cvChance = CreateConVar( "phantasmagoria_ghost_doorchance", "0.1", FCVAR_ARCHIVE,
     "Probabilidad ( 0..1 ) de que un fantasma que IBA A ATRAVESAR una puerta cerrada la ABRA en su lugar, dejando huella. 0 = el comportamiento de siempre ( control ): atraviesa y no abre.", 0, 1 )
 
 ---------------------------------------------------------------------------

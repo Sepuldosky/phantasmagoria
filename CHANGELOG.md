@@ -7,6 +7,123 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-19 (53) — **La r1 corrida: 9 de 9 en juego, los dos defaults movidos por decisión del autor… y tres de esos nueve verdes no miden lo que dicen. El pedido 2 sigue sin medirse, y la fila que iba a atraparlo se desactivó con su propia precondición.**
+
+Corrida del autor sobre `dev/checks/phantasmagoria-puertas-chance-r1.html`, guardada en
+[`dev/CORRIDA_puertas_chance_r1.md`](dev/CORRIDA_puertas_chance_r1.md). **Pasa 9 · Falla 0 · Sin correr
+0 (de 9)**, con su nota: *«Ambas funcionan bien, instrumentos tal vez "puedan" ser falsos, pero al
+menos como funcionalidad está ok»*. Mapa `gm_break_in_redux`.
+
+### ⭐⭐ Los dos defaults, movidos en el mismo commit que la corrida
+
+- **`phantasmagoria_ghost_doorchance` 0 → 0.1**, elegido por el autor. Nació en 0 para que la fila 00
+  pudiera medir que la perilla nueva no cambiaba nada, y se movió en el momento en que el número
+  existió: una convar `FCVAR_ARCHIVE` **no viaja en el `.gma`**, así que un default en 0 habría dejado
+  su decisión valiendo para su partida y para ninguna otra. El número sale de la fila 02 —con 0,30
+  salieron **4 de 17** encuentros y anotó *«si abre unas pocas, good tal como quiero»*—; 0.1 es un
+  tercio de eso. **El control no se perdió al mover el default:** sigue siendo `doorchance 0`, y la
+  fila 00 lo dejó medido.
+- **`phantasmagoria_ghost_huntvozlvl` 150 → 80**, y **eso revierte la decisión de la r3**, que estaba
+  citada textual en el código (*«el otro comando para aumentar el volumen a 150 está bien»*). El
+  comentario se **reescribió** con las cuatro paradas del número (70 → 80 → 150 → 80) en vez de dejarse
+  al lado del valor nuevo. ⚠ Y lo que el 150 tenía en contra **estaba escrito ahí desde la r3 y sin
+  medirse**: un SNDLVL de 150 está en el orden de un tren, casi no se atenúa, y en un mapa abierto se
+  oye de lejísimos; el renglón afirmaba que adentro de una casa eso era justo lo que se quería. El
+  autor jugó con él puesto y volvió al 80. *La advertencia estaba bien y el veredicto era del juego,
+  no del renglón.* La brecha de **12,3 LU** del banco sigue intacta, igual que con 150 — el SNDLVL
+  nunca fue la perilla que podía emparejar los clips, ni subiendo ni bajando.
+
+### ⭐ Lo que la corrida dejó MEDIDO, y es el pedido 1 de punta a punta
+
+| fila | qué salió |
+|---|---|
+| **00** control | `tiradas 0 · salio abrir 0 · abiertas 0 · huellas 0`, con `atraveso 9` y `VETADAS 6`: el 0 deja el comportamiento de hoy idéntico **y la fila se corrió de verdad** (el `atraveso` es el que lo prueba) |
+| **01** techo | `tiradas 3 · salio abrir 3 · abiertas de verdad 3 · huellas dejadas 3` — **los cuatro tramos completos**, con las tres huellas nombradas por puerta y por `via` |
+| **02** sorteo | `tiradas 17 · salio abrir 4` con la chance en 0,30 → **0,24 medido**. Ni 0 ni 17 |
+| **04** el evento | `pases del EVENTO 9` y **seis `door efecto CONFIRMADO`** en la bitácora, con los estados de la hoja antes y después |
+
+**El evento `doors` dejó de estar inerte, y esto es la mitad que ningún instrumento podía dar antes.**
+Con `opendoors 0` puesto —la combinación en la que el autor juega— seis de nueve intentos movieron la
+hoja. Antes de este bloque el veto se comía el `Use2` entero y el resultado era `SIN EFECTO` en
+**todos**.
+
+### ⚠⚠⚠ Y ahora la parte que los nueve verdes tapan: **el núcleo del pedido 2 no se midió**
+
+Las dos lecturas de velocidad (P0 y 05) dicen lo mismo, y no es lo que las filas pedían:
+
+    multiplic.  x0.700
+                = tipo x1.000 ( sin tipo: base neutra x1.000 ( phantasmagoria_ghost_typespeed 0
+                  ( CONTROL: manda el andamio ) ) )   ×   global x0.700
+
+La fila 05 pedía `x0.412` y `= tipo x0.588 × global x0.700`. **`phantasmagoria_ghost_typespeed` estaba
+en 0 toda la corrida**, así que el campo del tipo estaba vacío y lo que se midió fue el camino
+**sin tipo** — que con la precedencia nueva hace **exactamente lo mismo que antes**: `1.0 × convar` es
+el `else` viejo escrito de otra forma.
+
+> **El código viejo y el nuevo imprimen el mismo número en esa configuración.** La 05 no podía
+> distinguirlos, y la 06 —el control, `speedmul 1` sobre el mismo sujeto— tampoco, por la misma razón.
+
+*Es la asimetría nº 42 en su forma más barata.* Y la causa es de la **precondición**, no del autor: la
+fila nombraba los once tipos válidos —el problema de los `speed.base 1.000`— y **no nombraba la convar
+que borra el campo entero**. Un sujeto válido con `typespeed 0` es el mismo x1.000 contra el que la
+precondición estaba escrita para proteger, entrando por la puerta de al lado. *Una precondición que
+enumera los sujetos válidos no cubre la perilla que vuelve inválido a cualquiera de ellos.*
+
+### ⚠⚠ Pero la P0 sí dio veredicto, y es el que el prompt anticipó: **el multiplicador es inocente**
+
+`base 280` × `mul 0.700` = **196 u/s** contra los **280** del jugador, con `AHORA deseada 196 · real
+196`. **El fantasma va más lento que el jugador, medido.** Así que *«veo a los revenant ir
+rapidísimo»* no puede salir de esta perilla — el síntoma es real y el lugar no (nº 85).
+
+Y la P0 nombra al sospechoso que la lista de cinco del prompt tenía como (b): **`typespeed` en 0**.
+Con esa convar en 0 **ningún tipo puede mover la velocidad**; manda el andamio y nada más.
+
+> **Hipótesis, no medición, y anotada como tal:** la r18 dejó registrado un `x2.000 de convar · 560`
+> en su fila 05. Las dos convars son `FCVAR_ARCHIVE`, así que un `speedmul` alto sobrevivido de aquel
+> A/B, con `typespeed 0` impidiendo que el tipo lo corrigiera, daría **560 u/s contra 280** — el doble
+> del jugador, que sí es «rapidísimo».
+>
+> ⚠⚠ **Y el pedido 2 no arregla eso.** Con `typespeed 0` el campo está vacío y la fórmula nueva da
+> `1.0 × convar`, igual que la vieja. El arreglo de ese síntoma es `typespeed 1`. *Es exactamente el
+> nº 51 —la evidencia correcta cuyo arreglo adjudicado no la toca— y esta vez se dijo antes de que la
+> corrida lo descubriera.*
+
+### ⚠⚠⚠ La fila 03 no se corrió, y la culpa es de su propia precondición
+
+Salió `tiradas 0` con `atravesar 0`. Su propio criterio de FALLA lo decía: *«`tiradas` en 0 → la fila
+no se corrió»*. La causa es que se usó `phasedoors 0` para clavar al fantasma contra la puerta — **y
+la tirada sólo existe para un fantasma que IBA A ATRAVESAR**, así que apagar el atravesado la
+desactiva por construcción. **Y la precondición de la fila sugería justamente eso**, textual: *«o con
+el `phasedoors 0` temporal si hace falta»*.
+
+*Una precondición que apaga el mecanismo que la fila mide no es una precondición: es un apagador con
+instrucciones.* Y es peor que un falso verde común, porque el que corre la planilla hizo **lo que la
+planilla le dijo**.
+
+**Pero el defecto que la 03 iba a atrapar está refutado por otra vía**, y sale de los números
+laterales de las filas que sí corrieron. El Think de puertas corre a **10 Hz**; con la tirada por tick,
+`tiradas` estaría en los cientos. Salió `tiradas 3` con `vistas 16` (fila 01) y `tiradas 17` con
+`vistas 20` (fila 02) — y `vistas` cuenta **cada entrada de una puerta cerrada al sondeo**, la misma
+puerta varias veces. Diecisiete tiradas contra veinte entradas es **una tirada por encuentro**.
+
+*La evidencia llegó del dato lateral de dos filas y no de la fila escrita para darla.* Vale, pero es
+más débil: mide el promedio y no el caso de estar pegado diez segundos. **Cómo se corre de verdad:**
+`phasedoors 1`, `doorchance 0.3`, `reset`, y bloquear al fantasma **con el cuerpo** en el vano.
+
+### Residuos anotados y no tocados
+
+- **`1 FORZADAS a solido por el techo de 5 s`** en las filas 00, 01 y 04 — ya estaba en `ESTADO.md`
+  desde el bloque de la evidencia. Lo marca su propio instrumento.
+- **Tres `door SIN EFECTO`** en la fila 04, los tres `prop_door_rotating` en estado 0. Uno (`#1037`)
+  lo explica la propia bitácora (*«la puerta ya venía trabada»*); `#537` y `#540` **no están
+  explicados**. Con el veto descartado quedan las cuatro salidas silenciosas de la base, o que el mapa
+  las tuviera con llave.
+- **`peor 19.7 s`** contra un `prop_door_rotating` cerrada en la fila 03, con `opendoors 0` **y**
+  `phasedoors 0`: un atasco **por construcción**, no una medición del bot pegado. El número queda para
+  el bloque que viene.
+
+---
+
 ## 2026-08-19 (52) — **Los dos pedidos del cierre anterior, escritos: la puerta que se abre por chance, y el multiplicador global que el tipo se comía. Y el segundo trae una trampa que hay que decir antes de que la corrida la descubra: el arreglo es correcto y el síntoma que se le atribuyó no se sigue de él.**
 
 Dos pedidos **independientes** —tocan archivos distintos y ninguno bloquea al otro— pedidos juntos al

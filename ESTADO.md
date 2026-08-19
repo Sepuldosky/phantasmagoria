@@ -13,6 +13,54 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-19, r1 CORRIDA): 9 DE 9 EN JUEGO, LOS DOS DEFAULTS MOVIDOS… Y TRES DE
+> ESOS NUEVE VERDES NO MIDEN LO QUE DICEN.** Detalle en el CHANGELOG **(53)**; la corrida entera en
+> `dev/CORRIDA_puertas_chance_r1.md`.
+>
+> ⭐⭐ **Los dos defaults, por decisión del autor:** `phantasmagoria_ghost_doorchance` **0 → 0.1** (el
+> número sale de la fila 02: con 0,30 salieron 4 de 17 y anotó *«si abre unas pocas, good tal como
+> quiero»*), y `phantasmagoria_ghost_huntvozlvl` **150 → 80**, que **revierte la decisión de la r3**.
+> Lo que el 150 tenía en contra estaba escrito en el código desde la r3 y **sin medirse** —un SNDLVL de
+> 150 casi no se atenúa y en un mapa abierto se oye de lejísimos—: el autor jugó con él puesto y volvió
+> al 80. *La advertencia estaba bien y el veredicto era del juego, no del renglón.* La brecha de
+> 12,3 LU sigue intacta: el SNDLVL nunca fue la perilla que podía emparejar los clips.
+>
+> ⭐ **El pedido 1 está medido de punta a punta.** Fila 00 `tiradas 0 · atraveso 9 · VETADAS 6` (el
+> control se corrió de verdad); fila 01 `tiradas 3 · salio abrir 3 · abiertas 3 · huellas 3` —los
+> cuatro tramos—; fila 02 `17 tiradas · 4 abrir` con la chance en 0,30; fila 04 `pases del EVENTO 9` y
+> **seis `door efecto CONFIRMADO`**. **El evento `doors` dejó de estar inerte con `opendoors 0`**, que
+> es la combinación en la que el autor juega.
+>
+> ⚠⚠⚠ **EL NÚCLEO DEL PEDIDO 2 SIGUE SIN MEDIRSE: `phantasmagoria_ghost_typespeed` ESTABA EN 0.** Las
+> dos lecturas dicen `= tipo x1.000 ( sin tipo… typespeed 0 )  ×  global x0.700`, cuando la fila pedía
+> `= tipo x0.588 × global x0.700`. Con el campo vacío la fórmula nueva da `1.0 × convar`, que es **el
+> `else` viejo escrito de otra forma**: el código viejo y el nuevo imprimen **el mismo número** en esa
+> configuración, así que ni la 05 ni su control la 06 podían distinguirlos. *La precondición enumeraba
+> los once tipos válidos y no nombraba la perilla que vuelve inválido a cualquiera de ellos.*
+> **Falta una lectura:** `typespeed 1` → `type revenant` → `speedmul 0.7` → `ghost_speed` solo. Tiene
+> que decir `x0.412`.
+>
+> ⚠⚠ **La P0 SÍ dio veredicto, y absuelve al multiplicador:** `280 × 0.700 = 196 u/s` contra los 280
+> del jugador, con `deseada 196 · real 196`. **El fantasma va más lento que el jugador, medido**, así
+> que *«revenant rapidísimo»* no sale de esta perilla. La P0 nombra al sospechoso: **`typespeed 0`**,
+> que impide que **cualquier** tipo mueva la velocidad. Hipótesis anotada y no medida: la r18 registró
+> un `x2.000 de convar · 560`, las dos convars son `FCVAR_ARCHIVE`, y un `speedmul` sobrevivido de
+> aquel A/B con `typespeed 0` daría 560 contra 280 — el doble. ⚠ **Y el pedido 2 no arregla eso**: el
+> arreglo es `typespeed 1`.
+>
+> ⚠⚠⚠ **LA FILA 03 NO SE CORRIÓ Y LA CULPA ES DE SU PROPIA PRECONDICIÓN.** Salió `tiradas 0` porque se
+> usó `phasedoors 0` para clavar al bot — y la tirada **sólo existe para el que iba a atravesar** —,
+> y la precondición sugería justamente eso. *Un apagador con instrucciones.* El defecto que iba a
+> atrapar **queda refutado por otra vía**: el Think corre a 10 Hz y salieron `tiradas 3 / vistas 16` y
+> `tiradas 17 / vistas 20`, o sea **una tirada por encuentro y no por tick**. Más débil que la fila
+> propia: mide el promedio, no los diez segundos pegado. Se corre bien con `phasedoors 1` y el cuerpo
+> en el vano.
+>
+> ⚠ **Residuos anotados y no tocados:** `1 FORZADAS a solido por el techo de 5 s` (ya estaba), tres
+> `door SIN EFECTO` en `prop_door_rotating` estado 0 —uno explicado por *«ya venía trabada»*, `#537` y
+> `#540` **no**—, y `peor 19.7 s` con `opendoors 0` **y** `phasedoors 0`, que es un atasco **por
+> construcción** y no una medición del bot pegado.
+
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-19): LOS DOS PEDIDOS DEL CIERRE ANTERIOR, ESCRITOS Y SIN CORRER EN JUEGO.**
 > La puerta que se abre **por chance** y el multiplicador global que el tipo se comía. Detalle en el
 > CHANGELOG **(52)**. Planilla nueva: `dev/checks/phantasmagoria-puertas-chance-r1.html`, **nueve filas**,
