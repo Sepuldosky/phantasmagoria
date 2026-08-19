@@ -1,0 +1,574 @@
+PROMPT — Phantasmagoria · LA PUERTA QUE SE ABRE POR CHANCE, y el multiplicador
+de velocidad que el tipo se come (2026-08-19)
+
+> Bloque siguiente al del clic / el prop roto / el celular, que CERRO EN JUEGO
+> ( r1 6-de-8 + r2 4-de-4, CHANGELOG 48 y 51 ) y ya esta commiteado y pusheado
+> ( aee7333 ).
+>
+> Los dos pedidos son del autor, textuales, y los dio al cerrar ese bloque. Son
+> INDEPENDIENTES: tocan archivos distintos ( server_doors.lua y server_speed.lua )
+> y ninguno bloquea al otro. Se piden juntos porque el autor los pidio juntos.
+>
+> ⚠⚠⚠ EL SEGUNDO TRAE UNA TRAMPA Y ESTA EN EL §5: **el arreglo que el autor pide
+> es correcto y el sintoma que le atribuye NO SE SIGUE DE EL.** Con los numeros
+> de hoy, aplicar su multiplicador dejaria al Revenant **mas lento**, no menos
+> rapido. Las dos cosas hay que hacerlas, pero por separado y sin acreditarle a
+> una lo que arregle la otra.
+>
+> DESPUES de este bloque sigue el que el autor pidio hace CINCO rondas y que
+> todavia no tiene linea de investigacion: **por que el bot se queda pegado y
+> despues se despeja solo, y por que a veces quiere pasar a traves de un vidrio**
+> ( pista suya: la base Terminator tendria convars para ver el *thinking* del
+> NPC; NO esta medido que existan ). Ver ESTADO.md.
+
+
+===============================================================================
+1 · QUE SE QUIERE, EN UNA LINEA
+===============================================================================
+
+Que el fantasma que ATRAVIESA puertas las abra **de vez en cuando** en vez de
+nunca -- para que deje huellas --, y que el multiplicador global de velocidad
+**siga valiendo** cuando el fantasma tiene tipo.
+
+Textual del autor:
+
+  *"Lo que quiero hacer ahora es que al pasar por puertas con opendoors 0, la
+  puerta se abra igual pero con una probabilidad; La razon: Es que es muy
+  calmado con las puertas el evento doors y muy ruidoso con opendoors 1,
+  prefiero que si el fantasma puede traspasar las puertas este las abra con
+  chance, asi deja las huellas"*
+
+  *"Tambien quiero que el cvar que sirve para respetar la velocidad del tipo de
+  fantasma considere el multiplicador de velocidad porque no lo hace, veo a los
+  revenant ir rapidisimo aunque tenga mi multiplicador de velocidad en 0.7"*
+
+
+===============================================================================
+2 · LO QUE YA ESTA MEDIDO / LEIDO. NO SE VUELVE A MEDIR.
+===============================================================================
+
+Todo lo de este §2 salio de leer el codigo el 2026-08-19, con la ruta y la linea
+al lado. Nada de aca hace falta volver a averiguarlo; lo que SI hace falta medir
+esta en el §6.
+
+-------------------------------------------------------------------------------
+2.1 · EL MOTIVO DEL AUTOR ES EL MOTIVO ORIGINAL DEL DISENO, PALABRA POR PALABRA
+-------------------------------------------------------------------------------
+`server_doors.lua:1-13`, encabezado del archivo, cita del autor de hace rondas:
+
+    "lo unico importante es que PASE las puertas, y cuando lo haga que la ACTIVE
+     y la ABRA FISICAMENTE, eso deja la evidencia de la huella en la puerta"
+
+y la decision que se tomo con eso:
+
+    "La eleccion es la tercera y es mejor que las dos: NO atraviesa y NO rompe,
+     ABRE. **Atravesar seria gratis de programar y REGALARIA LA HUELLA**, que es
+     una de las 7 evidencias y la que el autor nombro como el motivo."
+
+O sea que *"si atraviesa, no deja huella"* **no es una suposicion de este
+bloque**: es la premisa escrita del modulo. Confirmado en el codigo:
+`PHANTASMAGORIA.CommitPrint` ( `server_doors.lua:433` ) se llama en **un solo
+lugar**, `:1275`, adentro de la escalera de apertura. El camino de atravesar no
+lo toca.
+
+⚠ Y eso hace que el pedido de hoy sea **volver a poner una parte de lo que el
+diseno eligio**, no un capricho: hoy el fantasma generico atraviesa
+( `phantom_PhasesDoors = true` en server.lua ) y con `opendoors 0` no abre nunca,
+asi que **la huella de puerta no se produce nunca**. El pedido cierra ese hueco.
+
+-------------------------------------------------------------------------------
+2.2 · ⚠⚠⚠ CON `opendoors 0` EL EVENTO `doors` NO ES "CALMADO": ESTA INERTE
+-------------------------------------------------------------------------------
+Esta es la mitad del pedido que el autor describio por su sintoma y que conviene
+nombrar por su mecanismo, porque **cambia que hay que escribir**.
+
+El evento `doors` mueve la hoja llamando a `ghost:Use2( door )`
+( `server_events.lua:3795` ). Y nosotros tenemos un veto propio enganchado en
+`TerminatorBlockUse` ( `server_doors.lua:864-878` ):
+
+    if not bot:phantom_CanOpenDoors() then
+        stats( bot ).vetadas = stats( bot ).vetadas + 1
+        return true          -- <- corta Use2 entero
+    end
+
+O sea que **con `opendoors 0` el evento `doors` suena la manija y la hoja no se
+mueve**. No es que sea sutil: no hace nada. Y ya esta escrito en el propio
+archivo, `server_events.lua:3758-3764`, como un defecto que se pago una vez:
+
+    "con `phantasmagoria_ghost_opendoors 0` -- una convar real, un control
+     documentado -- el evento sonaba la manija, no movia la hoja, y el
+     instrumento imprimia 'OK -- puerta prop_door_rotating #123'. **Verde exacto
+     sobre cero comportamiento.**"
+
+Eso se arreglo del lado del INSTRUMENTO ( hoy el evento lee el estado de la hoja
+antes y 0,25 s despues, y la bitacora dice `door SIN EFECTO` nombrando a
+`opendoors 0` como sospechoso principal — `:3820-3827` ), **pero no del lado del
+COMPORTAMIENTO**: la puerta sigue sin moverse.
+
+⚠ **Antes de escribir una linea, correr el evento con `opendoors 0` y leer la
+bitacora.** Si dice `door SIN EFECTO` en todas, entonces *"muy calmado"* era
+esto, y una probabilidad en el camino del paso **no lo arregla sola** -- ver el
+§4, que son DOS sitios y no uno.
+
+-------------------------------------------------------------------------------
+2.3 · `opendoors 0` ES EL CONTROL NEGATIVO DEL MODULO, Y ESTA CITADO
+-------------------------------------------------------------------------------
+Su propia descripcion lo dice ( `server_doors.lua:63-64` ):
+
+    "0 = ninguno abre ( control ) · 1 = respeta el flag phantom_OpensDoors de
+     cada NPC · 2 = abren TODOS, ignorando el flag."
+
+Y es la convencion de las CUATRO perillas del archivo -- `opendoors`,
+`phasedoors`, `doorsilent`, y la gemela `walkhunt` de server_speed.lua. El `0`
+es lo que hace que una fila pueda salir roja.
+
+⚠⚠ **Por eso la probabilidad NO va adentro de `opendoors`.** Si el `0` empieza a
+abrir a veces, el control negativo de este modulo deja de existir, y con el las
+filas que lo usan. Va en una **convar nueva**, cuyo `0` deje el comportamiento de
+hoy **identico byte por byte**. Eso ademas le da al autor las dos cosas por
+separado: *"no abre nunca"* y *"abre a veces"*.
+
+-------------------------------------------------------------------------------
+2.4 · DONDE SE DECIDE ABRIR, Y DONDE ATRAVESAR
+-------------------------------------------------------------------------------
+Los dos resolvedores, uno al lado del otro ( `server_doors.lua:807-815` ):
+
+    ENT:phantom_CanPhaseDoors()  -> resolve( self, "phantom_PhasesDoors", cvPhase, true )
+    ENT:phantom_CanOpenDoors()   -> resolve( self, "phantom_OpensDoors",  cvOpen,  true )
+
+Sus consumidores, contados con `rg` ( son todos, no una muestra ):
+
+    :870    el veto TerminatorBlockUse           <- lo que apaga el evento `doors`
+    :1036   phantom_CanPhaseDoors, camino de atravesar
+    :1090   phantom_CanOpenDoors, la escalera de apertura ( `if not puedeAbrir then return end` )
+    :1696   el comando testdoor
+    :1927-8 el reporte
+    :2361   el comando puerta
+
+⚠ La escalera de apertura ( de `:1090` para abajo ) es la que llama a
+`MakePrint` / `CommitPrint`. **La huella sale de ahi y de ningun otro lado**, asi
+que una apertura "por chance" que no pase por esa escalera **no deja huella**, y
+el pedido no se cumple aunque la puerta se mueva.
+
+-------------------------------------------------------------------------------
+2.5 · EL MULTIPLICADOR DE VELOCIDAD: EL CAMPO **REEMPLAZA** A LA CONVAR
+-------------------------------------------------------------------------------
+`server_speed.lua:186-194`, y esto es literalmente lo que el autor reporto:
+
+    local mul, mulFuente
+    if isnumber( self.phantom_SpeedMul ) then
+        mul, mulFuente = self.phantom_SpeedMul, "campo phantom_SpeedMul ( tipo )"
+    else
+        mul, mulFuente = cvMul:GetFloat(), "convar phantasmagoria_ghost_speedmul ( ANDAMIO )"
+    end
+
+`phantom_SpeedMul` lo escribe `phantom_ApplyTypeSpeed` con el `speed.base` del
+tipo ( `:267-272` ). O sea: **si el fantasma tiene tipo y `typespeed` esta en 1,
+`phantasmagoria_ghost_speedmul` NO HACE NADA.** Es un `else`, no un factor.
+
+Y la convar lo dice de si misma ( `:58-59` ): *"ANDAMIO"*, *"Lo reemplaza
+speed.base de la tabla de tipos"*. O sea que **no es un bug de implementacion:
+es el diseno que hay hoy, y el autor esta pidiendo cambiarlo**. Eso importa para
+el mensaje del commit: no se "arregla" nada, se cambia una precedencia.
+
+-------------------------------------------------------------------------------
+2.6 · ⚠⚠⚠ Y EL REVENANT, CON LOS NUMEROS DE HOY, VA **MAS LENTO** QUE VOS
+-------------------------------------------------------------------------------
+`ghost_types.lua:459-467`:
+
+    T[ "revenant" ] = {
+        speed = {
+            base       = 0.588,   -- 1.00 m/s
+            top        = 1.765,   -- 3.00 m/s (alterna entre los dos)
+            isRange    = false,
+            losSpeedUp = false,
+        },
+
+Y `server_type.lua:26`, textual:
+
+    "NO toma `speed.top`, `isRange`, `alt` ni `losSpeedUp` -- 13 de los 30 [...]"
+
+confirmado con `rg`: **nadie lee `speed.top` fuera de la tabla y del reporte que
+lo imprime como ficha**. Lo unico cableado es `speed.base`.
+
+Entonces, hoy:
+
+    Revenant  =  carrera del jugador  x 0.588       <- MAS LENTO que el jugador
+    con el pedido del autor aplicado:      x 0.588 x 0.7  =  x 0.41   <- mas lento todavia
+
+⚠⚠⚠ **El sintoma que el autor describe -- "los revenant van rapidisimo" -- no
+puede salir de la precedencia que el mismo pide cambiar.** Su observacion es un
+dato y hay que creerle; lo que no se sostiene es la causa que le adjudico. Es el
+patron nº 85 del catalogo de controles: *el sintoma es real y el lugar no*. Si se
+escribe el cambio y el Revenant sigue rapido, **el cambio se va a leer como que
+"no funciono"**, y va a estar funcionando perfecto.
+
+Los sospechosos que SI podrian producir un fantasma rapido, todos legibles con el
+reporte que ya existe ( `phantasmagoria_ghost_speed`, `server_speed.lua:581` ),
+que imprime los INSUMOS y no solo el resultado:
+
+  a) `phantasmagoria_ghost_derivespeed 0` -> vuelve a los **550 u/s de la base**
+     ( `:41-42` ). Eso si es rapidisimo: la carrera de un player sandbox es 400.
+  b) el fantasma **no tiene tipo asignado** -> manda el andamio, y el andamio del
+     autor esta en 0.7 ( no es rapido, pero tampoco es 0.588: el reporte lo dice
+     en la linea `mulFuente` ).
+  c) `PlayerBaseRunSpeed` ( `:110` ) leyendo un valor alto: con Better Movement la
+     convar base puede estar arriba de 400, y el fantasma DERIVA de ahi.
+  d) el tipo asignado **no es Revenant** aunque el autor crea que si. El reporte
+     imprime `phantom_TypeKey`.
+  e) la aceleracion / el comportamiento de persecucion de la base Terminator, que
+     no pasa por este modulo.
+
+**Ninguno de los cinco esta medido.** El §6 tiene la fila que los separa, y es
+UNA lectura de consola.
+
+
+===============================================================================
+3 · LO QUE HAY QUE ESCRIBIR — PEDIDO 1, LA PUERTA POR CHANCE
+===============================================================================
+
+-------------------------------------------------------------------------------
+3.1 · LA PERILLA
+-------------------------------------------------------------------------------
+Una convar nueva, en `server_doors.lua`, al lado de las otras cuatro:
+
+    phantasmagoria_ghost_doorchance    0.0 .. 1.0    default 0
+
+  · `0` = el comportamiento de HOY, exacto. Ese es el control, y es lo que
+    permite que las filas viejas del modulo sigan valiendo.
+  · `>0` = probabilidad de que un fantasma que IBA A ATRAVESAR abra en su lugar.
+
+⚠ **El default va en 0 y no en un valor "lindo".** Un default distinto de 0
+cambia el comportamiento de todas las corridas anteriores sin que nadie lo pida,
+y ademas se lleva puesto el control del §2.3. Que el autor elija el numero en
+juego es parte de la fila; lo que NO puede pasar es que el numero se quede solo
+en su consola -- ver el nº 82 del catalogo: *una convar `FCVAR_ARCHIVE` guarda
+en la maquina del que la tipeo y NO viaja en el `.gma`*. Cuando el autor decida
+el valor, **hay que mover el default en el mismo commit**.
+
+-------------------------------------------------------------------------------
+3.2 · ⚠⚠⚠ LA TIRADA ES **POR PUERTA Y POR ENCUENTRO**, NUNCA POR TICK
+-------------------------------------------------------------------------------
+Este es el defecto que hay que no escribir, y es el mas facil de escribir.
+
+El camino de atravesar se evalua **cada tick mientras el fantasma esta contra la
+puerta**. Un `math.random() < chance` ahi adentro **no es una probabilidad del
+0,1: es una probabilidad del 0,1 SESENTA VECES POR SEGUNDO**, o sea que abre
+siempre, en el primer decimo de segundo, con cualquier valor mayor que cero. Y el
+sintoma en juego es *"puse 0.05 y abre todas"*, que se lee como que la convar no
+funciona.
+
+La tirada tiene que ser **pegajosa**: se decide UNA vez por par ( fantasma,
+puerta ) cuando el fantasma llega, se guarda, y todos los ticks siguientes de ese
+mismo encuentro leen la decision guardada. Se suelta cuando el fantasma se va de
+la puerta -- el archivo ya tiene el reloj para eso ( `door.phantom_nextTry`,
+`term_NextUse`, y el `PHASE_COOLDOWN` de `phantom_PhaseTimeout` ).
+
+⚠ Y la decision guardada tiene que ser **de tres estados y no de dos**: `abrir`,
+`atravesar`, y **`sin tirar todavia`**. Con dos, `false` y "no se tiro" se ven
+igual y la primera lectura vuelve a tirar. Es la misma familia del `false` que no
+es `nil` que este repo ya pago dos veces.
+
+-------------------------------------------------------------------------------
+3.3 · LA APERTURA POR CHANCE TIENE QUE PASAR POR LA ESCALERA, NO POR AL LADO
+-------------------------------------------------------------------------------
+Dos motivos, los dos medidos y en el §2.4:
+
+  · **la huella sale de la escalera** ( `CommitPrint`, `:1275` ), y sin huella el
+    pedido no se cumplio aunque la hoja se mueva;
+  · la escalera ya resuelve el destrabado, el toggle, los dos relojes y el
+    silencio. Un camino paralelo los tendria que repetir, y dos copias de una
+    precedencia divergen.
+
+⚠⚠ **Y hay un veto que hay que levantar para esa puerta.** El
+`TerminatorBlockUse` de `:864-878` corta `Use2` cuando `phantom_CanOpenDoors()`
+dice que no -- y con `opendoors 0` dice que no **siempre**. Si la chance decide
+"abrir" y el veto sigue en pie, **la apertura no ocurre y no hay error**: el
+contador de la chance sube, la puerta no se mueve, y la fila se lee como "la
+chance no funciona". La decision pegajosa del §3.2 es lo que el veto tiene que
+consultar.
+
+-------------------------------------------------------------------------------
+3.4 · EL EVENTO `doors` ES UN SITIO APARTE, Y ES UNA DECISION DEL AUTOR
+-------------------------------------------------------------------------------
+Por el §2.2, con `opendoors 0` el evento `doors` esta inerte. Son DOS caminos
+distintos y hay que decidir cada uno:
+
+  (A) **el paso**   -- el fantasma navegando llega a una puerta cerrada.
+                       Hoy: atraviesa. Con la chance: a veces abre. Es lo que el
+                       autor describio.
+  (B) **el evento** -- una manifestacion paranormal deliberada, disparada por
+                       `phantasmagoria_ghost_event doors`. Hoy con `opendoors 0`
+                       **no mueve la hoja**.
+
+⚠ **PREGUNTARLE AL AUTOR, no elegir en silencio.** Las dos lecturas de su frase
+son razonables y dan comportamientos distintos:
+
+  · *"el evento tambien tira la chance"*  -> sigue siendo raro que pase algo, y
+    el evento sigue siendo casi inerte con chances bajas;
+  · *"el evento SIEMPRE mueve la hoja"*   -> el evento vuelve a ser un evento
+    ( es una manifestacion, no navegacion ), y la chance queda solo para (A).
+
+La recomendacion, y es una recomendacion y no la decision: **(B) siempre mueve la
+hoja**. El autor dijo que el evento le parece *"muy calmado"*, y un evento que no
+hace nada no es calmado -- esta roto. Pero es su llamada.
+
+-------------------------------------------------------------------------------
+3.5 · LOS CONTADORES, QUE SON LO QUE VUELVE MEDIBLE A LA FILA
+-------------------------------------------------------------------------------
+Sin numeros, *"puse la chance y no vi nada"* tiene cuatro causas que se ven
+iguales. El modulo ya tiene su tabla `stats( bot )` y su reporte
+( `phantasmagoria_ghost_doors` ); van ahi:
+
+    tiradas             cuantas veces se tiro el dado ( o sea, cuantos encuentros )
+    salio abrir         cuantas dieron `abrir`
+    abiertas de verdad  de esas, cuantas terminaron con la hoja movida
+    huellas dejadas     de esas, cuantas llamaron a CommitPrint
+
+⚠ Los cuatro y en ese orden, porque **cada renglon dice de cual de los cuatro
+tramos es la falla**: si `tiradas` es 0 el fantasma nunca llego a una puerta
+cerrada ( o la tirada esta en el lugar equivocado ); si `salio abrir` es 0 con
+`tiradas` alto es el numero de la convar; si `abiertas de verdad` es 0 con
+`salio abrir` alto es el veto del §3.3; y si `huellas` es 0 con `abiertas` alto,
+la apertura se fue por al lado de la escalera. *Un contador solo dice que algo
+no paso; cuatro dicen donde.*
+
+
+===============================================================================
+4 · LO QUE HAY QUE ESCRIBIR — PEDIDO 2, EL MULTIPLICADOR GLOBAL
+===============================================================================
+
+El cambio en si es de tres lineas: que `phantasmagoria_ghost_speedmul` deje de
+ser el `else` y pase a ser un **factor que multiplica al que gane**.
+
+    -- hoy
+    mul = campo or convar
+
+    -- pedido
+    mul = ( campo or ANDAMIO_NEUTRO ) * convar
+
+⚠⚠ **Y hay que elegir que pasa cuando NO hay tipo, porque hoy la convar cumple
+DOS papeles a la vez** ( `:45-49`: *"queda para tres cosas: el lado de control
+del A/B, un fantasma SIN TIPO, y mover la escala a mano"* ). Si pasa a ser un
+factor global, el papel de "valor para un fantasma sin tipo" queda vacante. Las
+dos salidas son legitimas y hay que declarar cual:
+
+  (a) el sin-tipo usa **1.0** como base y la convar lo escala -> `speedmul 0.7`
+      da 0.7, que es exactamente lo que hace hoy. **Ningun comportamiento cambia
+      para el sin-tipo.** Es la barata y la que recomiendo.
+  (b) una convar nueva para el sin-tipo, y `speedmul` puramente global.
+
+⚠ Con (a), y con el default en **1.0**, **el comportamiento de hoy no cambia para
+nadie que no toque la perilla**. Eso es lo que hace que este cambio no necesite
+re-correr las filas de velocidad viejas -- y hay que decirlo en el commit, porque
+"cambie la precedencia del multiplicador" suena a que si.
+
+⚠⚠ **Y el reporte tiene que imprimir los DOS factores por separado**, no el
+producto. `server_speed.lua:198-217` ya guarda `mul` y `mulFuente` en
+`phantom_speedDbg` justamente para eso ( *"el instrumento imprime LOS INSUMOS y
+no solo el resultado: si el numero sale raro, se tiene que poder ver cual de los
+cuatro lo torcio"* ). Un `x0.41` solo no distingue `0.588 x 0.7` de un tipo mal
+asignado con base 0.41.
+
+⚠⚠⚠ **LO QUE NO HAY QUE HACER: implementar `speed.top`.** Esta en la tabla de los
+30 tipos, esta declarado como NO implementado en `server_type.lua:26`, y es
+tentador porque el 1.765 del Revenant explica el sintoma del autor. **No es este
+pedido.** Si el §6 mide que el Revenant va rapido de verdad, `speed.top` es un
+candidato para el bloque siguiente -- con su propio prompt, su propia perilla y
+sus propias filas. Meterlo aca haria imposible saber cual de los dos cambios
+produjo que.
+
+
+===============================================================================
+5 · LO QUE **NO** SE ESCRIBE EN ESTE BLOQUE
+===============================================================================
+
+  · `speed.top`, `isRange`, `alt`, `losSpeedUp` -- ver arriba. 13 de los 30 tipos
+    tienen segunda velocidad y ninguno la usa hoy. Es un bloque entero.
+  · tocar `opendoors` -- su `0` es el control de cuatro filas. Ver §2.3.
+  · la huella en el camino de ATRAVESAR. Es tentador ( "que atravesar tambien
+    deje huella" ) y **contradice el diseno escrito** del §2.1: la huella es el
+    premio de abrir, y regalarla vacia el pedido de hoy.
+  · el bot pegado / el vidrio. Sigue siendo el bloque de despues.
+
+
+===============================================================================
+6 · LO QUE HAY QUE MEDIR ANTES DE ESCRIBIR, Y ES BARATO
+===============================================================================
+
+Dos lecturas de consola. Las dos van ANTES del codigo, porque las dos pueden
+cambiar que hay que escribir.
+
+-------------------------------------------------------------------------------
+6.1 · EL EVENTO `doors` CON `opendoors 0`: ¿inerte o sutil?
+-------------------------------------------------------------------------------
+    phantasmagoria_ghost_opendoors 0
+    phantasmagoria_ghost_event doors          ( ocho o diez veces, una por linea )
+
+y leer la **bitacora** a los 0,25 s de cada una. El instrumento ya distingue los
+dos casos y lo dice con esas palabras:
+
+    door SIN EFECTO -- ... no cambio de estado         <- inerte ( lo esperado )
+    door efecto CONFIRMADO -- ... estado X -> Y        <- se movio
+
+⚠ Si sale `SIN EFECTO` en todas, el §3.4 deja de ser una pregunta abierta y pasa
+a ser *"el evento esta roto con opendoors 0 y hay que arreglarlo"*. Si sale
+`CONFIRMADO`, entonces *"muy calmado"* era otra cosa y hay que preguntarle al
+autor que era.
+
+-------------------------------------------------------------------------------
+6.2 · ⚠⚠⚠ EL REVENANT RAPIDO: **UNA** LECTURA SEPARA LAS CINCO CAUSAS
+-------------------------------------------------------------------------------
+Con un Revenant vivo y el autor viendolo ir rapido:
+
+    phantasmagoria_ghost_speed
+
+El reporte imprime los insumos ( `:198-217` ): `ref`, `base`, `fuente`, `mul`,
+`mulFuente`, `baseRun`, `target`, `factor`, y el `at` que dice **cuando se saco
+la foto** ( sin ese sello, una linea vieja y una recien calculada se ven igual --
+ya pasaron tres filas verdes de la r18 imprimiendo el multiplicador del tipo
+anterior ).
+
+Lo que hay que leer, y que veredicto da cada uno:
+
+    mulFuente = "campo phantom_SpeedMul ( tipo )"  y  mul = 0.588
+        -> el enganche del tipo ANDA. El fantasma va a 0.588x y **no es rapido**:
+           lo que el autor ve viene de otro lado. Seguir por `base` y `fuente`.
+
+    mulFuente = "convar ... ( ANDAMIO )"
+        -> el fantasma **no tiene tipo**, o `typespeed` esta en 0. El pedido 2 no
+           tiene nada que ver: el problema es la asignacion de tipo.
+
+    fuente = "fallback" o `base` mucho mayor que 400
+        -> de ahi sale la velocidad, y el multiplicador es inocente.
+
+    derivespeed 0
+        -> 550 u/s de la base, que es el defecto original. Es la explicacion mas
+           economica de "rapidisimo" y se descarta en un renglon.
+
+⚠⚠ **Pegar esta lectura en el chat antes de escribir el pedido 2.** El cambio de
+precedencia hay que hacerlo igual -- el autor lo pidio y es correcto --, pero
+**si se escribe sin esta medicion, se le va a acreditar un arreglo que no hizo**,
+y el fantasma va a seguir rapido con una linea de CHANGELOG diciendo que se
+arreglo. Es exactamente el nº 51 del catalogo: *la evidencia correcta cuyo
+arreglo adjudicado no la toca*.
+
+
+===============================================================================
+7 · LOS INSTRUMENTOS QUE YA EXISTEN. NO SE REESCRIBEN.
+===============================================================================
+
+    phantasmagoria_ghost_doors            reporte de puertas ( server_doors.lua:1764 )
+    phantasmagoria_ghost_puerta           una puerta puntual  ( :2211 )
+    phantasmagoria_ghost_testdoor         forzar el intento   ( :1680 )
+    phantasmagoria_ghost_speed            reporte de velocidad ( server_speed.lua:581 )
+    phantasmagoria_ghost_event doors      dispara el evento
+
+⚠ El nombre de la convar de puertas es `phantasmagoria_ghost_opendoors` y el del
+COMANDO es `phantasmagoria_ghost_doors`. **Se llamaban igual y eso costo una
+ronda entera**: cuando una convar y un concommand comparten nombre la consola
+resuelve la convar y el comando queda mudo ( `server_doors.lua:49-58` ). La convar
+nueva del §3.1 **no puede llamarse igual que ningun comando** -- hay una guarda en
+`PHANTASMAGORIA.AddCommand` que lo grita al cargar, pero es mas barato no pisarlo.
+
+Offline, todos con auto-control, y ninguno necesita el juego:
+
+    find lua -name '*.lua' -print0 | xargs -0 python dev/luacheck_gmod.py
+    python dev/parsear_sintaxis_glua.py lua
+    python dev/auditar_returns_de_hooks.py lua
+    python dev/rutas_de_sonido.py
+
+⚠ `luacheck_gmod.py` **sin argumentos revisa cero archivos y sale 0** -- verde sin
+medir. Va siempre con el `find ... | xargs`.
+
+⚠⚠ Y `auditar_returns_de_hooks.py` importa **especialmente en este bloque**: el
+veto del §3.3 vive en un `hook.Add( "TerminatorBlockUse" )` que **devuelve `true`
+a proposito**, y ese `true` es su API. Tocarlo es tocar un hook cuyo valor de
+retorno decide. `hook.Call` aborta la cadena cuando un hook devuelve algo, y en
+este taller eso se pago dos veces ( `Corpus.OnReady` y el `return` de
+`PlayerSpawn` que se saltea `GM:PlayerSpawn` entero ).
+
+
+===============================================================================
+8 · LA PLANILLA
+===============================================================================
+
+`<workspace>/dev/checks/`, con la forma de siempre ( ⚠ **no es un repo git**: el
+reporte pegado en el chat hay que guardarlo en `dev/CORRIDA_*.md`, que si viaja ).
+Un comando por linea; la consola de Source **corta en 255 caracteres y no avisa**,
+y el error resultante parece de sintaxis de Lua.
+
+Antes de escribir una sola fila, leer
+`memory/controles-que-premian-su-modo-de-falla.md`. Las que este bloque tiene
+mas cerca:
+
+  · **nº 42** ( la asimetria que ordena todo ): un falso ROJO se descubre la
+    primera vez que se usa; un falso VERDE se descubre en el juego, y mientras
+    tanto ACREDITA.
+  · **nº 85**: el sintoma es real y el lugar no -- es el §2.6 entero.
+  · **nº 51**: la evidencia correcta cuyo arreglo adjudicado no la toca.
+  · **nº 87**: un control que prueba que algo DISCRIMINA no descubre que quedo
+    viejo.
+
+Las filas que no pueden faltar:
+
+  00  ⚠⚠⚠ **el control**: `doorchance 0` deja el comportamiento de HOY. El
+      fantasma atraviesa, no abre, `tiradas` no sube. **Si esta fila no sale
+      verde, el resto de la planilla no se puede correr**: significa que la
+      perilla nueva cambio algo que nadie pidio.
+
+  01  con `doorchance 1` **abre siempre** y **deja huella**. Los dos: la hoja se
+      mueve Y `huellas dejadas` sube. Es el techo, y sirve para separar "la
+      chance nunca sale" de "sale y no abre".
+
+  02  con `doorchance 0.3`, veinte encuentros: `tiradas` ~20 y `salio abrir` en
+      un entorno de 6. ⚠ **El criterio no puede ser un numero exacto** -- es un
+      sorteo -- pero **tampoco puede ser "salio algo"**: con la tirada por tick
+      del §3.2 saldrian 20 de 20 y la fila lo tiene que ver. El criterio util es
+      *ni 0 ni 20*.
+
+  03  ⚠⚠⚠ **la tirada es pegajosa**: quedarse pegado a la puerta diez segundos
+      y comprobar que `tiradas` sube **UNA** vez, no sesenta. Es la fila que
+      agarra el defecto del §3.2, y **ninguna otra la puede ver**: con la tirada
+      por tick, las filas 01 y 02 salen verdes igual.
+
+  04  el evento `doors` con `opendoors 0`, segun lo que el autor decida en §3.4.
+
+  05  ⚠⚠ **el multiplicador, sobre un tipo que NO sea x1.000.** `server_speed.lua:51-56`
+      lo dice con el denominador: **19 de los 30 tipos traen `speed.base` 1.000**,
+      asi que *"un check que pruebe un Spirit, un Demon o un Oni no puede fallar:
+      el enganche roto y el enganche andando imprimen el mismo x1.000"*. Los
+      sujetos validos son los 11: aswang 0.900, dayan 0.706, deildegast 0.235,
+      deogen 0.235, gallu 0.800, hantu 0.824, moroi 0.882, obambo 0.850,
+      revenant 0.588, thaye 0.588, the_twins 0.882.
+
+  06  el control del multiplicador: `speedmul 1` deja el numero de hoy **exacto**
+      sobre el mismo sujeto de la 05. Es lo que prueba que el cambio de
+      precedencia no movio a nadie que no pidio moverse.
+
+  07  no romper lo que cerro: el `+USE` de los props, el pestillo, y las puertas
+      con `opendoors 1` siguen andando como antes.
+
+
+===============================================================================
+9 · REGLAS DE LA CASA
+===============================================================================
+
+  · El autor es **chileno**: escribirle de **tu**, sin voseo. Vale tambien para
+    este archivo y para los documentos, que los lee el.
+  · **Commits sin `Co-Authored-By`.**
+  · ⚠⚠ **Hay varias sesiones trabajando este repo al mismo tiempo**, y ya costo
+    dos veces: los cambios del clic quedaron adentro de `221c5e8` y la entrada
+    (48) del CHANGELOG adentro de `f4d2057`, las dos de otras sesiones y ninguna
+    las menciona. **Nunca `git add -A`.** Stagear rutas explicitas y commitear
+    con `git commit -F- -- rutas`, que no deja ventana entre el `add` y el
+    `commit`. **Y mirar `git log` DESPUES.**
+  · `lua/autorun/client/phantasmagoria_eq_check.lua` esta modificado por otra
+    sesion: **no stagearlo**.
+  · ⚠ Hay **dos entradas numeradas (50)** en el CHANGELOG, de dos sesiones
+    distintas. La ultima propia es la **(51)**.
+  · **Leer el `git diff` entero antes de stagear**, y no solo por las sesiones
+    paralelas: el 2026-08-18 un recorte que terminaba en "el proximo renglon en
+    blanco" se llevo 36 lineas de `ESTADO.md` -- en un blockquote no hay
+    renglones en blanco, hay renglones que son `>`. Lo agarro esa lectura y nada
+    mas.
