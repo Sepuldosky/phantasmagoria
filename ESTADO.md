@@ -13,6 +13,93 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-18): LA CACERÍA CORRIÓ 11 DE 11 Y LA CORRIDA DEVOLVIÓ LO QUE FALTABA
+> — UN FANTASMA, UN ARCHIVO. Y la pregunta sobre ecualizar se midió: no es ecualización, son
+> 12,3 LU.** Detalle en el CHANGELOG **(49)**. Planilla nueva:
+> `dev/checks/phantasmagoria-caceria-r2.html`, **once filas**.
+>
+> El autor: *«los fantasmas en phasmophobia solo usan un solo archivo de audio loopeado en toda la
+> partida … los Alternates hablan con varias voces, así que el hunt debería ser tipo un flag para
+> cada fantasma»*. Lo anterior **no estaba roto: resolvía el caso general cuando el caso normal es
+> el particular** — encadenar seis clips hace que el fantasma suene *a un banco de sonido*.
+>
+> **Tres modos**, con prioridad **fantasma → tipo → convar → default**: `uno` (el default, un clip
+> sorteado una vez y loopeado toda la partida) · `varios` (encadena — los Alternates, **y es EL
+> CONTROL**: es lo único ya medido 11 de 11) · `mudo`. ⚠ El default es el modo **nuevo** a
+> conciencia: *una corrección cuyo efecto depende de que alguien tipee algo no es una corrección, es
+> una opción*.
+>
+> ⚠⚠ **El clip fijo reabrió un cabo que la entrada anterior había cerrado en su mitad.**
+> `phantom_ResetVoice` descarta la voz al cambiar el tipo y era completo **el día que se escribió**;
+> el campo nuevo lo volvió parcial sin que nada avisara — un Banshee sobre cuerpo de Male quedaría
+> hablando femenino y **cazando grave**. Es el nº 61 del catálogo.
+>
+> ⚠⚠ **«¿le hacemos una ecualización?» — NO.** Instrumento nuevo `dev/sonoridad_ogg.py` (EBU R128):
+> el gorgoteo está a **−26,4 LUFS** y el canto a **−20,0**; el banco entero abarca **12,3 LU**. El
+> oído del autor midió bien, pero LUFS **ya lleva la ponderación del oído**, así que eso es
+> **ganancia y no espectro**: ecualizar cambiaría el timbre para arreglar algo que no es el timbre.
+> Y **el modo `uno` lo vuelve jugable**: encadenando la brecha se promediaba sola; con un clip fijo, a
+> quien le toque `voice_2_loop_03` caza 10 dB más bajo **toda la partida**.
+>
+> ⚠⚠⚠ **Lo que el Lua NO puede arreglar:** el `volume` de `EmitSound` **sólo baja**, así que nivelar
+> desde acá empareja hacia abajo y los tres clips flojos no se pueden subir — eso es tocar los `.ogg`,
+> con backup previo, y **lo decide el autor**. Por eso `phantasmagoria_ghost_huntvoznivelar` arranca
+> en **0**: el estado que ya se aprobó no se cambia sin pedirlo. Las filas **09 y 10** son esa
+> decisión, y la 10 es corrible sólo gracias a `phantasmagoria_ghost_cazaclip`, que fija el clip a
+> mano — sin él dependría de un sorteo de 1 en 7, y **un check que depende de un sorteo no es un
+> check**.
+>
+> ⭐ **CERRADO (CHANGELOG 50): 11 de 11 otra vez, y el autor eligió.** *«pensándolo bien mejor no, el
+> otro comando para aumentar el volumen a 150 está bien»* — **ni se tocan los `.ogg` ni se baja
+> nada**: `phantasmagoria_ghost_huntvozlvl` pasa de **80 a 150** por default, con el techo a 180 para
+> que el valor elegido no quede pegado al máximo. El default se mueve con él porque `FCVAR_ARCHIVE`
+> guarda **en la máquina del que tipeó** y esa configuración **no viaja en el `.gma`**.
+>
+> ⚠⚠ **Y no arregla la brecha:** el SNDLVL sube los catorce clips **por igual**, así que los 12,3 LU
+> siguen intactos — resuelve *«al flojo no lo escucho»* y no *«unos suenan más que otros»*. Las dos
+> vías para eso siguen sin tocar: `huntvoznivelar 1` empareja hacia abajo, y normalizar los `.ogg` es
+> lo único que empareja hacia arriba. ⚠ 150 está en el orden de `SNDLVL_TRAIN`: en una casa es lo que
+> se busca, **en un mapa abierto se va a oír de muy lejos**.
+
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-18): EL HUNT DEJA DE SER MUDO — catorce clips que estaban en disco
+> hace quince días sin un solo consumidor, y la voz que sale es la del CUERPO.** Detalle en el
+> CHANGELOG **(45)**. Planilla nueva: `dev/checks/phantasmagoria-caceria-r1.html`, **once filas**.
+>
+> Pedido del autor: *«ahora que los ghost tienen sexo y modelo correspondiente, que asignaras en loop
+> las voces de cacería»*. `ghost/hunt/` tenía **14 `.ogg` desde el 2026-08-03 y ninguna línea de Lua
+> los citaba**; trece son la cacería del juego repartida por el **mismo índice** que ya decide el sexo
+> del cuerpo. Quedan **6 clips / 250,1 s** en la voz 1 y **7 / 259,4 s** en la 2, encadenados sin
+> repetir el anterior, colgados de `phantom_SetHunting` — la puerta única del flag.
+>
+> ⚠⚠ **La base YA tenía el mecanismo y no servía, por tres motivos medidos y ninguno de estilo:**
+> `AngryLoopingSounds` está **apagado** (`CanSpeak = false`), se dispara con `IsAngry()` — que es
+> *tener enemigo*, no el hunt, y este addon ya pagó una ronda por confundirlos — y además **latchea**,
+> con lo que la cacería seguiría sonando después de que el hunt se apagó.
+>
+> ⚠⚠ **Y `breath_1.ogg` NO se cabló, aunque el autor lo ofreció.** El permiso era condicional
+> (*«si es que lo necesitan»*) y la condición se fue a medir: **no hay fantasma sin voz**
+> — `phantom_EventVoice()` devuelve siempre 1 o 2, y el degenerado cae al sorteo —, y el clip es
+> **estéreo** (44100 / 2 canales), o sea que **Source no lo espacializa**: servido en 2D se oiría
+> igual de fuerte desde cualquier lado, justo en el sonido cuyo trabajo es dejarte ubicar al
+> fantasma. Queda declarado como banco neutro rotulado `DEGRADADO`, alcanzable sólo si un banco de
+> voz queda vacío. Si alguna vez se lo quiere: **a mono primero**, con `dev/mono_posicionales.py`.
+>
+> **Instrumento nuevo:** `dev/caceria_bancos.py` — los largos están **escritos a mano** en el Lua
+> (`SoundDuration` no es confiable server-side sobre `.ogg`) y ése es el dato que se desincroniza en
+> silencio; el arnés compara cada número contra el archivo. **Y su propia perilla lo agarró
+> mintiendo:** `--romper todos` inyectaba cuatro defectos y reportaba **tres** — uno pisaba al otro —
+> y se daba por pasado porque exigía «al menos una falla». Ahora cada modo declara **cuántas**.
+>
+> ⚠ **Un comentario citaba un instrumento que no existe:** el bloque de la voz decía *«El reporte de
+> `phantasmagoria_ghost_ev` lo imprime»* y ese comando **no está registrado en ninguna parte**, así
+> que `phantom_evVoiceWhy` — el motivo por el que se eligió cada voz — no se podía leer en juego.
+> Lo imprime ahora `phantasmagoria_ghost_caceria`.
+>
+> **Nada de esto corrió en juego.** Todo lo que pasa adentro del motor de sonido — encadenado, corte
+> instantáneo, espacialización, dos fantasmas a la vez, el cadáver que sigue respirando — son las
+> once filas de la planilla. El A/B está a mano y funciona **en vivo**:
+> `phantasmagoria_ghost_huntvoz 0` devuelve el hunt mudo sobre el mismo fantasma que ya está cazando.
+
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-18): EL EVENTO `prop` REVENTABA EN `gm_uh_house` Y YA NO. La causa no
 > era un número mal leído: eran las cuatro letras `LZMA`.** Detalle en el CHANGELOG **(44)**.
 >

@@ -1128,11 +1128,53 @@ end
 -- networkea con slots hardcodeados y el Bool 0 ya es Crouching. Los NW vars van
 -- por nombre y son otro sistema; ademas la base no usa ninguno ( grep de
 -- SetNWBool/SetNW2Bool sobre sus 71 archivos: cero ).
+--
+-- ⚠⚠ Y DESDE EL 2026-08-18 DE ACA CUELGA TAMBIEN LA VOZ DE LA CACERIA
+-- ( `server_events.lua`, bloque LA VOZ DE LA CACERIA ). Cuelga de la PUERTA y no
+-- de un Think por lo que dice el parrafo de arriba: el dia que la cordura mueva
+-- el flag, la voz la sigue sin que nadie se acuerde de engancharla. Un Think que
+-- comparara el flag contra su propio ultimo valor seria una SEGUNDA copia del
+-- estado, y esa copia se desincroniza sin decirlo.
+--
+-- ⚠ LA CONDICION ES LA INVARIANTE Y NO EL CAMBIO: se llama siempre, y son las
+-- dos funciones las que son idempotentes ( `Start` no corta un clip que ya
+-- suena, `Stop` sobre un fantasma callado devuelve false sin escribir ). Escrito
+-- como `if hunting ~= antes`, un fantasma que entrara en hunt por un camino que
+-- no pase por aca -- o que quedara con el flag en true y la caceria apagada por
+-- la convar -- se quedaria mudo para siempre, y el sintoma seria "a veces no
+-- suena", que es el mas caro de perseguir.
 function ENT:phantom_SetHunting( hunting )
     hunting = hunting == true
 
     self.phantom_Hunting = hunting
     self:SetNWBool( "phantasmagoria_hunting", hunting )
+
+    -- ⚠ CON GUARDA Y AVISO DE UNA SOLA VEZ, como `SonarLlave` en server_doors:
+    -- estos metodos los define `server_events.lua`, que es el ULTIMO include de
+    -- este archivo. Si ese include muriera, el hunt se quedaria mudo Y sin decir
+    -- por que -- que es indistinguible de la convar en 0, del banco vacio y del
+    -- fantasma que no entro en hunt. El aviso separa esas cuatro.
+    local arrancar = self.phantom_HuntVoiceStart
+    local callar   = self.phantom_HuntVoiceStop
+
+    if isfunction( arrancar ) and isfunction( callar ) then
+        if hunting then
+            arrancar( self )
+
+        else
+            callar( self, "se apago el hunt" )
+
+        end
+
+    elseif not PHANTASMAGORIA.avisoHuntVoz then
+        PHANTASMAGORIA.avisoHuntVoz = true
+
+        ErrorNoHalt( "[Phantasmagoria] la voz de la caceria NO EXISTE: " ..
+            "`phantom_HuntVoiceStart` / `phantom_HuntVoiceStop` deberian venir de server_events.lua, " ..
+            "que es el ultimo include de server.lua. El hunt va a ser MUDO, y eso se oye igual que " ..
+            "phantasmagoria_ghost_huntvoz en 0. Mirar si server_events.lua cargo.\n" )
+
+    end
 
     return hunting
 

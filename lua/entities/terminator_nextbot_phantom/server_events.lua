@@ -1471,6 +1471,1055 @@ local function sortearPeso( pesos, orden )
 
 end
 
+---------------------------------------------------------------------------
+-- ⭐ LA VOZ DE LA CACERIA -- ES UN LOOP, Y POR ESO **NO** VIVE EN `VOZ`
+---------------------------------------------------------------------------
+-- Pedido del autor ( 2026-08-18 ), literal: *"ahora que los ghost tienen sexo y
+-- modelo correspondiente, que asignaras en loop las voces de caceria"*.
+--
+-- `sound/phantasmagoria/ghost/hunt/` tiene CATORCE clips y estaban en disco
+-- desde el 2026-08-03 **sin un solo consumidor en todo el Lua**. Trece son la
+-- caceria real del juego repartida por voz -- `voice_1_*` y `voice_2_*` --, o sea
+-- el MISMO indice que decide el sexo del cuerpo en `ghost_models.lua` y que fija
+-- el rasgo `voice` del tipo. El catorceavo es `breath_1.ogg` y tiene su bloque
+-- aparte, mas abajo.
+--
+-- ⚠⚠ POR QUE ESTE BANCO NO ENTRA EN LA TABLA `VOZ` DE ARRIBA, que era lo obvio.
+-- `VOZ` es lo que sortea `EV.sound`, o sea el evento paranormal AMBIENTE, y ese
+-- dispara one-shot con `EmitSound( snd, 70, math.random( 96, 104 ) )` sin
+-- guardar nada con que apagarlo. Estos clips miden de **21,05 a 64,92 s**
+-- ( `dev/duracion_ogg.py`; el lector quedo calibrado en la misma corrida contra
+-- los cuatro clips de control de `prop/radio`, 4 de 4 OK ). Metidos ahi, el dia
+-- que un tipo trajera un peso `hunt` en sus `soundBanks` el fantasma largaria
+-- sesenta y cinco segundos de caceria en plena calma y **nadie podria pararlos**
+-- -- que es, palabra por palabra, el motivo por el que los cuatro `_loop` de
+-- `prop/` quedaron fuera del banco plano en la r1 y por el que `clock_tick` se
+-- fue del suyo despues.
+--
+-- *Una tabla que un sorteo recorre es la promesa de que cualquiera de sus
+-- entradas puede salir sola.* Estas no pueden: son un estado, no un evento.
+--
+-- ⚠ Y EL LARGO VA ESCRITO AL LADO DE LA RUTA, EN LA MISMA FILA. `SoundDuration`
+-- no es confiable sobre `.ogg` del lado del servidor -- ya esta escrito mas
+-- arriba, en el bloque de `EMISOR_VIDA` --, asi que el encadenado no puede
+-- preguntarle al motor cuanto dura lo que acaba de emitir. Una segunda tabla
+-- `ruta -> segundos` habria sido una lista paralela que se desincroniza el dia
+-- que alguien agregue un clip en una sola de las dos.
+---------------------------------------------------------------------------
+-- ⭐⭐ r2 ( 2026-08-18 ) -- **UN FANTASMA, UN ARCHIVO**, Y EL FLAG DE LOS TRES MODOS
+---------------------------------------------------------------------------
+-- La r1 encadenaba clips DISTINTOS y paso 11 de 11 en juego. El autor la corrio
+-- entera y agrego la acotacion que faltaba, literal: *"los fantasmas en
+-- phasmophobia solo usan un solo archivo de audio loopeado en toda la partida,
+-- es decir cada voz es particular al fantasma. Los «Alternates» que busco
+-- construir mas adelante hablan con varias voces, asi que el hunt deberia ser
+-- tipo un flag para cada fantasma."*
+--
+-- O sea que la r1 no estaba rota: **estaba resolviendo el caso general cuando el
+-- caso normal es el particular**. Encadenar seis clips distintos hace que el
+-- fantasma suene a un banco de sonido; quedarse con UNO lo vuelve un individuo,
+-- que es la misma tesis del `fingerprint sonoro` que Diseno §5 le pide a la voz.
+--
+-- LOS TRES MODOS, y son tres y no dos porque el autor nombro los tres casos:
+--
+--   uno      ( DEFAULT ) el clip se sortea UNA VEZ por fantasma y se loopea toda
+--            la partida. Es Phasmophobia, y es lo que el autor describio.
+--   varios   encadena clips distintos sin repetir el anterior -- el
+--            comportamiento de la r1. Queda para los **Alternates**, que "hablan
+--            con varias voces", y **es tambien el CONTROL**: la r1 corrio 11 de
+--            11 con esto, asi que apagar el modo nuevo devuelve un estado que ya
+--            esta medido en juego, no una hipotesis.
+--   mudo     este fantasma no hace ruido de caceria. Es el *"para que algunos
+--            hagan ruido de hunt y otros no"*.
+--
+-- ⚠⚠ Y EL DEFAULT ES `uno` AUNQUE SEA EL MODO NUEVO. Escrito al reves -- default
+-- `varios`, que es lo ya medido -- el pedido del autor quedaria detras de una
+-- perilla que hay que acordarse de mover, o sea implementado y apagado. *Una
+-- correccion cuyo efecto depende de que alguien tipee algo no es una correccion:
+-- es una opcion.* Lo que se paga a cambio es que el estado medido pasa a ser el
+-- que hay que pedir, y por eso `varios` es explicitamente el CONTROL y tiene su
+-- fila propia en la planilla.
+--
+-- ⚠ LA PRIORIDAD ES **override del fantasma > rasgo del tipo > convar global >
+-- `uno`**, y el orden es la decision. El override por fantasma va primero porque
+-- es el andamio con el que el autor va a poder tener dos fantasmas al lado, uno
+-- mudo y otro no, que es literalmente lo que pidio. El rasgo del tipo va segundo
+-- porque es la regla del juego y no una prueba. La convar global va tercera
+-- porque es del que MIDE, no del diseno; y si estuviera primera, tocarla para un
+-- A/B pisaria en silencio un rasgo que un tipo declara -- que es el defecto nº 49
+-- del catalogo con otra cara.
+--
+-- ⚠ HOY NINGUN TIPO DECLARA EL RASGO, y eso esta bien: los treinta caen al
+-- default. La lectura ya esta escrita para que el dia que `ghost_flags.lua`
+-- declare `huntVoice = "mudo"` en un tipo, funcione sin tocar una linea de aca.
+-- *Un gancho que no se escribe el dia que se disena el mecanismo se escribe el
+-- dia que hace falta, o sea con el archivo de datos ya lleno.*
+---------------------------------------------------------------------------
+-- POR QUE NO SE USA `AngryLoopingSounds` DE LA BASE, QUE HACE CASI ESTO
+---------------------------------------------------------------------------
+-- La base TIENE el mecanismo: `ENT.IdleLoopingSounds` / `ENT.AngryLoopingSounds`
+-- + `SpokenLinesThink` ( terminator nextbot/spokenlines.lua:39-100 ), que
+-- encadena un `CreateSound` y lo reinicia cuando termina. Se leyo entero antes
+-- de escribir esto, y no sirve por TRES motivos medidos, no por estilo:
+--
+--   ① ESTA APAGADO. `ENT.CanSpeak = false` ( su shared.lua:177 ) y el phantom no
+--      lo prende en ninguna linea: `SpokenLinesThink` sale en su primer `if`.
+--      O sea que hoy el subsistema entero es codigo muerto para nosotros.
+--   ② EL DISPARADOR ES OTRO. Elige el banco con `self:IsAngry()`, que es *tener
+--      enemigo / que te hayan pegado / `terminator_PermanentAngry`*
+--      ( motionoverrides.lua:659 ) -- **no** nuestro flag de hunt. Este addon ya
+--      pago una ronda entera por confundir las dos cosas: server.lua:1260 dice
+--      con todas las letras *"esa frase no es EL HUNT, es TENER ENEMIGO -- y son
+--      cosas distintas"*.
+--   ③ Y SE QUEDA PRENDIDO. `terminator_AngryTime` es una latch y
+--      `terminator_PermanentAngry` no se apaga nunca: la caceria seguiria
+--      sonando despues de que el hunt se apago, que es el sintoma mas caro de
+--      todos ( se oye como "el fantasma sigue cazando" cuando ya no ).
+--
+-- Se cuelga entonces de `phantom_SetHunting` ( server.lua ), que es LA PUERTA
+-- UNICA del flag y ya esta declarada como tal en su propio bloque.
+---------------------------------------------------------------------------
+-- EL CANAL, Y QUE NO CHOCA CON NADA
+---------------------------------------------------------------------------
+-- Va por `CHAN_VOICE`. La ventaja no es cosmetica: un `EmitSound` nuevo en el
+-- mismo canal reemplaza al que estaba sonando, asi que un timer que dispare dos
+-- veces no deja dos cacerias superpuestas. Igual se llama `StopSound` con el
+-- nombre del archivo, que no depende de esa promesa del engine.
+--
+-- Censo de quien mas usa `CHAN_VOICE` sobre el bot -- son cuatro lineas y las
+-- cuatro estan en `spokenlines.lua` ( :145, :185, :208, :240 ), o sea adentro del
+-- subsistema que el ① de arriba deja apagado. `EV.sound`, la otra voz que sale
+-- del fantasma, emite en `CHAN_AUTO` ( no pasa canal ): no se cortan entre si.
+---------------------------------------------------------------------------
+
+-- ⚠ EL HUECO ENTRE UNA VUELTA Y LA SIGUIENTE ES **POR MODO**, y no es un ajuste
+-- fino: son dos cosas distintas con el mismo nombre.
+--
+--   en `uno`     el archivo se re-emite a si mismo, asi que el empalme es EL
+--                MISMO PUNTO cada vuelta y el oido lo aprende. Cualquier hueco
+--                audible convierte un loop en "se corta y arranca". Va en CERO:
+--                lo unico que queda es el jitter del timer ( un frame, ~15 ms a
+--                66 tick ), y el largo esta medido a 2 decimales, o sea ±5 ms.
+--   en `varios`  el clip que entra es OTRO, asi que el cambio se oye igual. Un
+--                respiro corto ahi lee como una pausa del fantasma y no como un
+--                corte -- y ademas tapa el salto de sonoridad entre dos clips
+--                que no estan nivelados ( ver el bloque de LUFS, abajo ).
+local HUNT_GAP = { uno = 0.00, varios = 0.15 }
+
+---------------------------------------------------------------------------
+-- ⚠⚠ LA TERCERA COLUMNA ES **SONORIDAD MEDIDA**, Y SALIO DE UNA CORRIDA EN JUEGO
+---------------------------------------------------------------------------
+-- El autor, corriendo la fila 09 de la r1: *"Ese loop se siente mas bajito que
+-- las «canciones» tarareadas. El loop_03 es un canto, ese suena mas fuerte por
+-- lo agudo de la voz, el loop_01 es como un gorgoteo grave femenino, le hacemos
+-- una ecualizacion?"*
+--
+-- Se fue a medir antes de contestar, con `dev/sonoridad_ogg.py` ( EBU R128 sobre
+-- ffmpeg ). Los dos clips que nombro:
+--
+--     voice_1_loop_01  ( el gorgoteo )   -26,4 LUFS
+--     voice_1_loop_03  ( el canto )      -20,0 LUFS      ->  6,4 LU de brecha
+--
+-- ⚠ Y LA RESPUESTA A LA PREGUNTA ES **NO**: no falta ecualizar. LUFS lleva la
+-- ponderacion K, que ya modela la sensibilidad del oido por frecuencia, asi que
+-- esos 6,4 LU **no** son "se percibe mas bajo por ser grave": son mas bajo. Una
+-- ecualizacion corrige el ESPECTRO y este defecto es de GANANCIA -- aplicarla
+-- cambiaria el timbre de la voz para arreglar algo que no es el timbre.
+--
+-- ⚠⚠ Y EL MODO `uno` LO CONVIERTE DE ESTETICO EN JUGABLE. El banco entero va de
+-- **-30,5 a -18,2 LUFS: 12,3 LU de dispersion**. Encadenando ( la r1 ) eso se
+-- promediaba solo. Con un clip fijo por fantasma NO se promedia: al que le toque
+-- `voice_2_loop_03` caza 10 dB mas bajo que al que le toque `voice_1_loop_04`,
+-- toda la partida, y la caceria es la senal con la que el jugador decide correr.
+--
+-- ⚠⚠⚠ LO QUE ESTE LADO **NO** PUEDE ARREGLAR, Y HAY QUE DECIRLO. El `volume` de
+-- `EmitSound` va de 0 a 1: **solo baja**. O sea que nivelar desde el Lua empareja
+-- HACIA ABAJO y los clips por debajo del objetivo se quedan donde estan. Subir
+-- los tres flojos ( `voice_2_loop_03`, `voice_2_grim`, `voice_1_loop_01` ) es
+-- tocar los `.ogg`, y eso es decision del autor: `sound/` esta gitignoreado y una
+-- normalizacion no se deshace sin el backup previo.
+--
+-- Por eso la nivelacion tiene perilla y **arranca en 0**: el estado que el autor
+-- ya oyo y aprobo 11 de 11 no se cambia sin que el lo pida. La perilla existe
+-- para que pueda comparar en juego, que es donde se decide.
+local HUNT_LUFS_OBJETIVO = -24.0
+
+-- ⚠ EL LARGO Y EL LUFS SON DATO MEDIDO, NO ESTIMADO.
+--   largo   `python dev/duracion_ogg.py sound/phantasmagoria/ghost/hunt`, con el
+--           lector calibrado en la MISMA sesion contra `prop/radio` ( 4 de 4 de
+--           control OK ). Ese instrumento ademas cuenta canales, y los trece son
+--           **mono** -- la precondicion de que el motor los espacialice, o sea de
+--           que la caceria te sirva para ubicar al fantasma.
+--   lufs    `python dev/sonoridad_ogg.py sound/phantasmagoria/ghost/hunt`
+--           ( EBU R128 integrado, ffmpeg ).
+-- Los dos los vuelve a comprobar `dev/caceria_bancos.py` contra el archivo.
+--
+--     { ruta, largo en s, LUFS integrado }
+local HUNT = {
+    -- La voz 1 ( femenina ): ghost_girl y ghost_oldcrone.
+    [ 1 ] = {
+        { "phantasmagoria/ghost/hunt/voice_1_loop_01.ogg", 47.22, -26.4 },
+        { "phantasmagoria/ghost/hunt/voice_1_loop_02.ogg", 21.05, -19.9 },
+        { "phantasmagoria/ghost/hunt/voice_1_loop_03.ogg", 24.24, -20.0 },
+        { "phantasmagoria/ghost/hunt/voice_1_loop_04.ogg", 58.33, -18.2 },
+        { "phantasmagoria/ghost/hunt/voice_1_loop_05.ogg", 64.92, -24.2 },
+        { "phantasmagoria/ghost/hunt/voice_1_inhales.ogg", 34.32, -22.3 },
+    },
+
+    -- La voz 2 ( grave ): ghost_male.
+    [ 2 ] = {
+        { "phantasmagoria/ghost/hunt/voice_2_loop_01.ogg",    41.23, -24.1 },
+        { "phantasmagoria/ghost/hunt/voice_2_loop_02.ogg",    40.97, -24.0 },
+        { "phantasmagoria/ghost/hunt/voice_2_loop_03.ogg",    50.09, -30.5 },
+        { "phantasmagoria/ghost/hunt/voice_2_loop_04.ogg",    36.81, -20.2 },
+        { "phantasmagoria/ghost/hunt/voice_2_loop_05.ogg",    39.37, -20.7 },
+        { "phantasmagoria/ghost/hunt/voice_2_whispering.ogg", 22.88, -24.3 },
+        { "phantasmagoria/ghost/hunt/voice_2_grim.ogg",       28.03, -30.2 },
+    },
+}
+
+---------------------------------------------------------------------------
+-- ⚠⚠ `breath_1.ogg` -- EL PEDIDO DEL AUTOR, Y LAS DOS COSAS QUE SE MIDIERON
+---------------------------------------------------------------------------
+-- El autor lo ofrecio asi: *"breath_1 puede ser para los sin tipo si es que lo
+-- necesitan"*. Es un permiso condicional, y la condicion se fue a medir en vez
+-- de darla por buena. Las dos mediciones dicen que HOY no lo necesitan, y por
+-- que si algun dia lo necesitaran habria que tocarlo ANTES:
+--
+--   ① NO HAY FANTASMA SIN VOZ. `phantom_EventVoice()` devuelve **siempre** 1 o
+--      2: si el tipo no la fija y el modelo tampoco -- que es el caso degenerado
+--      normal, y el unico que existe con un cuerpo ajeno -- cae al
+--      `math.random( 1, 2 )` de su ultima rama. O sea que el fantasma "sin tipo"
+--      no se queda sin banco: se queda sin QUIEN DECLARE su voz, que es otra
+--      cosa, y el sorteo ya se hace cargo. Un fallback puesto sobre un caso que
+--      no ocurre es codigo que nadie va a oir nunca y que igual acredita.
+--
+--   ② Y ES **ESTEREO**, que sobre este clip en particular no es un detalle:
+--      44100 / **2 canales** / 2,60 s ( `dev/duracion_ogg.py`, que lo marca solo
+--      con `!! 2 CANALES` ). **Source no espacializa un estereo: lo tira en 2D.**
+--      La caceria es justamente el sonido cuyo TRABAJO es dejarte ubicar al
+--      fantasma; servido en 2D se oiria igual de fuerte pegado a la puerta que
+--      desde el otro cuarto, y el jugador leeria eso como "el mod no ubica
+--      nada". Los trece de voz son mono y no tienen el problema.
+--
+-- Queda declarado igual, y con un solo consumidor: **el banco de la voz vacio**.
+-- Eso hoy es inalcanzable ( los dos tienen seis y siete clips ), y esta escrito
+-- para que el dia que alguien vacie uno la caceria no enmudezca EN SILENCIO --
+-- que es el modo de falla que `dev/rutas_de_sonido.py` describe en su cabecera:
+-- un sonido que falta no da error, da silencio, y el silencio se disfraza de las
+-- otras tres causas. El instrumento de abajo lo rotula `DEGRADADO`.
+--
+-- ⚠ SI ALGUN DIA SE LO QUIERE DE VERDAD: pasarlo a mono primero, con
+-- `dev/mono_posicionales.py`, que hace el backup antes ( una conversion a mono
+-- no se deshace y `sound/` esta gitignoreado ). Cablearlo como esta seria meter
+-- el defecto que ese script existe para sacar.
+local HUNT_NEUTRA = {
+    { "phantasmagoria/ghost/hunt/breath_1.ogg", 2.60, -21.1 },
+}
+
+---------------------------------------------------------------------------
+-- LAS PERILLAS
+---------------------------------------------------------------------------
+-- ⚠ DOS ESTADOS Y NO TRES, igual que `evhunt` y `evreserva`: no hay un flag por
+-- NPC que ignorar. El 0 es el CONTROL y reproduce EXACTAMENTE lo de antes de
+-- este bloque -- el hunt mudo --, que es lo que hace que "no se oye la caceria"
+-- se pueda separar de "el hunt no se prendio".
+local cvHuntVoz = CreateConVar( "phantasmagoria_ghost_huntvoz", "1", FCVAR_ARCHIVE,
+    "La voz de la caceria. Mientras el fantasma esta en hunt suena el clip de " ..
+    "sound/phantasmagoria/ghost/hunt/ que le toca a SU voz ( 1 femenina, 2 grave ). " ..
+    "0 = CONTROL, el hunt vuelve a ser mudo ( el comportamiento previo al 2026-08-18 ) - 1 = puesta.", 0, 1 )
+
+---------------------------------------------------------------------------
+-- ⭐ 150, Y ES LA DECISION DEL AUTOR SOBRE LOS 12,3 LU -- r3 ( 2026-08-18 )
+---------------------------------------------------------------------------
+-- Arrancó en 70 ( el de la voz ambiente ) y pasó a 80 en la r1: el susurro de
+-- `EV.sound` es presencia de cuarto y la caceria tiene que oirse desde el otro
+-- lado de la casa, porque es la senal con la que el jugador decide correr.
+--
+-- La r2 midio que el banco tiene **12,3 LU de dispersion** y dejo la pregunta
+-- abierta en dos filas de la planilla: emparejar bajando desde el Lua
+-- ( `huntvoznivelar` ), o normalizar los `.ogg`. El autor corrio las once filas
+-- y contesto las dos que no: *"ahi digo que yo usaria el comando para
+-- normalizar, pero pensandolo bien mejor no, el otro comando para aumentar el
+-- volumen a 150 esta bien"*.
+--
+-- O sea: **ni se tocan los assets ni se baja nada. Se sube el nivel.** Y el
+-- default se mueve con el, porque una perilla `FCVAR_ARCHIVE` se guarda en la
+-- maquina del que la tipeo y **no viaja en el `.gma`**: dejar el default en 80
+-- habria hecho que la decision del autor valiera para su partida y para ninguna
+-- otra. Es la misma razon por la que el modo `uno` es el default y no una
+-- opcion.
+--
+-- ⚠⚠ LO QUE ESTO **NO** ARREGLA, Y HAY QUE TENERLO ESCRITO. El SNDLVL multiplica
+-- a los catorce clips por igual, asi que **la brecha de 12,3 LU sigue intacta**:
+-- el flojo sigue siendo 10 dB mas flojo que el fuerte, solo que ahora los dos
+-- llegan mucho mas lejos. Resuelve *"al clip flojo no lo escucho"* y no resuelve
+-- *"unos suenan mas que otros"* -- son dos afirmaciones distintas y esta perilla
+-- solo puede con la primera. Si algun dia la segunda molesta, las dos vias
+-- siguen donde estaban: `phantasmagoria_ghost_huntvoznivelar 1` empareja hacia
+-- abajo, y normalizar los `.ogg` es lo unico que empareja hacia arriba.
+--
+-- ⚠ Y TIENE UN EFECTO QUE EN UNA CASA NO SE VE: un SNDLVL de 150 esta en el
+-- orden de un tren ( `SNDLVL_TRAIN` ), asi que la caida con la distancia es
+-- minima y en un mapa ABIERTO la caceria se va a oir de muy lejos. Adentro de
+-- una casa -- que es el sujeto de Phasmophobia y de este addon -- es justo lo
+-- que se quiere. La perilla sigue a mano y el callback la aplica en vivo.
+--
+-- El tope se corre de 150 a 180 para que el default no quede pegado al maximo:
+-- una perilla cuyo valor elegido es tambien su techo no deja probar si el
+-- problema era que faltaba mas.
+local cvHuntVozLvl = CreateConVar( "phantasmagoria_ghost_huntvozlvl", "150", FCVAR_ARCHIVE,
+    "SNDLVL de la voz de caceria. 70 es el de la voz ambiente ( EV.sound ), 80 se oye a traves de " ..
+    "un par de paredes, y 150 -- el elegido por el autor -- casi no se atenua con la distancia. " ..
+    "Sube el ALCANCE de los catorce clips POR IGUAL: no cambia la brecha de sonoridad entre ellos.",
+    50, 180 )
+
+-- ⚠ EL DEFAULT DE ESTA ES `auto` Y NO UN MODO, y no es lo mismo. `auto` significa
+-- *no opino, decide el fantasma o su tipo*; escribir `uno` aca haria que la
+-- convar global -- que es del que mide -- pisara el rasgo de un tipo que manana
+-- declare `mudo`, en silencio y en todas las partidas. Es el nº 49 del catalogo:
+-- una perilla que apaga justamente lo que existe para probar.
+local cvHuntVozModo = CreateConVar( "phantasmagoria_ghost_huntvozmodo", "auto", FCVAR_ARCHIVE,
+    "Modo de la voz de caceria para los fantasmas que no lo declaren ellos ni su tipo. " ..
+    "auto = el default del bloque ( uno ) - uno = UN clip sorteado una vez y loopeado toda la " ..
+    "partida ( Phasmophobia ) - varios = encadena clips distintos ( el CONTROL: es la r1, medida " ..
+    "11 de 11 en juego ) - mudo = este fantasma no hace ruido de caceria." )
+
+-- ⚠ ARRANCA EN 0 A PROPOSITO. Ver el bloque de LUFS: el autor ya oyo y aprobo el
+-- estado sin nivelar, asi que el cambio no se le mete sin que lo pida. La perilla
+-- existe para que pueda comparar EN JUEGO, que es donde se decide -- y no para
+-- dejar el arreglo escrito y apagado, que seria la trampa inversa.
+local cvHuntVozNivel = CreateConVar( "phantasmagoria_ghost_huntvoznivelar", "0", FCVAR_ARCHIVE,
+    "Nivela la sonoridad de los clips de caceria bajando los mas fuertes hasta " ..
+    tostring( HUNT_LUFS_OBJETIVO ) .. " LUFS. El banco tiene 12,3 LU de dispersion medida y el " ..
+    "`volume` de EmitSound SOLO BAJA, asi que esto empareja hacia abajo y los tres clips que ya " ..
+    "estan por debajo del objetivo no se pueden subir desde aca. 0 = CONTROL, como suena hoy.", 0, 1 )
+
+---------------------------------------------------------------------------
+-- EL MODO DE CADA FANTASMA
+---------------------------------------------------------------------------
+local MODOS = { uno = true, varios = true, mudo = true }
+
+--[[
+    phantom_HuntVoiceMode() -> "uno" | "varios" | "mudo", motivo
+
+    ⚠ DEVUELVE EL MOTIVO Y NO SOLO EL MODO, por lo mismo que `phantom_EventVoice`:
+    "salio mudo" no distingue *lo puso el andamio* de *lo pide el tipo* de *lo
+    forzo la convar global*, y las tres se ven igual en una consola. El reporte
+    lo imprime.
+
+    ⚠ Y NO CACHEA. La voz se cachea porque sortear clip por clip delataria que el
+    sonido es una tabla; el modo no sortea nada -- es una lectura de tres campos
+    -- y cachearlo lo volveria otra perilla que no alcanza a los que ya existen
+    ( nº 26 ). Se resuelve en cada vuelta del loop, que es una vez cada 20-65 s.
+]]
+function ENT:phantom_HuntVoiceMode()
+    -- ① el override del fantasma: el andamio con el que el autor pone dos al
+    --    lado, uno mudo y otro no.
+    local propio = self.phantom_huntVozModo
+
+    if MODOS[ propio ] then
+        return propio, "lo fija ESTE fantasma ( phantasmagoria_ghost_cazavoz )"
+
+    end
+
+    -- ② el rasgo del tipo. Hoy ninguno de los 30 lo declara y todos caen mas
+    --    abajo; la lectura existe para que declararlo manana no toque codigo.
+    local flags = self:phantom_EventFlags()
+    local delTipo = flags and flags.huntVoice
+
+    if MODOS[ delTipo ] then
+        return delTipo, "lo fija el TIPO " .. tostring( self.phantom_TypeKey ) ..
+            " ( rasgo huntVoice = " .. delTipo .. " )"
+
+    end
+
+    -- ③ la convar global, que es del que mide.
+    local global = string.lower( string.Trim( cvHuntVozModo:GetString() or "" ) )
+
+    if MODOS[ global ] then
+        return global, "lo fuerza phantasmagoria_ghost_huntvozmodo = " .. global
+
+    end
+
+    -- ⚠ UN VALOR QUE NO ES NINGUNO DE LOS TRES SE DICE, no se traga. `auto` es el
+    -- default legitimo y calla; cualquier otra cosa es un tipeo y el sintoma
+    -- seria "la convar no hace nada", que se lee como que el modo no existe.
+    if global ~= "" and global ~= "auto" then
+        return "uno", "phantasmagoria_ghost_huntvozmodo dice '" .. global ..
+            "', que NO es uno/varios/mudo/auto -- se usa el default"
+
+    end
+
+    -- ④ el default del bloque, que es lo que el autor describio de Phasmophobia.
+    return "uno", "el default ( un solo archivo por fantasma, como Phasmophobia )"
+
+end
+
+---------------------------------------------------------------------------
+-- EL ENCADENADO
+---------------------------------------------------------------------------
+
+-- ⚠ LA CLAVE DEL TIMER ES LA **SERIE** Y NO EL EntIndex, por lo mismo que la
+-- bitacora de arriba: GMod recicla el EntIndex, asi que dos fantasmas separados
+-- por un respawn pueden compartir nombre de timer y el segundo le apagaria la
+-- caceria al primero. Se guarda ademas EN el fantasma, para que el `Stop` borre
+-- exactamente el timer que el `Start` creo aunque la serie cambiara en el medio.
+local function idCaceria( ghost )
+    return "phantasmagoria_huntvoz_s" .. tostring( ghost.phantom_Serial or ( "e" .. ghost:EntIndex() ) )
+
+end
+
+-- Devuelve true si habia algo sonando ( o sea: si esta llamada CALLO algo ).
+-- Que devuelva el hecho y no un ok es lo que deja que la bitacora no escriba
+-- "se apago la caceria" cuando no habia ninguna -- que es la mitad del spam de
+-- un log que despues nadie lee.
+local function pararCaceria( ghost, motivo )
+    if not IsValid( ghost ) then return false end
+
+    local id = ghost.phantom_huntTimer
+
+    if id then
+        timer.Remove( id )
+        ghost.phantom_huntTimer = nil
+
+    end
+
+    local snd = ghost.phantom_huntSnd
+    if not snd then return false end
+
+    ghost.phantom_huntSnd   = nil
+    ghost.phantom_huntHasta = nil
+
+    ghost:StopSound( snd )
+
+    anotar( quien( ghost ) .. "  caceria CALLADA  ( " .. tostring( motivo or "sin motivo declarado" ) .. " )" )
+
+    return true
+
+end
+
+-- Declarada antes de definirse porque se llama a si misma desde el timer: sin
+-- esto el `local` de adentro seria un upvalue nil en la primera vuelta y la
+-- caceria sonaria UNA vez -- que se oye exactamente igual que "los clips no
+-- encadenan", pero por un motivo que no tiene nada que ver con el sonido.
+local sonarCaceria
+
+function sonarCaceria( ghost )
+    if not IsValid( ghost ) then return false end
+
+    -- Las tres puertas, cada una con SU motivo. "No suena" tiene causas
+    -- distintas que desde afuera se oyen igual ( catalogo nº 49 ), y las tres
+    -- terminan en la bitacora diciendo cual fue.
+    if not cvHuntVoz:GetBool() then
+        return pararCaceria( ghost, "phantasmagoria_ghost_huntvoz esta en 0 ( el CONTROL )" )
+
+    end
+
+    -- `term_Dead` lo pone la base en la primera linea de su OnKilled
+    -- ( damageandhealth.lua:676 ). Se mira ademas del OnKilled propio porque
+    -- entre la muerte y el Remove pasan varios frames, y en ese hueco el timer
+    -- puede vencer: un cadaver que sigue cazando es el peor de los sintomas
+    -- posibles, porque suena a mecanica y no a bug.
+    if ghost.term_Dead then
+        return pararCaceria( ghost, "el fantasma esta muerto" )
+
+    end
+
+    if not ghost:phantom_IsHunting() then
+        return pararCaceria( ghost, "el hunt se apago" )
+
+    end
+
+    -- ⚠ LA CUARTA PUERTA ES EL MODO, Y SE LEE EN CADA VUELTA A PROPOSITO. Es el
+    -- *"para que algunos hagan ruido de hunt y otros no"* del autor. Se resuelve
+    -- aca y no en el `Start` porque asi un `cazavoz mudo` tipeado en el medio de
+    -- una caceria la calla en la vuelta siguiente sin que nadie re-prenda el
+    -- hunt -- y el motivo entra en la bitacora, que es lo que distingue *lo
+    -- pusieron mudo* de *el bloque dejo de andar*.
+    local modo, porQueModo = ghost:phantom_HuntVoiceMode()
+
+    if modo == "mudo" then
+        return pararCaceria( ghost, "modo MUDO -- " .. tostring( porQueModo ) )
+
+    end
+
+    local voz       = ghost:phantom_EventVoice()
+    local banco     = HUNT[ voz ]
+    local degradado = ""
+
+    if not istable( banco ) or #banco <= 0 then
+        banco     = HUNT_NEUTRA
+        degradado = "  ( DEGRADADO: la voz " .. tostring( voz ) .. " no tiene banco de caceria; " ..
+            "suena el neutro, que es ESTEREO y no se espacializa )"
+
+    end
+
+    if #banco <= 0 then
+        return pararCaceria( ghost, "ni la voz " .. tostring( voz ) .. " ni el banco neutro tienen un clip" )
+
+    end
+
+    ---------------------------------------------------------------------------
+    -- QUE CLIP -- Y ACA ES DONDE LOS DOS MODOS SE SEPARAN
+    ---------------------------------------------------------------------------
+    local idx
+
+    if modo == "uno" then
+        -- ⭐ UN FANTASMA, UN ARCHIVO. Se sortea la PRIMERA vez y se guarda; de
+        -- ahi en adelante todas las vueltas re-emiten el mismo. Es lo que el
+        -- autor describio de Phasmophobia y lo que vuelve la voz *de ese
+        -- fantasma* en vez de *del banco*.
+        --
+        -- ⚠ SE GUARDA EL INDICE Y SE **RE-VALIDA**, no se guarda la ruta suelta.
+        -- El indice apunta a `banco`, y `banco` depende de la VOZ: si la voz
+        -- cambiara ( `phantasmagoria_ghost_type banshee` sobre un fantasma vivo,
+        -- que es un camino real y ya medido ) un indice viejo apuntaria a otro
+        -- clip -- o a ninguno, si el banco nuevo es mas corto. Se comprueba que
+        -- siga en rango y que la ruta guardada sea la de ese indice; si no, se
+        -- vuelve a sortear y SE DICE.
+        idx = ghost.phantom_huntFijo
+
+        local fila = idx and banco[ idx ]
+
+        if not fila or ( ghost.phantom_huntFijoRuta and fila[ 1 ] ~= ghost.phantom_huntFijoRuta ) then
+            idx = math.random( #banco )
+
+            ghost.phantom_huntFijo     = idx
+            ghost.phantom_huntFijoRuta = banco[ idx ][ 1 ]
+            ghost.phantom_huntFijoWhy  = fila and
+                "RE-SORTEADO: el clip anterior no pertenece al banco de la voz " .. tostring( voz ) or
+                "sorteado una vez, al entrar en hunt por primera vez"
+
+        end
+    else
+        -- `varios` -- el encadenado de la r1, que corrio 11 de 11 en juego y
+        -- queda como CONTROL y como el camino de los Alternates.
+        --
+        -- ⚠ NO REPETIR EL CLIP ANTERIOR, y sorteando sobre los OTROS n-1 en vez
+        -- de volver a tirar hasta que salga otro: un reintento es un bucle cuya
+        -- cota superior no esta escrita en ninguna parte, y con un banco de un
+        -- solo clip no termina nunca. Esto elige uniforme entre los n-1
+        -- restantes y corrige el indice, que es la misma cuenta hecha una vez.
+        local n = #banco
+        idx = math.random( n )
+
+        if n > 1 and ghost.phantom_huntIdx then
+            idx = math.random( n - 1 )
+            if idx >= ghost.phantom_huntIdx then idx = idx + 1 end
+
+        end
+    end
+
+    local clip = banco[ idx ]
+    local ruta, dur, lufs = clip[ 1 ], clip[ 2 ], clip[ 3 ]
+
+    -- El anterior se para POR NOMBRE ademas de por canal. `CHAN_VOICE` ya
+    -- reemplaza lo que este sonando ahi, pero eso es una promesa del engine
+    -- sobre un canal compartido; el `StopSound` nombra el archivo y no depende
+    -- de ella.
+    local previo = ghost.phantom_huntSnd
+    if previo then ghost:StopSound( previo ) end
+
+    -- ⚠ LA NIVELACION SOLO BAJA, y el `math.min( 1, ... )` no es una precaucion
+    -- de estilo: tres clips del banco estan POR DEBAJO del objetivo y su factor
+    -- da mayor que 1. Un `volume` > 1 en `EmitSound` no sube nada -- el engine
+    -- lo satura -- pero si lo escribieramos sin el clamp, el reporte diria
+    -- "x1,45" sobre un clip que suena exactamente igual que sin nivelar, y eso
+    -- es un numero que afirma un efecto que no existe.
+    local vol = 1
+
+    if cvHuntVozNivel:GetBool() and isnumber( lufs ) then
+        vol = math.min( 1, 10 ^ ( ( HUNT_LUFS_OBJETIVO - lufs ) / 20 ) )
+
+    end
+
+    -- ⚠⚠ PITCH **100 CLAVADO**, Y NO ES UN OLVIDO. Las otras familias sortean
+    -- 96-104 para que el banco no se oiga como una tabla. Aca el pitch cambia el
+    -- LARGO REAL del clip -- la propia base lo divide,
+    -- `duration / ( pitch / 100 )` en spokenlines.lua:29 -- y el largo esta
+    -- escrito a mano en la tabla de arriba porque `SoundDuration` no es
+    -- confiable server-side sobre `.ogg`. Con pitch sorteado el encadenado se
+    -- corre hasta un 4 %: sobre los 64,92 s del clip mas largo son 2,6 s de
+    -- silencio o de solape POR VUELTA, y el error se ACUMULA porque cada vuelta
+    -- agenda la siguiente. Un desfasaje que crece se oye recien despues de
+    -- varios minutos de hunt, o sea nunca en una prueba corta.
+    --
+    -- ⚠⚠⚠ Y EN EL MODO `uno` ESO DEJA DE SER UNA PRECAUCION Y PASA A SER LA
+    -- CONDICION DE QUE EL LOOP EXISTA: el empalme cae siempre en el mismo punto
+    -- del mismo archivo, asi que un desfasaje que crece se oye como un hueco que
+    -- se agranda vuelta a vuelta. Encadenando clips distintos se disimulaba.
+    ghost:EmitSound( ruta, cvHuntVozLvl:GetInt(), 100, vol, CHAN_VOICE )
+
+    ghost.phantom_huntSnd   = ruta
+    ghost.phantom_huntIdx   = idx
+    ghost.phantom_huntVol   = vol
+    ghost.phantom_huntHasta = CurTime() + dur
+
+    local id = idCaceria( ghost )
+    ghost.phantom_huntTimer = id
+
+    timer.Create( id, dur + ( HUNT_GAP[ modo ] or 0 ), 1, function()
+        if not IsValid( ghost ) then timer.Remove( id ) return end
+
+        sonarCaceria( ghost )
+
+    end )
+
+    -- La bitacora NOMBRA EL ARCHIVO, por lo mismo que `EV.sound`: cuando el
+    -- engine escriba `Invalid sample rate` o `Missing sound` en la linea de al
+    -- lado, las dos lineas tienen que poder aparearse. Un "caceria voz 2" pelado
+    -- no dice cual de los siete.
+    --
+    -- ⚠ Y NOMBRA EL MODO. En `uno` esta linea se repite igual cada vuelta -- es
+    -- el mismo archivo -- y sin el modo escrito, un lector de la bitacora leeria
+    -- eso como "el encadenado se trabo", que es el sintoma opuesto al correcto.
+    anotar( quien( ghost ) .. "  caceria voz " .. tostring( voz ) .. " [" .. modo .. "]  " ..
+        string.GetFileFromFilename( ruta ) .. string.format( "  %.2f s", dur ) ..
+        ( vol < 1 and string.format( "  vol %.2f", vol ) or "" ) .. degradado )
+
+    return true
+
+end
+
+--[[
+    phantom_HuntVoiceStart() -> true si a partir de ahora suena
+
+    IDEMPOTENTE A PROPOSITO: si ya hay un clip en el aire NO lo corta. Sin eso,
+    cualquier llamada repetida a `phantom_SetHunting( true )` -- que es lo que
+    hace el andamio de consola y lo que va a hacer la cordura de Diseno 19 --
+    reiniciaria la caceria desde el principio cada vez, y el sintoma seria un
+    fantasma que "traba" la respiracion. La invariante que se sostiene es
+    *en hunt suena algo*, no *cada llamada arranca un clip*.
+]]
+function ENT:phantom_HuntVoiceStart()
+    if self.phantom_huntSnd then return true end
+
+    sonarCaceria( self )
+
+    return self.phantom_huntSnd ~= nil
+
+end
+
+function ENT:phantom_HuntVoiceStop( motivo )
+    return pararCaceria( self, motivo )
+
+end
+
+--[[
+    LA MUERTE, POR EL GANCHO QUE LA BASE DEJO PARA ESTO.
+
+    `AdditionalOnKilled` es un stub declarado por la base con ese comentario
+    ( damageandhealth.lua:664, *"stub! for your convenience"* ) y lo llama su
+    `OnKilled` en :686. Se usa ese y NO un override de `OnKilled`, que es la
+    Trampa 1 de este addon: la implementacion default de la base NO esta vacia y
+    un override que no encadene mata mecanica en silencio.
+
+    ⚠ SE ENCADENA IGUAL, aunque HOY el de la base sea el stub vacio. Cuesta una
+    linea y cubre el dia que la base le ponga cuerpo -- que es exactamente la
+    forma del defecto que server.lua:1100-1108 describe: *"hoy no duele porque no
+    declaramos el campo, y por eso mismo el defecto seria invisible"*.
+
+    ⚠ Y NO ALCANZA CON EL BORRADO DE LA ENTIDAD: entre la muerte y el Remove hay
+    frames ( la base arma el ragdoll y corre hooks ), y ahi el timer puede vencer.
+    Por eso `sonarCaceria` mira ademas `term_Dead` en cada vuelta: son dos redes
+    para el mismo hueco y ninguna de las dos cubre sola los dos extremos.
+]]
+function ENT:AdditionalOnKilled( dmg )
+    self:phantom_HuntVoiceStop( "el fantasma murio" )
+
+    local base = self.BaseClass
+
+    if base and isfunction( base.AdditionalOnKilled ) then
+        return base.AdditionalOnKilled( self, dmg )
+
+    end
+end
+
+---------------------------------------------------------------------------
+-- ⚠ LA PERILLA TIENE QUE ALCANZAR A LOS QUE YA EXISTEN -- CATALOGO Nº 26
+---------------------------------------------------------------------------
+-- Es el defecto que este mismo archivo cerro el 2026-08-17 con
+-- `phantom_ResetVoice`: *una perilla que no alcanza a los sujetos que ya existen
+-- se lee como "el control no funciona" o, peor, como "el mecanismo no existe"*.
+-- Sin este callback, `phantasmagoria_ghost_huntvoz 1` tipeado con el fantasma ya
+-- cazando no haria nada hasta el proximo cambio de hunt, y el que mide
+-- concluiria que el bloque entero no anda. Con el, la perilla es un A/B de
+-- verdad: se puede prender y apagar SOBRE EL MISMO hunt.
+cvars.AddChangeCallback( "phantasmagoria_ghost_huntvoz", function( _, _, nuevo )
+    local prendida = ( tonumber( nuevo ) or 0 ) ~= 0
+
+    if not isfunction( PHANTASMAGORIA.EachGhost ) then return end
+
+    PHANTASMAGORIA.EachGhost( function( ghost )
+        if not ghost:phantom_IsHunting() then return end
+
+        if prendida then
+            ghost:phantom_HuntVoiceStart()
+
+        else
+            ghost:phantom_HuntVoiceStop( "phantasmagoria_ghost_huntvoz paso a 0 en vivo" )
+
+        end
+    end )
+
+end, "phantasmagoria_huntvoz_alcanza_a_los_vivos" )
+
+-- ⚠ LAS OTRAS DOS PERILLAS TAMBIEN TIENEN QUE ALCANZAR AL QUE YA ESTA CAZANDO, y
+-- por un motivo mas fuerte que la de arriba: las dos cambian **como suena el clip
+-- que ya esta en el aire**, no si suena. Sin esto, tipear `huntvoznivelar 1` en
+-- medio de una caceria no cambiaria nada hasta que el clip actual termine -- y el
+-- clip actual puede durar **64,92 s**. El que mide oiria "no hizo nada", movería
+-- otra cosa, y cuando el cambio finalmente entrara se lo atribuiria a lo otro.
+--
+-- ⚠ SE RE-EMITE, no se re-sortea: `Stop` + `Start` sobre el modo `uno` vuelve al
+-- MISMO archivo, porque el clip fijo vive en `phantom_huntFijo` y esto no lo
+-- toca. Lo unico que se pierde es la posicion adentro del clip, y eso es
+-- inevitable: `EmitSound` no tiene seek.
+local function reemitirVivos( porQue )
+    if not isfunction( PHANTASMAGORIA.EachGhost ) then return end
+
+    PHANTASMAGORIA.EachGhost( function( ghost )
+        if not ghost:phantom_IsHunting() then return end
+        if not ghost.phantom_huntSnd then return end
+
+        ghost:phantom_HuntVoiceStop( porQue )
+        ghost:phantom_HuntVoiceStart()
+
+    end )
+end
+
+cvars.AddChangeCallback( "phantasmagoria_ghost_huntvoznivelar", function()
+    reemitirVivos( "cambio phantasmagoria_ghost_huntvoznivelar: se re-emite el MISMO clip" )
+
+end, "phantasmagoria_huntvoznivelar_alcanza_a_los_vivos" )
+
+cvars.AddChangeCallback( "phantasmagoria_ghost_huntvozlvl", function()
+    reemitirVivos( "cambio phantasmagoria_ghost_huntvozlvl: se re-emite el MISMO clip" )
+
+end, "phantasmagoria_huntvozlvl_alcanza_a_los_vivos" )
+
+-- ⚠ EL MODO **NO** LLEVA CALLBACK, y la omision es deliberada. Se lee en cada
+-- vuelta del loop ( `sonarCaceria` ), asi que ya alcanza a los vivos solo -- y
+-- re-emitir al cambiarlo cortaria el clip en curso para poner el mismo archivo
+-- desde el principio, que es justo el "traba la respiracion" que la idempotencia
+-- del `Start` existe para evitar. La unica diferencia es que `mudo` tarda hasta
+-- una vuelta en hacer efecto, y el comando de abajo lo resuelve callando a mano.
+
+---------------------------------------------------------------------------
+-- EL ANDAMIO DEL FLAG POR FANTASMA
+---------------------------------------------------------------------------
+-- Pedido del autor: *"un flag para cada fantasma"*, para que *"algunos hagan
+-- ruido de hunt y otros no"*. La convar global no alcanza para eso -- es global
+-- --, y el rasgo del tipo tampoco, porque exige que los que uno quiera separar
+-- tengan tipos distintos. Este comando setea el override POR ENTIDAD, que es el
+-- eslabon ① de la prioridad.
+--
+-- ⚠ ES UN ANDAMIO Y ESTA DECLARADO COMO TAL. El lugar definitivo de "este tipo
+-- de fantasma no hace ruido de caceria" es el rasgo `huntVoice` en
+-- `ghost_flags.lua`; esto existe para poder PROBARLO hoy, con dos fantasmas al
+-- lado, sin inventarle un rasgo a un tipo que la fuente no describe asi.
+--
+-- ⚠ `mudo` CALLA EN EL ACTO y no en la vuelta siguiente. Sin eso, el comando se
+-- oiria como que no hizo nada durante hasta 64,92 s -- el clip mas largo del
+-- banco --, que es exactamente la forma de falla que el comentario de las
+-- perillas de arriba describe.
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cazavoz", function( ply, _, args )
+    local say = PHANTASMAGORIA.MakeSay( ply )
+    local arg = string.lower( string.Trim( ( args and args[ 1 ] ) or "" ) )
+
+    if arg ~= "auto" and not MODOS[ arg ] then
+        say( "[Phantasmagoria] uso: phantasmagoria_ghost_cazavoz uno|varios|mudo|auto" )
+        say( "    uno     UN clip sorteado una vez y loopeado toda la partida ( Phasmophobia )" )
+        say( "    varios  encadena clips distintos sin repetir el anterior ( la r1 -- es el CONTROL )" )
+        say( "    mudo    este fantasma no hace ruido de caceria" )
+        say( "    auto    saca el override y manda el tipo, o la convar, o el default" )
+        say( "" )
+        say( "    Toca a TODOS los fantasmas vivos. Para separar dos, spawnear uno, tipear," )
+        say( "    spawnear el otro y volver a tipear: el override queda pegado a cada entidad." )
+
+        local found = PHANTASMAGORIA.EachGhost( function( ghost )
+            local modo, porQue = ghost:phantom_HuntVoiceMode()
+
+            say( "    " .. quien( ghost ) .. "  modo " .. modo .. "   ( " .. tostring( porQue ) .. " )" )
+
+        end )
+
+        if found <= 0 then say( "    no hay ningun fantasma vivo." ) end
+        return
+
+    end
+
+    local found = PHANTASMAGORIA.EachGhost( function( ghost )
+        ghost.phantom_huntVozModo = ( arg ~= "auto" ) and arg or nil
+
+        local modo, porQue = ghost:phantom_HuntVoiceMode()
+
+        if modo == "mudo" then
+            ghost:phantom_HuntVoiceStop( "phantasmagoria_ghost_cazavoz mudo" )
+
+        elseif ghost:phantom_IsHunting() then
+            -- Estaba mudo y dejo de estarlo: hay que arrancarlo, porque el loop
+            -- se apago y no hay ninguna vuelta agendada que lo vuelva a mirar.
+            ghost:phantom_HuntVoiceStart()
+
+        end
+
+        say( "    " .. quien( ghost ) .. "  modo -> " .. modo .. "   ( " .. tostring( porQue ) .. " )" )
+
+    end )
+
+    if found <= 0 then say( "[Phantasmagoria] no hay ningun fantasma vivo." ) end
+
+end, "ANDAMIO. Modo de la voz de caceria POR FANTASMA: uno ( un clip loopeado, el default ) - " ..
+    "varios ( encadena, el control ) - mudo ( sin ruido de caceria ) - auto ( saca el override ). " ..
+    "Sin argumento imprime el modo de cada uno y quien lo decidio." )
+
+---------------------------------------------------------------------------
+-- ELEGIR EL CLIP A MANO -- Y NO ES UN LUJO, ES LO QUE VUELVE CORRIBLE UNA FILA
+---------------------------------------------------------------------------
+-- El banco tiene **12,3 LU de dispersion medida** y los dos extremos son los que
+-- hay que oir para decidir si hay que normalizar los `.ogg`:
+-- `voice_2_loop_03` y `voice_2_grim` a -30 LUFS contra `voice_1_loop_04` a -18,2.
+--
+-- ⚠ SIN ESTE COMANDO, ESA FILA DE LA PLANILLA DEPENDE DE UN SORTEO: habria que
+-- spawnear fantasmas hasta que salga el clip flojo -- una chance de 1 en 7 por
+-- spawn --, y **un check que depende de un sorteo no es un check**. Es la misma
+-- leccion que la convar de peso de los eventos, escrita al principio de este
+-- archivo: *"sin el, un check de 'el fantasma tira cosas' tendria que esperar a
+-- que el peso salga favorecido"*.
+--
+-- ⚠ Y SOLO TIENE SENTIDO EN EL MODO `uno`, que es el unico que guarda un clip
+-- fijo. En `varios` la vuelta siguiente lo pisa, asi que en vez de fingir que
+-- funciono se dice -- un comando que acepta callado una orden que no puede
+-- cumplir es el nº 63 con otra cara.
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cazaclip", function( ply, _, args )
+    local say = PHANTASMAGORIA.MakeSay( ply )
+    local arg = string.lower( string.Trim( ( args and args[ 1 ] ) or "" ) )
+    local n   = tonumber( arg )
+
+    if arg ~= "auto" and not n then
+        say( "[Phantasmagoria] uso: phantasmagoria_ghost_cazaclip <n>|auto" )
+        say( "    Fija a mano QUE clip del banco de su voz loopea cada fantasma vivo." )
+        say( "    auto = lo vuelve a sortear." )
+        say( "" )
+
+        for _, voz in ipairs( { 1, 2 } ) do
+            say( "    voz " .. voz .. ":" )
+
+            for i, c in ipairs( HUNT[ voz ] or {} ) do
+                say( string.format( "      %d  %-24s %6.2f s   %6.1f LUFS", i,
+                    string.GetFileFromFilename( c[ 1 ] ), c[ 2 ], c[ 3 ] or 0 ) )
+
+            end
+        end
+
+        return
+
+    end
+
+    local found = PHANTASMAGORIA.EachGhost( function( ghost )
+        local modo = ghost:phantom_HuntVoiceMode()
+
+        if modo ~= "uno" then
+            say( "    " .. quien( ghost ) .. "  SALTEADO: esta en modo '" .. modo ..
+                "', que no guarda un clip fijo. Ponerlo en 'uno' primero." )
+            return
+
+        end
+
+        if arg == "auto" then
+            ghost.phantom_huntFijo     = nil
+            ghost.phantom_huntFijoRuta = nil
+            ghost.phantom_huntFijoWhy  = nil
+
+            say( "    " .. quien( ghost ) .. "  clip -> se vuelve a sortear" )
+
+        else
+            local voz   = ghost:phantom_EventVoice()
+            local banco = HUNT[ voz ] or {}
+
+            if not banco[ n ] then
+                say( "    " .. quien( ghost ) .. "  el banco de la voz " .. tostring( voz ) ..
+                    " tiene " .. #banco .. " clips: " .. n .. " no existe." )
+                return
+
+            end
+
+            ghost.phantom_huntFijo     = n
+            ghost.phantom_huntFijoRuta = banco[ n ][ 1 ]
+            ghost.phantom_huntFijoWhy  = "FORZADO a mano ( phantasmagoria_ghost_cazaclip " .. n .. " )"
+
+            say( "    " .. quien( ghost ) .. "  clip -> " ..
+                string.GetFileFromFilename( banco[ n ][ 1 ] ) ..
+                string.format( "  ( %.1f LUFS )", banco[ n ][ 3 ] or 0 ) )
+
+        end
+
+        -- Se re-emite para que el cambio se oiga YA. Sin esto habria que esperar
+        -- a que termine el clip anterior, y el mas largo dura 64,92 s: el
+        -- comando se leeria como que no hizo nada.
+        if ghost:phantom_IsHunting() then
+            ghost:phantom_HuntVoiceStop( "phantasmagoria_ghost_cazaclip" )
+            ghost:phantom_HuntVoiceStart()
+
+        end
+    end )
+
+    if found <= 0 then say( "[Phantasmagoria] no hay ningun fantasma vivo." ) end
+
+end, "ANDAMIO. Fija a mano que clip del banco loopea cada fantasma ( modo 'uno' ). Sin argumento " ..
+    "lista los dos bancos con su largo y su sonoridad medida. auto lo vuelve a sortear." )
+
+---------------------------------------------------------------------------
+-- EL INSTRUMENTO
+---------------------------------------------------------------------------
+-- ⚠ NO SE LLAMA COMO NINGUNA CONVAR. `phantasmagoria_ghost_huntvoz` YA es una
+-- convar de este archivo, y un concommand homonimo queda inalcanzable en
+-- silencio -- la guarda de `PHANTASMAGORIA.AddCommand` lo volveria un error
+-- ruidoso, pero el nombre se elige bien de entrada.
+--
+-- ⚠⚠ Y EXISTE TAMBIEN PORQUE `phantasmagoria_ghost_ev` **NO EXISTE**. El bloque
+-- de la voz, mas arriba en este archivo, cierra diciendo *"El reporte de
+-- `phantasmagoria_ghost_ev` lo imprime"* -- y ese comando no esta registrado en
+-- ninguna parte del addon ( censo sobre `PHANTASMAGORIA.AddCommand`: 16 usos y
+-- ninguno es ese ). O sea que el motivo por el que se eligio cada voz, que ese
+-- bloque se tomo el trabajo de guardar en `phantom_evVoiceWhy`, no habia forma
+-- de leerlo en juego.
+--
+-- *Un comentario que cita un instrumento no prueba que el instrumento exista.*
+PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_caceria", function( ply )
+    local say = PHANTASMAGORIA.MakeSay( ply )
+
+    say( "[Phantasmagoria] LA VOZ DE LA CACERIA" )
+    say( "  phantasmagoria_ghost_huntvoz     " ..
+        ( cvHuntVoz:GetBool() and "1 ( puesta )" or "0 ( CONTROL: el hunt es mudo )" ) )
+    -- ⚠ EL NIVEL SE IMPRIME CON LO QUE **NO** HACE. Es la perilla con la que el
+    -- autor decidio la brecha de sonoridad, y sube los catorce clips por igual:
+    -- sin esta linea, la de abajo -- que imprime la brecha por banco -- se leeria
+    -- como algo que el nivel deberia haber arreglado.
+    say( "  phantasmagoria_ghost_huntvozlvl  " .. cvHuntVozLvl:GetInt() ..
+        "  ( SNDLVL; sube el alcance de TODOS los clips por igual, no la brecha entre ellos )" )
+    say( "  phantasmagoria_ghost_huntvozmodo " .. tostring( cvHuntVozModo:GetString() ) ..
+        "   ( el default global; el fantasma y su tipo mandan por encima )" )
+    say( "  phantasmagoria_ghost_huntvoznivelar " ..
+        ( cvHuntVozNivel:GetBool() and
+            ( "1 ( bajando todo a " .. HUNT_LUFS_OBJETIVO .. " LUFS )" ) or
+            "0 ( CONTROL: como suena sin nivelar )" ) )
+
+    -- EL DENOMINADOR VA IMPRESO. Un "suena la voz 2" no vale nada si nadie sabe
+    -- sobre cuantos clips habia, y un banco que quedo en cero se lee igual que
+    -- un fantasma callado.
+    --
+    -- ⚠ Y VA LA **DISPERSION DE SONORIDAD**, que es el dato que el autor
+    -- encontro con el oido en la r1 ( *"ese loop se siente mas bajito"* ). Con
+    -- el modo `uno` deja de ser estetico: al fantasma le toca UN clip para toda
+    -- la partida, asi que la brecha entre el mas fuerte y el mas flojo del banco
+    -- es, literalmente, cuanto puede variar la caceria entre dos partidas.
+    for _, voz in ipairs( { 1, 2 } ) do
+        local banco = HUNT[ voz ] or {}
+        local total, lo, hi = 0, nil, nil
+
+        for _, c in ipairs( banco ) do
+            total = total + c[ 2 ]
+
+            if isnumber( c[ 3 ] ) then
+                lo = ( not lo or c[ 3 ] < lo ) and c[ 3 ] or lo
+                hi = ( not hi or c[ 3 ] > hi ) and c[ 3 ] or hi
+
+            end
+        end
+
+        say( string.format( "  banco voz %d                      %d clips, %.1f s de material%s",
+            voz, #banco, total,
+            ( lo and hi ) and string.format( "   sonoridad %.1f a %.1f LUFS ( %.1f LU de brecha )",
+                lo, hi, hi - lo ) or "" ) )
+
+    end
+
+    say( "  banco NEUTRO                     " .. #HUNT_NEUTRA ..
+        " clip ( breath_1, ESTEREO: no se espacializa. Solo si el banco de la voz queda vacio )" )
+    say( "" )
+
+    local found = PHANTASMAGORIA.EachGhost( function( ghost )
+        -- ⚠⚠ SE LEE EL CAMPO CACHEADO Y **NO** SE LLAMA A `phantom_EventVoice()`,
+        -- que era lo natural de escribir y esta mal: ese metodo no es un getter,
+        -- es EL RESOLVEDOR -- sortea la voz y la GUARDA. Un instrumento que la
+        -- llama le fija la voz al fantasma en el momento en que alguien tipea el
+        -- comando, o sea que *mirar cambia al sujeto*. Es el catalogo nº 30, el
+        -- instrumento que corrompe la pasada: la voz quedaria decidida antes de
+        -- que el fantasma hablara, y una corrida en la que se miro el reporte
+        -- temprano dejaria de ser comparable con una en la que no.
+        --
+        -- Que todavia no este resuelta es un ESTADO legitimo y se imprime como
+        -- tal: un fantasma recien spawneado que no hablo ni cazo no tiene voz, y
+        -- eso no es lo mismo que tener una y que el reporte no la sepa.
+        local voz = ghost.phantom_evVoice
+
+        say( "  " .. quien( ghost ) .. "  hunt " .. ( ghost:phantom_IsHunting() and "SI" or "NO" ) ..
+            "   voz " .. ( voz and tostring( voz ) or "SIN RESOLVER ( no hablo ni cazo todavia )" ) )
+
+        -- EL MOTIVO Y NO SOLO EL NUMERO: "salio voz 1" no distingue *la fijo el
+        -- tipo* de *la fijo el modelo* de *la sorteo la moneda*, y las tres se
+        -- ven igual en una consola.
+        say( "        por que:  " .. tostring( ghost.phantom_evVoiceWhy or
+            "todavia nadie la resolvio -- se decide en el primer evento de sonido o al entrar en hunt" ) )
+
+        -- El modo y QUIEN lo decidio, por lo mismo que la voz: "salio mudo" no
+        -- distingue el andamio del rasgo del tipo de la convar global.
+        local modo, porQueModo = ghost:phantom_HuntVoiceMode()
+
+        say( "        modo:     " .. modo .. "   ( " .. tostring( porQueModo ) .. " )" )
+
+        -- ⚠ EL CLIP FIJO SE IMPRIME AUNQUE NO ESTE SONANDO, y es el dato que
+        -- vuelve verificable el modo `uno`: sin el, "un fantasma un archivo" se
+        -- comprueba escuchando tres minutos, y con el se comprueba leyendo dos
+        -- renglones de dos corridas separadas. Es el mismo argumento por el que
+        -- la voz guarda su motivo.
+        if modo == "uno" and ghost.phantom_huntFijoRuta then
+            say( "        su clip:  " .. string.GetFileFromFilename( ghost.phantom_huntFijoRuta ) ..
+                "   ( " .. tostring( ghost.phantom_huntFijoWhy or "sin motivo declarado" ) .. " )" )
+
+        elseif modo == "uno" then
+            say( "        su clip:  todavia sin sortear -- se elige al entrar en hunt por primera vez" )
+
+        end
+
+        local snd = ghost.phantom_huntSnd
+
+        if snd then
+            local resta = ( ghost.phantom_huntHasta or 0 ) - CurTime()
+            local vol   = ghost.phantom_huntVol or 1
+
+            say( string.format( "        suena:    %s   quedan %.1f s%s",
+                string.GetFileFromFilename( snd ), resta,
+                vol < 1 and string.format( "   vol %.2f ( nivelado, -%.1f dB )",
+                    vol, -20 * math.log( vol, 10 ) ) or "" ) )
+
+        elseif modo == "mudo" then
+            say( "        suena:    NADA, y esta bien: este fantasma esta en modo MUDO." )
+
+        elseif not ghost:phantom_IsHunting() then
+            say( "        suena:    NADA, y esta bien: no esta en hunt." )
+
+        elseif not cvHuntVoz:GetBool() then
+            say( "        suena:    NADA porque phantasmagoria_ghost_huntvoz esta en 0 ( el CONTROL )." )
+
+        elseif ghost.term_Dead then
+            say( "        suena:    NADA porque el fantasma esta muerto." )
+
+        else
+            say( "        suena:    NADA, y NO deberia: esta en hunt, vivo y con la perilla puesta." )
+            say( "                  Mirar la bitacora por la ultima linea que diga 'caceria'." )
+
+        end
+    end )
+
+    if found <= 0 then say( "  no hay ningun fantasma vivo." ) end
+
+end, "Reporte de la voz de caceria: las dos perillas, el tamano de cada banco, y por cada fantasma " ..
+    "su voz, QUIEN la decidio, que clip suena y cuanto le queda. Si no suena, dice por que." )
+
 -- "Un punto valido cerca del fantasma, preferentemente donde nadie mira."
 --
 -- NO usa navmesh a proposito, y esa es una decision con consecuencia: los
@@ -1726,6 +2775,25 @@ function ENT:phantom_ResetVoice( motivo )
 
     self.phantom_evVoice    = nil
     self.phantom_evVoiceWhy = nil
+
+    -- ⚠⚠ Y CON ELLA SE VA EL CLIP FIJO DE LA CACERIA ( r2, 2026-08-18 ). El
+    -- modo `uno` guarda UN clip por fantasma y ese clip **pertenece al banco de
+    -- una voz**: si la voz se descarta y el clip no, un `ghost_type banshee`
+    -- sobre un fantasma vivo con cuerpo de Male lo dejaria hablando femenino y
+    -- **cazando grave**, que es el mismo estado que la fuente prohibe y que este
+    -- metodo existe para impedir -- sobreviviendo por la puerta de al lado.
+    --
+    -- Es el nº 61 del catalogo: *el arreglo de un cabo deja sin poder fallar a
+    -- la fila que probaba el otro*. `phantom_ResetVoice` se escribio el
+    -- 2026-08-17 y era completo ese dia; el campo nuevo lo volvio parcial sin
+    -- que nada avisara.
+    --
+    -- ⚠ SE BORRA TAMBIEN EL `..Ruta`, que es la mitad que hace la re-validacion
+    -- de `sonarCaceria` posible: con el indice en nil y la ruta puesta, la
+    -- comprobacion de coherencia no tendria contra que comparar.
+    self.phantom_huntFijo     = nil
+    self.phantom_huntFijoRuta = nil
+    self.phantom_huntFijoWhy  = nil
 
     -- `PHANTASMAGORIA.Print` y no `ghostPrint`: este archivo no tiene el local de
     -- server.lua, porque include() corre otro chunk y un local no cruza. Con

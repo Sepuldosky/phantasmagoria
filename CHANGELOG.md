@@ -7,6 +7,327 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-18 (50) — **La cacería vuelve a pasar 11 de 11 y el autor cierra la pregunta de los 12,3 LU: ni normalizar ni bajar, subir el nivel a 150. Y el default se mueve con él, porque una convar archivada no viaja en el `.gma`.**
+
+Segunda corrida entera: **11 pasa · 0 falla · 0 sin correr**, con la salida del reporte pegada fila
+por fila. Las dos filas que no eran un check sino una decisión —la 09 y la 10, que preguntaban si la
+dispersión de sonoridad se arregla desde el Lua o tocando los `.ogg`— las contestó el autor:
+
+> *«ahí digo que yo usaría el comando para normalizar, pero pensándolo bien mejor no, el otro comando
+> para aumentar el volumen a 150 está bien.»*
+
+O sea: **ni se tocan los assets ni se baja nada. Se sube el alcance.**
+`phantasmagoria_ghost_huntvozlvl` pasa de **80 a 150** (y su techo de 150 a 180, para que el valor
+elegido no quede pegado al máximo: *una perilla cuyo valor elegido es también su techo no deja probar
+si el problema era que faltaba más*).
+
+### Por qué se mueve el **default** y no alcanzaba con que el autor lo tipee
+
+`FCVAR_ARCHIVE` guarda el valor **en la máquina del que lo tipeó**, y esa configuración **no viaja en
+el `.gma`**. Dejar el default en 80 habría hecho que la decisión valiera para su partida y para
+ninguna otra. Es la misma razón por la que el modo `uno` quedó como default en la entrada anterior:
+*una corrección cuyo efecto depende de que alguien tipee algo no es una corrección, es una opción.*
+
+### ⚠⚠ Lo que esto **no** arregla, y queda escrito al lado del número
+
+El SNDLVL multiplica a los **catorce clips por igual**, así que **la brecha de 12,3 LU sigue
+intacta**: el flojo sigue siendo 10 dB más flojo que el fuerte, sólo que ahora los dos llegan mucho
+más lejos. Resuelve *«al clip flojo no lo escucho»* y **no** resuelve *«unos suenan más que otros»* —
+son dos afirmaciones distintas y esta perilla sólo puede con la primera.
+
+Es la misma forma que el nº 78 del catálogo, del bloque anterior, con el signo cambiado: allá el
+riesgo era elegir el **instrumento** equivocado para una afirmación; acá es elegir el **arreglo**
+equivocado, que se ve igual de bien mientras uno no separe las dos frases. Las dos vías para la
+segunda siguen donde estaban y sin tocar: `phantasmagoria_ghost_huntvoznivelar 1` empareja hacia
+abajo, y normalizar los `.ogg` es lo único que empareja hacia arriba.
+
+El reporte lo dice ahora en la propia línea del nivel — *«sube el alcance de TODOS los clips por
+igual, no la brecha entre ellos»* —, porque dos renglones más abajo imprime la brecha por banco y sin
+esa aclaración se leería como algo que el nivel debería haber arreglado.
+
+### ⚠ El efecto que en una casa no se ve
+
+150 está en el orden de `SNDLVL_TRAIN`: la caída con la distancia es mínima, así que **en un mapa
+abierto la cacería se va a oír de muy lejos**. Adentro de una casa —que es el sujeto de Phasmophobia
+y de este addon— es exactamente lo que se busca. La perilla sigue a mano y su callback la aplica
+sobre el fantasma que ya está cazando, sin esperar a que termine el clip.
+
+### Lo que la corrida confirmó de paso
+
+La fila 07 salió con el caso más difícil que había: un `ghost_male` que sorteó **tipo banshee** en el
+spawn. El reporte lo muestra resuelto por el eslabón correcto —`voz 1 · la fija el TIPO banshee
+( rasgo voice = 1 )`— y con `su clip: voice_1_loop_05.ogg`, o sea del banco de la voz **1** sobre un
+cuerpo masculino. Es justo el estado que la fuente prohíbe si el clip saliera del banco equivocado, y
+salió bien **sin que nadie tuviera que forzar nada**.
+
+Sin planilla nueva: el cambio es un número que el autor ya probó en juego antes de pedirlo, y las
+once filas de la ronda anterior siguen siendo la medición vigente. Offline pasaron sintaxis (37
+archivos, 0 errores), `luacheck_gmod`, `rutas_de_sonido` (179 / 0 faltantes), `caceria_bancos`
+(14 clips, 0 fallas) y `voz_y_modelo` (53 comprobaciones, 0 fallas).
+
+---
+
+## 2026-08-18 (49) — **La cacería corrió 11 de 11 y la corrida devolvió lo que faltaba: un fantasma, un archivo. Y la pregunta del autor sobre ecualizar se midió: no es ecualización, es 12,3 LU de dispersión — con un clip fijo eso deja de ser estético.**
+
+El autor corrió la planilla entera: **11 pasa · 0 falla · 0 sin correr**, con la salida del reporte
+pegada fila por fila. Y en dos notas agregó la acotación que faltaba, literal:
+
+> *«los fantasmas en phasmophobia solo usan un solo archivo de audio loopeado en toda la partida, es
+> decir cada voz es particular al fantasma. Los "Alternates" que busco construir mas adelante hablan
+> con varias voces, asi que el hunt deberia ser tipo un flag para cada fantasma.»*
+
+### ⭐ La entrada anterior no estaba rota: **resolvía el caso general cuando el caso normal es el particular**
+
+Encadenar seis clips distintos hace que el fantasma suene **a un banco de sonido**. Quedarse con
+**uno** lo vuelve un individuo — que es la misma tesis del *fingerprint sonoro* que Diseño §5 le pide
+a la voz, y que la entrada anterior citó para justificar que la voz se sortea una vez… sin aplicarla
+al clip. *Una regla escrita en un bloque no se aplica sola al bloque de al lado, aunque los haya
+escrito la misma mano el mismo día.*
+
+**Los tres modos**, y son tres porque el autor nombró los tres casos:
+
+    uno      ( DEFAULT )  un clip sorteado UNA vez y loopeado toda la partida  -- Phasmophobia
+    varios                encadena clips distintos                             -- los Alternates, Y EL CONTROL
+    mudo                  este fantasma no hace ruido de cacería               -- "algunos sí y otros no"
+
+**La prioridad es `override del fantasma > rasgo del tipo > convar global > uno`**, y el orden es la
+decisión. El override va primero porque es lo que deja tener dos fantasmas al lado, uno mudo y otro
+no — el pedido literal. La convar global va **última** porque es del que mide: primera, tocarla para
+un A/B pisaría en silencio un rasgo que un tipo declara (nº 49 del catálogo con otra cara).
+
+⚠ **El default es `uno` aunque sea el modo nuevo**, y eso se pagó a conciencia: escrito al revés
+—default `varios`, que es lo ya medido— el pedido del autor quedaría detrás de una perilla que hay
+que acordarse de mover. *Una corrección cuyo efecto depende de que alguien tipee algo no es una
+corrección: es una opción.* A cambio, `varios` queda declarado explícitamente como **el CONTROL** y
+tiene fila propia: es el único estado de comparación que ya corrió 11 de 11 en juego.
+
+⚠ **Y hoy ningún tipo declara el rasgo `huntVoice`**, a propósito: los treinta caen al default. La
+lectura ya está escrita para que declararlo mañana en `ghost_flags.lua` no toque una línea de código.
+
+### ⚠⚠ El cabo que el clip fijo abrió, y que la entrada anterior había cerrado en su mitad
+
+`phantom_ResetVoice` descarta la voz cuando cambia el tipo — se escribió ayer y **era completo ese
+día**. El campo nuevo lo volvió parcial sin que nada avisara: el clip fijo **pertenece al banco de una
+voz**, así que un `phantasmagoria_ghost_type banshee` sobre un Male vivo dejaría al fantasma hablando
+femenino y **cazando grave** — el estado exacto que la fuente prohíbe, sobreviviendo por la puerta de
+al lado. Es el **nº 61** del catálogo. Se descarta también el clip, y `sonarCaceria` además
+**re-valida** el índice contra el banco en cada vuelta, porque un índice viejo puede apuntar a otro
+clip o a ninguno.
+
+### ⚠⚠ «¿le hacemos una ecualización?» — se midió antes de contestar, y la respuesta es **no**
+
+El autor, en la nota de la fila 09: *«ese loop se siente mas bajito que las canciones tarareadas … el
+loop_01 es como un gorgoteo grave femenino, le hacemos una ecualizacion?»*.
+
+**«Se siente más bajito» y «está más bajo» no son la misma afirmación** — la misma forma que la ronda
+7 del lote de equipamiento, donde *«se ve chico»* y *«está mal escalado»* resultaron distintas y el
+que estaba mal era el pack de referencia. Instrumento nuevo, `dev/sonoridad_ogg.py` (EBU R128 sobre
+ffmpeg):
+
+    voice_1_loop_01  ( el gorgoteo )   -26,4 LUFS      voice_2_loop_03   -30,5 LUFS   ( el más flojo )
+    voice_1_loop_03  ( el canto )      -20,0 LUFS      voice_1_loop_04   -18,2 LUFS   ( el más fuerte )
+                      6,4 LU de brecha entre los dos que nombró  ·  12,3 LU en todo el banco
+
+**El oído del autor midió bien y el número lo confirma.** Pero lo que falta **no es ecualización**:
+LUFS lleva la ponderación K, que ya modela la sensibilidad del oído por frecuencia, así que esos
+6,4 LU **no** son *«se percibe más bajo por ser grave»* — son más bajo. Una ecualización corrige el
+**espectro**; esto es **ganancia**. Aplicarla cambiaría el timbre de la voz para arreglar algo que no
+es el timbre.
+
+⚠⚠ **Y el modo `uno` lo convierte de estético en jugable.** Encadenando, los 12,3 LU se promediaban
+solos. Con un clip fijo **no se promedian**: a quien le toque `voice_2_loop_03` caza 10 dB más bajo
+**toda la partida**, y la cacería es la señal con la que el jugador decide correr. *La corrección de
+una cosa puede volver urgente un defecto de otra que hasta ayer se disimulaba.*
+
+⚠⚠⚠ **Lo que el Lua NO puede arreglar, y va escrito.** El `volume` de `EmitSound` va de 0 a 1: **sólo
+baja**. Nivelar desde acá empareja **hacia abajo** y los tres clips por debajo del objetivo
+(−26,4 / −30,2 / −30,5) **no se pueden subir**. Subirlos es tocar los `.ogg`, y eso es decisión del
+autor: `sound/` está gitignoreado y una normalización no se deshace sin backup previo. La perilla
+`phantasmagoria_ghost_huntvoznivelar` **arranca en 0**, porque el estado que el autor ya oyó y aprobó
+11 de 11 no se le cambia sin que lo pida; existe para que pueda comparar **en juego**, que es donde
+se decide. Las filas 09 y 10 de la planilla son esa decisión.
+
+### Los detalles que no son obvios
+
+- **El hueco entre vueltas es por modo:** `0,00 s` en `uno` y `0,15 s` en `varios`. No es un ajuste
+  fino: en `uno` el empalme cae **siempre en el mismo punto del mismo archivo** y el oído lo aprende,
+  así que cualquier hueco audible convierte un loop en *«se corta y arranca»*. En `varios` el clip
+  que entra es otro y un respiro lee como pausa. Y el pitch clavado en 100 deja de ser una precaución
+  y pasa a ser **la condición de que el loop exista**.
+- **`phantasmagoria_ghost_cazaclip`** fija a mano qué clip loopea cada fantasma. No es un lujo: sin
+  él, la fila que juzga el clip más flojo dependería de un sorteo de 1 en 7 por spawn, y **un check
+  que depende de un sorteo no es un check** — la misma frase que ya está escrita al principio de este
+  archivo para la convar de peso de los eventos.
+- **Las perillas de nivel y de nivelación re-emiten al fantasma que ya está cazando.** Sin eso,
+  tipearlas en medio de una cacería no cambiaría nada hasta que el clip actual termine — y el clip
+  actual puede durar **64,92 s**. El que mide oiría *«no hizo nada»*, movería otra cosa, y cuando el
+  cambio finalmente entrara se lo atribuiría a lo otro. **El modo no lleva callback y la omisión es
+  deliberada**: se lee en cada vuelta, así que ya alcanza a los vivos solo.
+- **`math.min( 1, … )` en el volumen no es estilo.** Tres clips dan factor > 1, y un `volume > 1` no
+  sube nada — el engine lo satura. Sin el clamp, el reporte diría *«×1,45»* sobre un clip que suena
+  igual que sin nivelar: **un número que afirma un efecto que no existe**.
+
+### Los instrumentos
+
+- **`dev/sonoridad_ogg.py`** — LUFS integrado + true peak, con `--objetivo` que dice cuánto bajar
+  cada clip y **cuáles no se pueden subir**. Su auto-control genera un tono y el mismo tono a −6 dB y
+  exige medir 6,0 ±0,3 LU: si no reproduce una atenuación que él mismo produjo, **aborta sin
+  publicar**. Midió 6,00.
+- **`dev/caceria_bancos.py`** ahora audita **cinco** cosas: la tercera es el LUFS escrito contra el
+  archivo (tolerancia 0,6 LU), que es el número del que sale el volumen. ⚠ Y **si no hay ffmpeg lo
+  dice** en vez de saltearse — *un chequeo que se saltea callado se lee como un chequeo que pasó*.
+  `--romper` sumó el modo `lufs` y `todos` pasó a exigir **5** rojos exactos.
+
+Offline pasaron: sintaxis (37 archivos, 0 errores), `luacheck_gmod`, `auditar_returns_de_hooks`
+(0 de 31), `rutas_de_sonido` (179 / 0 faltantes), `caceria_bancos` (14 clips, 0 fallas, y los seis
+modos de `--romper` dan el número exacto de rojos), `sonoridad_ogg` (14 de 14, auto-control 6,00) y
+`voz_y_modelo` (**53 comprobaciones, 0 fallas** — la resolución de voz y cuerpo sigue intacta pese a
+que `phantom_ResetVoice` cambió).
+
+**Nada de esto corrió en juego.** Planilla nueva: `dev/checks/phantasmagoria-caceria-r2.html`, **once
+filas**, con el A/B contra `varios` — que es el único estado de comparación ya medido.
+
+---
+
+## 2026-08-18 (45) — **La voz de la cacería: catorce clips que estaban en disco hace quince días sin un solo consumidor. La base ya tenía el mecanismo y no servía por tres motivos medidos; el clip que el autor ofrecía de comodín es estéreo; y el propio arnés nuevo se acreditó un defecto que no ejercitaba.**
+
+Pedido del autor, literal: *«ahora que los ghost tienen sexo y modelo correspondiente, que asignaras
+en loop las voces de cacería»* — más el permiso condicional *«breath_1 puede ser para los sin tipo si
+es que lo necesitan»*.
+
+`sound/phantasmagoria/ghost/hunt/` tenía **catorce `.ogg` desde el 2026-08-03 y ninguna línea de Lua
+los citaba**. Trece son la cacería real del juego repartida por voz — `voice_1_*` y `voice_2_*` —, o
+sea el **mismo índice** que ya decide el sexo del cuerpo en `ghost_models.lua` y que fija el rasgo
+`voice` del tipo. Ahora, mientras el fantasma está en hunt, se encadenan:
+
+    banco voz 1 ( femenina: la nena, la vieja )   6 clips   250,1 s   el más largo 64,92 s
+    banco voz 2 ( grave: el hombre )              7 clips   259,4 s   el más largo 50,09 s
+
+### El banco **no** entra en la tabla `VOZ`, y ése es el punto
+
+`VOZ` es lo que sortea `EV.sound`, el evento paranormal ambiente, que dispara **one-shot** con
+`EmitSound( snd, 70, math.random( 96, 104 ) )` y **no guarda nada con qué apagarlo**. Metidos ahí,
+el día que un tipo trajera un peso `hunt` en sus `soundBanks` el fantasma largaría sesenta y cinco
+segundos de cacería en plena calma y nadie podría pararlos — que es, palabra por palabra, el motivo
+por el que los cuatro `_loop` de `prop/` quedaron fuera del banco plano en la r1 y por el que
+`clock_tick` (46,55 s) se fue del suyo después.
+
+*Una tabla que un sorteo recorre es la promesa de que cualquiera de sus entradas puede salir sola.*
+Éstas no pueden: son un **estado**, no un evento.
+
+### ⚠⚠ La base ya tenía el mecanismo — y no sirve por **tres** motivos, ninguno de estilo
+
+`ENT.IdleLoopingSounds` / `ENT.AngryLoopingSounds` + `SpokenLinesThink`
+(`terminator nextbot/spokenlines.lua:39-100`) hace casi exactamente esto: encadena un `CreateSound`
+y lo reinicia al terminar. Se leyó entero **antes** de escribir una línea propia:
+
+- **① Está apagado.** `ENT.CanSpeak = false` (su `shared.lua:177`) y el phantom no lo prende en
+  ninguna línea: `SpokenLinesThink` sale en su primer `if`. Hoy el subsistema entero es código
+  muerto para nosotros.
+- **② El disparador es otro.** Elige el banco con `self:IsAngry()`, que es *tener enemigo / que te
+  hayan pegado / `terminator_PermanentAngry`* (`motionoverrides.lua:659`) — **no** nuestro flag de
+  hunt. Este addon ya pagó una ronda entera por confundirlos: `server.lua` dice con todas las letras
+  *«esa frase no es EL HUNT, es TENER ENEMIGO — y son cosas distintas»*.
+- **③ Y se queda prendido.** `terminator_AngryTime` es una latch y `terminator_PermanentAngry` no se
+  apaga nunca: la cacería seguiría sonando después de que el hunt se apagó, que es el síntoma más
+  caro de todos — **se oye como mecánica, no como bug**.
+
+Cuelga entonces de `phantom_SetHunting`, que es la **puerta única** del flag y ya estaba declarada
+como tal. La condición es la **invariante** (*en hunt suena algo*) y no el cambio: escrito como
+`if hunting ~= antes`, un fantasma que entrara en hunt por otro camino se quedaría mudo para siempre
+y el síntoma sería *«a veces no suena»*.
+
+### ⚠⚠ `breath_1.ogg` — el permiso del autor se fue a medir en vez de darlo por bueno, y **no** se cableó
+
+Las dos mediciones, y las dos dicen que hoy no hace falta:
+
+- **① No hay fantasma sin voz.** `phantom_EventVoice()` devuelve **siempre** 1 o 2: si el tipo no la
+  fija y el modelo tampoco — el caso degenerado normal, y el único que existe con un cuerpo ajeno —
+  cae al `math.random( 1, 2 )` de su última rama. El fantasma «sin tipo» no se queda sin banco: se
+  queda sin **quién declare** su voz, que es otra cosa, y el sorteo ya se hace cargo. *Un fallback
+  puesto sobre un caso que no ocurre es código que nadie va a oír nunca y que igual acredita.*
+- **② Y es estéreo.** 44100 / **2 canales** / 2,60 s (`dev/duracion_ogg.py`, que lo marca solo con
+  `!! 2 CANALES`). **Source no espacializa un estéreo: lo tira en 2D** — y la cacería es justamente
+  el sonido cuyo *trabajo* es dejarte ubicar al fantasma. Servido en 2D se oiría igual de fuerte
+  pegado a la puerta que desde el otro cuarto, y eso se lee como *«el mod no ubica nada»*. Los trece
+  de voz son mono, medidos.
+
+Queda **declarado** como banco neutro con un solo consumidor —el banco de la voz vacío, hoy
+inalcanzable— y rotulado `DEGRADADO` en el instrumento, para que el día que alguien vacíe un banco la
+cacería no enmudezca *en silencio*. Si algún día se lo quiere de verdad: pasarlo a mono primero con
+`dev/mono_posicionales.py`, que hace el backup antes.
+
+### Los detalles que no son obvios y que costarían una ronda
+
+- **Pitch 100 clavado**, contra la costumbre de las otras familias (96-104). Acá el pitch cambia el
+  **largo real** del clip —la propia base lo divide, `duration / ( pitch / 100 )`— y el largo está
+  escrito a mano porque `SoundDuration` no es confiable server-side sobre `.ogg`. Con pitch sorteado
+  el encadenado se corre hasta un 4 %: sobre los 64,92 s del clip más largo son **2,6 s por vuelta**,
+  y **el error se acumula** porque cada vuelta agenda la siguiente. Un desfasaje que crece no se ve
+  en una prueba corta.
+- **La clave del timer es la serie (`/sN`) y no el `EntIndex`**, que GMod recicla. Es el mismo defecto
+  que este addon ya cerró dos veces en otros archivos.
+- **`CHAN_VOICE`**, con censo: las otras cuatro líneas que lo usan sobre este bot están en
+  `spokenlines.lua`, o sea adentro del subsistema que el ① deja apagado. `EV.sound` emite en
+  `CHAN_AUTO`: no se cortan entre sí.
+- **La muerte va por `AdditionalOnKilled`**, el gancho que la base declara *«stub! for your
+  convenience»* — y no por un override de `OnKilled`, que es la Trampa 1 de este addon. Se encadena
+  igual aunque hoy el stub esté vacío. Y **no alcanza con eso solo**: entre la muerte y el `Remove`
+  hay frames, así que el encadenado mira además `term_Dead` en cada vuelta.
+- **El reporte lee el campo cacheado y NO llama a `phantom_EventVoice()`**, que era lo natural de
+  escribir. Ese método **no es un getter: es el resolvedor** — sortea la voz y la guarda. Un
+  instrumento que lo llama le fija la voz al fantasma en el momento en que alguien tipea el comando,
+  o sea que *mirar cambia al sujeto* (nº 30 del catálogo). Ahora «sin resolver» se imprime como el
+  estado legítimo que es.
+- **La perilla alcanza a los que ya existen** (`cvars.AddChangeCallback`). Es el nº 26 del catálogo, y
+  el mismo defecto que este archivo cerró el 2026-08-17 con `phantom_ResetVoice`: sin eso,
+  `phantasmagoria_ghost_huntvoz 1` con el fantasma ya cazando no haría nada y el que mide concluiría
+  que el bloque entero no anda.
+
+### ⚠ Y un comentario citaba un instrumento que **no existe**
+
+El bloque de la voz cierra desde el 2026-08-17 diciendo *«El reporte de `phantasmagoria_ghost_ev` lo
+imprime»*. Ese comando **no está registrado en ninguna parte del addon** (censo sobre
+`PHANTASMAGORIA.AddCommand`: 16 usos, ninguno es ése). O sea que `phantom_evVoiceWhy` —el motivo por
+el que se eligió cada voz, que ese bloque se tomó el trabajo de guardar justamente porque *«salió voz
+1» no distingue quién la decidió*— **no había forma de leerlo en juego**.
+
+*Un comentario que cita un instrumento no prueba que el instrumento exista.* Lo imprime ahora
+`phantasmagoria_ghost_caceria`.
+
+### Instrumento nuevo: `dev/caceria_bancos.py`, y **el defecto que tuvo su propio control**
+
+Audita el banco **leído del Lua real** (anclas de texto, no una maqueta) contra el disco: ruta
+existe, **largo escrito = largo del archivo** (tolerancia 0,05 s), los de voz en mono, y las dos
+voces con banco no vacío. El lector es `medir()` de `dev/duracion_ogg.py` — el mismo que produjo los
+números que están escritos en el Lua, a propósito: un segundo lector podría discrepar y el arnés no
+sabría a cuál creerle.
+
+    14 clips: rutas en disco, largos que coinciden, los 13 de voz en mono.
+    rutas_de_sonido.py:  165 -> 179 rutas citadas, 0 faltantes.
+
+**El defecto del arnés, y lo pagó su propia perilla.** `--romper todos` inyecta cuatro defectos y
+reportaba **tres**: `falta` escribía una ruta inexistente en el banco de la voz 2, y `vacio` corría
+después y lo vaciaba — se llevaba puesto el defecto anterior. El arnés se ponía rojo igual, **por los
+otros**, así que el control se daba por pasado. *Un control que exige «al menos una falla» se acredita
+solo el trabajo que no hizo.* Ahora cada modo declara **cuántas** fallas tiene que producir
+(`ESPERADAS`) y un número distinto —de más o de menos— es rojo del arnés, no del sujeto.
+
+### Qué queda sin medir
+
+**Todo lo que pasa adentro del motor de sonido.** Encadenado real, corte instantáneo,
+espacialización, dos fantasmas a la vez y el sonido colgado de un cadáver **no se pueden medir sin el
+juego**. Van a la planilla nueva: `dev/checks/phantasmagoria-caceria-r1.html`, **once filas**, con el
+A/B a mano (`phantasmagoria_ghost_huntvoz 0/1`, que funciona *en vivo* sobre el mismo fantasma) y con
+el reporte que dice el motivo cuando **no** suena.
+
+Offline pasaron: `parsear_sintaxis_glua` (0 errores), `luacheck_gmod` (OK),
+`auditar_returns_de_hooks` (0 de 28), `rutas_de_sonido` (179 / 0 faltantes), `caceria_bancos`
+(14 / 0 fallas, y los cinco modos de `--romper` dan el número exacto de rojos), y `voz_y_modelo`
+(53 comprobaciones, 0 fallas: la resolución de voz y cuerpo **no se tocó**).
+
+---
+
 ## 2026-08-18 (44) — **`table overflow` en `gm_uh_house`: el parser leía la firma `LZMA` como si fuera una cantidad. Dos defectos y no uno, el gemelo en Python tenía el mismo con otra cara, y el arnés nuevo se disfrazó de hallazgo sobre el mapa.**
 
 El autor cargó la planilla del bloque anterior en `gm_uh_house` y no pudo correr **ni una fila**: el
