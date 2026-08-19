@@ -13,6 +13,116 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-18, r2 corrida): 12 DE 12, Y EL VERDE DE LA FILA 02 ESCONDÍA EL DATO.**
+> Detalle en el CHANGELOG **(48)**. Planilla nueva: `dev/checks/phantasmagoria-evidencia-r3.html`,
+> **siete filas**. Sin correr en juego.
+>
+> ⚠⚠ **Tres de cada cuatro huellas del fantasma salían por el FALLBACK** (`via cercano`), no por el
+> trace de mano. La fila pasó —el fallback cae sobre la superficie por construcción, para eso se
+> eligió— pero **el camino que da la normal real casi nunca corría**, y eso no lo dice el ojo: lo
+> dice el `via`. *Un verde que se apoya en el plan B es un verde prestado.* La causa estaba escrita
+> hace rondas en el mismo archivo: `doorAhead` justifica su hull diciendo que **una línea se cuela
+> por el hueco del marco**, y yo tiré la línea hacia adelante del bot, que es ese tiro. Ahora la
+> línea **apunta a la hoja** (`NearestPoint` + 24 u de retroceso + tiro hacia adentro).
+>
+> ⭐ **La partícula de gmpa SE FUE del addon**, por dictamen del autor comparando los dos en juego:
+> *«se ve muchísimo mejor el nuestro»*. Se fueron el `.pcf`, la carpeta `particles/`, la convar
+> `phantasmagoria_orbe_modo`, las tres ramas del código y el crédito —**marcado retirado, no
+> borrado**—. El addon **no depende de ningún asset de terceros para los orbes**: el sprite
+> (`sprites/light_glow02_add`) viene con el juego.
+>
+> ⭐ **Un orbe, no seis.** *«Es como un orbe → un fantasma»*: `phantasmagoria_orbe` sin argumentos
+> pone **uno** con 64 u de dispersión, y el emisor quedó con `n = 1` — que es, literalmente, *«un
+> solo orbe que se mueva, aparezca y desaparezca»*.
+>
+> **Límite conocido y aceptado por el autor:** con la puerta **ya abierta** la huella a veces queda
+> mal pintada. Con la hoja abierta lo que se apunta suele ser el **canto**, y una mano de 13 u sobre
+> un canto de 4 se lee mal por geometría. *«Por ahora está aceptable.»*
+>
+> ⚠ **Y un hallazgo que NO es de este bloque:** el instrumento de puertas imprimió
+> `2 FORZADAS a solido por el techo de 5 s: eso no deberia pasar` (52 atravesadas). Es del bloque de
+> atravesar y **lo marca su propio instrumento**; no se tocó.
+
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-18, r1 corrida): 11 DE 12 EN JUEGO, Y LAS TRES NOTAS DEL AUTOR VALIERON
+> MÁS QUE LOS ONCE VERDES.** Detalle en el CHANGELOG **(47)**. Planilla nueva:
+> `dev/checks/phantasmagoria-evidencia-r2.html`, **once filas**. Los tres arreglos están escritos y
+> **sin correr en juego**.
+>
+> ⚠ **La huella del fantasma caía a la altura de los tobillos y separada de la hoja**, y la causa
+> estaba escrita en el encabezado del propio sondeo: **es un `TraceHull`**, cuyo contacto queda a
+> medio ancho del bot del plano y se resuelve abajo. Y el sondeo **tiene que seguir siendo un hull**
+> (una línea entra por el hueco del marco y no ve la puerta), así que no era un parámetro para
+> ajustar: **son dos preguntas distintas** — encontrar la puerta quiere un volumen, dejar una mano
+> quiere un punto. `PHANTASMAGORIA.HandPointOnDoor` tira su propio trace de línea a 48 u, y el
+> fallback es `NearestPoint` (que cae **sobre** la superficie) y no el punto del hull. El instrumento
+> imprime `via linea` / `cercano` / `manual`.
+>
+> ⚠ **La única fila roja acusaba a un código sano, y la pregunta del autor era la corrección:**
+> *«¿debería funcionar realmente? o sea estoy en singleplayer»*. En singleplayer el `retry`
+> **reinicia el servidor**, así que no queda huella que resincronizar — la fila no podía distinguir
+> «el resync no anda» de «no quedó nada que mandar». Ahora hay `phantasmagoria_uv_resync`, que mide
+> el camino sin tocar el server.
+>
+> ⭐ **El orbe pasó a ser PROPIO** — *«¿son verdes? no deberían ser blancos tenues… como partículas
+> de polvo que se mueven erráticamente»* —, y eso **salda la deuda que la r1 dejó escrita**: una
+> partícula la ven todos y no admite gate; un sprite client-side sí, que es como el orbe funciona en
+> Phasmophobia. `sprites/light_glow02_add`, aditivo y sin `$ignorez` (lo tapa una pared).
+> **El movimiento no viaja: viaja una SEMILLA** y el cliente deriva la deriva — un orbe cuesta un
+> mensaje y no un stream. Calibración en tres convars de cliente (`_tam`, `_alfa`, `_deriva`), y
+> **`dur 0` = no caducan**, que es la forma que va a usar la habitación favorita.
+>
+> El modo `pcf` queda **una ronda** para comparar, con una decisión pendiente en la fila 08 de la r2:
+> **si el propio convence, se saca `particles/gmpa_fx.pcf` del addon** y con él el crédito de
+> terceros.
+
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-18, más tarde): LA EVIDENCIA QUE SE VE — las huellas tenían productor
+> desde la ronda 6 y NINGÚN consumidor; los orbes no existían ni como dato.** Detalle en el CHANGELOG
+> **(46)**. Planilla nueva: `dev/checks/phantasmagoria-evidencia-r1.html`, **doce filas**.
+> **Nada de esto está probado en juego todavía.**
+>
+> Pedido del autor: *«sobre los orbes y las manos que quedan en las puertas… quiero que veas para que
+> podamos testear eso, tipo spawnear una huella y un orbe, cosa que cuando tengamos el código de
+> habitación favorita del ghost se pueda generar esos efectos»*.
+>
+> Lo escrito es `lua/autorun/phantasmagoria_evidencia.lua`: la huella viaja al cliente y **se
+> dibuja** bajo `PHANTASMAGORIA.HoldingUV()` — hoy la convar `phantasmagoria_uv`, **gate provisional**
+> hasta que exista la linterna, y está en una función justo para que ese día cambie **un cuerpo**.
+> Comandos: `phantasmagoria_huella` · `phantasmagoria_huella_limpiar` · `phantasmagoria_orbe` ·
+> `phantasmagoria_orbe_emisor` · `phantasmagoria_orbe_limpiar` (server, admin) ·
+> `phantasmagoria_uv_toggle` · `phantasmagoria_uv_estado` (cliente).
+>
+> ⚠⚠ **Las «dos líneas» que el diseño daba por hechas para los orbes no habrían dibujado nada.**
+> §11.3 cerraba el tema con `ParticleEffect( "gmpa_ghost_orb_green", … )`, y la línea es correcta —
+> lo que no se había mirado es si la partícula **existe en la máquina donde iba a correr**. Barridos
+> los **880 addons** del workshop local: **gmpa no está suscripto**, el `.pcf` sólo vivía en
+> `dev/other/`. *Un `ParticleEffect` sobre un sistema que no existe no dibuja y no tira error* — el
+> mismo silencio con el que los orbes estuvieron muertos dentro de gmpa toda su vida, allá por un
+> `IsValid()` sobre un `Vector`. El archivo se copió a `particles/gmpa_fx.pcf` (**no se versiona**:
+> `particles/` está en el `.gitignore` como todo asset — reponerlo con el `cp` de `docs/ASSETS.md`),
+> y el código hace `file.Exists` **antes** de `game.AddParticles` y grita si falta.
+>
+> ⚠ **El hook `PhantasmagoriaGhostUsedDoor` ahora lleva TRES argumentos** (`ghost, door, p`). Con dos,
+> el consumidor sabe qué pasó pero no tiene la huella, y el síntoma sería *«el contador sube y la
+> puerta se ve limpia»*. El consumidor **grita si llega `nil`**.
+>
+> ⚠ **El defecto que apareció revisando lo propio, y que sólo se rompe según dónde estés parado:**
+> `net.ReadEntity` devuelve NULL si el cliente todavía no conoce la entidad, y una puerta **fuera del
+> PVS del que recibe** entra justo en ese caso. La primera versión podaba con `not IsValid( p.ent )`
+> y perdía esa huella **para siempre**. Ahora viaja también el `EntIndex`, la poda es **sólo por
+> tiempo**, y `phantasmagoria_uv_estado` cuenta **por separado** las vivas y las que todavía no
+> resolvieron su puerta.
+>
+> **Lo que queda abierto y es de diseño, no de código:** en Phasmophobia el orbe se ve **sólo por la
+> videocamara**, igual que la huella sólo bajo la UV. Una partícula del engine no admite gate por
+> jugador — para eso hay que reimplementar el orbe como sprite client-side, con el mismo patrón que
+> la huella. Y **cuánto dura una emisión** de `gmpa_ghost_orb_green` no lo sabemos: sale de la
+> corrida (filas 10 y 12) o no sale.
+>
+> **La API que espera a la habitación favorita** (§14 del diseño, que sigue sin existir):
+> `PHANTASMAGORIA.SpawnOrbs( pos, n, radio )` y
+> `PHANTASMAGORIA.StartOrbEmitter( pos, periodo, dur, n, radio )`. El emisor calcula sus repeticiones
+> y **se muere solo** — no repite la fuga de timers de gmpa.
+
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-18): LA CACERÍA CORRIÓ 11 DE 11 Y LA CORRIDA DEVOLVIÓ LO QUE FALTABA
 > — UN FANTASMA, UN ARCHIVO. Y la pregunta sobre ecualizar se midió: no es ecualización, son
 > 12,3 LU.** Detalle en el CHANGELOG **(49)**. Planilla nueva:

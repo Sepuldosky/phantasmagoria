@@ -97,6 +97,26 @@ Necesita el addon de origen montado en `dev/other/` (el script lo dice si falta)
 porqué están en §8.6 de [EQUIPAMIENTO.md](EQUIPAMIENTO.md); el crédito, con el hash de cada fuente,
 en [CREDITOS.md](CREDITOS.md).
 
+## Ghost orbs — **sin assets**
+
+El orbe es un **sprite del propio juego** (`sprites/light_glow02_add`, que viene en
+`sourceengine/hl2_misc_dir.vpk`) dibujado en el cliente: no hay archivo que reponer ni carpeta
+`particles/` que armar.
+
+> **Hubo un `.pcf` acá y duró dos rondas.** Se copió `gmpa_fx.pcf` de `[gm] paranormal events` para
+> usar su partícula `gmpa_ghost_orb_green`, y en la r2 se comparó contra el orbe propio mirando los
+> dos en juego: ganó el propio, así que **el archivo salió del árbol**. Si alguna vez se lo quiere de
+> vuelta —trae además `gmpa_shadow_lurker`, `gmpa_shadow_figure_clouds`, `gmpa_cockroach_swarm` y
+> `gmpa_blood_drip`, que ningún bloque usa todavía—:
+>
+> ```bash
+> cp "dev/other/phantom/dev2/[gm] paranormal events/particles/gmpa_fx.pcf" particles/
+> ```
+>
+> Y hay que saber esto antes de intentarlo: **gmpa no está suscripto** (medido sobre los 880 addons
+> del workshop local), así que la partícula sólo existe en `dev/other/`. Un `ParticleEffect` sobre un
+> sistema no montado **no dibuja y no tira error**.
+
 ## Rostros del Alternate — **derivados, no descargados**
 
 `materials/phantasmagoria/alternate/` (6 PNG de 768×1024) sale de los seis originales de 4096×4096

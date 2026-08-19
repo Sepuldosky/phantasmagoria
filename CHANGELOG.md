@@ -7,6 +7,343 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-18 (48) — **La planilla del clic cerró 6 pasa / 1 falla / 1 sin correr — y dos de esos seis no decían lo que parecían. El control negativo salió verde sin correrse, el rojo no dejó saber de qué era, y un tercer instrumento venía dando el número equivocado hace dos días.**
+
+Corrida del autor sobre `dev/checks/phantasmagoria-clic-y-celular.html`, guardada en
+[`dev/CORRIDA_clic_y_celular_parcial.md`](dev/CORRIDA_clic_y_celular_parcial.md). Planilla de la ronda
+siguiente: `dev/checks/phantasmagoria-prop-roto-r2.html`, **cinco filas**.
+
+### ⭐ Lo que la corrida cerró de verdad
+
+- **P0** — el evento `prop` ya no revienta en `gm_uh_house`, y el censo dice **188 modelos / 702
+  props**. Confirmado aparte, sin el juego, con `dev/bsp_statics_offline.py` sobre los dos mapas: el
+  control `gm_funkis_night` reproduce **418 / 1588** y `gm_uh_house` da **188 / 702**, con `sobrantes
+  0` y el control negativo del camino comprimido pasando. Dos instrumentos independientes, el mismo
+  número.
+- **03** — el clic suena al apagar y se oye **desde el objeto**.
+- **05** — el teléfono suena `phone_ring` y **nunca** `phone_vibrate`.
+- **06** — el `+USE`, la `E` de las puertas y el pestillo siguen andando.
+- **02** — cerrada **offline**, que era donde había que cerrarla: los dos clips del clic quedaron
+  **1 canal** con la **misma duración** que los originales estéreo (`button_toggle_1` 0,23 s,
+  `button_toggle_2` 0,35 s, medidos contra el backup de `dev/other/OLD/` con el lector calibrado
+  **4/4** en la misma sesión), y el extractor sigue viendo **las dos fuentes** — `PROP_CONSUJETO` 30
+  rutas y `CLIC_APAGADO` 2 —, que es lo que la fila pedía. **0 estéreo restantes** sobre 25 rutas.
+
+### ⚠⚠⚠ La fila 04 está marcada verde y su propio criterio dice que no se corrió
+
+El renglón `habia algo pero FUERA del radio` quedó en **0** en las dos lecturas que el autor pegó —
+la de radio 60 y la de radio 256 —, y la fila lo tenía escrito en su rama de FALLA:
+
+> `lejos` queda en **0** → **la fila no se corrió**: no había candidato en el registro, así que el
+> silencio no prueba nada. *Un vacío no es una medición.*
+
+**La causa está medida y no es del código, es del sujeto.** En las dos lecturas lo único sonando eran
+*un microondas*, *un televisor* y *un inodoro*, y las tres son familias **`NO apagable`**: el `+USE`
+ni las mira. Con cero candidatos, `apagarCerca()` sale por la puerta de *«no había nada»* **sin tocar
+ningún contador**, y eso se ve **idéntico** a un filtro que decidió bien y rechazó por distancia.
+
+*Apretar `E` lejos de algo que el interruptor no atiende no es el control negativo del interruptor.*
+
+Y hay una segunda mitad, que es por qué el sujeto no fue una radio: `phone_ring` dura **3,46 s**, que
+no alcanza para caminar a otro cuarto. El único sujeto `apagable` con ventana larga es **la radio**,
+que es `entero` — y en `gm_uh_house` **no hay ninguna radio horneada**. Hay que spawnearla.
+
+### ⚠⚠⚠ La fila 01 salió roja y no se puede saber de qué
+
+La nota dice *«se rompió la radio, sigue sonando; borrar tampoco apaga el sonido, desintegrar
+tampoco»*. Pero la fila **00**, de la misma corrida, midió que borrar **sí** calla — «emisores
+distintos, y se corta correspondientemente el tic-tac». Las dos no pueden ser la misma afirmación.
+
+La diferencia es **de quién colgaba el sonido**, y la corrida no lo registró:
+
+- en `gm_uh_house` **no hay ninguna radio horneada** (censo: *una radio: ninguno*);
+- el evento sortea **una familia por disparo**;
+- todo lo que aparece en el registro de esa corrida son `info_target` **nuestros**.
+
+O sea que es perfectamente posible que **la radio que se rompió nunca haya sido la que sonaba**.
+*Un rojo cuyo sujeto no está identificado no es una medición del arreglo: es una medición de otra
+cosa.* No se reinterpreta — se vuelve a medir, y la fila 00 de la r2 existe sólo para conseguir un
+sujeto **nombrado por la consola** antes de romperlo.
+
+### El pedido 2, escrito — por la mitad que no dependía de ninguna medición
+
+*«Al destruir un `prop_physics` que haga estos ruidos… el sonido debe parar»*, y la mitad que el autor
+agregó después: *«una radio phys que se rompa no detiene el sonido **ni permite pararlo**»*.
+
+Esa segunda mitad estaba **confirmada leyendo el código, sin el motor**: `podarSonando()` tira la
+entrada de `SONANDO` en cuanto la entidad deja de ser válida, y `apagarCerca()` poda **antes** de
+buscar. El registro **suelta el único mango justo en el momento en que haría falta**: rota la radio,
+el `+USE` no tiene a quién apagar, ni ahora ni nunca. Eso no dependía de lo que midiera la 01.
+
+El arreglo es un **`ent:CallOnRemove` acotado a los props a los que nosotros hicimos sonar**, con un
+`StopSound` **explícito** — no se apoya en el borrado, justamente porque el borrado es lo que está en
+duda — y sacando la entrada de `SONANDO` en el acto.
+
+Tres detalles que no son cosméticos:
+
+- **Va sólo sobre props de verdad** (`not IsValid( emisor )`). Sobre nuestro emisor sería un defecto:
+  lo borra `SafeRemoveEntityDelayed` en el segundo exacto de `dur + EMISOR_MARGEN`, y un `StopSound`
+  ahí **decapitaría el último suspiro del clip**, que es justo lo que `EMISOR_MARGEN` existe para
+  rescatar.
+- **El nombre del hook lleva el clip adentro.** `CallOnRemove` indexa por nombre: dos sonidos sobre la
+  *misma* radio con el mismo nombre dejarían **un solo hook vivo** y el primer clip no se callaría
+  nunca.
+- **Dos contadores nuevos, `ROTOS.enganchados` y `ROTOS.callados`**, impresos en
+  `phantasmagoria_ghost_estaticos`. Son lo que vuelve diagnosticable a la 01: *«rompí la radio y sigue
+  sonando»* tiene **tres** causas que se oyen exactamente igual, y ahora cada una tiene su número —
+  el sonido nunca salió de un `prop_physics`; el prop no se estaba borrando; o el `StopSound` no llega
+  a tiempo, que es la única de las tres que pide un mecanismo distinto.
+
+⚠ **El mecanismo sigue sin medirse y está dicho:** que un `StopSound` sobre una entidad *que se está
+yendo* llegue a tiempo es una suposición. Si la fila 01 sale roja **con `callados` arriba**, el
+arreglo cambia de forma — emisor propio `SetParent`-eado al prop, que ya está medido que sí se calla
+al borrarse — **y no de intención**.
+
+### La frase de los cinco lugares quedó partida en dos, no borrada
+
+*«Borrar el emisor **ES** un corte: una entidad que se va se lleva su canal»* estaba escrita en cinco
+lugares y **nunca se había medido**. La corrida la midió, y la respuesta son dos:
+
+    fila 00   borrar NUESTRO `info_target` mientras suena  ->  SI corta   ( clock_tick, 46,55 s )
+    fila 01   romper / borrar / desintegrar un prop_physics ->  NO corta  ( sea cual sea su sujeto )
+
+Es **cierta donde nació** — sobre el emisor — y **no es una ley del motor**. Los cinco lugares
+quedaron **acotados al emisor**, con la fecha y con el contraejemplo al lado, en vez de corregidos o
+dejados: *valía donde nació y se había mudado sola*.
+
+### ⚠⚠ Y un tercer instrumento venía dando el número equivocado hace dos días
+
+El censo en juego dijo **10 modelos / 12 instancias** reclamadas sobre `gm_uh_house`. El HANDOFF y el
+CHANGELOG (44) citaban **11 / 13**. Ganaba el juego, y la diferencia era exactamente un modelo:
+
+    models/props_radiostation/radio_antenna01_skybox.mdl   ->  la ANTENA del skybox 3D
+
+`dev/censo_props_horneados.py` llevaba las reglas **transcritas a mano** desde `PROP_CONSUJETO`, y no
+recibió los **tres vetos del 2026-08-16** (`radio_antenna`, `phone_book`, `toiletpaper`). Seguía
+contando la antena como *una radio*. Y su auto-control **no podía verlo**: probaba que las reglas
+**discriminan**, que es una propiedad que una copia vieja conserva intacta. *Un control que audita al
+instrumento contra sí mismo no puede descubrir que el instrumento quedó viejo.*
+
+Arreglado sacando la copia, no sincronizándola: el `.py` ahora **recorta `PROP_CONSUJETO`,
+`BasenameDeRuta` y `NombreCoincide` del `.lua` y los ejecuta** en un Lua real (`lupa`), igual que
+`guarda_3b_offline.py`. Y el auto-control tiene una **segunda mitad**: los tres vetos, uno por uno,
+que sí se rompen si la tabla cargada no es la de hoy.
+
+Los dos negativos se ejercieron, sobre una copia del árbol para no tocar el repo:
+
+- sin el veto `radio_antenna` → `CONTROL de reglas FALLADO` nombrándolo, y **no reporta nada**;
+- sin la marca del recorte → **muere**, en vez de repartir sobre una tabla vacía (que se leería como
+  un mapa sin radios).
+
+Ahora los dos censos coinciden: **10 / 12** sobre `gm_uh_house`, y **8 / 11** sobre `gm_funkis_night`
+— que es el número que el propio addon registra en su línea de HISTORIA. El **11 / 13** quedó
+corregido en `CHANGELOG (44)`, `ESTADO.md`, el HANDOFF y la corrida guardada, **con la fecha y el
+motivo al lado**, porque un número corregido en silencio se vuelve a citar.
+
+### Chequeos offline al día
+
+    sintaxis 37/37 · luacheck 37/37 · returns de hooks 0/32 · rutas de sonido 179 citadas / 0 faltantes
+    guarda 3b callada Y comprobada gritando en los dos casos rotos
+    bsp offline: 418/1588 ( control ) + 188/702, sobrantes 0, control negativo del LZMA OK
+    censo de familias: 7/7 -> discriminan Y estan al dia, con sus dos negativos ejercidos
+
+---
+
+## 2026-08-18 (48) — **12 de 12 en la r2, y el verde de la fila 02 escondía el dato: tres de cada cuatro huellas salían por el FALLBACK. La partícula de gmpa se fue del addon por dictamen del autor.**
+
+Corrida del autor sobre `dev/checks/phantasmagoria-evidencia-r2.html`: **12 pasa, 0 falla**. Planilla
+de esta ronda: `dev/checks/phantasmagoria-evidencia-r3.html`, **siete filas**.
+
+### ⭐⭐ El `via` hizo su trabajo: la fila pasó y el mecanismo bueno no estaba corriendo
+
+La fila 02 salió **PASA** —*«sí queda en la puerta»*— y el reporte que el autor pegó dice esto:
+
+```
+huella 1  mano 3   en func_door_rotating #164   via cercano   quedan 0 s
+huella 2  mano 1   en func_door_rotating #163   via cercano   quedan 0 s
+huella 3  mano 2   en func_door_rotating #174   via cercano   quedan 5 s
+huella 4  mano 3   en func_door_rotating #184   via linea     quedan 33 s
+```
+
+**Tres de cuatro por el fallback.** El resultado visible era correcto —`NearestPoint` cae sobre la
+superficie por construcción, para eso se eligió— pero **el camino que da la normal REAL casi nunca
+corría**, y eso no lo dice el ojo: lo dice el `via`, que existe desde la r2 exactamente para esto.
+
+*Un verde que se apoya en el plan B es un verde prestado: sigue en pie hasta que el plan B se
+encuentre un caso que no sabe resolver.*
+
+**Y la causa estaba escrita hace rondas, en el archivo que toqué.** `doorAhead` justifica su hull
+diciendo *«una linea entra por el hueco entre la puerta y el marco y no ve nada»* — y yo tiré la
+línea **hacia adelante del bot**, que es precisamente ese tiro. Ahora la línea **apunta a la hoja**:
+se pide `NearestPoint` de la puerta a la mano, se arranca 24 u por fuera de ese punto y se traza
+hacia adentro. El tiro dejó de depender de cómo esté parado el bot.
+
+### La partícula de gmpa se fue del árbol — dictamen de la fila 08
+
+*«Se ve la diferencia, pero sabes, se ve muchísimo mejor el nuestro. Mejor saquemos el de GM
+Paranormal porque el nuestro está bien.»*
+
+Se fue **entero**: el `.pcf`, la carpeta `particles/`, la convar `phantasmagoria_orbe_modo`, las tres
+ramas del código y el crédito. El addon vuelve a no depender de ningún asset de terceros para los
+orbes — el sprite es del propio juego.
+
+**El crédito no se borró: se marcó retirado**, con las fechas y de dónde salió. *Un crédito retirado
+tiene que poder auditarse igual que uno vigente* — si mañana aparece la partícula en un `.gma` viejo,
+`CREDITOS.md` contesta.
+
+### Un orbe, no seis
+
+*«Para que sea parecido a la de Phasmophobia tiene que ser un solo orbe que se mueva errático (es
+como un orbe → un fantasma), eso se soluciona con `1 64`, ahí sí se ve perfecto.»* Ése es el default
+ahora: `phantasmagoria_orbe` sin argumentos pone **uno**, con 64 u de dispersión.
+
+Y sobre el emisor —*«no le veo utilidad, basta con tener un solo orbe que se mueva, aparezca y
+desaparezca»*—: **eso es un emisor de n = 1**, que es lo que quedó por default. Un orbe suelto no
+caduca y se queda quieto para siempre; el emisor lo hace nacer, derivar unos segundos y apagarse, y
+después nace otro. Presencia intermitente en vez de un adorno fijo, que es lo que la habitación
+favorita va a pedir.
+
+### Límite conocido, dicho por el autor y no resuelto
+
+*«A veces cuando la puerta está ya abierta, la huella queda mal pintada… si la puerta está cerrada
+todo bien, si la puerta es normal y el fantasma no va corriendo todo bien, digo que por ahora está
+aceptable.»* Queda anotado como límite y **no se tocó**: con la hoja abierta de par en par lo que se
+apunta suele ser el **canto** de la puerta, y una mano de 13 u dibujada sobre un canto de 4 se lee
+mal por geometría, no por un defecto del dibujo. Si molesta, el arreglo es descartar impactos cuya
+superficie sea más angosta que la huella — pero eso es una regla nueva y hoy no hay evidencia de que
+haga falta.
+
+### Un hallazgo que NO es de este bloque, y conviene no perder
+
+En el reporte de la fila 11 aparece, en el instrumento de puertas:
+
+```
+atraveso 52 veces ( todas por cercania: a 45 u o menos ) · 2 FORZADAS a solido
+por el techo de 5 s: eso no deberia pasar
+```
+
+Es del bloque de atravesar puertas y **el propio instrumento lo marca como anómalo**. No se tocó acá
+—no es de esta ronda— pero queda escrito para que no se pierda entre doce verdes.
+
+### Controles
+
+`dev/parsear_sintaxis_glua.py` sobre `lua/` (37 archivos): **0 errores**. `luacheck_gmod.py`: 0
+saltos crudos. `auditar_returns_de_hooks.py`: **0 de 32**.
+
+Al sacar el modo `pcf` quedaron dos restos que el borrado no toca solo y que hubieran envejecido como
+mentiras: un comentario que explicaba el emisor por *«cuánto dura una emisión del sistema de gmpa»* —
+un dato que ya no le importa a nadie — y **una guarda que imprimía `no hay .pcf montado` y ya no
+podía dispararse** (su única causa de `nil` se había ido en el mismo commit). Las dos afuera. *Sacar
+un mecanismo incluye sacar lo que hablaba de él.*
+
+**Y el verificador de citas se puso rojo sobre una planilla correcta**, que es su propio modo de
+falla favorito: la fila 06 de la r3 cita `phantasmagoria_orbe_modo` **justamente porque tiene que
+decir «Unknown command»**, y el header nombra el `.pcf` que se borró. El instrumento no distinguía
+una cita-instrucción de una **cita-sujeto**. El arreglo no fue silenciarlo: la planilla ahora declara
+sus ausencias —`<!-- verificador: AUSENTES … -->`— y **para ésas el criterio se invierte**: fallan si
+resuelven. Eso agarra el caso peor, que es un retiro hecho a medias: *una convar huérfana que sigue
+viva se puede poner en `pcf` y los orbes dejan de salir sin un solo error*. El `--control` creció con
+un cuarto caso que lo prueba.
+
+---
+
+## 2026-08-18 (47) — **Ronda 1 corrida en juego: 11 de 12, y las tres notas del autor valieron más que los once verdes. La huella salía del hull equivocado, el orbe era la partícula de otro, y la única fila roja acusaba a un código sano.**
+
+Corrida del autor sobre `dev/checks/phantasmagoria-evidencia-r1.html`. Planilla de esta ronda:
+`dev/checks/phantasmagoria-evidencia-r2.html`, **once filas**.
+
+### ⭐ La huella caía a la altura de los tobillos, y la causa estaba escrita en el sondeo
+
+El autor, en la fila 06: *«veo que la huella está en la parte de abajo de la puerta a unos
+centímetros de la puerta en vez de en ella misma»* — y con el diagnóstico al lado: *«aplicar
+`phantasmagoria_huella` la dibuja perfecto sobre la puerta, maybe solución es un trace para aplicar
+lo mismo desde una posición cercana a la puerta»*.
+
+**Las dos mitades de esa frase son una sola causa, y `doorAhead` la tenía escrita en su encabezado:
+el sondeo es un `TraceHull`, no una línea.**
+
+| Lo que se veía | Por qué |
+|---|---|
+| «a unos centímetros de la puerta» | El `HitPos` de un hull es donde toca **el hull**: queda a medio ancho del bot (~16 u) del plano de la hoja |
+| «en la parte de abajo» | El hull arranca en `GetPos() + 8` y su contacto se resuelve abajo: la huella caía a los tobillos |
+
+**Y el sondeo tiene que seguir siendo un hull** — *«una linea entra por el hueco entre la puerta y el
+marco y no ve nada»*, medido en su momento. O sea que **no era un parámetro para ajustar: son dos
+preguntas distintas**. Encontrar la puerta quiere un volumen; dejar una mano quiere un punto.
+
+`PHANTASMAGORIA.HandPointOnDoor` tira **su propio trace de línea** a 48 u del piso (el pecho de un
+ValveBiped de 72) y 64 u de brazo. Y el fallback, cuando esa línea no llega —la hoja en diagonal, el
+hueco del marco—, **no es volver al punto del hull**: es `NearestPoint` de la hoja sobre la mano, que
+por construcción cae **sobre** la superficie, que es justo lo que el punto del hull no garantiza.
+
+**El instrumento ahora imprime `via`** por cada huella (`linea` · `cercano` · `manual`). Existe
+porque la r1 dejó la huella mal puesta y *el reporte no ayudaba a saber por cuál camino salió*: sin
+esa palabra, «sigue mal ubicada» tiene dos causas y ninguna forma de separarlas.
+
+### ⭐ La fila roja acusaba a un código sano — y la pregunta del autor era la corrección
+
+Fila 08 (resync tras `retry`), marcada **FALLA**, con la nota: *«¿debería funcionar realmente? o sea
+estoy en singleplayer»*. **Tenía razón, y el que estaba mal era el check:** en singleplayer el
+`retry` **reinicia el servidor**, así que `PHANTASMAGORIA.Prints` se va con el mapa. No queda huella
+que resincronizar, y la fila **no podía distinguir «el resync no anda» de «no quedó nada que
+mandar»** — las dos se ven igual: cero huellas.
+
+Es el falso rojo de manual: *acusa a un instrumento sano y lo saca de circulación*. El arreglo es un
+comando que mide el camino sin tocar el servidor — `phantasmagoria_uv_resync` vacía la lista **de
+ese cliente** y se la vuelve a pedir; el instante con la lista en cero prueba, además, que se vació
+de verdad.
+
+### ⭐ El orbe pasó a ser propio, y eso salda la deuda que la r1 dejó escrita
+
+El autor, en la fila 10: *«¿son verdes? no deberían ser blancos tenues, cosa que apenas se noten; los
+orbes son como partículas de polvo que se mueven erráticamente»*.
+
+Tiene razón, **y el cambio resuelve de paso lo que la r1 había anotado como imposible**: una
+partícula del engine la ven todos y no admite gate, mientras que el orbe de Phasmophobia se ve
+**sólo por la videocámara**. Un sprite dibujado en el cliente arregla las dos cosas de una.
+
+- **`sprites/light_glow02_add`**, aditivo y **sin `$ignorez`** — se lee como polvo iluminado, pero
+  **lo tapa una pared**, que es lo que un orbe adentro de un cuarto tiene que respetar. Verificado en
+  disco: está en `sourceengine/hl2_misc_dir.vpk`.
+- **El movimiento no viaja por la red.** Cada orbe lleva una **semilla** y el cliente deriva la
+  deriva de ella: un orbe cuesta un mensaje, no un stream a 33 Hz. Que cada cliente vea la mota un
+  poco corrida no importa — lo que la mecánica necesita es que todos vean orbes **en el mismo
+  cuarto**, y eso es la posición base, que sí viaja. Y como es determinista, la semilla alcanza para
+  reproducir el punto exacto el día que importe (una foto que puntúa).
+- **Dos senos de frecuencias no múltiplas** por eje: con uno solo el movimiento se lee como un
+  péndulo, y «errático» es justo lo que un péndulo no es.
+- **Tres convars de calibración** (`_tam`, `_alfa`, `_deriva`) porque *«apenas se noten»* es un
+  criterio que se calibra mirando; los tres valores que salgan de la corrida son el entregable de la
+  fila 05 y pasan a ser el default.
+- **`dur 0` = no caducan**, que es la forma que va a usar la habitación favorita.
+
+El modo `pcf` queda **una ronda** para poder comparar los dos mirando (fila 08 de la r2), con una
+decisión explícita: si el propio convence, **se saca el `.pcf` del addon** y con él el crédito de
+terceros. Dos implementaciones de lo mismo divergen apenas alguien toque una.
+
+### Lo que la corrida confirmó y no hay que volver a medir
+
+Las cuatro texturas cargan, el gate abre y cierra en el acto, la huella **viaja con la puerta que
+gira** (*«sí viaja con la puerta»*), el fade de 60 s se ve, el fantasma abre puertas y deja huella
+(el camino real), el hook no rompió nada, borrar borra lo que se ve, el emisor **se muere solo**, y
+la partícula se montó desde el árbol del addon sin gmpa suscripto.
+
+### Controles
+
+`dev/parsear_sintaxis_glua.py` sobre `lua/` entero (37 archivos): **0 errores**. `luacheck_gmod.py`
+sobre los dos tocados: 0 saltos crudos. `dev/auditar_returns_de_hooks.py`: **0 de 32**.
+
+**Y el auditor de hooks se puso rojo una vez, con razón parcial:** pasarle a `hook.Add` un callback
+**nombrado** (`pedirSync`) le impide leer el cuerpo, y lo reporta como *«sin cuerpo visible»*. No era
+un defecto — pero **una alarma que va a salir en todas las corridas y nunca es nada enseña a ignorar
+el instrumento** (es el nº 68 del catálogo, el control que emitió 11 alarmas y las 11 falsas). El
+callback volvió a ser inline y el auditor volvió a 0.
+
+`dev/verificar_citas_de_planilla.py --control` sobre la planilla de la r2: **14 comandos y 3 rutas,
+todos resuelven**, con el denominador de 37 archivos leídos.
+
+---
+
 ## 2026-08-18 (50) — **La cacería vuelve a pasar 11 de 11 y el autor cierra la pregunta de los 12,3 LU: ni normalizar ni bajar, subir el nivel a 150. Y el default se mueve con él, porque una convar archivada no viaja en el `.gma`.**
 
 Segunda corrida entera: **11 pasa · 0 falla · 0 sin correr**, con la salida del reporte pegada fila
@@ -64,6 +401,106 @@ Sin planilla nueva: el cambio es un número que el autor ya probó en juego ante
 once filas de la ronda anterior siguen siendo la medición vigente. Offline pasaron sintaxis (37
 archivos, 0 errores), `luacheck_gmod`, `rutas_de_sonido` (179 / 0 faltantes), `caceria_bancos`
 (14 clips, 0 fallas) y `voz_y_modelo` (53 comprobaciones, 0 fallas).
+
+---
+
+## 2026-08-18 (46) — **Las huellas tenían productor desde la ronda 6 y ningún consumidor; los orbes no existían ni como dato, y las «dos líneas» del diseño no habrían dibujado nada sin tirar un error.**
+
+Pedido del autor: *«sobre los orbes y las manos que quedan en las puertas… quiero que veas para que
+podamos testear eso, tipo spawnear una huella y un orbe, cosa que cuando tengamos el código de
+habitación favorita del ghost se pueda generar esos efectos»*.
+
+**Nada de esto está probado en juego todavía.** Lo que sigue es lo escrito y lo medido en disco; la
+corrida va en `dev/checks/phantasmagoria-evidencia-r1.html`.
+
+### El estado real de las dos evidencias, antes de tocar nada
+
+| | Estado medido |
+|---|---|
+| **Huella UV** | **Productor vivo** (`MakePrint`/`CommitPrint`, `server_doors.lua`), **4 texturas generadas** en `materials/phantasmagoria/uv/`, y **cero consumidores**: ni un `net.Start`, ni un `PostDrawTranslucentRenderables`. El propio instrumento lo confesaba: *«NO se dibujan todavia, falta la linterna UV»* |
+| **Ghost Orb** | **No existía ni una línea.** La palabra `orb` no aparece en ningún `.lua` del addon — sólo en Diseño §11.1/§11.3 |
+
+### ⚠ Las «dos líneas» del diseño eran correctas y **no habrían dibujado nada**
+
+Diseño §11.3 cerraba los orbes con *«los reimplementamos en dos líneas:
+`ParticleEffect("gmpa_ghost_orb_green", …)`»*. La línea es correcta. Lo que no se había mirado es si
+la partícula **existe en la máquina donde iba a correr**: se barrieron los **880 addons** de
+`steamapps/workshop/content/4000` buscando `gmpa_fx.pcf` y `gm_paranormal` en el índice de cada
+`.gma`, y **gmpa no está suscripto**. El único «paranormal» instalado es *[VJ] Paranormal SNPC's*,
+que es otro mod. El `.pcf` sólo vivía en `dev/other/`, o sea **fuera del árbol que GMod monta**.
+
+*Un `ParticleEffect` sobre un sistema que no existe no dibuja y no tira error* — el mismo silencio
+con el que los orbes estuvieron muertos dentro de gmpa toda su vida, allá por un `IsValid()` sobre un
+`Vector`. **Dos causas distintas, el mismo modo de falla, y ninguna de las dos se ve.** Por eso el
+`.pcf` se copió al árbol (`particles/gmpa_fx.pcf`, `sha256 7c847544…`, acreditado en CREDITOS.md) y
+por eso el código hace `file.Exists` **antes** de `game.AddParticles` y grita si falta.
+
+### Lo escrito
+
+**`lua/autorun/phantasmagoria_evidencia.lua`** — el consumidor que faltaba, más el banco de pruebas:
+
+- **La huella viaja al cliente y se dibuja** bajo `PHANTASMAGORIA.HoldingUV()`, con el fade por
+  `expire` de §8.5 y recomponiendo `LocalToWorld` **en cada frame**, así sigue a la hoja que gira.
+- **El gate es una convar de cliente** (`phantasmagoria_uv 1`) y está **en una función**: cuando
+  exista la linterna, cambia un cuerpo y ningún consumidor se entera.
+- **API para la habitación favorita** (Diseño §14), que es a lo que apunta el pedido:
+  `PHANTASMAGORIA.SpawnOrbs( pos, n, radio )` y
+  `PHANTASMAGORIA.StartOrbEmitter( pos, periodo, dur, n, radio )`. El emisor calcula sus
+  repeticiones y **se muere solo** — no repite la fuga de timers de gmpa (§11.2, defecto 6).
+- **Comandos:** `phantasmagoria_huella` · `phantasmagoria_huella_limpiar` · `phantasmagoria_orbe` ·
+  `phantasmagoria_orbe_emisor` · `phantasmagoria_orbe_limpiar` (server, admin) ·
+  `phantasmagoria_uv_toggle` · `phantasmagoria_uv_estado` (cliente).
+
+**El comando de huella NO duplica `MakePrint`/`CommitPrint`: las llama.** Un banco de pruebas con su
+propia copia del productor deja de probar el camino real la primera vez que alguien toque una de las
+dos — y lo caro es que **seguiría dando verde**.
+
+### El hook tenía dos argumentos y hacían falta tres
+
+`CommitPrint` emitía `hook.Run( "PhantasmagoriaGhostUsedDoor", p.ghost, p.ent )`. Con eso el
+consumidor sabe **qué pasó** pero no tiene la huella: no hay forma de llegar a `lpos`, `hand` ni
+`expire`, y pescar `prints[ #prints ]` sería adivinar. Ahora viaja `p` como tercer argumento, y el
+consumidor **grita si llega `nil`** en vez de dibujar nada — porque el síntoma de esa versión sería
+*«el contador de huellas sube y la puerta se ve limpia»*.
+
+### El defecto que apareció revisando lo propio, y que sólo se rompe según dónde estés parado
+
+`net.ReadEntity` devuelve **NULL si el cliente todavía no conoce esa entidad**, y una puerta **fuera
+del PVS del que recibe** entra justo en ese caso. La primera versión podaba la lista con
+`not IsValid( p.ent )`, así que esa huella se descartaba **para siempre**. Corregido: viaja también
+el `EntIndex` (13 bits), la poda es **sólo por tiempo**, y la entidad se re-resuelve cada frame hasta
+que la puerta entra en PVS. `phantasmagoria_uv_estado` cuenta **por separado** las vivas y las que
+todavía no resolvieron su puerta: *un contador que junta dos causas no deja separar ninguna.*
+
+### Lo que este bloque **no** resuelve, y queda escrito
+
+- **El orbe lo ven todos.** En Phasmophobia el orbe se ve **sólo por la videocamara**, igual que la
+  huella sólo bajo la UV. Una partícula del engine no admite gate por jugador: para eso hay que
+  reimplementarlo como sprite client-side. El comando lo imprime cada vez que corre.
+- **Cuánto dura una emisión de `gmpa_ghost_orb_green`** es un dato que no tenemos (el `.pcf` es
+  binario y su propio Lua nunca lo llamó). `phantasmagoria_orbe_limpiar` apaga los emisores pero no
+  las partículas ya emitidas, y avisa que si no se apagan solas, el sistema es **loop** — y eso es
+  algo que la corrida en juego tiene que anotar.
+
+### Controles
+
+`dev/parsear_sintaxis_glua.py` (con su `--control`, que discrimina) sobre los dos archivos tocados:
+**0 errores de sintaxis**. `dev/luacheck_gmod.py`: 0 `continue` neutralizados, 0 saltos crudos.
+`dev/auditar_returns_de_hooks.py` sobre `lua/` entero: **31 `hook.Add`, 0 con `return` de valor**
+donde no sea la API del hook — los tres nuevos incluidos, con denominador impreso.
+
+**Instrumento nuevo: `dev/verificar_citas_de_planilla.py`** (en el workspace, no en el addon). Cruza
+cada comando y cada ruta que una planilla manda tipear contra el Lua que los registra y contra el
+disco. Existe por un modo de falla que ya se pagó en otras rondas: *un check que manda tipear un
+comando inexistente no se ve como un error de la planilla* — en juego sale `Unknown command` y quien
+corre lo anota como defecto del bloque que se estaba midiendo. **El instrumento acusa al sujeto.**
+
+**Y su propio `--control` lo agarró a él:** la primera versión capturaba los comandos con
+`phantasmagoria_[a-z_]+`, que se come también el **nombre de archivo** `phantasmagoria_evidencia.lua`
+citado dentro de un criterio, y reportaba un `FALTA` sobre algo que **nunca fue un comando**. *Un
+verificador de citas que inventa una cita es exactamente lo que ese archivo existe para impedir.*
+Sobre la planilla de esta ronda: **12 comandos y 4 rutas, todos resuelven**, con el denominador de
+37 archivos `.lua` leídos impreso arriba del resultado.
 
 ---
 

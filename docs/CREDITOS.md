@@ -65,6 +65,16 @@ Los tres formaban parte de un gamemode de Phasmophobia para GMod que quedó aban
 > renombrado no es un asset propio; si alguna vez alguien duda de si estas cuatro texturas son
 > nuestras, el hash de la fuente contesta sin discusión.
 
+### Partícula de los ghost orbs — **se usó una ronda y se retiró**
+
+`particles/gmpa_fx.pcf` estuvo en el árbol entre el 2026-08-18 y ese mismo día (rondas 1 y 2), como
+copia byte-por-byte del archivo de `[gm] paranormal events`, para el sistema `gmpa_ghost_orb_green`.
+
+**Ya no está, y no hay nada que acreditar de él.** El orbe que usa el addon es propio —un sprite
+dibujado en el cliente— y el `.pcf` salió entero junto con el modo que lo usaba. La entrada se deja
+escrita porque *un crédito retirado tiene que poder auditarse igual que uno vigente*: si alguien
+encuentra la partícula en un `.gma` viejo, esto dice de dónde salió y hasta cuándo estuvo.
+
 ### Excepción: un archivo que **no** es de ellos
 
 `materials/phas/Strong Flashlight Glass.vmt` **lo escribimos nosotros**. El modelo

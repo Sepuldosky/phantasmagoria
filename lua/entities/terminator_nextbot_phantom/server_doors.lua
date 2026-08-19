@@ -303,8 +303,10 @@ end
 ---------------------------------------------------------------------------
 -- Diseno 8.5 ya fijo la forma y aca se respeta al pie: el SERVIDOR guarda la
 -- huella como DATO y no pinta nada; el cliente la dibuja solo mientras la UV
--- apunta. Ese dibujo NO es de este bloque -- necesita la linterna UV, que no
--- existe -- asi que lo unico que se escribe aca es el productor.
+-- apunta. Ese dibujo NO es de este bloque: vive en
+-- lua/autorun/phantasmagoria_evidencia.lua ( escrito el 2026-08-18 ), que
+-- escucha el hook de mas abajo, la networkea y la dibuja bajo el gate
+-- PHANTASMAGORIA.HoldingUV. Aca sigue estando solo el productor.
 --
 -- Los campos son los de 8.5 ( pos, normal, hand, expire ) mas dos: la puerta y
 -- el fantasma. La puerta porque una prop_door_rotating GIRA, y una huella
@@ -329,6 +331,89 @@ PHANTASMAGORIA.Prints = PHANTASMAGORIA.Prints or {}
 --
 -- MakePrint corre EN EL CONTACTO, cuando la puerta todavia no se movio, y
 -- congela lo relativo. CommitPrint corre cuando ya se sabe que abrio.
+-- DE DONDE SALE EL PUNTO, Y POR QUE NO PUEDE SALIR DEL SONDEO
+--
+-- La r1 dejaba la huella en `tr.HitPos` del sondeo de doorAhead, y el autor lo
+-- reporto mirandolo: *"la huella esta en la parte de abajo de la puerta a unos
+-- centimetros de la puerta en vez de en ella misma"*. Las dos mitades de esa
+-- frase son la misma causa y estaba escrita en el propio sondeo: **es un
+-- TraceHull, no una linea**.
+--
+--   ① El HitPos de un hull es donde toca EL HULL, no donde toca la linea: queda
+--     separado del plano por medio ancho del bot ( ~16 u ), o sea "a unos
+--     centimetros de la puerta".
+--   ② El hull arranca en `GetPos() + 8` y sube hasta 56, y su contacto se
+--     resuelve abajo: la huella cae a la altura de los TOBILLOS.
+--
+-- Y el sondeo tiene que seguir siendo un hull -- una linea entra por el hueco
+-- entre la hoja y el marco y no ve la puerta ( eso ya esta medido arriba ). O
+-- sea que no es un parametro para ajustar: **son dos preguntas distintas**.
+-- Encontrar la puerta quiere un volumen; dejar una mano quiere un punto.
+--
+-- Asi que la huella tira SU PROPIO trace, de linea, a la altura de una mano.
+-- Si esa linea no llega ( entra por el hueco, o la hoja quedo en diagonal ), el
+-- fallback NO es volver al punto del hull: es `NearestPoint` de la hoja sobre
+-- la mano, que por construccion cae SOBRE la superficie -- que es justo lo que
+-- el punto del hull no garantiza.
+local HAND_HEIGHT = 48   -- u sobre los pies del bot: el pecho/mano de un ValveBiped de 72
+local HAND_BACKOFF = 24   -- u que el tiro retrocede desde la hoja para arrancar AFUERA de ella.
+                          -- Corto a proposito: arrancar lejos puede empezar del otro lado de
+                          -- una pared cercana, y entonces el trace pega en la pared y no en la puerta.
+
+-- ⚠⚠ LA r2 MIDIO ESTO Y LA PRIMERA VERSION ERRABA CASI SIEMPRE: de las cuatro
+-- huellas que dejo el fantasma, **tres salieron por el fallback** ( `via
+-- cercano` ) y una sola por el trace de linea. Se veian bien -- el fallback cae
+-- sobre la superficie por construccion -- pero el camino que da la normal REAL
+-- no estaba corriendo, y eso solo se supo porque el reporte imprime el `via`.
+--
+-- La causa es la misma que doorAhead ya tenia escrita para justificar su hull:
+-- *"una linea entra por el hueco entre la puerta y el marco y no ve nada"*. Yo
+-- tire la linea HACIA ADELANTE DEL BOT, que es exactamente el tiro que se cuela.
+--
+-- La linea ahora apunta A LA HOJA: se pide el punto mas cercano de la puerta a
+-- la mano, se arranca 24 u por FUERA de ese punto y se traza hacia adentro. Asi
+-- el tiro no depende de como este parado el bot, y pega en la cara que mira
+-- hacia el -- que es la cara donde la mano tiene que quedar.
+function PHANTASMAGORIA.HandPointOnDoor( ghost, door, trHull )
+    if not IsValid( ghost ) or not IsValid( door ) then return nil end
+
+    local mano = ghost:GetPos() + Vector( 0, 0, HAND_HEIGHT )
+
+    -- La superficie de referencia es la que el HULL toco ( puede ser el panel
+    -- parenteado y no la hoja: el panel ES parte de la puerta ), y si no toco
+    -- nada util, la puerta misma.
+    local sup      = ( trHull and esLaPuertaOSuPanel( trHull.Entity, door ) ) and trHull.Entity or door
+    local objetivo = sup:NearestPoint( mano )
+    local haciaMano = mano - objetivo
+
+    -- Mano adentro de la hoja ( pasa cuando el fantasma esta ATRAVESANDO ): no
+    -- hay un "hacia afuera" que sacar de la geometria, asi que se usa el cuerpo.
+    if haciaMano:LengthSqr() < 0.01 then
+        haciaMano = ghost:GetForward() * -1
+
+    end
+
+    haciaMano:Normalize()
+
+    local linea = util.TraceLine( {
+        start  = objetivo + haciaMano * HAND_BACKOFF,
+        endpos = objetivo - haciaMano * 8,
+        mask   = MASK_SOLID,
+        filter = ghost,
+    } )
+
+    if linea.Hit and esLaPuertaOSuPanel( linea.Entity, door ) then
+        return linea.HitPos, linea.HitNormal, "linea"
+
+    end
+
+    -- El fallback sigue existiendo -- algo puede meterse entre el punto de
+    -- arranque y la hoja -- y ahora su normal sale de la misma geometria que el
+    -- tiro: del punto de la superficie HACIA la mano.
+    return objetivo, haciaMano, "cercano"
+
+end
+
 function PHANTASMAGORIA.MakePrint( ghost, door, pos, normal )
     -- El punto se guarda RELATIVO a la puerta justamente porque la puerta gira.
     -- El absoluto se recompone con LocalToWorld a la hora de dibujarlo.
@@ -359,10 +444,16 @@ function PHANTASMAGORIA.CommitPrint( p )
     p.expire = now + PRINT_LIFE
     prints[ #prints + 1 ] = p
 
-    -- El enganche para el bloque de la UV, que todavia no existe. Se declara
-    -- ahora porque el productor es este y el consumidor es otro: si el gancho
-    -- no esta, el bloque de la UV tiene que volver a tocar este archivo.
-    hook.Run( "PhantasmagoriaGhostUsedDoor", p.ghost, p.ent )
+    -- El enganche para el bloque de la UV. Ya tiene consumidor:
+    -- lua/autorun/phantasmagoria_evidencia.lua lo escucha y networkea la huella.
+    --
+    -- ⚠ EL TERCER ARGUMENTO SE AGREGO EL 2026-08-18 Y NO ES OPCIONAL. Con
+    -- ( ghost, door ) solamente, el consumidor sabe QUE paso pero no tiene la
+    -- huella: no hay forma de llegar a `lpos`, `hand` ni `expire` desde ahi, y
+    -- pescar `prints[ #prints ]` seria adivinar cual es la ultima. El sintoma
+    -- de sacarlo es la clase de falla cara: el contador de huellas sube y la
+    -- puerta se ve limpia. El consumidor lo comprueba y grita si llega nil.
+    hook.Run( "PhantasmagoriaGhostUsedDoor", p.ghost, p.ent, p )
 
 end
 
@@ -1133,8 +1224,18 @@ function ENT:phantom_DoorThink()
     -- como el panel esta parenteado se mueve rigido con ella -- el punto local
     -- sigue cayendo sobre el vidrio cuando la hoja gira.
     if tr and tr.Hit and esLaPuertaOSuPanel( tr.Entity, door ) then
-        pendiente = PHANTASMAGORIA.MakePrint( self, door, tr.HitPos, tr.HitNormal )
+        -- ⚠ EL PUNTO YA NO SALE DE `tr.HitPos`, Y EL MOTIVO ESTA ARRIBA, EN
+        -- HandPointOnDoor: `tr` es un TraceHull y su contacto queda a medio
+        -- ancho del bot de la hoja y a la altura de los tobillos. La condicion
+        -- de arriba SIGUE saliendo del hull -- eso es "hay puerta y la toque",
+        -- que es justo lo que un volumen contesta mejor que una linea.
+        local pos, normal, via = PHANTASMAGORIA.HandPointOnDoor( self, door, tr )
 
+        if pos then
+            pendiente = PHANTASMAGORIA.MakePrint( self, door, pos, normal )
+            pendiente.via = via   -- "linea" o "cercano": lo imprime el instrumento
+
+        end
     end
 
     -- VERIFICACION, y es la diferencia entre "intente" y "abri". Sin esto el
@@ -2005,7 +2106,8 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
     end
 
     say( "[Phantasmagoria] huellas vivas: " .. vivas .. " de " .. #prints .. " guardadas" ..
-        "   ( duran " .. PRINT_LIFE .. " s; NO se dibujan todavia, falta la linterna UV -- Diseno 8.5 )" )
+        "   ( duran " .. PRINT_LIFE .. " s; se DIBUJAN con el gate abierto: en la consola del" ..
+        " cliente  phantasmagoria_uv 1  -- gate provisional hasta que exista la linterna )" )
 
     -- LA BITACORA DE SONIDO, que existe para una falla concreta: en la ronda 3
     -- el autor reporto que la puerta "sigue sonando" y no habia forma de saber
@@ -2045,8 +2147,15 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
         local p = prints[ i ]
         if not p then continue end
 
+        -- El `via` distingue las dos formas en que se pudo conseguir el punto, y
+        -- existe porque la r1 dejo la huella en el lugar equivocado y el reporte
+        -- no ayudaba a saber por que: `linea` es el trace de mano ( el bueno ),
+        -- `cercano` es el fallback por NearestPoint, `manual` es el comando de
+        -- prueba. Si una huella vuelve a quedar mal puesta, esta palabra dice
+        -- cual de los tres caminos la puso.
         say( "    huella " .. i .. "  mano " .. p.hand ..
             "   en " .. ( IsValid( p.ent ) and ( p.ent:GetClass() .. " #" .. p.ent:EntIndex() ) or "( puerta borrada )" ) ..
+            "   via " .. ( p.via or "?" ) ..
             "   quedan " .. math.max( math.Round( p.expire - now ), 0 ) .. " s" )
 
     end

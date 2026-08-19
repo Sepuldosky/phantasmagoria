@@ -492,6 +492,19 @@ Tres cosas que esto compra y el decal no: **el color** (teñir un PNG blanco con
 una textura por color), **el fade** (alfa desde `expire - CurTime()`, sin depender de
 `$decalfadeduration`), y **la puerta**, que es toda la mecánica.
 
+> **ESCRITO Y VIVO (2026-08-18).** Este bloque dejó de ser un diseño: el consumidor existe en
+> [`lua/autorun/phantasmagoria_evidencia.lua`](../lua/autorun/phantasmagoria_evidencia.lua) y sigue
+> el pseudocódigo de arriba con **dos diferencias que el borrador no podía prever**:
+>
+> 1. **No se manda `pos` sino `lpos`/`lang` (relativos a la puerta) más el `EntIndex`.** Lo primero
+>    porque la hoja gira —ya lo sabía `MakePrint`—; lo segundo porque `net.ReadEntity` devuelve
+>    `NULL` si el cliente todavía no conoce esa entidad, y una puerta **fuera del PVS del que
+>    recibe** entra justo en ese caso. Sin el índice, la huella llegaría muerta y se descartaría para
+>    siempre: un agujero que se abre según **dónde está parado el que mira**.
+> 2. **El gate es `PHANTASMAGORIA.HoldingUV()` y hoy devuelve una convar** (`phantasmagoria_uv`).
+>    Está en una función y no inline para que el día que exista la linterna cambie **un cuerpo** y
+>    ningún consumidor se entere.
+
 **La huella de sal viaja en la misma puerta.** `demit/salt_step.mdl` es un **modelo**, no un decal:
 se spawnea con `SetNoDraw(true)` y se dibuja client-side con la misma condición. Un solo gate para
 las dos evidencias UV, y ningún mecanismo nuevo.

@@ -790,8 +790,26 @@ el primero cambia cómo se siente el mod más que los otros cinco juntos:
   | `FlingNearbyPhysicsProps(self)` | ~~Se lee sana pero nunca corrió~~ **CORRE** — tiene **tres** call sites (`:612` muerto, `:1040` y `:1055` vivos vía `activeGhosts`). Ver la corrección de §11.2 |
   | `BreakNearbyProps(self)` | **No hace lo que el nombre dice.** Si querés romper `prop_physics`, hay que escribirlo |
 
-- **Los orbes los reimplementamos** en dos líneas, esquivando el bug:
-  `ParticleEffect("gmpa_ghost_orb_green", pos, Angle(0,0,0))`.
+- ~~**Los orbes los reimplementamos** en dos líneas, esquivando el bug:
+  `ParticleEffect("gmpa_ghost_orb_green", pos, Angle(0,0,0))`.~~ **SUPERADO — el orbe es PROPIO
+  (2026-08-18, r2).** Las dos líneas eran correctas y fallaban por dos motivos que sólo se ven
+  mirando:
+
+  1. **La partícula no existe en la máquina donde iba a correr.** gmpa no está suscripto (barridos
+     los 880 addons del workshop local). `ParticleEffect` sobre un sistema que no está montado **no
+     dibuja y no tira error**.
+  2. **Una partícula del engine la ven todos y no admite gate**, y el orbe de Phasmophobia se ve
+     **sólo por la videocámara** — el mismo patrón que la huella bajo la UV. Con partículas ese gate
+     no se puede escribir.
+
+  Y una tercera, del autor mirándola en juego: *«¿son verdes? no deberían ser blancos tenues, cosa
+  que apenas se noten; los orbes son como partículas de polvo que se mueven erráticamente»*.
+
+  **La forma que quedó** (`lua/autorun/phantasmagoria_evidencia.lua`): el orbe es **dato en el
+  server** y un **sprite dibujado en el cliente** — `sprites/light_glow02_add`, aditivo y sin
+  `$ignorez`, así que lo tapa una pared. **El movimiento no viaja: viaja una semilla** y la deriva se
+  deriva de ella en el cliente, con dos senos de frecuencias no múltiplas por eje. `SpawnOrbs( pos,
+  n, radio, dur )` con `dur 0` = no caducan, que es lo que la habitación favorita (§14) va a querer.
 
 ---
 
