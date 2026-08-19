@@ -1,6 +1,6 @@
 # Phantasmagoria — Estado actual y handoff
 
-**Última actualización:** 2026-08-18
+**Última actualización:** 2026-08-19
 **Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
@@ -12,6 +12,43 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 ---
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
+
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-19): LOS DOS PEDIDOS DEL CIERRE ANTERIOR, ESCRITOS Y SIN CORRER EN JUEGO.**
+> La puerta que se abre **por chance** y el multiplicador global que el tipo se comía. Detalle en el
+> CHANGELOG **(52)**. Planilla nueva: `dev/checks/phantasmagoria-puertas-chance-r1.html`, **nueve filas**,
+> con los tres auditores de planilla en verde.
+>
+> ⚠⚠⚠ **EL PEDIDO 2 TRAE UNA TRAMPA Y ESTÁ DICHA ANTES DE CORRER: el arreglo pedido es correcto y el
+> síntoma que se le atribuyó NO SE SIGUE DE ÉL.** El autor ve *«revenant rapidísimos aunque tenga mi
+> multiplicador en 0.7»*, pero el Revenant tiene `speed.base 0.588` y nadie lee `speed.top`: hoy va
+> **× 0.588, más lento que el jugador**, y con su multiplicador aplicado queda en **× 0.412**, más lento
+> todavía. *El síntoma es real y el lugar no.* Los cinco sospechosos que sí explicarían un fantasma
+> rápido los separa **una sola lectura**, que es la **fila P0** y se corre **primero**. Sin ella, el
+> cambio se lleva un crédito que no le toca.
+>
+> ⭐⭐ **`phantasmagoria_ghost_doorchance` (0…1, default 0).** La probabilidad de que un fantasma que
+> **iba a atravesar** abra en su lugar. Es convar nueva y **no** un tercer valor de `opendoors`, cuyo `0`
+> es el control negativo de cuatro filas viejas. Con la perilla en 0 el comportamiento de hoy queda
+> idéntico. **La tirada es pegajosa por par (fantasma, puerta) y de TRES estados** —`abrir`,
+> `atravesar`, y la entrada ausente—: por tick sería una probabilidad diez veces por segundo, o sea que
+> abriría siempre, y **la fila 03 es la única que puede ver ese defecto**. La apertura pasa **por la
+> escalera** (la huella sale de ahí y de ningún otro lado) y **el veto consulta la decisión** (si no,
+> el contador sube, la hoja no se mueve, y no hay error).
+>
+> ⭐⭐ **El evento `doors` vuelve a mover la hoja, también con `opendoors 0`** — decisión del autor entre
+> las dos lecturas posibles de su pedido. Y eso corrige un defecto **medido y sin corregir**: el veto se
+> comía su `Use2` entero, y aquello **se había arreglado del lado del instrumento** (la bitácora decía
+> `door SIN EFECTO`) **y no del lado del comportamiento**. Mecanismo: un **pase de un solo uso**, contado
+> aparte de `VETADAS`.
+>
+> ⚠ **El default de `doorchance` está en 0 y hay que moverlo.** Cuando el autor elija el número en juego,
+> ese número va **al default, en el código**: `FCVAR_ARCHIVE` guarda en su máquina y **no viaja en el
+> `.gma`**.
+>
+> ⚠ **Lo que NO se escribió, a propósito:** `speed.top` / `isRange` / `alt` / `losSpeedUp` (13 de los 30
+> tipos traen segunda velocidad). Es tentador **justamente porque** el `top 1.765` del Revenant
+> explicaría el síntoma — y por eso no va acá: mezclarlo haría imposible saber cuál de los dos cambios
+> produjo qué.
 
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-19): LAS TRES RONDAS CERRADAS Y PUSHEADAS** (`f4d2057`) — 11/12, 12/12 y
 > **7/7**. El trace de mano pasó de **1 de 4** a **5 de 6** huellas por el camino bueno, el orbe tiene

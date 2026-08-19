@@ -41,11 +41,34 @@
 local cvDerive = CreateConVar( "phantasmagoria_ghost_derivespeed", "1", FCVAR_ARCHIVE,
     "El fantasma deriva su velocidad de la carrera del jugador ( Diseno 1.1 ). En 0 usa los 550 u/s de la base, que es el defecto original: sirve para el A/B.", 0, 1 )
 
--- ANDAMIO, y desde este bloque ya NO es el que manda por default: el
--- multiplicador lo pone la tabla de tipos ( ghost_types.lua, speed.base ) via el
--- campo phantom_SpeedMul, que GANA. Esta convar queda para tres cosas: el lado
--- de control del A/B ( con typespeed 0 ), un fantasma SIN TIPO, y mover la
--- escala a mano en una corrida.
+-- ⚠⚠⚠ ERA UN `else` Y DESDE EL 2026-08-19 ES UN **FACTOR**. Pedido del autor,
+-- textual: *"quiero que el cvar que sirve para respetar la velocidad del tipo de
+-- fantasma considere el multiplicador de velocidad porque no lo hace"*. Tenia
+-- razon sobre el mecanismo: hasta hoy esta convar era la rama `else` de
+-- phantom_RefreshSpeed, o sea que con un fantasma CON tipo y `typespeed 1` no
+-- hacia absolutamente nada.
+--
+-- ⚠ ESO NO ERA UN BUG: era el diseño que habia, y esta convar lo decia de si
+-- misma ( "ANDAMIO", "lo reemplaza speed.base" ). Lo que cambia es una
+-- PRECEDENCIA, y hay que decirlo asi -- no se "arreglo" nada.
+--
+--     antes    mul = campo or convar
+--     ahora    mul = ( campo or 1.0 ) * convar
+--
+-- ⚠⚠ Y CUANDO NO HAY TIPO, LA BASE ES 1.0 -- decision del autor entre las dos
+-- salidas legitimas ( la otra era una convar nueva solo para el sin-tipo ). Con
+-- esta, `speedmul 0.7` sobre un fantasma sin tipo sigue dando 0.7, que es
+-- EXACTAMENTE lo que hacia antes: el papel viejo de la convar se conserva sin
+-- una perilla mas.
+--
+-- ⚠⚠⚠ CON EL DEFAULT EN 1.0 **NADIE QUE NO TOQUE LA PERILLA CAMBIA DE
+-- VELOCIDAD**, ni con tipo ni sin el. Eso es lo que hace que este cambio no
+-- obligue a re-correr las filas de velocidad viejas, y hay que decirlo en el
+-- commit: "cambie la precedencia del multiplicador" suena a que si.
+--
+-- Sigue sirviendo para las tres cosas de siempre -- el lado de control del A/B,
+-- el fantasma sin tipo, y mover la escala a mano -- solo que ahora la tercera
+-- alcanza tambien a los que tienen tipo, que es el pedido.
 -- 1.0 = Spirit = va tan rapido como vos corriendo ( Diseno 5.1 ).
 --
 -- ⚠ Y SU DEFAULT ES EXACTAMENTE speed.base DE 19 DE LOS 30 TIPOS. Contado sobre
@@ -56,7 +79,15 @@ local cvDerive = CreateConVar( "phantasmagoria_ghost_derivespeed", "1", FCVAR_AR
 -- el enganche roto y el enganche andando imprimen el mismo x1.000. Los sujetos
 -- de este bloque tienen que salir de esos 11.
 local cvMul = CreateConVar( "phantasmagoria_ghost_speedmul", "1", FCVAR_ARCHIVE,
-    "ANDAMIO. Multiplicador de la carrera del jugador ( Spirit = 1.0 ). Lo reemplaza speed.base de la tabla de tipos cuando el fantasma tiene tipo y phantasmagoria_ghost_typespeed esta en 1.", 0.1, 5 )
+    "Multiplicador GLOBAL de la velocidad del fantasma. MULTIPLICA al speed.base del tipo ( antes lo reemplazaba ): un Revenant x0.588 con esta en 0.7 va a x0.412. Sin tipo, la base es 1.0 y esta convar es toda la escala. 1.0 = no toca nada.", 0.1, 5 )
+
+-- LA BASE DEL FANTASMA **SIN TIPO**, y existe como constante con nombre en vez
+-- de un 1 suelto adentro de la formula por un motivo concreto: es una DECISION
+-- ( la salida (a) del pedido del autor ), no una identidad matematica, y el dia
+-- que alguien quiera la salida (b) -- una convar propia para el sin-tipo -- este
+-- es el unico lugar que hay que mirar. Un `* 1` en medio de una multiplicacion
+-- no se puede buscar ni se puede explicar.
+local SIN_TIPO = 1.0
 
 -- EL A/B DEL ENGANCHE DE speed.base ( Diseno 5.1 ), y hace falta una convar
 -- propia aunque parezca que el A/B ya existia. El prompt de este bloque decia
@@ -174,6 +205,38 @@ function ENT:phantom_BaseRun()
 
 end
 
+---------------------------------------------------------------------------
+-- LA PRECEDENCIA DEL MULTIPLICADOR, EN UN SOLO LUGAR
+---------------------------------------------------------------------------
+-- ⚠⚠ EXISTE COMO FUNCION PORQUE TIENE **DOS** LECTORES Y NO UNO, y el segundo es
+-- el que lo hace obligatorio: el reporte reconstruye este numero para comparar
+-- la foto de `phantom_speedDbg` contra el estado en vivo, que es lo unico que
+-- separa "el mecanismo esta mal" de "estas leyendo una foto vieja". Si las dos
+-- copias de la precedencia divergieran, el reporte gritaria "ESTA FOTO YA NO
+-- VALE" sobre una foto perfecta -- o, peor, se callaria sobre una vieja.
+--
+-- Devuelve CUATRO cosas y ninguna es decoracion: el producto ( lo que multiplica
+-- de verdad ), el factor del TIPO, de donde salio ese factor, y el global.
+local function multiplicador( ent )
+    local base, fuente
+
+    if isnumber( ent.phantom_SpeedMul ) then
+        base, fuente = ent.phantom_SpeedMul, "campo phantom_SpeedMul ( tipo )"
+
+    else
+        -- SIN TIPO: base neutra, y la convar es toda la escala. Es exactamente
+        -- lo que la convar hacia antes de este bloque para este caso.
+        base, fuente = SIN_TIPO, "sin tipo: base neutra x" .. string.format( "%.3f", SIN_TIPO ) ..
+            " ( " .. tostring( ent.phantom_SpeedMulWhy or "phantom_ApplyTypeSpeed nunca corrio" ) .. " )"
+
+    end
+
+    local global = cvMul:GetFloat()
+
+    return base * global, base, fuente, global
+
+end
+
 -- Recalcula y cachea. Deja todo lo que uso en phantom_speedDbg para que el
 -- instrumento imprima LOS INSUMOS y no solo el resultado: si el numero sale
 -- raro, se tiene que poder ver cual de los cuatro lo torcio.
@@ -181,17 +244,10 @@ function ENT:phantom_RefreshSpeed()
     local ref             = self:phantom_SpeedReferencePlayer()
     local base, fuente    = PHANTASMAGORIA.PlayerBaseRunSpeed( ref )
 
-    -- El campo gana sobre la convar. Desde Diseno 5.1 lo escribe
-    -- phantom_ApplyTypeSpeed con el speed.base del tipo; sin tipo, o con
-    -- phantasmagoria_ghost_typespeed en 0, queda vacio y manda el andamio.
-    local mul, mulFuente
-    if isnumber( self.phantom_SpeedMul ) then
-        mul, mulFuente = self.phantom_SpeedMul, "campo phantom_SpeedMul ( tipo )"
-
-    else
-        mul, mulFuente = cvMul:GetFloat(), "convar phantasmagoria_ghost_speedmul ( ANDAMIO )"
-
-    end
+    -- Los DOS factores, y salen de la funcion compartida a proposito ( ver
+    -- multiplicador() ): el reporte tiene un detector de foto vieja que
+    -- reconstruye este mismo numero, y dos copias de una precedencia divergen.
+    local mul, mulBase, mulBaseFuente, mulGlobal = multiplicador( self )
 
     local baseRun = self:phantom_BaseRun()
     local target  = base * mul
@@ -209,8 +265,16 @@ function ENT:phantom_RefreshSpeed()
         ref       = IsValid( ref ) and ref:Nick() or "( ninguno )",
         base      = base,
         fuente    = fuente,
-        mul       = mul,
-        mulFuente = mulFuente,
+        -- ⚠⚠ LOS DOS FACTORES VAN GUARDADOS POR SEPARADO Y NO SOLO EL
+        -- PRODUCTO, que es la regla de este archivo desde que existe ( "el
+        -- instrumento imprime LOS INSUMOS y no solo el resultado" ). Un x0.412
+        -- pelado no distingue `0.588 del tipo x 0.700 de la convar` de un tipo
+        -- mal asignado cuyo speed.base fuera 0.412 -- y son dos veredictos
+        -- opuestos sobre la misma pantalla.
+        mul       = mul,          -- el producto, que es lo que multiplica de verdad
+        mulBase   = mulBase,      -- el del TIPO ( o 1.0 si no tiene )
+        mulFuente = mulBaseFuente,
+        mulGlobal = mulGlobal,    -- phantasmagoria_ghost_speedmul
         baseRun   = baseRun,
         target    = target,
         factor    = factor,
@@ -661,16 +725,46 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_speed", function( ply )
         -- la foto contra el estado en vivo es lo unico que separa "el mecanismo
         -- esta mal" de "estas leyendo una foto vieja", y son dos veredictos
         -- opuestos sobre la misma pantalla.
-        local mulAhora = isnumber( ghost.phantom_SpeedMul ) and ghost.phantom_SpeedMul or cvMul:GetFloat()
+        -- ⚠ SALE DE LA MISMA FUNCION QUE EL MECANISMO. Antes esta linea
+        -- reconstruia la precedencia a mano, y desde el 2026-08-19 la
+        -- precedencia tiene dos factores: una copia a mano habria seguido
+        -- comparando contra el `campo or convar` viejo y este detector -- que es
+        -- el que separa "el mecanismo esta mal" de "estas leyendo una foto
+        -- vieja" -- habria gritado sobre TODAS las fotos.
+        local mulAhora = multiplicador( ghost )
         local vieja    = math.abs( mulAhora - dbg.mul ) > 0.0005
 
         say( "    referencia  " .. dbg.ref .. "   base " .. math.Round( dbg.base ) .. " u/s   de " .. dbg.fuente )
-        say( "    multiplic.  x" .. string.format( "%.3f", dbg.mul ) .. "   de " .. dbg.mulFuente ..
+
+        -- ⚠⚠ EL PRODUCTO Y SUS DOS FACTORES, EN DOS RENGLONES. Un x0.412 pelado
+        -- no distingue "0.588 del tipo por 0.700 de la convar" de "un tipo mal
+        -- asignado con speed.base 0.412", y son dos veredictos opuestos. El
+        -- renglon de abajo es el que contesta cual de los dos torcio el numero.
+        say( "    multiplic.  x" .. string.format( "%.3f", dbg.mul ) ..
             ( edad and ( "   [ foto de hace " .. string.format( "%.2f", edad ) .. " s ]" ) or "   [ sin sello: foto vieja de antes de la r18b ]" ) )
+        say( "                = tipo x" .. string.format( "%.3f", dbg.mulBase or 1 ) .. " ( " .. dbg.mulFuente .. " )" ..
+            "   ×   global x" .. string.format( "%.3f", dbg.mulGlobal or 1 ) .. " ( phantasmagoria_ghost_speedmul )" )
+
+        -- ⚠⚠⚠ EL AVISO QUE EVITA QUE ESTE BLOQUE SE ACREDITE ALGO QUE NO HIZO.
+        -- El autor pidio este cambio porque veia Revenants "rapidisimos", y con
+        -- los numeros de hoy el Revenant va a x0.588 -- MAS LENTO que la carrera
+        -- del jugador --, asi que aplicar su multiplicador lo deja mas lento
+        -- todavia. El sintoma es real y la causa que se le adjudico no. Con el
+        -- global en 1 no hay nada que avisar; apenas se mueve, esta linea dice
+        -- en que direccion se movio y contra que se lo compara.
+        if math.abs( ( dbg.mulGlobal or 1 ) - 1 ) > 0.0005 then
+            say( "                ⚠ el global esta en x" .. string.format( "%.3f", dbg.mulGlobal or 1 ) ..
+                ": este fantasma va " .. ( ( dbg.mulGlobal or 1 ) < 1 and "MAS LENTO" or "MAS RAPIDO" ) ..
+                " de lo que pide su tipo. Si lo ves rapido igual, el multiplicador NO es la causa:" )
+            say( "                  mirar `base` y `fuente` de arriba ( derivespeed 0 -> 550 u/s de la base )," )
+            say( "                  y el `tipo` de abajo, que dice cual es de verdad." )
+
+        end
 
         if vieja then
             say( "    !! ESTA FOTO YA NO VALE: ahora el multiplicador seria x" .. string.format( "%.3f", mulAhora ) ..
-                " ( " .. ( isnumber( ghost.phantom_SpeedMul ) and "campo phantom_SpeedMul" or "convar andamio" ) .. " )." )
+                " ( tipo x" .. string.format( "%.3f", isnumber( ghost.phantom_SpeedMul ) and ghost.phantom_SpeedMul or SIN_TIPO ) ..
+                "  ×  global x" .. string.format( "%.3f", cvMul:GetFloat() ) .. " )." )
             say( "       Las cuatro lineas de abajo -- objetivo, factor, convertidas y AHORA -- son del calculo VIEJO." )
             say( "       Volve a tipear el comando SOLO ( sin encadenarlo con otro ): dos concommands en la misma" )
             say( "       linea corren en el mismo frame y no hay tick en el medio que recalcule." )
@@ -696,7 +790,8 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_speed", function( ply )
                 "   " .. ( coincide and "COINCIDEN" or "!! NO COINCIDEN: el campo quedo de otro tipo o lo escribio otro" ) )
 
         else
-            say( "    speed.base  campo VACIO   -> manda el andamio.   motivo: " ..
+            say( "    speed.base  campo VACIO   -> la base es x" .. string.format( "%.3f", SIN_TIPO ) ..
+                " y toda la escala la pone phantasmagoria_ghost_speedmul.   motivo: " ..
                 tostring( ghost.phantom_SpeedMulWhy or "( nunca se llamo phantom_ApplyTypeSpeed )" ) )
 
         end

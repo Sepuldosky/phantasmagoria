@@ -22,6 +22,9 @@
            speed.base del tipo, en phantom_SetType. Es LO UNICO de este archivo
            que cambia comportamiento, tiene su propia convar de control
            ( phantasmagoria_ghost_typespeed ) y su propia planilla.
+           ⚠ Desde el 2026-08-19 ese campo ya NO es el multiplicador final: es
+           uno de dos factores. `phantasmagoria_ghost_speedmul` lo MULTIPLICA en
+           vez de reemplazarlo ( pedido del autor ).
 
       NO   no toma `speed.top`, `isRange`, `alt` ni `losSpeedUp` -- 13 de los 30
            traen una segunda velocidad. Eso es §5.1 entero y va despues. Los
@@ -427,7 +430,12 @@ function PHANTASMAGORIA.TypeLines( ghost, say )
         estado = "NO aplicado ( " .. tostring( ghost.phantom_SpeedMulWhy or "phantom_ApplyTypeSpeed nunca corrio" ) .. " )"
 
     elseif math.abs( campo - base ) < 0.0005 then
-        estado = "APLICADO ( phantom_SpeedMul, gana sobre la convar andamio )"
+        -- ⚠ DECIA "gana sobre la convar andamio" Y DESDE EL 2026-08-19 ES
+        -- FALSO: la convar dejo de ser el `else` y paso a MULTIPLICAR al campo
+        -- ( pedido del autor; ver el encabezado de phantasmagoria_ghost_speedmul
+        -- en server_speed.lua ). Un comentario viejo al lado de su propia
+        -- refutacion es la trampa que este taller ya pago dos veces.
+        estado = "APLICADO ( phantom_SpeedMul; lo MULTIPLICA phantasmagoria_ghost_speedmul )"
 
     else
         estado = "!! APLICADO CON OTRO NUMERO: el campo vale x" .. string.format( "%.3f", campo )
@@ -688,7 +696,7 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_type", function( ply, _, args )
     -- enganche "y no despues", asi que se actualiza en la misma edicion.
     -- Cambiar el tipo en caliente cambia la velocidad EN EL ACTO.
     say( "    ⚠ ESTO CAMBIA LA VELOCIDAD EN EL ACTO ( Diseno 5.1 ): el speed.base del tipo se escribe " ..
-        "en phantom_SpeedMul y gana sobre phantasmagoria_ghost_speedmul." )
+        "en phantom_SpeedMul, y phantasmagoria_ghost_speedmul lo MULTIPLICA ( desde el 2026-08-19 no lo reemplaza )." )
     say( "      para volver al andamio sin perder el tipo:  phantasmagoria_ghost_typespeed 0" )
 
     PHANTASMAGORIA.EachGhost( function( ghost ) ghost:phantom_ResolveType() end )

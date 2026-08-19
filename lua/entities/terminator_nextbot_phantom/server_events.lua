@@ -3756,12 +3756,20 @@ EV.door = function( ghost, radio )
     --   :1221  local block = hook.Run( "TerminatorBlockUse", self, toUse )
     --   :1222  if block then return end
     --
-    -- Y el cuarto lo tenemos NOSOTROS: server_doors.lua:566-578 devuelve true
-    -- cuando phantom_CanOpenDoors() dice que no. O sea que con
+    -- Y el cuarto lo tenemos NOSOTROS: server_doors.lua devuelve true cuando
+    -- phantom_CanOpenDoors() dice que no. O sea que con
     -- `phantasmagoria_ghost_opendoors 0` -- una convar real, un control
     -- documentado -- el evento sonaba la manija, no movia la hoja, y el
     -- instrumento imprimia "OK -- puerta prop_door_rotating #123". Verde exacto
     -- sobre cero comportamiento.
+    --
+    -- ⚠ ESO SE ARREGLO EL 2026-08-19, Y DEL LADO DEL COMPORTAMIENTO. El arreglo
+    -- de aquella vez fue del INSTRUMENTO -- la bitacora paso a decir
+    -- `door SIN EFECTO` en vez de `OK` -- y la hoja siguio sin moverse un año de
+    -- rondas. Ahora el evento pide un pase de un solo uso antes de su Use2 ( ver
+    -- abajo ), asi que la cuarta salida ya no lo alcanza. Las OTRAS CUATRO
+    -- siguen ahi, y por eso la medicion de abajo no se toca: sigue siendo la
+    -- unica que no envejece.
     --
     -- Enumerar las cinco salidas seria frágil ( la segunda se activa porque un
     -- tercero AGREGUE un campo ). Lo que no envejece es medir la hoja: se lee su
@@ -3790,6 +3798,32 @@ EV.door = function( ghost, radio )
     -- orden en que ocurren -- manija, despues hoja.
     local snd = elegir( SND.door )
     if snd then sound.Play( snd, door:WorldSpaceCenter(), 70, math.random( 95, 105 ) ) end
+
+    -- ⚠⚠⚠ EL PASE, Y ES LA LINEA QUE VUELVE A ESTE EVENTO UN EVENTO. Hasta el
+    -- 2026-08-19 la cuarta salida silenciosa de Use2 -- nuestro propio veto de
+    -- server_doors.lua -- se comia esta apertura entera cuando
+    -- `phantasmagoria_ghost_opendoors` estaba en 0, que es la combinacion en la
+    -- que el autor juega. La manija sonaba, la hoja no se movia, y la bitacora de
+    -- abajo lo decia con esas palabras ( `door SIN EFECTO` ) sin que nadie
+    -- pudiera arreglarlo desde este archivo. Eso era el instrumento diciendo la
+    -- verdad sobre un comportamiento roto: el defecto estaba MEDIDO y sin
+    -- corregir.
+    --
+    -- DECISION DEL AUTOR ( 2026-08-19 ), entre las dos lecturas de su pedido:
+    -- el evento **siempre** mueve la hoja, tambien con `opendoors 0`. La
+    -- probabilidad ( `phantasmagoria_ghost_doorchance` ) es para el fantasma que
+    -- NAVEGA y llega a una puerta; esto es una manifestacion deliberada, la
+    -- dispara un comando, y un evento que no hace nada no es "calmado": esta
+    -- roto.
+    --
+    -- ⚠ El pase dura UNA apertura y UNA puerta ( ver phantom_GrantDoorPass ). No
+    -- se toca `opendoors`: su 0 sigue siendo el control negativo de cuatro filas
+    -- de las planillas de puertas, y el veto sigue vetando todo lo demas --
+    -- incluida la apertura que la BASE hace por su cuenta.
+    if isfunction( ghost.phantom_GrantDoorPass ) then
+        ghost:phantom_GrantDoorPass( door, "evento doors" )
+
+    end
 
     ghost:Use2( door )
 
@@ -3820,9 +3854,16 @@ EV.door = function( ghost, radio )
         local despues = leerEstado( door )
 
         if despues == estadoAntes then
+            -- ⚠ EL SOSPECHOSO CAMBIO EL 2026-08-19 Y LA LINEA TENIA QUE
+            -- CAMBIAR CON EL. Decia que la causa mas probable era
+            -- `opendoors 0` o el veto, y desde el pase de un solo uso esos dos
+            -- ya no pueden ser: quedan las CUATRO salidas de la base. Un
+            -- instrumento que sigue nombrando al sospechoso que se descarto
+            -- manda a mirar donde ya no esta.
             anotar( string.format( "%s door SIN EFECTO -- %s #%d no cambio de estado ( %s ). " ..
-                "Use2 tiene cinco salidas silenciosas; la mas probable es " ..
-                "phantasmagoria_ghost_opendoors en 0 o el veto TerminatorBlockUse",
+                "El veto propio ya NO es sospechoso ( el evento pide pase ): quedan las cuatro " ..
+                "salidas silenciosas de la base -- CanUseStuff, GetDriver, la lista negra de clases, " ..
+                "o un TerminatorBlockUse de un TERCERO",
                 yo, door:GetClass(), door:EntIndex(),
                 tostring( despues ) ) )
 

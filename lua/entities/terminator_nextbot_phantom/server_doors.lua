@@ -130,6 +130,43 @@ local cvPhaseMask = CreateConVar( "phantasmagoria_ghost_phasemask", "1", FCVAR_A
     "1 = MASK_NPCWORLDSTATIC ( como HIM: pasa props Y brush entities como func_door_rotating ). 0 = MASK_NPCSOLID_BRUSHONLY ( como el wraith de la base: pasa props y NO brush entities ).", 0, 1 )
 
 ---------------------------------------------------------------------------
+-- ABRIR **POR CHANCE** EL QUE IBA A ATRAVESAR
+---------------------------------------------------------------------------
+-- Pedido del autor del 2026-08-19, textual: *"al pasar por puertas con
+-- opendoors 0, la puerta se abra igual pero con una probabilidad; la razon: es
+-- muy calmado con las puertas el evento doors y muy ruidoso con opendoors 1,
+-- prefiero que si el fantasma puede traspasar las puertas este las abra con
+-- cierta probabilidad para dejar huellas"*.
+--
+-- Y NO ES UN CAPRICHO NUEVO: es volver a poner una parte de lo que el diseño de
+-- este archivo eligio. El encabezado de arriba dice que atravesar *"regalaria la
+-- huella"* -- por eso se eligio abrir --, y hoy el fantasma generico atraviesa
+-- ( phantom_PhasesDoors = true en server.lua ), asi que con `opendoors 0` la
+-- huella de puerta **no se produce nunca**. Esto cierra ese hueco.
+--
+-- ⚠⚠⚠ POR QUE ES UNA CONVAR NUEVA Y NO UN TERCER VALOR DE `opendoors`. El `0` de
+-- `opendoors` es el CONTROL NEGATIVO de este modulo -- su propia descripcion lo
+-- dice, "0 = ninguno abre ( control )" -- y cuatro filas de las planillas viejas
+-- se apoyan en el. Si ese 0 empezara a abrir a veces, el control deja de existir
+-- y con el las filas que lo usan. Aca el `0` de la perilla NUEVA deja el
+-- comportamiento de hoy identico, y ademas le da al autor las dos cosas por
+-- separado: "no abre nunca" y "abre a veces".
+--
+-- ⚠ EL DEFAULT VA EN 0 Y NO EN UN NUMERO "LINDO". Un default distinto de 0
+-- cambiaria el comportamiento de todas las corridas anteriores sin que nadie lo
+-- pida. El numero lo elige el autor en juego -- y cuando lo elija hay que MOVER
+-- EL DEFAULT en el mismo commit: una convar FCVAR_ARCHIVE guarda en la maquina
+-- del que la tipeo y NO viaja en el .gma.
+--
+-- ⚠ El nombre no puede chocar con ningun concommand: `phantasmagoria_ghost_doors`
+-- es el COMANDO del reporte, y cuando una convar y un concommand comparten
+-- nombre la consola resuelve la convar y el comando queda mudo ( eso costo la
+-- ronda 2 entera; ver el comentario de cvOpen ). `doorchance` no existe como
+-- comando.
+local cvChance = CreateConVar( "phantasmagoria_ghost_doorchance", "0", FCVAR_ARCHIVE,
+    "Probabilidad ( 0..1 ) de que un fantasma que IBA A ATRAVESAR una puerta cerrada la ABRA en su lugar, dejando huella. 0 = el comportamiento de siempre ( control ): atraviesa y no abre.", 0, 1 )
+
+---------------------------------------------------------------------------
 -- Numeros
 ---------------------------------------------------------------------------
 local THINK_EVERY = 0.1  -- el Think de la tarea corre hasta 3 veces por tick
@@ -191,6 +228,45 @@ local PHASE_COOLDOWN = 1
 -- gracia hace que ese caso no dependa de la respuesta: a 66 u/s son 33 u de
 -- margen y a 280 son 140, con una hoja que tiene 4 de espesor.
 local PHASE_GRACE = 0.5
+
+-- ⚠⚠⚠ LA TIRADA DEL DADO ES **POR PUERTA Y POR ENCUENTRO**, NUNCA POR TICK, Y
+-- ESTA CONSTANTE ES LA QUE LO SOSTIENE.
+--
+-- El camino de atravesar se evalua en CADA pasada del Think, o sea 10 veces por
+-- segundo mientras el fantasma esta contra la puerta. Un `math.random() < chance`
+-- ahi adentro no seria una probabilidad del 0,1: seria una probabilidad del 0,1
+-- **diez veces por segundo**, o sea que abriria siempre, en el primer medio
+-- segundo, con cualquier valor mayor que cero. El sintoma en juego seria "puse
+-- 0.05 y abre todas", que se lee como que la convar no funciona.
+--
+-- La decision se toma UNA vez por par ( fantasma, puerta ), se guarda, y todas
+-- las pasadas siguientes del MISMO encuentro leen lo guardado. El encuentro se
+-- da por terminado cuando pasa este tiempo sin que el sondeo vuelva a ver esa
+-- puerta -- y no cuando el sondeo la pierde un tick, que es lo que pasa todo el
+-- tiempo mientras el bot gira delante de ella. Cinco segundos: mas que
+-- suficiente para sobrevivir el parpadeo del sondeo, y lo bastante corto para
+-- que volver diez segundos despues sea un encuentro nuevo.
+local ENCOUNTER_FORGET = 5
+
+-- EL RESCATE DE LA DECISION "ABRIR", y existe porque decidir abrir APAGA el
+-- atravesado ( ver phantom_DoorThink ): sin esto, un fantasma que saca "abrir"
+-- contra una puerta que no se puede abrir -- con llave y `doorunlock 0`, o una
+-- clase que se come el Fire sin avisar -- se queda ahi para siempre, y el
+-- sintoma seria "desde que puse la chance el fantasma se traba", que es peor que
+-- el defecto que la chance viene a arreglar.
+--
+-- El numero es FORCE_AFTER * 2, o sea el tiempo que la escalera entera necesita
+-- para gastar sus tres peldaños. Si a los 3 s la hoja sigue cerrada, la decision
+-- se da vuelta a "atravesar" para lo que queda del encuentro y se cuenta aparte.
+local CHANCE_RESCUE = 3
+
+-- LA VENTANA DEL PASE DEL EVENTO. El evento `doors` no navega: es una
+-- manifestacion deliberada, y por decision del autor mueve la hoja SIEMPRE,
+-- tambien con `opendoors 0`. Pide el pase justo antes de su Use2 y el veto lo
+-- consume adentro del hook, que corre en el MISMO frame -- la ventana existe
+-- solo para que un pase que nadie consumio ( Use2 tiene salidas anteriores al
+-- hook ) no quede colgado esperando a la proxima apertura.
+local EVENT_PASS_WINDOW = 0.2
 
 -- ⚠ ACA VIVIA STUCK_PHASE_AFTER, EL RESCATE DE LA HOJA QUE SE ABRE ENCIMA, Y LA
 -- RONDA 6 LO RETIRO. Se deja escrito para que nadie lo vuelva a escribir:
@@ -751,6 +827,32 @@ local function stats( ghost )
         vistas = 0, intentos = 0, use = 0, unlock = 0, away = 0, open = 0,
         abrio = 0, fallo = 0, huellas = 0, fases = 0, fasesLargas = 0,
         silencios = 0, silenciosBase = 0, silenciosHermanas = 0, vetadas = 0,
+
+        -- ⚠ LOS CUATRO DE LA CHANCE VAN EN ESTE ORDEN Y NO EN OTRO, porque
+        -- **cada renglon dice de cual de los cuatro tramos es la falla** y sin
+        -- los cuatro "puse la chance y no vi nada" tiene cuatro causas que se
+        -- ven iguales:
+        --   tiradas = 0                      -> el fantasma nunca llego a una
+        --                                       puerta cerrada que fuera a
+        --                                       atravesar ( o la tirada esta en
+        --                                       el lugar equivocado )
+        --   chanceAbrir = 0 con tiradas alto -> es el numero de la convar
+        --   chanceAbiertas = 0 con abrir alto-> algo se come la apertura: el
+        --                                       veto, un Fire que la clase no
+        --                                       acepta, una puerta con llave
+        --   chanceHuellas = 0 con abiertas   -> la apertura se fue por al lado
+        --     alto                              de la escalera, y la huella sale
+        --                                       de ahi y de ningun otro lado
+        -- *Un contador solo dice que algo no paso; cuatro dicen donde.*
+        tiradas = 0, chanceAbrir = 0, chanceAbiertas = 0, chanceHuellas = 0,
+
+        -- Y los dos de los costados. `chanceRescates` sube cuando una decision
+        -- "abrir" no consiguio mover la hoja en CHANCE_RESCUE segundos y se dio
+        -- vuelta sola: si sube mucho, la chance esta eligiendo abrir puertas que
+        -- no se pueden abrir y el fantasma esta perdiendo 3 s en cada una.
+        -- `pases` cuenta las aperturas que el EVENTO forzo pasando por encima
+        -- del veto, que es un camino distinto y no tiene que sumar con la chance.
+        chanceRescates = 0, pases = 0,
     }
 
     return ghost.phantom_doorStats
@@ -822,6 +924,156 @@ function ENT:phantom_WantsSilentDoors()
 end
 
 ---------------------------------------------------------------------------
+-- LA TIRADA POR CHANCE, Y ES **PEGAJOSA**
+---------------------------------------------------------------------------
+-- Todo lo que decide la chance vive aca. Los tres consumidores -- el Think, la
+-- escalera y el veto -- preguntan y no tiran: dos sitios que tiraran el dado
+-- serian dos probabilidades distintas sobre el mismo encuentro.
+--
+-- ⚠⚠⚠ LA DECISION GUARDADA ES DE **TRES** ESTADOS Y NO DE DOS, y esa es la
+-- diferencia entre que la perilla funcione y que no. Con un booleano, `false`
+-- ( "salio atravesar" ) y "todavia no se tiro" se ven exactamente iguales, asi
+-- que la lectura siguiente vuelve a tirar y la tirada deja de ser pegajosa sin
+-- que nada avise. Los tres son: la entrada ausente ( no se tiro ), "abrir" y
+-- "atravesar". Es la misma familia del `false` que no es `nil` que este taller
+-- ya pago dos veces.
+--
+-- Devuelve "abrir", "atravesar", o nil cuando NO CORRESPONDE TIRAR -- que no es
+-- lo mismo que "salio atravesar" y por eso no se colapsan: con `doorchance 0`
+-- no se escribe ni un campo, que es lo que hace que el 0 deje el comportamiento
+-- de hoy identico.
+function ENT:phantom_DoorChanceRoll( door, cerrada, puedeAtravesar, puedeAbrir )
+    local chance = cvChance:GetFloat()
+
+    -- Las cuatro puertas de entrada, y ninguna es redundante:
+    if chance <= 0 then return nil end          -- el control: no hay chance
+    if not IsValid( door ) then return nil end
+    if puedeAbrir then return nil end           -- ya abre por la via normal
+    if not puedeAtravesar then return nil end   -- la chance es para el que IBA a atravesar
+    if not cerrada then return nil end          -- una puerta abierta no tiene nada que abrir
+
+    local rolls = self.phantom_doorRolls
+
+    if not rolls then
+        rolls = {}
+        self.phantom_doorRolls = rolls
+
+    end
+
+    local now = CurTime()
+    local r   = rolls[ door ]
+
+    if r and ( now - r.visto ) <= ENCOUNTER_FORGET then
+        -- MISMO ENCUENTRO: se refresca el reloj y se devuelve lo decidido. Esta
+        -- es la rama que corre 10 veces por segundo, y la que hace que
+        -- `tiradas` suba UNA vez por puerta y no sesenta.
+        r.visto = now
+
+        -- EL RESCATE. Ver CHANCE_RESCUE: decidir "abrir" apaga el atravesado, y
+        -- una puerta que no se puede abrir dejaria al fantasma clavado ahi.
+        if r.estado == "abrir" and ( now - r.cuando ) > CHANCE_RESCUE then
+            r.estado = "atravesar"
+            r.rescatada = true
+
+            local st = stats( self )
+            st.chanceRescates = st.chanceRescates + 1
+
+        end
+
+        return r.estado
+
+    end
+
+    -- ENCUENTRO NUEVO. Se purga antes de escribir: sin esto la tabla acumula una
+    -- entrada por puerta que el fantasma vio en toda su vida, con la entidad
+    -- adentro como clave.
+    for d, viejo in pairs( rolls ) do
+        if not IsValid( d ) or ( now - viejo.visto ) > ENCOUNTER_FORGET then rolls[ d ] = nil end
+
+    end
+
+    local estado = ( math.random() < chance ) and "abrir" or "atravesar"
+
+    rolls[ door ] = {
+        estado = estado,
+        visto  = now,
+        cuando = now,
+        chance = chance,   -- con que numero se tiro: la convar puede moverse en el medio
+    }
+
+    local st = stats( self )
+    st.tiradas = st.tiradas + 1
+
+    if estado == "abrir" then st.chanceAbrir = st.chanceAbrir + 1 end
+
+    return estado
+
+end
+
+-- LA CONSULTA SIN TIRAR, que es la que usa el veto. Tiene que ser read-only:
+-- el veto corre adentro de Use2, o sea DESPUES de que el Think ya decidio, y si
+-- volviera a tirar el dado la decision del encuentro tendria dos autores.
+function ENT:phantom_DoorChanceOpens( door )
+    local rolls = self.phantom_doorRolls
+    if not rolls then return false end
+
+    local r = rolls[ door ]
+    if not r then return false end
+    if r.estado ~= "abrir" then return false end
+    if ( CurTime() - r.visto ) > ENCOUNTER_FORGET then return false end
+
+    return true
+
+end
+
+---------------------------------------------------------------------------
+-- EL PASE DE UN SOLO USO -- el evento `doors` SIEMPRE mueve la hoja
+---------------------------------------------------------------------------
+-- DECISION DEL AUTOR, 2026-08-19, sobre las dos lecturas posibles de su pedido:
+-- el evento tira la chance, o el evento siempre abre. Eligio **siempre abre**, y
+-- el motivo se sostiene solo: el evento `doors` es una MANIFESTACION deliberada
+-- ( la dispara `phantasmagoria_ghost_event doors` ), no navegacion, y hoy con
+-- `opendoors 0` no mueve la hoja **en absoluto** -- el veto de abajo se come su
+-- Use2 entero. El autor lo describio como "muy calmado" y un evento que no hace
+-- nada no es calmado: esta roto. Ya estaba escrito como defecto pago en
+-- server_events.lua:3758-3764, pero se habia arreglado del lado del INSTRUMENTO
+-- ( la bitacora dice `door SIN EFECTO` y nombra a `opendoors 0` ) y no del lado
+-- del COMPORTAMIENTO.
+--
+-- ⚠ ES UN PASE Y NO UNA EXCEPCION POR CLASE, a proposito: dura una apertura y una
+-- puerta. Una excepcion permanente para el evento ( "si viene del evento no
+-- vetes" ) obligaria a marcar la entidad o a leer un flag global, y las dos
+-- formas sobreviven al frame -- o sea que la siguiente apertura de la BASE, que
+-- pasa por el mismo hook, se colaria gratis.
+function ENT:phantom_GrantDoorPass( door, motivo )
+    self.phantom_doorPass = {
+        door   = door,
+        hasta  = CurTime() + EVENT_PASS_WINDOW,
+        porque = motivo or "( sin motivo declarado )",
+    }
+
+end
+
+-- Lo consume el veto. Devuelve true UNA sola vez.
+local function tomarPase( bot, door )
+    local p = bot.phantom_doorPass
+    if not p then return false end
+
+    if CurTime() > p.hasta then
+        bot.phantom_doorPass = nil
+        return false
+
+    end
+
+    if p.door ~= door then return false end
+
+    bot.phantom_doorPass = nil
+
+    return true
+
+end
+
+---------------------------------------------------------------------------
 -- EL VETO: que "no abre" signifique NO ABRE
 ---------------------------------------------------------------------------
 -- DEFECTO MEDIDO EN LA RONDA 3, y la causa no estaba en nuestro codigo sino en
@@ -868,13 +1120,33 @@ hook.Add( "TerminatorBlockUse", "phantasmagoria_veto_puertas", function( bot, us
     if not DOOR_CLASSES[ used:GetClass() ] then return end
 
     if not bot:phantom_CanOpenDoors() then
-        stats( bot ).vetadas = stats( bot ).vetadas + 1
+        -- ⚠⚠ LAS DOS EXCEPCIONES, Y SIN ELLAS EL PEDIDO DE HOY NO SE CUMPLE
+        -- AUNQUE EL RESTO DEL CODIGO ESTE PERFECTO. Este veto corta `Use2`
+        -- ENTERO, y `Use2` es por donde pasan las dos aperturas nuevas: la que
+        -- la chance decidio ( peldaño 1 de la escalera ) y la del evento. Si el
+        -- veto siguiera en pie, `chanceAbrir` subiria, la hoja no se moveria, y
+        -- la fila se leeria como "la chance no funciona".
+        --
+        -- ⚠ La chance se CONSULTA y no se tira aca: la decision ya la tomo el
+        -- Think en este mismo frame. El pase, en cambio, se CONSUME -- vale una
+        -- apertura y una puerta.
+        local porChance = bot:phantom_DoorChanceOpens( used )
+        local porPase   = ( not porChance ) and tomarPase( bot, used ) or false
 
-        -- Vetada no se silencia a proposito: la hoja no se mueve, asi que no hay
-        -- sonido que tapar, y silenciarla seria pedirle prestados los keyvalues
-        -- a una puerta que nunca los iba a usar.
-        return true
+        if porPase then
+            stats( bot ).pases = stats( bot ).pases + 1
 
+        end
+
+        if not porChance and not porPase then
+            stats( bot ).vetadas = stats( bot ).vetadas + 1
+
+            -- Vetada no se silencia a proposito: la hoja no se mueve, asi que no hay
+            -- sonido que tapar, y silenciarla seria pedirle prestados los keyvalues
+            -- a una puerta que nunca los iba a usar.
+            return true
+
+        end
     end
 
     -- phantom_SilenceDoor devuelve true SOLO si abrio una ventana nueva. Nuestra
@@ -1035,11 +1307,30 @@ function ENT:phantom_DoorThink()
     -- veces por segundo y no lo leia nadie.
     local puede, motivo = self:phantom_CanPhaseDoors()
 
+    -- ⚠ SE LEE ACA ARRIBA Y SE USA DOS VECES. El gate de la escalera sigue
+    -- estando donde estaba ( `if not puedeAbrir ...`, mas abajo ); lo que sube es
+    -- la LECTURA, porque la tirada de la chance necesita saber si el fantasma ya
+    -- podia abrir por la via normal -- si podia, no hay nada que sortear.
+    local puedeAbrir = self:phantom_CanOpenDoors()
+
+    -- LA TIRADA. Pegajosa por par ( fantasma, puerta ): ver phantom_DoorChanceRoll.
+    -- Devuelve nil cuando no corresponde tirar, que NO es lo mismo que "salio
+    -- atravesar" -- con `doorchance 0` no se escribe ni un campo y todo lo de
+    -- abajo se comporta exactamente como antes de este bloque.
+    local decision      = self:phantom_DoorChanceRoll( door, info.cerrada, puede, puedeAbrir )
+    local abrePorChance = decision == "abrir"
+
     -- UNA SOLA PUERTA DE ENTRADA AL ATRAVESADO: LA CERCANIA. La segunda -- el
     -- rescate por atasco contra una hoja ABIERTA -- se retiro en la ronda 6
     -- porque no podia dispararse; el porque esta arriba, donde estaba su
     -- constante.
-    if puede and distancia <= PHASE_RANGE then
+    -- ⚠⚠ LA DECISION "ABRIR" **APAGA** EL ATRAVESADO PARA ESTA PUERTA, y no es
+    -- un detalle de estilo: si el fantasma atravesara igual, la puerta se abriria
+    -- detras suyo y lo que el autor pidio -- *"que la puerta se abra"* -- se
+    -- veria como un fantasma que pasa de largo mientras la hoja se mueve sola.
+    -- El que no se pueda abrir tiene salida: CHANCE_RESCUE da vuelta la decision
+    -- a los 3 s y el atravesado vuelve a entrar por esta misma linea.
+    if puede and distancia <= PHASE_RANGE and not abrePorChance then
         self.phantom_doorSeenAt = now
         self:phantom_SetPhasing( true, motivo )
 
@@ -1086,10 +1377,16 @@ function ENT:phantom_DoorThink()
 
     end
 
-    -- Idem phantom_PhaseWhy: el motivo lo reimprime el reporte, no un campo.
-    local puedeAbrir = self:phantom_CanOpenDoors()
-
-    if not puedeAbrir then return end
+    -- ⚠ LA CHANCE ABRE **POR LA ESCALERA**, NO POR AL LADO, y son dos motivos
+    -- medidos: la huella sale de `CommitPrint`, que se llama en UN solo lugar y
+    -- es el final de esta escalera -- una apertura por chance que no pasara por
+    -- aca no dejaria huella y el pedido no se cumpliria aunque la hoja se mueva
+    -- --; y la escalera ya resuelve el destrabado, el toggle, los dos relojes y
+    -- el silencio, que un camino paralelo tendria que repetir. Dos copias de una
+    -- precedencia divergen.
+    --
+    -- ( `puedeAbrir` se leyo arriba, junto con la tirada. )
+    if not puedeAbrir and not abrePorChance then return end
 
     -- Contra el TOGGLE: dos Use seguidos abren y cierran. Se respetan los dos
     -- relojes, el nuestro y el de la base ( term_NextUse, que tryToOpen pone en
@@ -1247,6 +1544,8 @@ function ENT:phantom_DoorThink()
     -- contador se lo anota al fantasma. Para la corrida alcanza -- el fantasma
     -- cruza puertas que el jugador no esta tocando -- pero no sirve como prueba
     -- si los dos estan en el mismo vano.
+    local porChance = abrePorChance
+
     timer.Simple( VERIFY_AFTER, function()
         if not IsValid( self ) then return end
         if not IsValid( door ) then return end
@@ -1270,10 +1569,20 @@ function ENT:phantom_DoorThink()
 
         st.abrio = st.abrio + 1
 
+        -- ⚠ LOS DOS DE LA CHANCE SE CUENTAN **ADENTRO** DE LOS GLOBALES Y NO EN
+        -- LUGAR DE ELLOS: `abrio` sigue contando todas las aperturas y estos dos
+        -- cuentan el subconjunto que decidio el dado. `abrePorChance` se captura
+        -- en el closure a proposito -- para cuando este timer corre, 0,9 s
+        -- despues, la decision del encuentro puede haberse dado vuelta por el
+        -- rescate, y lo que hay que anotar es de donde salio ESTA apertura.
+        if porChance then st.chanceAbiertas = st.chanceAbiertas + 1 end
+
         if not pendiente then return end
 
         PHANTASMAGORIA.CommitPrint( pendiente )
         st.huellas = st.huellas + 1
+
+        if porChance then st.chanceHuellas = st.chanceHuellas + 1 end
 
     end )
 end
@@ -1699,6 +2008,21 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_testdoor", function( ply )
             say( "#" .. ghost:EntIndex() .. "  NO SE DISPARA: este fantasma no puede abrir puertas." )
             say( "    " .. motivoAbrir )
             say( "    Sin apertura no hay sonido que tapar: el silencio NO se puede medir asi." )
+
+            -- ⚠ EL RENGLON QUE EVITA UN FALSO ROJO DE LA CHANCE, y hace falta
+            -- desde que existe doorchance. Este boton fuerza NUESTRO camino a
+            -- proposito y NO consulta la tirada -- un instrumento que se
+            -- colgara de un sorteo no mediria dos veces lo mismo --, asi que
+            -- con la chance prendida dice "no puede abrir" sobre un fantasma
+            -- que SI abre a veces. Sin esta linea eso se lee como que la
+            -- perilla nueva no funciona.
+            if cvChance:GetFloat() > 0 then
+                say( "    ⚠ phantasmagoria_ghost_doorchance esta en " .. string.format( "%.2f", cvChance:GetFloat() ) ..
+                    ": este boton NO la consulta ( fuerza nuestro camino ). La chance se mide con" )
+                say( "      phantasmagoria_ghost_doors, mirando la linea CHANCE -- no con testdoor." )
+
+            end
+
             return
 
         end
@@ -1856,6 +2180,17 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
             ghost.phantom_doorSer        = 0
             ghost.phantom_doorBlocker    = nil
 
+            -- ⚠⚠ Y LAS TIRADAS TAMBIEN, por la MISMA regla que los dos de
+            -- arriba enuncian -- que es la regla que ya se olvido una vez al
+            -- partir un contador en dos. Aca ademas no alcanza con que el
+            -- contador vuelva a 0: si las DECISIONES sobrevivieran al reset, la
+            -- segunda mitad del A/B arrancaria con los encuentros de la primera
+            -- ya resueltos y `tiradas` no volveria a subir sobre las mismas
+            -- puertas. *Resetear el numero sin resetear el estado que lo produce
+            -- deja el contador limpio y el sujeto sucio.*
+            ghost.phantom_doorRolls      = nil
+            ghost.phantom_doorPass       = nil
+
         end )
 
         say( "[Phantasmagoria] contadores y peor-marca reseteados en " .. n .. " fantasma(s). Las huellas NO se tocan." )
@@ -1868,6 +2203,18 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
         " · silencio " .. cvSilent:GetInt() ..
         "   ( 0 nadie · 1 el flag del NPC · 2 todos )" ..
         "   destrabar " .. ( cvUnlock:GetBool() and "SI" or "NO" ) )
+
+    -- LA CHANCE VA EN SU PROPIO RENGLON Y CON SU SIGNIFICADO AL LADO, porque no
+    -- comparte la convencion de las otras cuatro ( 0 nadie · 1 el flag · 2
+    -- todos ): es un numero continuo. Meterla en la linea de arriba seria tres
+    -- significados distintos para el mismo digito en la misma pantalla, que es
+    -- justo lo que la convencion de las cuatro existe para evitar.
+    say( "    chance    " .. string.format( "%.2f", cvChance:GetFloat() ) ..
+        ( cvChance:GetFloat() <= 0
+          and "   ( CONTROL: el que iba a atravesar atraviesa; no se tira ningun dado )"
+          or ( "   ( el que IBA A ATRAVESAR abre en su lugar " ..
+               math.Round( cvChance:GetFloat() * 100 ) .. " de cada 100 encuentros )" ) ) ..
+        "   <- phantasmagoria_ghost_doorchance" )
 
     -- LA MITAD DE ENFRENTE, Y NO ES DECORACION: server_steps.lua overridea
     -- IsSilentStepping, que es el mismo if del que cuelga el CLICK de Use2
@@ -2087,6 +2434,23 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_doors", function( ply, _, args 
         say( "    resultado ABRIO " .. st.abrio .. "   fallo " .. st.fallo ..
             "   ( releyendo el estado " .. VERIFY_AFTER .. " s despues; ABRIENDO cuenta como abrio )" )
         say( "    huellas   " .. st.huellas .. " dejadas por este fantasma" )
+
+        -- ⚠⚠⚠ LOS CUATRO DE LA CHANCE, EN ESTE ORDEN Y NUNCA UNO SOLO. Cada
+        -- renglon dice de cual de los cuatro tramos es la falla, y el detalle de
+        -- que veredicto da cada cero esta arriba, en `stats`. Se imprimen SIEMPRE
+        -- -- tambien con la chance en 0 y los cuatro en cero --, porque "la
+        -- perilla esta apagada" y "la perilla esta prendida y no se tira nunca"
+        -- son dos cosas distintas y la linea de convars de arriba es la que las
+        -- separa. Un bloque que solo aparece cuando hay algo que contar no puede
+        -- decir que no hubo nada.
+        say( "    CHANCE    tiradas " .. st.tiradas ..
+            "   ·  salio abrir " .. st.chanceAbrir ..
+            "   ·  abiertas de verdad " .. st.chanceAbiertas ..
+            "   ·  huellas dejadas " .. st.chanceHuellas )
+
+        say( "              rescates " .. st.chanceRescates ..
+            " ( decidio abrir y a los " .. CHANCE_RESCUE .. " s la hoja seguia cerrada: se dio vuelta a atravesar )" ..
+            "   ·  pases del EVENTO " .. st.pases .. " ( aperturas que el evento forzo por encima del veto )" )
 
     end )
 

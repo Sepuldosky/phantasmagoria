@@ -7,6 +7,158 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-19 (52) — **Los dos pedidos del cierre anterior, escritos: la puerta que se abre por chance, y el multiplicador global que el tipo se comía. Y el segundo trae una trampa que hay que decir antes de que la corrida la descubra: el arreglo es correcto y el síntoma que se le atribuyó no se sigue de él.**
+
+Dos pedidos **independientes** —tocan archivos distintos y ninguno bloquea al otro— pedidos juntos al
+cerrar el bloque del clic / el prop roto / el celular (`aee7333`). **Ninguno de los dos está corrido en
+juego.** Planilla nueva: `dev/checks/phantasmagoria-puertas-chance-r1.html` (en el workspace, **fuera del repo**:
+el reporte pegado hay que guardarlo en `dev/CORRIDA_*.md`, que sí viaja), **nueve filas**.
+
+### ⭐ Pedido 1 — *«que al pasar por puertas con `opendoors 0` la puerta se abra igual pero con una probabilidad»*
+
+Perilla nueva, `phantasmagoria_ghost_doorchance` (0…1, **default 0**). Es la probabilidad de que un
+fantasma **que iba a atravesar** una puerta cerrada la **abra en su lugar**.
+
+**Y no es un capricho nuevo: es volver a poner una parte de lo que el diseño de `server_doors.lua`
+eligió.** El encabezado del archivo dice, desde que se escribió, que atravesar *«regalaría la huella»* —
+por eso se eligió abrir—; y hoy el fantasma genérico atraviesa (`phantom_PhasesDoors = true`), así que
+con `opendoors 0` **la huella de puerta no se produce nunca**. Esto cierra ese hueco.
+
+**Va en una convar nueva y no adentro de `opendoors`, a propósito.** El `0` de `opendoors` es el
+**control negativo** del módulo —su propia descripción lo dice— y cuatro filas de las planillas viejas se
+apoyan en él. Si ese `0` empezara a abrir a veces, el control deja de existir y con él las filas que lo
+usan. Con la perilla nueva en `0` el comportamiento de hoy queda **idéntico**, y el autor tiene las dos
+cosas por separado: *«no abre nunca»* y *«abre a veces»*.
+
+### ⚠⚠⚠ La tirada es **por puerta y por encuentro**, nunca por tick — y es el defecto más fácil de escribir
+
+El camino de atravesar se evalúa **diez veces por segundo** mientras el fantasma está contra la puerta.
+Un `math.random()` ahí adentro no sería una probabilidad del 0,1: sería una del 0,1 **diez veces por
+segundo**, o sea que **abriría siempre**, en el primer medio segundo, con cualquier valor mayor que
+cero. Y el síntoma en juego sería *«puse 0.05 y abre todas»*, que se lee como que la convar no funciona.
+
+La decisión se toma una vez por par (fantasma, puerta), se guarda, y todas las pasadas siguientes del
+mismo encuentro leen lo guardado; se suelta a los 5 s sin que el sondeo vuelva a ver esa puerta.
+**Y es de tres estados y no de dos** —`abrir`, `atravesar`, y **la entrada ausente**— porque con un
+booleano `false` y «todavía no se tiró» se ven iguales y la primera lectura vuelve a tirar: la tirada
+dejaría de ser pegajosa **sin que nada avise**. Es la misma familia del `false` que no es `nil` que este
+taller ya pagó dos veces.
+
+**La fila 03 es la única que puede ver ese defecto.** Con la tirada por tick, las filas 01 y 02 salen
+verdes igual.
+
+### ⚠⚠ Las dos cosas que había que tocar para que la apertura por chance **exista**, y ninguna es la tirada
+
+- **Pasa por la ESCALERA, no por al lado.** La huella sale de `CommitPrint`, que se llama en **un solo
+  lugar** y es el final de esa escalera: una apertura por chance que no pasara por ahí **no dejaría
+  huella aunque la hoja se mueva**, y el pedido no se cumpliría. Además la escalera ya resuelve el
+  destrabado, el toggle, los dos relojes y el silencio.
+- **El veto de `TerminatorBlockUse` consulta la decisión.** Ese hook corta `Use2` **entero** cuando
+  `phantom_CanOpenDoors()` dice que no —y con `opendoors 0` dice que no **siempre**—. Sin esto,
+  `salio abrir` subiría, la puerta no se movería, **y no habría ningún error**: la fila se leería como
+  «la chance no funciona».
+
+Y decidir «abrir» **apaga el atravesado** para esa puerta, porque si no el fantasma pasaría de largo
+mientras la hoja se mueve sola. El riesgo obvio —una puerta que *no se puede* abrir dejaría al fantasma
+clavado— tiene salida escrita: a los **3 s** la decisión se da vuelta a `atravesar` y se cuenta en
+`rescates`.
+
+### ⭐⭐ Decisión del autor: el evento `doors` **siempre** mueve la hoja — y eso cierra un defecto medido y sin corregir
+
+Las dos lecturas de su frase daban comportamientos distintos, así que se preguntó en vez de elegir en
+silencio. Eligió **siempre**: el evento es una manifestación deliberada, no navegación.
+
+**Y con eso se corrige algo que estaba medido desde hace rondas.** Con `opendoors 0` el evento sonaba la
+manija y **no movía la hoja**: nuestro propio veto se comía su `Use2` entero. Eso ya estaba escrito en
+`server_events.lua` como un defecto pago… **pero se había arreglado del lado del INSTRUMENTO** —la
+bitácora pasó a decir `door SIN EFECTO` y a nombrar a `opendoors 0` como sospechoso— **y no del lado del
+comportamiento**. Así que *«el evento doors es muy calmado»* era, literalmente, **inerte**.
+
+El mecanismo es un **pase de un solo uso** (una apertura, una puerta, 0,2 s de ventana) que el evento
+pide antes de su `Use2` y el veto consume. No es una excepción por clase a propósito: una excepción
+permanente sobreviviría al frame y la siguiente apertura de **la base**, que pasa por el mismo hook, se
+colaría gratis. El reporte cuenta `pases del EVENTO` **aparte** de `VETADAS`.
+
+Y la línea de diagnóstico de la bitácora cambió con él: decía que la causa más probable era
+`opendoors 0` o el veto, y esos dos ya no pueden ser. *Un instrumento que sigue nombrando al sospechoso
+que se descartó manda a mirar donde ya no está.*
+
+### ⭐ Cuatro contadores, y en ese orden, porque cada renglón dice **de cuál de los cuatro tramos** es la falla
+
+    CHANCE   tiradas N · salio abrir N · abiertas de verdad N · huellas dejadas N
+
+`tiradas` en 0 → el fantasma nunca llegó a una puerta cerrada que fuera a atravesar. `salio abrir` en 0
+con `tiradas` alto → es el número de la convar. `abiertas de verdad` en 0 con `salio abrir` alto → algo
+se come la apertura (el veto, una puerta con llave). `huellas dejadas` en 0 con `abiertas` alto → la
+apertura se fue por al lado de la escalera. *Un contador solo dice que algo no pasó; cuatro dicen dónde.*
+
+### ⭐ Pedido 2 — *«que el cvar considere el multiplicador de velocidad porque no lo hace»*
+
+Tenía razón sobre el mecanismo: `phantasmagoria_ghost_speedmul` era la rama **`else`** de la fórmula, o
+sea que con un fantasma **con tipo** y `typespeed 1` **no hacía absolutamente nada**. Ahora multiplica:
+
+    antes    mul = campo del tipo  or  convar
+    ahora    mul = ( campo del tipo  or  1.0 ) × convar
+
+**Eso no era un bug: era el diseño que había** —la convar lo decía de sí misma, *«ANDAMIO»*, *«lo
+reemplaza speed.base»*—, así que lo que cambia es una **precedencia** y hay que decirlo así.
+
+Cuando **no hay tipo**, la base es **1.0** y la convar es toda la escala: `speedmul 0.7` sobre un
+sin-tipo sigue dando 0.7, exactamente lo que hacía antes. El papel viejo se conserva sin una perilla más.
+**Y con el default en 1.0 nadie que no toque la perilla cambia de velocidad**, ni con tipo ni sin él —
+por eso este cambio **no obliga a re-correr las filas de velocidad viejas**, y la fila 06 lo mide en vez
+de afirmarlo.
+
+El reporte imprime **los dos factores por separado** y no el producto: un `x0.412` pelado no distingue
+`0.588 del tipo × 0.700 de la convar` de un tipo mal asignado con `speed.base 0.412`, y son dos
+veredictos opuestos sobre la misma pantalla. La precedencia vive ahora en **una sola función**, porque
+tiene dos lectores —el mecanismo y el detector de foto vieja del reporte— y dos copias divergen.
+
+### ⚠⚠⚠ Y la trampa, dicha antes de que la corrida la descubra: **el Revenant, con los números de hoy, va MÁS LENTO que vos**
+
+El autor pidió esto porque ve *«a los revenant ir rapidísimo aunque tenga mi multiplicador en 0.7»*. Pero
+`ghost_types.lua` le da al Revenant `speed.base 0.588`, y **nadie lee `speed.top`** (está declarado como
+no implementado). O sea:
+
+    hoy                          Revenant = carrera del jugador × 0.588   ← MÁS LENTO que el jugador
+    con el pedido aplicado       × 0.588 × 0.7 = × 0.412                  ← más lento todavía
+
+**El síntoma que describe no puede salir de la precedencia que él mismo pide cambiar.** Su observación es
+un dato y hay que creerle; lo que no se sostiene es la causa que se le adjudicó. Los cinco sospechosos
+que **sí** podrían producir un fantasma rápido —`derivespeed 0` y sus 550 u/s, un fantasma sin tipo, un
+`PlayerBaseRunSpeed` alto, un tipo que no es el que él cree, o la aceleración de la base Terminator—
+**los separa una sola lectura**, y esa lectura es la **fila P0** de la planilla, que se corre **primero**.
+
+Si el cambio se escribiera sin esa lectura, **se le acreditaría un arreglo que no hizo** y el fantasma
+seguiría rápido con una línea de changelog diciendo que se arregló. Por eso el reporte de velocidad trae
+además un aviso propio: cuando el global no es 1, dice en qué dirección movió al fantasma y manda a mirar
+`base`, `fuente` y `tipo`.
+
+**Lo que este bloque NO escribe, y no es un olvido:** `speed.top` / `isRange` / `alt` / `losSpeedUp` —13
+de los 30 tipos traen una segunda velocidad y ninguno la usa hoy—. Es tentador justamente porque el
+`top 1.765` del Revenant *explicaría* el síntoma, y por eso mismo no va acá: mezclarlo haría imposible
+saber cuál de los dos cambios produjo qué. Si la P0 mide que el Revenant va rápido de verdad,
+`speed.top` es el bloque siguiente, con su propio prompt y sus propias filas.
+
+### Los cuatro controles offline, corridos
+
+`luacheck_gmod.py` sobre los 37 `.lua` (con el `find | xargs`: **sin argumentos revisa cero archivos y
+sale 0**, o sea verde sin medir), `parsear_sintaxis_glua.py` (**37 archivos, 0 errores**, con su
+auto-control discriminando), `auditar_returns_de_hooks.py` (**0 de 32** `hook.Add` con un `return` fuera
+de la API del hook — y el `TerminatorBlockUse` que este bloque tocó aparece listado con su `return true`
+reconocido como API, que es lo que importaba: ese `true` **es** su contrato) y `rutas_de_sonido.py` (179
+rutas, 0 faltantes). Y los tres auditores de planilla: `auditar_planilla.py` **sana**,
+`verificar_citas_de_planilla.py` **9 comandos y 1 ruta resuelven**, con su `--control` discriminando.
+
+### ⚠ Lo que queda por hacer y no se puede hacer sin el autor
+
+**El default de `doorchance` está en 0 y hay que moverlo.** Cuando él elija el número en juego, ese
+número tiene que ir **al default, en el código, en el mismo commit**: una convar `FCVAR_ARCHIVE` guarda
+en *su* máquina y **no viaja en el `.gma`**. Si se queda sólo en su consola, para todos los demás la
+perilla no existe.
+
+---
+
 ## 2026-08-19 (51) — **El pedido 2 cerrado en juego: la radio rota deja de sonar. La r2 dio 4/4 con la única fila que faltaba corrida offline el día antes, y de paso cerró la precondición que el bloque anterior declaraba sin medir.**
 
 Corrida del autor sobre `dev/checks/phantasmagoria-prop-roto-r2.html`, guardada en
