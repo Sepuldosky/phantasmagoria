@@ -149,7 +149,55 @@ motivo al lado**, porque un número corregido en silencio se vuelve a citar.
 
 ---
 
-## 2026-08-18 (48) — **12 de 12 en la r2, y el verde de la fila 02 escondía el dato: tres de cada cuatro huellas salían por el FALLBACK. La partícula de gmpa se fue del addon por dictamen del autor.**
+## 2026-08-18 (50) — **La r3 cerró 7/7 y el trace de mano pasó de 1 de 4 a 5 de 6. Y un aviso que no es del código: este commit anterior se llevó la entrada del clic de otra sesión bajo un mensaje que no la menciona.**
+
+Corrida del autor sobre `dev/checks/phantasmagoria-evidencia-r3.html`: **7 pasa, 0 falla**.
+
+### El arreglo del trace, medido
+
+| | r2 | r3 |
+|---|---|---|
+| Huellas del fantasma por `via linea` | **1 de 4** | **3 de 3** (fila 02) · **5 de 6** sumando la fila 07 |
+
+El fallback quedó donde tiene que estar: cubriendo el caso raro, no haciendo el trabajo. La convar
+retirada contesta `Unknown command` (fila 06), o sea que el retiro del modo `pcf` fue completo.
+
+### El orbe se apagaba y aparecía de golpe
+
+*«Funciona pero cambian rápidamente de posición sin un fade in o fade out. Es tosco en ese
+sentido.»* Y tenía razón **dos veces**: el orbe nuevo entraba con el alfa entero, y como cada uno
+nace en otro punto del radio, lo que se leía no era «se apagó uno y nació otro» sino **el mismo orbe
+teletransportándose**. Además el fade de salida era de 5 s sobre una vida de 6: el 83 % de su vida
+apagándose.
+
+Ahora hay fade en **las dos puntas**, corto (1,2 s) y acotado a un tercio de la vida cuando el orbe
+es breve. Con las dos puntas suaves el relevo pasa desapercibido.
+
+### ⚠⚠ EL COMMIT `f4d2057` SE LLEVÓ TRABAJO DE OTRA SESIÓN, Y HAY QUE SABERLO
+
+**La entrada (48) —la del clic y el celular— está adentro de `f4d2057`**, un commit cuyo mensaje
+habla de huellas UV y ghost orbs y **no la menciona**. No se perdió nada y nadie pisó a nadie, pero
+*buscarla por `git log` no la va a encontrar*. Es la falla simétrica que este repo ya pagó con
+`221c5e8`, y esta vez la pagué yo en el otro sentido.
+
+**Cómo pasó, que es lo que importa:** stagear el archivo entero se descartó justamente para evitar
+esto, y en su lugar armé el índice hunk por hunk clasificándolos por *mayoría de señales* — palabras
+mías contra palabras ajenas. **Las dos sesiones insertamos al principio del CHANGELOG**, así que
+git juntó los dos textos en **un solo hunk contiguo**, y la mayoría lo declaró mío.
+
+> *Un criterio de mayoría sobre una unidad que puede tener dos autores no separa autores: elige uno.*
+> El hunk no es la unidad de autoría — la unidad es el bloque de texto, y cuando dos sesiones
+> escriben en el mismo punto del archivo, git no tiene forma de saberlo. El control que sí lo agarra
+> es el que corrí **después**: buscar en el diff commiteado las palabras del trabajo ajeno. Salió
+> rojo, y por eso esto está escrito.
+
+**Y la colisión de numeración que vino con ella:** las dos sesiones escribimos una entrada **(48)**
+el mismo día. La del clic se quedó con el número —es la que ya estaba— y la mía pasó a **(49)**.
+Precedente: el catálogo de controles ya tiene dos entradas numeradas 56 por lo mismo.
+
+---
+
+## 2026-08-18 (49) — **12 de 12 en la r2, y el verde de la fila 02 escondía el dato: tres de cada cuatro huellas salían por el FALLBACK. La partícula de gmpa se fue del addon por dictamen del autor.**
 
 Corrida del autor sobre `dev/checks/phantasmagoria-evidencia-r2.html`: **12 pasa, 0 falla**. Planilla
 de esta ronda: `dev/checks/phantasmagoria-evidencia-r3.html`, **siete filas**.

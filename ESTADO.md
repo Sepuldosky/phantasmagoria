@@ -13,8 +13,19 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> ⭐⭐⭐ **LO ÚLTIMO (2026-08-18, r2 corrida): 12 DE 12, Y EL VERDE DE LA FILA 02 ESCONDÍA EL DATO.**
-> Detalle en el CHANGELOG **(48)**. Planilla nueva: `dev/checks/phantasmagoria-evidencia-r3.html`,
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-19): LAS TRES RONDAS CERRADAS Y PUSHEADAS** (`f4d2057`) — 11/12, 12/12 y
+> **7/7**. El trace de mano pasó de **1 de 4** a **5 de 6** huellas por el camino bueno, el orbe tiene
+> fade en las dos puntas, y la partícula de gmpa está afuera. Detalle en el CHANGELOG **(50)**.
+>
+> ⚠⚠ **`f4d2057` SE LLEVÓ LA ENTRADA (48) DEL CLIC, que es de otra sesión**, bajo un mensaje que no la
+> menciona. No se perdió nada, pero **buscar el clic por `git log` no lo va a encontrar**. Armé el
+> índice hunk por hunk para no hacer exactamente esto, y falló porque **las dos sesiones insertamos al
+> principio del CHANGELOG**: git juntó los dos textos en un hunk contiguo y mi criterio de mayoría lo
+> declaró mío. *El hunk no es la unidad de autoría.* Y con ella vino una colisión de numeración: hubo
+> **dos entradas (48)**; la del clic se quedó con el número y la mía pasó a **(49)**.
+>
+> ⭐⭐⭐ **La r2 corrida: 12 DE 12, Y EL VERDE DE LA FILA 02 ESCONDÍA EL DATO.**
+> Detalle en el CHANGELOG **(49)**. Planilla nueva: `dev/checks/phantasmagoria-evidencia-r3.html`,
 > **siete filas**. Sin correr en juego.
 >
 > ⚠⚠ **Tres de cada cuatro huellas del fantasma salían por el FALLBACK** (`via cercano`), no por el
