@@ -2703,7 +2703,16 @@ end
 -- el tipo* de *la fijo el modelo* de *la sorteo la moneda*, y las tres se ven
 -- igual en una consola. Sin el motivo, una fila que fuerza un Banshee con el
 -- Male y lo oye femenino no prueba nada: la moneda tambien da 1 la mitad de las
--- veces. El reporte de `phantasmagoria_ghost_ev` lo imprime.
+-- veces. Lo imprime `phantasmagoria_ghost_caceria`.
+--
+-- ⚠ ACA DECIA `phantasmagoria_ghost_ev` Y ESE COMANDO **NUNCA EXISTIO** -- censo
+-- sobre `PHANTASMAGORIA.AddCommand`: cero registros con ese nombre. O sea que
+-- este campo, que se guarda a proposito para poder distinguir quien decidio la
+-- voz, **no habia forma de leerlo en juego**, y el comentario afirmaba que si.
+-- Se corrige el 2026-08-18, en la misma pasada en que se escribio el instrumento
+-- que lo imprime de verdad. *Un comentario que cita un instrumento no prueba que
+-- el instrumento exista* -- y dejarlo escrito una vez encontrado es propagar la
+-- mentira al proximo lector, que es como llego hasta aca.
 function ENT:phantom_EventVoice()
     if self.phantom_evVoice then return self.phantom_evVoice end
 
