@@ -537,7 +537,18 @@ no nuestras.
 
 ---
 
-## 9. Lo que **oye a distancia**: la parabólica y el sound sensor — **no los tenemos**
+## 9. ~~Lo que **oye a distancia**: la parabólica y el sound sensor — **no los tenemos**~~ **SUPERADO**
+
+> ⚠ **Esta sección quedó vieja y hay que leerla como historia, no como estado** (nota del 2026-08-18).
+> Se escribió el 2026-08-03 sobre un árbol de **36 modelos**; hoy hay **73 en
+> `models/phantasmagoria/eq/`** más los tres de la parabólica, y los dos huecos que esta sección
+> declara **están cubiertos**: `paramic1/2/3.mdl` (con pantalla propia y radar en el tier 3, ver
+> `phantasmagoria_paramic_screen.lua`) y `sound_sensor_i/ii/iii`. También llegaron `motion_sensor` y
+> `sound_recorder`, que ni siquiera estaban en la pregunta. Los tres caminos que §9.2 dejaba abiertos
+> ya no hacen falta: se portaron los modelos. **§10 tiene la ficha de los tres.**
+>
+> *Se deja el texto entero y no se borra*: la pregunta y el razonamiento siguen siendo el motivo por
+> el que hoy existen esos modelos, y una sección tachada enseña más que una sección ausente.
 
 Pregunta del autor (2026-08-03): *«¿dentro de los equipos tenemos la antena parabólica o de sonidos?
 Los sonidos que puede captar eso claramente delatarían al fantasma en su posición.»*
@@ -572,3 +583,111 @@ se juega. Con ella, el bucle se cierra: barrés con el plato, el medidor pica ha
    describió y ya vale por sí solo.
 
 **Sin decidir.** Lo que sí está decidido es no fingir que la tenemos.
+
+---
+
+## 10. La ficha de Cargo de cada equipo: **precio, peso y trivia** [2026-08-18]
+
+**Los precios los da el autor**, en USD del juego, con una regla de tiers de una línea: *«TIERS sería
+doblar el precio, tier II: 2x y tier III: 3x»*. Van directo a `value` de `CARGO.Items.Register`, que
+es *«BASE PRICE in the active money provider's currency»*.
+
+⚠ **Los pesos NO se estiman: ya estaban decididos.** `prop_data_eq.lua` les puso masa a las 20
+familias portadas —y el autor corrigió dos a mano en la r15b—, así que el `weight` de Cargo **es ese
+mismo número**. *Un objeto no puede pesar una cosa en la mano y otra en la mochila*: si se estimara
+de nuevo acá habría dos fuentes para el mismo hecho y la segunda ganaría por ser más nueva. Las
+trivias sí son mías, y van **en inglés**, que es el idioma de cara al jugador que Cargo declara.
+
+### 10.1 La tabla
+
+`T1` es el precio del autor; `T2` y `T3` salen de su regla. El peso es por **familia** (un tier II no
+es un objeto más pesado: es uno mejor — lo dice el encabezado de `prop_data_eq.lua`).
+
+| familia | T1 | T2 | T3 | kg | cat. | clase | trivia (en inglés, para el def) |
+|---|---:|---:|---:|---:|---|---|---|
+| **D.O.T.S. Projector** | 65 | 130 | 195 | 0,9 | accessories | unique | *Projects a grid of dots. A ghost crossing it shows as a silhouette — to the eye and to a camera.* |
+| **EMF Reader** | 45 | 90 | 135 | 0,5 | accessories | unique | *Reads electromagnetic disturbance from 1 to 5. Only a 5 is evidence; anything lower just means the ghost was here.* |
+| **Flashlight** | 30 | 60 | 90 | 0,9 | accessories | unique | *Handheld light. Keeping it on slows sanity loss — and tells the ghost exactly where you are.* |
+| **Photo Camera** | 40 | 80 | 120 | 0,7 | accessories | unique | *Photographs evidence: the ghost, bones, fingerprints, dirty water. Each subject pays once.* |
+| **UV Flashlight** | 35 | 70 | 105 | 0,3 | accessories | unique | *Reveals fingerprints and footprints the ghost left behind. They fade, so photograph them first.* |
+| **Video Camera** | 50 | 100 | 150 | 1,2 | accessories | unique | *Feeds the truck monitors and sees ghost orbs in night vision. On a tripod it watches a room you are not in.* |
+| **Spirit Box** | 50 | 100 | 150 | 0,6 | accessories | unique | *Ask out loud in the dark. Some ghosts answer through the static.* |
+| **Ghost Writing Book** | 40 | 80 | 120 | 0,8 | accessories | unique | *Left open on the floor where the ghost roams, some ghosts write in it. Once each.* |
+| **Lighter** | 10 | 20 | 30 | 0,2 | accessories | unique | *Lights candles and smudge sticks. Goes out under heavy rain.* |
+| **Candle (Firelight)** | 15 | 30 | 45 | 0,3 | accessories | stackable | *An open flame that slows sanity loss while it burns. Some ghosts put it out.* |
+| **Crucifix** | 30 | 60 | 90 | 0,6 | accessories | unique | *Stops a hunt from starting within its range. It is spent by the hunts it prevents, not by time.* |
+| **Salt Shaker** | 15 | 30 | 45 | 0,3 | accessories | unique | *Pour a pile where the ghost walks. Stepping in it disturbs the ghost and leaves prints only UV can see.* |
+| **Smudge Sticks (Repellent)** | 15 | 30 | 45 | 0,2 | accessories | stackable | *Burn it to keep the ghost from starting a hunt for a while — or to blind it in the middle of one.* |
+| **Tripod** | 25 | 50 | 75 | 2,0 | accessories | unique | *Holds a video camera pointing where you left it. The heaviest thing you will carry, and it does nothing by itself.* |
+| **Motion Sensor** | 100 | 200 | 300 | 0,4 | accessories | unique | *Mounted on a wall, it reports anything crossing its beam to the truck. It does not care whether that thing was alive.* |
+| **Sound Sensor** | 80 | 160 | 240 | 0,5 | accessories | unique | *Mounted on a wall, it puts the noise of its area on the truck's sound monitor.* |
+| **Sanity Pills** | 20 | 40 | 60 | 0,2 | **medical** | **stackable** | *Restores sanity on the spot. Higher tiers restore more, and there is a short wait between doses.* |
+| **Thermometer** | 30 | 60 | 90 | 0,8 | accessories | unique | *Reads the temperature of a room. Freezing is evidence — and the ghost's favourite room is always the coldest.* |
+| **Parabolic Microphone** | 50 | 100 | 150 | ⚠ **sin masa** | accessories | unique | *Points across a room and puts paranormal sound on its screen. The tier 3 also shows where the noise came from.* |
+| **Glowstick** | 20 | 40 | 60 | 0,2 | accessories | stackable | *A cold light that keeps burning wherever you drop it. No batteries, and nothing can blow it out.* |
+| **Head Mounted Camera** | 60 | 120 | 180 | 0,4 | accessories | unique | *Worn on the head, it sends what you see to the truck. Whoever is watching sees the hunt before you do.* |
+| **Sound Recorder** | ⚠ **45** | 90 | 135 | 0,3 | accessories | unique | *Records what it hears and plays it back. Some ghosts only speak into a recording, never to your face.* |
+
+### 10.2 Las cuatro cosas que la tabla destapó, y tres piden decisión
+
+**(1) ⚠ «Strong Flashlight 50 USD» y «Flashlight 30 USD» son EL MISMO ÍTEM en dos tiers.** El lote
+portado no tiene ningún `strong_flashlight`: tiene `flashlight_i/ii/iii`, porque la Strong Flashlight
+del juego viejo **es** el tier alto de la linterna después del rework de tiers. El único
+`eqp_flashlight_strong.mdl` que existe en el árbol es del pack de terceros de §2.1, no de lo nuestro.
+
+Y los dos números chocan: la regla del autor da **60** para el tier II, y la lista dice **50** para la
+«Strong». **Decisión pedida:** o la linterna es una familia de tres tiers y la regla manda (30/60/90),
+o se conserva el 50 como excepción escrita. *La primera es más barata de sostener: una excepción sin
+motivo escrito se lee como un error de tipeo dentro de seis meses.*
+
+**(2) ⚠ El Sound Recorder está PORTADO y no tiene precio.** Sus tres tiers están en disco
+(`sound_recorder_i/ii/iii`, masa 0,3 ya asignada) y no aparece en la lista de 22. El **45** de la
+tabla es **una estimación mía**, puesta en la banda de sus vecinos de audio (spirit box 50,
+parabólica 50) y marcada como tal para que no se lea como dato del juego. *Un número inventado que no
+se marca se convierte en un número medido en la siguiente lectura.*
+
+**(3) ⚠ La parabólica no tiene masa declarada.** `paramic1/2/3.mdl` viven en
+`models/phantasmagoria/` y **no** en `models/phantasmagoria/eq/`, que es el directorio que
+`dev/gen_eq_propdata.py` recorre — así que quedaron fuera de `prop_data_eq.lua` y siguen con el
+default del `.qc` (1,5 kg y `surfaceprop metal`, el mismo defecto que ese archivo existe para
+corregir). **No lo estimo acá**: la masa vive en un solo lugar y ese lugar es `prop_data_eq.lua`.
+Propuesta para cuando se toque: **1,0 kg**, `item`.
+
+**(4) El Glowstick sólo existe en el pack de terceros y no tiene tiers.** `models/phas/eqp_glowstick`
+(masa 0,2 y `skinLit = 1` ya declarados en `prop_data.lua`) es el único, y el lote propio no lo
+incluye. Los tres precios de su fila son la regla aplicada por completitud: **hoy sólo el T1 tiene
+modelo**.
+
+### 10.3 Dónde caen en la UI de Cargo, y por qué no se inventa una categoría
+
+Las categorías de Cargo son un **conjunto abierto** —una desconocida se auto-registra— pero la fila de
+**pestañas es FIJA**, y una categoría que no esté mapeada cae en el paraguas **Misc**
+(`corpus_cargo_items.lua`, bloque de *Display tabs*, cerrado con el autor el 2026-07-13). O sea que
+registrar una categoría `phasmophobia` propia **no crea una pestaña**: manda los 22 ítems a Misc.
+
+Por eso el reparto es con lo que ya existe: **`accessories`** para las 21 herramientas y
+**`medical`** para las pastillas —la misma categoría de las cuatro de Coagulant, y si Coagulant no
+está montado Cargo la registra sola—.
+
+Y dos campos del contrato que estos ítems piden casi solos:
+
+- **`has_condition`** para todo lo que se gasta por USOS y no por tiempo: crucifijo, sal, smudge,
+  film de la cámara de fotos, y las baterías de linterna / cámara de video. La instancia arranca en
+  100 y el ítem ya tiene dónde guardar cuánto le queda, sin inventar un campo.
+
+  ⚠ **Y la barrita de usos al estilo STALKER ya está dibujada**: `corpus_cargo_grid.lua:96` pinta
+  *«condition: bar hugging the bottom edge + % above it»* en la celda, y el tooltip ya muestra la
+  condición. Lo único que Cargo **no** tiene es la **unidad**: diría `67 %` y no `2 usos`. Eso es un
+  pendiente **de Cargo** —un `def.uses = 3` que convierta condición en usos en la celda y el
+  tooltip—, chico y bien delimitado, y no de este addon. ⚠⚠ Ojo con el precio, que sale gratis y en
+  el sentido correcto: Cargo calcula `price = value × condition × spread`, así que **un frasco a
+  medio usar ya se revende a la mitad** sin escribir nada.
+
+  **El trade-off que decide la clase de las pastillas está medido y vive en §19.9.7 del diseño:**
+  el quick bind a F1-F4 está condicionado a `class == "stackable"` (`corpus_cargo_ui.lua:288`), así
+  que un frasco `unique` con barrita **pierde la tecla** — y una pastilla se toma en pánico. Por eso
+  la tabla de arriba las deja `stackable`, y el resto de lo que se gasta despacio va con condición.
+- **`effect_icon`** para que la celda diga de un vistazo qué hace (la UI mapea las conocidas).
+
+⚠ Y lo que **no** hay que hacer: registrar esto desde Phantasmagoria colgando de un solo `hook.Add`.
+El motivo está en §19.8.6 del diseño y le costó a Corpus 4.413 defs.

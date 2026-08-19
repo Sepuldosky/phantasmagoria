@@ -220,8 +220,11 @@ justamente lo que un `false` en `ShouldBeEnemy` consigue: las 31 tareas siguen c
 
 La cordura es del **jugador**, no del fantasma, y es la variable que gobierna todo el juego.
 
-- Baja con: oscuridad, ver manifestaciones, estar cerca del fantasma, hunts.
-- Sube con: pastillas, luz.
+- Baja con: oscuridad, ver manifestaciones, estar cerca del fantasma, hunts — y, **por decisión del
+  autor del 2026-08-18**, también con los eventos paranormales de §21, que en la fuente **no drenan**.
+- Sube con: pastillas, la zona segura, un **goteo pasivo lejos del fantasma** (tras el 2026-08-18, con
+  convar), y los dos desenlaces — desterrarlo, y **morir**. ⚠ **La luz NO sube: FRENA** — es un
+  modificador de tasa y no una vía de recuperación. Estas dos líneas quedaron corregidas por §19.8.5.
 - Cuando el promedio (o el mínimo, según el tipo) cae bajo `huntThreshold`, el fantasma **puede**
   cazar.
 
@@ -1431,6 +1434,29 @@ aparte, convar propia, leída contra el mod vivo y nunca supuesta, y degradació
 direcciones.** Si el mod no está o su toggle está en 0, la capa no hace nada y el camino base sigue
 siendo toda la historia.
 
+#### Los tres delatores nombrados de la capa **[enmienda del autor, 2026-08-18]**
+
+> *«Tener impulse 100, el nightvision o activado un attachment de ARC9 debería delatar al fantasma de
+> la presencia humana. El wheelmenu de Cargo permite apagar esas.»*
+
+| delator | dónde va | por qué ahí |
+|---|---|---|
+| **`impulse 100`** — la linterna del engine | **camino base** | es `ply:FlashlightIsOn()`, que este bloque ya nombraba: no es de terceros, es del motor |
+| **NVG** (`corpus_cargo_nvg.lua`) | **capa de compat**, con su convar | es de **otro módulo**. Detección en runtime, y sin Cargo la capa no hace nada |
+| **Láser / linterna de attachment ARC9** | **capa de compat**, con su convar | ídem, y el estado lo sabe Cargo (`corpus_cargo_arc9.lua`), no nosotros |
+
+⚠ **Y hay que escribir POR QUÉ delata la NVG, o alguien lo va a «corregir» como bug:** una gafa de
+visión nocturna **no emite luz visible** —es un intensificador—, así que a los ojos de un lector
+futuro «la NVG te delata» parece un error de física. La justificación tiene que estar en el archivo:
+o delata por su **iluminador IR**, que el fantasma percibe, o es una decisión de gameplay declarada
+como tal. *Lo que no se puede dejar es el comportamiento sin el motivo: un `if` sin razón escrita se
+borra en la primera limpieza.*
+
+**El wheelmenu de Cargo ya deja apagar las tres**, y eso es lo que vuelve al delator una **decisión
+del jugador** y no un impuesto: la luz protege la cordura (§19.9.3) y entrega la posición, y apagarla
+hace lo contrario. Ver §19.9.3 para la tabla de las dos consultas —**luz portátil** contra **luz de
+ambiente**—, que son la misma familia de datos leída para dos cosas distintas.
+
 **El escondite se rompe si te vio entrar, y eso sale gratis.** `UpdateEnemyMemory` guarda dónde te
 vio por última vez; si te vio meterte, va ahí. El escondite sirve **sólo si cortaste la línea de
 vista antes de entrar** — que es la regla exacta del juego, sin escribir nada.
@@ -2035,7 +2061,7 @@ precondición de la siguiente.
 | | Qué es | Estado |
 |---|---|---|
 | **A · el tipo** | Asignarlo al spawnear desde `PHANTASMAGORIA.Types`, networkearlo, poder forzarlo | **ESCRITA, sin pasada en juego** (`server_type.lua`, planilla `phantasmagoria-tipo-r15`) |
-| **B · la cordura** | Por jugador, servidor, networkeada, con sus causas e instrumentos | sin empezar |
+| **B · la cordura** | Por jugador, servidor, networkeada, con sus causas e instrumentos | **DISEÑADA en §19.8** (2026-08-18), sin una línea de código. Y §19.8.8 la parte en **B1** (variable + presencia + recuperación) y **B2** (la esfera de los eventos) |
 | **C · el gatillo** | Cordura bajo el `hunt.threshold` **del tipo** → `phantom_SetHunting( true )` | sin empezar |
 
 **Por qué A va primero:** C no compara la cordura contra un número fijo, la compara contra
@@ -2055,14 +2081,535 @@ ronda que estrena el mecanismo que la decide: *un rojo de velocidad ahí sería 
 
 ### 19.7 Lo que falta
 
-- **Los 3 tiers de las pastillas** (§16): el modelo es uno; los tiers son cuánto restauran. El autor
+> ⚠ **Dos de estos tres los DECIDE §19.8 (2026-08-18), y por eso se tachan acá y no sólo allá.** Es la
+> misma trampa que §19.6 documenta y que ya costó tres versiones: *una lista de pendientes que no se
+> tacha cuando la sección de abajo decide manda a re-discutir lo cerrado — y como se lee antes que el
+> cuerpo, gana ella.*
+
+- ~~**Los 3 tiers de las pastillas** (§16): el modelo es uno; los tiers son cuánto restauran.~~
+  **RESUELTO en §19.8.5: +25 / +40 / +60 %**, con 60 s de enfriamiento, y el porqué de no copiar el
+  40/45/50 de la fuente. Sigue abierto **el precio** de cada tier, que es economía de Cargo. El autor
   quiere **ripear el resto de los ítems**, así que la tabla lleva `tier` desde el principio.
-- **Qué drena y cuánto** (tajada B): oscuridad (§19.4), ver manifestaciones, cercanía del fantasma
-  —el banco `ghost/scare_light` del catálogo **ya es ese evento**, §7.2— y los hunts. ⚠ Los 10-20 min
-  de §19.2 dejan de ser un **reloj** y pasan a ser la **escala**: son cuánto tiene que tardar una
-  partida con actividad normal, no una tasa que corra sola. Con las causas apagadas la barra no se
-  mueve, y eso es el diseño y no un bug.
-- **El medidor de actividad** (§19.3): qué suma actividad y con qué peso.
+- ~~**Qué drena y cuánto** (tajada B): oscuridad (§19.4), ver manifestaciones, cercanía del fantasma
+  —el banco `ghost/scare_light` del catálogo **ya es ese evento**, §7.2— y los hunts.~~ **RESUELTO en
+  §19.8.2 y §19.8.4**, con la tabla de tasas por estado y la de costos por categoría. ⚠ Lo que sigue
+  vigente de este bullet es la advertencia: los 10-20 min de §19.2 dejan de ser un **reloj** y pasan a
+  ser la **escala** —cuánto tiene que tardar una partida con actividad normal, no una tasa que corra
+  sola—. Con las causas apagadas la barra no se mueve, y eso es el diseño y no un bug.
+- **El medidor de actividad** (§19.3): qué suma actividad y con qué peso. **Sigue abierto**, y §19.8
+  lo deja mejor parado que antes: los ocho eventos son la fuente natural y ahora tienen número.
+
+### 19.8 Qué drena, qué recupera y cuánto — el diseño de la tajada B **[2026-08-18]**
+
+§19.7 dejaba «qué drena y cuánto» como el hueco principal, y §21.8 cerraba el par al revés: *«mientras
+no exista la cordura, los eventos no drenan nada»*. **Ese bloqueo circular ya está roto**: los ocho
+eventos existen y corrieron en juego (§21.9, r1: 8 pasa · 0 falla). Esta sección es la otra mitad.
+
+Pedido del autor, literal (2026-08-18): *«¿Los eventos que haga el bot no deberían tener un área
+esférica que haga efectos sobre la cordura? Digo porque así un ghost puede hacer sonar una radio y el
+jugador está cerca, eso le quita un tanto de cordura. El estar en presencia del ghost (con absence en
+0: o sea visible) debería bajar la cordura más rápido que con la presencia del ghost.»*
+
+#### La decisión de fondo: **nos desviamos de la fuente**, y hay dos razones **[decisión del autor]**
+
+En Phasmophobia **las interacciones no drenan cordura**. Sólo drenan el *ghost event* (la
+manifestación, 10 %), la oscuridad, los hunts y algunos rasgos por tipo. Que un plato que se cae te
+quite cordura es una desviación, y está autorizada: *«esto es GMod y tenemos cambios en todo aspecto
+del gameplay, hasta el mismo jugador puede correr, saltar y escapar mejor; el gameplay no es 1:1 a
+Phasmophobia»*.
+
+Y hay una segunda razón que **no es de gusto y decide el bloque de recuperación**: en Phasmophobia
+**la partida TERMINA**. Un contrato dura veinte minutos y la cordura no necesita recuperarse porque
+el reloj la cierra. Acá no termina nunca: una barra que sólo baja llega a 0 en el primer cuarto de
+hora y **se queda ahí para siempre**, con lo que el gatillo de la tajada C queda permanentemente
+abierto y el sistema pierde su rango dinámico. *La recuperación no es una comodidad de jugador: es lo
+único que mantiene viva la mecánica en un mapa que no se acaba.*
+
+#### 19.8.1 Las dos familias de causas, y son de naturalezas distintas
+
+| familia | forma | dónde vive el radio |
+|---|---|---|
+| **Presencia** | continua, **%/s** mientras el jugador esté adentro | esfera alrededor del **fantasma** |
+| **Eventos** | discreta, **% por evento** | esfera alrededor del **sujeto del evento** (la radio, la lámpara, la puerta) |
+
+No se suman en una sola fórmula ni comparten radio: son dos causas separadas, con perilla separada y
+contador separado. Un jugador parado al lado del fantasma cuando el fantasma le habla cobra las dos,
+y eso es correcto — es la misma ficción vista dos veces, y el desglose del instrumento tiene que
+poder mostrarlo.
+
+#### 19.8.2 La presencia — un área esférica, sin línea de visión **[decisión del autor]**
+
+Pedido literal: *«ya estoy haciendo que suene al hacer HUNT y cuando está en ese modo hace un ruido
+bastante aterrador; independiente que estés escondido debería bajarte la cordura, por eso lo pensé
+como un área de presencia donde el ghost te drene la cordura»*.
+
+⚠ **La consecuencia se acepta de frente: el escondite NO protege de la cordura.** §18.2 diseñó el
+escondite contra el *targeting* — meterse en el ropero salva de que te encuentre, no de oírlo. Son
+dos capas distintas, y esta sección es la segunda.
+
+**DOS tasas, y el discriminante es el HUNT y NADA MÁS** [enmienda del autor, 2026-08-18]:
+
+| estado del fantasma dentro del radio | %/s | 100 → 0 |
+|---|---:|---:|
+| **en calma** | 0,10 | ~16,7 min |
+| **cazando** | 0,35 | ~4,8 min |
+
+⚠⚠ **La primera versión de esta tabla tenía tres filas y separaba «visible» de «invisible» leyendo
+`absence`. Está MAL, y el autor lo vio antes de que se escribiera una línea:** *«mejor no cablear de
+absence 1 o 0, mejor sólo del estado hunt; algo me dice que absence una sesión futura la puede usar
+para hacer que el ghost parpadee mientras está en hunt, como pasa en el juego original, y eso puede
+estar cambiando constantemente el daño a la cordura»*.
+
+**Y no es una intuición: §20.6 ya lo diseñó, con números.** El parpadeo del hunt son dos duraciones,
+`visible = { 0.08, 0.30 }` e `invisible = { 0.10, 1.00 }` segundos. Una tasa colgada del estado de
+render **cambiaría entre 2 y 10 veces por segundo** durante el hunt, y el desglose por causa del
+instrumento repartiría el mismo drenaje entre dos filas según el frame en que cayó el tick. *Un
+parámetro de gameplay no se cuelga de un estado de PRESENTACIÓN, y menos de uno que otra sección ya
+declaró que va a titilar.*
+
+**La intención original —ver al fantasma tiene que doler más— no se pierde: se muda.** Su lugar es la
+**manifestación** (§20 ③), que es un **evento discreto, con principio y fin**, y por eso se puede
+cobrar de una vez como los otros ocho. Un estado de render que titila no puede cobrar por segundo;
+una aparición que dura tres segundos, sí.
+
+**El techo no lo elegí yo, lo pone la fuente:** el Phantom drena **0,5 %/s** *«while in heartbeat
+range of the ghost during hunts and events»* (`ghost_types.lua:415`). Si la tasa estándar llega a
+0,5, el Phantom deja de ser especial. Las tres de arriba quedan abajo de su rasgo a propósito.
+
+Radio: **400 u** (~7,6 m) con **meseta hasta 150 u** (~2,9 m, el equivalente del *heartbeat range*) y
+caída lineal a 0 en el borde. En hunt, **×1,5** (600 u ≈ 11,4 m), porque el ruido del hunt se oye más
+lejos que la presencia en calma.
+
+⚠ **Y el hunt entra por `phantom_Hunting`, que es el mismo campo que ya leen `server_events.lua` y
+`server_cloak.lua`** — no por «se ve o no se ve». Es un booleano que cambia **dos veces por hunt**,
+no diez veces por segundo, y es exactamente el estado que el jugador percibe como *«está cazando»*
+sin necesidad de verlo: el ruido de la cacería llega igual adentro del ropero.
+
+#### 19.8.3 Por qué **«drena más si lo estás mirando» se DESCARTA**
+
+El autor preguntó qué es más costoso. La respuesta honesta es que **en CPU no cuesta nada ninguno de
+los dos**: con 4 jugadores y un fantasma a 1 Hz son 4 restas de vectores por segundo contra 4 restas
++ 4 tracelines + 4 productos punto. Un servidor de GMod hace miles de traces por segundo. *Descartar
+la mirada por rendimiento habría sido una razón inventada.*
+
+Lo caro es lo otro, y son dos cosas:
+
+1. **Premia jugar mirando al piso.** Si mirar drena, la respuesta óptima del jugador es no mirar, y la
+   partida se vuelve mirar la alfombra. Va justo en contra de la misma frase del autor: que estando
+   escondido igual te drene.
+2. **No se puede medir en una planilla.** Una causa que depende de dónde apunta la cámara **no se
+   reproduce**: dos corridas del mismo escenario dan números distintos y ninguna fila puede tener
+   criterio binario. Este repo mide con planillas, y una fila cuyo resultado depende del operador no
+   discrimina nada.
+
+**Queda una sola geometría: la distancia**, y un solo discriminante de estado: el hunt.
+
+⚠ La primera versión de este párrafo cerraba diciendo que *«el estado visible/invisible hace el
+trabajo que la mirada iba a hacer»*. **La enmienda de §19.8.2 se lo lleva puesto**: ese estado va a
+titilar diez veces por segundo cuando se escriba §20.6. Los dos descartes —la mirada y el render—
+tienen la misma forma y conviene decirla junta: **una tasa continua no se puede colgar de algo que
+cambia más rápido que el tick que la cobra.** Lo que sí puede cobrar por eventos rápidos es un
+**evento discreto**, y ahí es donde va a vivir «ver al fantasma duele más»: la manifestación.
+
+#### 19.8.4 Los eventos — la esfera cuelga del **SUJETO**, no del fantasma
+
+Hoy los ocho eventos pasan a ≤ `evradius` (450 u) **del fantasma** (§21.1), y ⚠ **ninguno devuelve
+dónde pasó**: los ocho `EV.*` devuelven `( bool, string )` y el string dice la distancia *al
+fantasma*. Un evento puede ocurrir a 450 u del fantasma con el jugador a 20 m del sujeto — que es
+exactamente el hueco que el autor señaló.
+
+**La forma: los ocho devuelven un tercer valor `pos`, y `phantom_FireEvent` hace UNA sola pasada
+sobre los jugadores.** Un solo lugar, y es el que ya sabe la categoría, si está cazando y los rasgos
+del tipo. Ocho llamadas dispersas serían ocho lugares donde olvidarse — y este archivo ya pagó esa
+lección: `count` se leía en dos lugares y terminaba componiéndose consigo mismo (§21.5).
+
+| categoría | % en el epicentro | por qué |
+|---|---:|---|
+| `sound` | **3,0** | la voz es lo más parecido a una manifestación de las ocho |
+| `throw` | **2,0** | ⚠ **por objeto**, con tope 4. El 2 % es literal de la fuente: es el rasgo del Poltergeist (`ghost_types.lua:430`) |
+| `light` | **2,0** | **3,0** si es ESTALLIDO |
+| `prop` | **2,0** | la radio, el teléfono |
+| `knock` | 1,5 | |
+| `door` | 1,5 | |
+| `furniture` | 1,5 | |
+| `creak` | 1,0 | el más ambiental de los ocho |
+
+Caída igual que la presencia: meseta al 30 % del radio, lineal a 0 en el borde. **Radio propio**,
+`phantasmagoria_ghost_sanrad` (450 u), **separado de `evradius` a propósito**: uno decide *dónde puede
+pasar* el evento y el otro *a quién le llega*. Atados, subir el alcance del fantasma subiría también
+el drenaje y ninguna medición podría separarlos después.
+
+**Tope de 6 % por disparo**, porque `count` sortea hasta dos categorías a la vez (The Twins).
+
+⚠ **El 10 % de la fuente NO se usa acá: se reserva.** Ese número es del *ghost event* —la
+manifestación, §20, sin escribir—. Si una interacción cuesta 10, la manifestación se queda sin lugar
+donde caer y un Poltergeist con `throw` cada 25 s vacía la barra en cuatro minutos.
+
+**Los rasgos por tipo van en una sub-tabla `sanity` de `ghost_flags.lua`**, nunca en la raíz de la
+fila (regla 1 de §21.5, o el Mimic no puede copiarla imitando `events`). Tres salen de la fuente sin
+inventar nada:
+
+| tipo | rasgo | de dónde sale |
+|---|---|---|
+| **Oni** | `mult = 2` | *«Drains 20 % sanity during events (instead of the standard 10 %)»* |
+| **Yurei** | `per.door = 15` | *«Can shut a door and drop sanity of nearby players by 15 %»* |
+| **Phantom** | `presence = 0.5` | *«Player will lose 0.5 % sanity /s while in heartbeat range»* |
+
+Y dos que piden mecanismos que no existen, **anotados y sin escribir** (§21.6: *no se escribe un
+mecanismo sin destino*): **Jinn/Hantu 25 %** (pide el breaker, que GMod no tiene) y **Banshee 15 %**
+(pide tocar al fantasma durante un evento cantado).
+
+#### 19.8.5 La recuperación — cuatro vías de goteo y dos por desenlace
+
+Pregunta del autor: *«¿cómo se recupera la cordura? ¿Se regenera?»*.
+
+**Sí hay regeneración pasiva, y es una enmienda del autor** (2026-08-18): *«fuera de la presencia de
+fantasmas se restaure un poco la cordura, la mitad de Zona Segura/Camión… puesto que la cordura se
+drena por presencia de fantasmas y sus eventos o cacería. Eso se debe cambiar con un cvar en caso que
+el gamemode futuro lo quiera desactivar, ya que es algo más para Sandbox ilimitado»*.
+
+**El razonamiento es el de arriba llevado un paso más.** Si la cordura baja **sólo** por presencia,
+eventos y cacerías, entonces lejos del fantasma no hay nada que la baje — y en una sesión de sandbox
+que no termina nunca, la barra quedaría clavada donde la dejó la última cacería hasta que alguien
+camine al camión. *Un sistema por causas necesita que la ausencia de causas signifique algo.*
+
+⚠ Y va **detrás de una convar prendida por default** (`phantasmagoria_sanity_regen`), porque el
+propio autor declara el alcance: es para **sandbox ilimitado**, y un gamemode con partidas que
+terminan la va a querer en 0. *Una perilla cuyo motivo está escrito no se re-discute en tres meses.*
+
+| vía | qué hace | qué cuesta | por qué |
+|---|---|---|---|
+| **Regeneración pasiva** | **+0,2 %/s** — la mitad del camión — **fuera del radio de presencia y sin drenaje reciente** | estar lejos del fantasma, o sea **no investigar** | Es lo que hace que la ausencia de causas signifique algo. Convar propia, default 1 |
+| **La zona segura** (§18.1) | **+0,4 %/s** hasta el techo | **tiempo**: 0 → 100 son ~4 min sentado | Le da al camión una función mecánica además del veto de targeting. Como cuesta tiempo, volver es una decisión y no un botón |
+| **Las pastillas** (3 tiers) | **+25 / +40 / +60 %** de golpe, con **60 s** de enfriamiento | **dinero y peso** | La única vía instantánea, y la que le da sentido a la economía |
+| **La luz** (§19.4) | **no restaura: frena**. ×0,5 a la presencia con luz, ×1,5 a oscuras. La vela `eqp_candle` frena igual mientras esté encendida | ocupar la mano, o quedarse donde hay luz | Es lo que hace la fuente y lo que EQUIPAMIENTO §3.5 ya decía de la vela. **Un modificador de tasa no es una vía de recuperación**, y por eso va en fila aparte y con contador aparte |
+
+#### ⚠ La aritmética de ese 0,2 %/s, y por qué el retardo **no es un adorno**
+
+**+0,2 %/s son 12 %/min, y la presencia en calma drena 6 %/min.** O sea que, tomados crudos, **estar
+lejos recupera el doble de rápido de lo que estar cerca gasta**. El punto de equilibrio sale de
+igualar las dos: con `f` = fracción del tiempo dentro del radio, `0,10·f = 0,20·(1−f)` da **f = 2/3**.
+Sumando los eventos (~2 %/min mientras estás cerca) baja a **f ≈ 0,6**. Traducido: **habría que pasar
+más de la mitad de la partida adentro del radio del fantasma sólo para EMPATAR**, y con menos que eso
+la barra sube sola — con lo que el `hunt.threshold` (50 típico, Demon 70) **no se alcanza nunca** y la
+tajada C queda de adorno. *El número está bien elegido para lo que el autor quiere —que la barra no
+se quede en 0 para siempre— y mal calibrado contra lo único que la baja.*
+
+**El arreglo conserva el 0,2 y le pone una condición, en vez de discutir el número:** la regeneración
+pide **las dos cosas a la vez** — estar fuera del radio de presencia **y** que no haya habido ningún
+drenaje en los últimos **45 s** (`phantasmagoria_sanity_regendelay`). Durante una investigación real
+esa ventana casi nunca se cumple: los eventos salen cada 25-90 s. Cuando la partida se calma de
+verdad —el fantasma lejos, sin eventos, nadie cazando—, se cumple sola. Y de paso resuelve el mismo
+problema que la enmienda de §19.8.2: **una condición con retardo no puede parpadear.**
+
+Alternativa si aun así se siente flojo, y es una decisión y no un arreglo: **bajar la tasa a
+0,05 %/s** (0 → 100 en ~33 min) y sacarle el retardo. Las dos cumplen el pedido; la primera conserva
+el número del autor y la segunda conserva la simplicidad.
+
+**Y dos vías que cierran el ciclo, las dos por desenlace y no por goteo:**
+
+- **Desterrar o matar al fantasma** (§5.4) devuelve la cordura de todos a 100. Es el equivalente al
+  fin del contrato — lo que en Phasmophobia hace el reloj, acá lo hace el desenlace.
+- **Morir la restaura** — ver abajo.
+
+**Los tiers son 25/40/60 y no los 40/45/50 de la fuente.** Tres tiers separados por 5 puntos no son
+tres tiers: son el mismo ítem con tres precios. Sin diferencia perceptible, el jugador compra siempre
+el más barato y los otros dos son decorado. Con la economía de Cargo detrás, la separación tiene que
+verse en el efecto o no existe. (§16 ya dejaba el campo `tier` en la tabla desde el principio.)
+
+#### **La muerte SÍ restaura** — y la objeción que tenía se cae sola **[decisión del autor, 2026-08-18]**
+
+Este documento proponía lo contrario, con este argumento: *«si respawnear devuelve 100 %, suicidarse
+es más rápido y más barato que caminar hasta el camión, y las otras vías dejan de existir el día que
+alguien lo descubra»*. **El argumento estaba mirando el juego equivocado.** El autor:
+
+> *«Matarse o morir sí restaura la cordura. Por gameplay loop de gamemode a lo Phasmophobia, morir es
+> algo que termina la partida en general, no se puede respawnear como gamemode. Como sandbox sí, así
+> que no hay drama.»*
+
+**Los dos destinos lo resuelven por caminos opuestos, y ninguno deja el atajo abierto:**
+
+| destino | qué pasa al morir | por qué el «suicidio como atajo» no existe |
+|---|---|---|
+| **Gamemode** (a futuro) | la partida **termina** | no hay a qué volver: restaurar o no es una pregunta sin consecuencia |
+| **Sandbox** (hoy) | respawneás | el jugador ya tiene la consola y el menú Q. **Un atajo que compite contra `sv_cheats` no es un exploit**: es una de las diez formas triviales de saltearse cualquier mecánica |
+
+*Una defensa contra el abuso sólo vale si el abuso es más barato que las alternativas que el jugador
+ya tiene.* En sandbox no lo es, y en gamemode ni siquiera es alcanzable.
+
+⚠ Lo que sí queda escrito, porque es lo que hace que esto no importe: **morir en un hunt ya es el
+castigo**. La cordura es el recurso que administra el jugador *para no llegar ahí*; devolverla al
+respawnear no perdona nada, porque lo que se perdió fue la corrida.
+
+#### 19.8.6 Las pastillas como ítems de Cargo — sí, y la forma ya tiene precedente leído
+
+`CARGO.Items.Register( def )` con `onUse = function( ply, ctx ) → true` para consumir una unidad. El
+precedente exacto está en corpus-coagulant (`corpus_coagulant_items.lua:95`): `class = "stackable"`,
+`category = "medical"` —categoría **abierta**, Cargo la auto-registra si Coagulant no está—, más
+`model`, `weight` y `value`. Los tres modelos ya están en disco y `prop_data_eq.lua` ya les dio masa
+0,2. La barra es `CARGO.StatusPanel.RegisterBar` con `getValue( ply ) → 0..100`, igual que la de
+sangre de Coagulant (`corpus_coagulant_hud.lua:458`).
+
+⚠ **Dos trampas, las dos ya pagadas en este ecosistema:**
+
+1. **Phantasmagoria está FUERA de Corpus y no puede depender de él** (EQUIPAMIENTO §3.5). Detección en
+   runtime, y **camino propio** cuando Cargo no está: una entidad usable con `+USE` — el patrón ya
+   existe en el addon (`phantasmagoria_ghost_evuse`, §21.9) — más el HUD propio para leer la barra.
+2. ⚠⚠ **El wiring no puede colgar de un solo `hook.Add`.** `hook.Call` **aborta la cadena entera**
+   cuando cualquier hook devuelve un valor, y los que caen más abajo en la fila no reciben el evento:
+   sin error de Lua, sin desengancharse y sin que el instrumento lo note. A Corpus le costó **4.413
+   defs y 3 barras del StatusPanel colgadas en el realm cliente**, con los cuatro módulos imprimiendo
+   «cargado» en los dos realms. La barrera cuelga de **más de una señal**, con guard de idempotencia,
+   y la línea de log dice **cuál** disparó y **cuántos** wirings soltó.
+
+#### 19.8.7 Dónde vive el número, y la trampa de la oscilación
+
+Un `NW2Float` por jugador (`phantasmagoria_sanity`), **servidor autoritativo**, que es lo que leen los
+tres consumidores: la barra de Cargo, el HUD propio y la pantalla **TEAM SANITY** del camión — que hoy
+dibuja **datos demo** y está esperando el enchufe (`phantasmagoria_trucktv_screen.lua:1825`).
+
+⚠ **La oscilación de ±2 % es de DIBUJO, no de almacenamiento.** La pantalla del camión ya la aplica a
+propósito (§19.3) para que se lea orgánica. Si ese ruido entrara al valor guardado, el gatillo de la
+tajada C compararía contra `hunt.threshold` un número con ruido: un fantasma de umbral 50 empezaría a
+cazar entre 48 y 52 sin causa, y **ninguna corrida sería reproducible**. El valor guardado es exacto;
+el ruido lo pone el que dibuja.
+
+Y el promedio sigue siendo **una lectura y no la variable** (§19.2) — con una excepción que la fuente
+obliga: el **Banshee** *«hunts based on target's sanity instead of average sanity»*, así que la tajada
+C necesita las dos cuentas de todas formas.
+
+#### 19.8.8 El orden, los instrumentos, y lo que queda abierto
+
+| | qué es | qué toca |
+|---|---|---|
+| **B1** | la variable + la presencia + la recuperación + los instrumentos | archivo nuevo. **No toca `server_events.lua`** |
+| **B2** | la esfera de los eventos: el tercer retorno `pos` en los ocho y la pasada única | `server_events.lua` + `ghost_flags.lua` |
+| **C** | el gatillo contra el `hunt.threshold` del tipo; jubila la convar andamio `phantasmagoria_hunt` | `server.lua:3815` |
+
+**Los instrumentos, y son la parte que no se puede dejar para después:** una barra que baja no dice
+**qué** la bajó. El reporte imprime, por jugador, el valor y el **desglose acumulado por causa**
+(presencia en calma · presencia en hunt · cada una de las ocho categorías · oscuridad · y cada vía de
+recuperación por separado) más la última causa con su timestamp. Una perilla por causa, con el `0` como
+CONTROL, para poder correr el A/B de cada una con el resto apagado. Y la escala de §19.2 —10-20 min
+con actividad normal— es la **vara**, no un reloj: si la corrida da 3 min o 40, lo que está mal son
+estos números y no el mecanismo.
+
+**Abierto, y son decisiones del autor:**
+
+- ~~**¿La muerte cura?**~~ **CERRADO el 2026-08-18: sí** (§19.8.5).
+- **La calibración de la regeneración pasiva**, que es lo único que quedó con dos salidas escritas:
+  **0,2 %/s con retardo de 45 s** (conserva el número del autor) contra **0,05 %/s sin retardo**
+  (conserva la simplicidad). La aritmética de las dos está en §19.8.5. ⚠ Y sea cual sea, **la fila de
+  la planilla que la juzgue tiene que medir el NETO**, no la tasa: la pregunta que importa no es «¿se
+  regenera?» sino «¿la barra puede llegar al `hunt.threshold` en una partida normal?».
+- **El techo de la zona segura:** ¿100 %, o menos (p. ej. 80 %) para que las pastillas sigan teniendo
+  un lugar que el camión no cubre? La misma pregunta vale ahora para el techo de la regeneración
+  pasiva, y **no tienen por qué ser el mismo número**: un camión que llega a 100 y un goteo que llega
+  a 80 dejarían las tres vías con territorio propio
+- ~~**¿Cuánto vale cada tier en la economía de Cargo?**~~ **CERRADO el 2026-08-18**: el autor pasó los
+  precios de los 22 equipos y la regla de tiers (T2 ×2, T3 ×3), así que las pastillas son **20 / 40 /
+  60 USD** contra **+25 / +40 / +60 %** de efecto. La tabla completa —precio, peso y trivia de cada
+  equipo— vive en [EQUIPAMIENTO.md §10](EQUIPAMIENTO.md). ⚠ El peso **no se estima acá**: sale de
+  `prop_data_eq.lua`, que ya lo decidió por familia.
+- **El medidor de actividad** (§19.3) sigue sin diseñar: qué suma actividad y con qué peso. Los ocho
+  eventos ya son la fuente natural, y ahora tienen número.
+
+### 19.9 Las nueve que cerró la ronda de afinado **[2026-08-18]**
+
+§19.8 dejó el modelo; esta sección cierra los nueve huecos que salieron de auditarlo contra lo que ya
+estaba escrito. **Ninguna de las nueve es una idea nueva:** siete son consecuencias de decisiones que
+ya estaban tomadas y las otras dos son datos del ecosistema que estaban en disco.
+
+#### 19.9.1 El gate del hunt: **promedio en gamemode, CICLADO en sandbox** [decisión del autor]
+
+> *«La diferencia recae entre el sandbox y un gamemode distinto. Para el sandbox, en vez de usar el
+> promedio, debería ciclar entre los jugadores vivos para efectuar el hunt — el promedio ya no cuenta
+> realmente, ya que es sandbox (sin objetivos, por exploración o por divertirse). En un gamemode sí
+> debería contar el promedio.»*
+
+**La forma concreta:** el gate evalúa **un jugador vivo por vuelta, rotando**, y el que está en foco
+cuando cae bajo su umbral **es además el objetivo inicial del hunt** — que §18 necesita de todas
+formas, así que sale gratis. Con un solo jugador —el caso normal en sandbox— la rotación es él y no
+hay caso especial que escribir.
+
+Perilla: `phantasmagoria_sanity_gate`, **0 = promedio** (gamemode) · **1 = ciclado** (sandbox,
+default).
+
+⚠⚠ **Y esto rescata un defecto que había introducido la decisión de la muerte.** Con el promedio y
+con «morir restaura a 100», **el primer muerto SUBE el promedio y protege a los vivos**: el equipo se
+vuelve más seguro a medida que muere gente, que es el reverso exacto de lo que el juego quiere. En el
+modo ciclado no puede pasar —los muertos no entran en la rotación—, y **en el modo promedio los
+muertos quedan FUERA del promedio**, explícitamente. La pantalla del camión ya dibuja el estado
+`dead`, así que se ve por qué el número cambió.
+
+⚠ **El choque con el Banshee, y su salida sale de la misma fuente.** «Ciclar entre los vivos» es
+literalmente el rasgo del Banshee aplicado a los treinta (*«Hunts based on target's sanity instead of
+average sanity»*), o sea que en sandbox el Banshee dejaría de ser especial — la misma trampa que el
+Phantom con su 0,5 %/s. El discriminante está escrito al lado, en su propia ficha: *«Will only pursue
+its target during a hunt»*. **El estándar ROTA entre cacerías; el Banshee se FIJA y no suelta.**
+
+Y sobre la pantalla: si el promedio no decide nada en sandbox, **que la pantalla no lo destaque**. Un
+número grande arriba que no predice nada es la familia «el instrumento que nombra». En modo ciclado el
+monitor resalta **el mínimo** —que sí predice— y deja el promedio como lectura chica.
+
+#### 19.9.2 La oscuridad es un **MODULADOR**, no una causa propia — y se resuelve sin red
+
+**Por qué modulador:** la regla del autor es que *«la cordura se drena por presencia de fantasmas y
+sus eventos o cacería»*. Si la oscuridad drenara sola, la barra bajaría en cualquier mapa oscuro sin
+fantasma cerca y contradiría esa regla. Como modulador **amplifica lo que el fantasma hace**, que es
+coherente con el resto y no compite con el goteo pasivo de §19.8.5.
+
+Las tres formas, ordenadas por costo, con lo que cada una pierde:
+
+| | qué mira | costo | qué pierde |
+|---|---|---|---|
+| **A** | sólo la **luz que lleva el jugador** | ~10 líneas, **cero red** | un cuarto iluminado no protege: mentira perceptible |
+| **B** ✅ | A **+ las luces del mapa que `EV.light` ya enumera** y cuyo `GetOn()` ya lee | **reusa código existente**, cero red | ⚠ **la luz HORNEADA no cuenta**: un mapa iluminado por lightmap sin entidades `light` se lee como oscuro |
+| **C** | el sampler de §19.4 (6 muestras de `render.GetLightColor`) | archivo client nuevo, un net por jugador, histéresis | ⚠ **confianza**: el cliente le diría al servidor si está a oscuras, y un cliente modificado **apaga su propio drenaje** |
+
+**Se elige B**, y lo que la hace barata no es el algoritmo sino la forma: una sola función
+`PHANTASMAGORIA.IsPlayerLit( ply )` que devuelve **estado + MOTIVO** (`"linterna"`, `"vela"`,
+`"lámpara #123 a 180 u"`, `"nada cerca"`), como el resto del addon. Si mañana entra C, cambia el
+cuerpo y **ningún llamador**.
+
+⚠ El defecto de B se escribe ahora y no se descubre después: **hay mapas donde va a decir «oscuro»
+con la luz prendida**, porque su iluminación está horneada y no hay entidad que preguntar. Es el mismo
+fenómeno que obligó a escribir `bsp_statics.lua` para los props.
+
+⚠ Y el costo de C **no es CPU**: es que mueve la autoridad de una variable de gameplay al cliente. En
+sandbox da igual; en un gamemode, no.
+
+#### 19.9.3 `IsPlayerLit` devuelve **dos cosas**, y ahí se une con el delator de §18.2
+
+El autor, sobre el delator: *«tener impulse 100, el nightvision o activado un attachment de ARC9
+debería delatar al fantasma de la presencia humana»*. Eso y la oscuridad de §19.9.2 **leen la misma
+familia de datos**, pero ⚠ **no son la misma consulta**:
+
+| | protege la cordura | delata al fantasma |
+|---|---|---|
+| **luz PORTÁTIL** (linterna, vela, glowstick, UV, NVG, láser ARC9) | sí | **sí** |
+| **luz de AMBIENTE** (una lámpara del mapa encendida) | sí | **no** |
+
+Una lámpara del techo cuida la cordura sin entregar a nadie; la linterna hace las dos cosas a la vez,
+**y ése es el trade-off del sistema**: prenderla te protege y te vende. Estaba implícito en dos
+secciones que no se citaban; queda escrito acá y en §18.2.4.
+
+⚠⚠ **Y hay una trampa medida por Cargo que le pega justo a esta función: `ply:FlashlightIsOn()` es
+server-only EN LAS DOS DIRECCIONES.** No es que escribirla necesite canal y leerla no: **leerla en el
+cliente devuelve `false` con el haz pintando una pared**. Está medido en juego, no deducido
+(`corpus_cargo_lights.lua`, segunda pasada de su planilla V: `lua_run print(Entity(1):FlashlightIsOn())`
+da `true` y `lua_run_cl` sobre el mismo jugador da `false`; su primer intento salió sin el espejo y el
+chip nunca se pintaba encendido).
+
+**Refuerza la elección de la opción B**, que es servidor puro: la parte del sampler de la opción C que
+corre en CLIENT **no podría leer el delator más importante** y habría que networkearlo al revés. Y
+avisa de una segunda cosa: cualquier HUD nuestro que quiera pintar «estás iluminado» necesita su
+propio espejo, igual que el de Cargo.
+
+⚠ Bonus de la misma fuente, y ahorra una ronda: **`RunConsoleCommand("impulse 100")` no sirve para
+prender la linterna** si el jugador tiene en la mano cualquier dispositivo conmutrable de ARC9 —
+`arc9/shared/sh_move.lua:360-369` **secuestra el impulse** y lo reescribe a `IMPULSE_TOGGLEATTS`: la
+linterna se queda apagada y lo que cambia es el modo del aparato. Medido por Cargo, no supuesto.
+
+#### 19.9.4 La cordura **no se dibuja**, y el indicador es el MUNDO [decisión del autor]
+
+> *«En Phasmophobia no se demuestra la baja cordura; creo que acá tampoco debería. A lo más podría
+> verse en Cargo como barrita —eso ayuda en sandbox donde no tengas camión—, con algún cvar para
+> desactivarla.»*
+
+Dos consecuencias que hay que escribir para que la decisión no se rompa sola:
+
+1. ⚠ **La barrita de Cargo lleva la misma oscilación de ±2 % que la pantalla del camión** (§19.3). Sin
+   ella, el número exacto vuelve a hacer predecible el umbral del hunt — que es exactamente lo que
+   §19.3 quiso evitar cuando puso el monitor detrás de una convar por «tramposo». *Una decisión de
+   ocultamiento se rompe por la puerta de atrás si el segundo consumidor no la respeta.*
+2. **El indicador fiel no cuesta HUD: es el ritmo de los eventos.** `phantom_ScheduleEvent` **ya
+   tiene** un `rate` que divide el intervalo; atarlo a la cordura hace que menos cordura signifique
+   más actividad, que es **cómo Phasmophobia lo comunica**. Y cierra la condición que §19.2 dejó
+   colgada —*el drenaje sólo funciona si los eventos sostienen la tensión*— convirtiéndola en un lazo:
+   la cordura baja ⇒ hay más eventos ⇒ hay más de qué asustarse.
+
+#### 19.9.5 La puerta: **dos funciones y una causa**
+
+Las 7 posesiones malditas ya tienen costos escritos (EQUIPAMIENTO §4) y **todavía se están
+construyendo**, así que no se cablea ninguna. Lo que sí se escribe ahora es **por dónde van a entrar**,
+porque eso decide la forma del módulo:
+
+```lua
+PHANTASMAGORIA.DrainSanity(   ply, pct, causa )
+PHANTASMAGORIA.RestoreSanity( ply, pct, causa )
+```
+
+`causa` es un string y **no es decoración**: es lo que el instrumento desglosa (§19.8.8), y sin él
+«la barra bajó 30 %» no distingue una cacería de una güija. Las dos posesiones que son **tasa** —el
+mirror con 7,5 %/s y la music box con 2,6 %/s— entran por la misma puerta llamando por tick, así que
+no hace falta una segunda API para ellas. *Escribir la puerta no es escribir la feature, y cuesta dos
+líneas hoy contra un rediseño después.*
+
+#### 19.9.6 Valor inicial: **100 %**, con convar
+
+Quien se conecta a mitad de partida entra con 100 [decisión del autor: *«sí, un 100 % en sandbox; ese
+gamemode es bien laxo y es para divertirse más que algo serio»*]. La cordura **no persiste** entre
+mapas. La convar existe para que un gamemode futuro elija conservar el valor, que es la única
+configuración en la que reconectarse sería un atajo.
+
+#### 19.9.7 Las pastillas: **instantáneas**, y el precedente es **Craving** y no Coagulant
+
+> *«Instantánea, es casi como comer en Craving, no es como un ítem médico de Coagulant; así mismo
+> ocurre en Phasmophobia.»*
+
+Y ese precedente trae un regalo que conviene copiar entero: el `onUse` de la comida devuelve
+`CRAVING.Consume(...)`, y **devolver `false` con la barra llena hace que Cargo NO descuente la
+unidad** (`corpus_craving_items.lua:61-66`). Tomar una pastilla al 100 % de cordura **no la gasta**.
+Anti-desperdicio gratis, con la forma ya probada en el ecosistema.
+
+**Y la UI que parecía faltar, existe:** `corpus_cargo_ui.lua:242` pone **«Use»** en el menú contextual
+de todo ítem con `onUse`, y **`:288` da «Quick bind…» F1-F4** — o sea una **tecla** para la pastilla,
+que es justo lo que hace falta en medio de una cacería.
+
+⚠⚠ **Pero el quick bind está condicionado a `class == "stackable"`, y eso convierte la elección de
+clase en un trade-off de gameplay y no de contabilidad.** El autor quiere un frasco con usos, al
+estilo STALKER: *«tener un solo ítem pero con x usos, más que varios ítems en un stack; generalmente
+en STALKER el ítem tiene una barrita abajo en el mismo slot que te dice del uso»*.
+
+| forma | qué se gana | qué se pierde |
+|---|---|---|
+| **`stackable`**, 1 unidad = 1 dosis | **tecla F1-F4**, y el precio ya está por unidad | no hay barrita: el frasco es una cuenta, no un objeto |
+| **`unique` + `has_condition`** | **la barrita del slot YA EXISTE** (`corpus_cargo_grid.lua:96`: *bar hugging the bottom edge + % above it*), y el precio de reventa sale bien solo, porque Cargo ya calcula `price = value × condition × spread` | **se pierde el quick bind**, y el número se lee como **«67 %»** y no como **«2 usos»** |
+
+**Lo único que le falta de verdad a Cargo es la UNIDAD, no la barra** — un `def.uses = 3` que haga que
+la celda y el tooltip conviertan la condición en usos. Es un pendiente **de Cargo** y no de este
+addon, chico y bien delimitado.
+
+**Recomendación, y parte el problema en dos:** la pastilla se toma en pánico, así que va **stackable
+con tecla**; el crucifijo, la sal, el smudge, el film de la cámara y las baterías se gastan despacio y
+van **`unique` con condición y barrita**. *Lo que se usa en pánico va a una tecla; lo que se planta o
+se consume de a poco va con barrita.* Queda abierto si el frasco de pastillas cambia de bando cuando
+Cargo tenga `uses`.
+
+#### 19.9.8 Sin Cargo **no hay camino todavía**, y el andamio lo dice con todas las letras
+
+> *«Sin Cargo tendría que ir por SWEP, pero aún no hacemos SWEPs porque estoy investigando eso; yo voy
+> primero por Cargo.»*
+
+Entonces el camino propio **no se escribe**, y lo que hay que escribir es qué pasa mientras tanto:
+**hoy, sin Cargo montado, no hay forma de tomar una pastilla.** Para que eso no bloquee la medición va
+un `concommand` de servidor **declarado ANDAMIO en su propio texto de ayuda** —la misma costumbre que
+`phantasmagoria_hunt`, que dice en su descripción que la cordura lo va a reemplazar—, y su único
+trabajo es que la fila de la planilla pueda medir la restauración sin depender de un módulo ajeno.
+
+⚠ *Un andamio que no se anuncia como andamio se convierte en la feature.* Por eso la palabra va en la
+ayuda de la convar y no sólo en este documento.
+
+#### 19.9.9 Lo que queda abierto después de esta ronda
+
+- **La calibración del goteo pasivo** (§19.8.5): 0,2 %/s con retardo de 45 s contra 0,05 %/s sin
+  retardo.
+- **El techo** de la zona segura y el del goteo pasivo, que no tienen por qué ser el mismo número.
+- **`def.uses` en Cargo**, que es lo que decidiría si el frasco de pastillas pasa a `unique`.
+- **El medidor de actividad** (§19.3), que sigue sin diseñar — aunque §19.9.4 le acaba de dar su
+  primer insumo: si la cordura mueve el ritmo de los eventos, la actividad y la cordura dejan de ser
+  dos variables independientes.
 
 ---
 
@@ -2554,8 +3101,12 @@ Y una del arco de lectura, que corrige a este documento: **`FlingNearbyPhysicsPr
 - **El ritmo.** Los defaults (25-90 s, radio 450 u, masa 60 kg, fuerza 180-320 × masa) son una
   elección de escritorio. La fila 10 de la planilla es la única que los juzga. → **La r1 lo aprobó**:
   *«si no es muy seguido se siente bien ese sentido»*.
-- **La cordura.** Mientras no exista, los eventos no drenan nada — y §19 dice que el drenaje está
-  **condicionado a que existan eventos**. Este bloque es la mitad que faltaba de ese par.
+- ~~**La cordura.** Mientras no exista, los eventos no drenan nada — y §19 dice que el drenaje está
+  **condicionado a que existan eventos**. Este bloque es la mitad que faltaba de ese par.~~
+  **DISEÑADO en §19.8** (2026-08-18): los eventos drenan por una **esfera centrada en el sujeto**, con
+  un costo por categoría, y para eso los ocho `EV.*` tienen que devolver un tercer valor `pos` (hoy
+  devuelven `( bool, string )` y el string mide contra el **fantasma**, no contra el sujeto). Es la
+  tajada **B2**. Sin código todavía.
 - **`deogen.ogg`** está en el catálogo (`ghost/breathing/`) y **sin cablear**: es el clip propio del
   Deogen, que la fuente describe respirando por el spirit box. Hoy sería un singleton; se anota como
   asset disponible, no como hueco de diseño.
