@@ -3620,17 +3620,86 @@ escritor de la mirada se sale por debajo de 30 u/s; y *«quedarse quieto»* no t
 el piso duro es 1 u/s. **Eso alcanza a `singing` y a `standing`, que son los dos eventos que piden
 exactamente eso.**
 
-### 22.6 Lo que falta decidir antes de escribir una línea
+### 22.6 **DECISIONES DEL AUTOR — 2026-08-20**, y los tres bloqueantes bajan a uno
 
-1. **Las pisadas de `mist`, `singing` y `standing`** — la spec las nombra para `chase` (sí) y `appear`
-   (no) y calla en las otras tres. Un `mist` que es una nube sin silueta **no debería** hacer pisadas;
-   `singing` y `standing` están abiertos.
-2. **Si `standing` hace gritar al equipo.** Tiene actividad 6-7, la más baja de las cinco, y el autor
-   no lo dijo. Con la regla que él mismo fijó —el caos no se sigue de la actividad— hay que preguntarlo.
-3. **Cuánto dura `appear`.** Se asume «como chase» (10 s) porque él lo describió por diferencia, pero
-   no lo dijo.
-4. **El canto que sobra** — las tres salidas del §22.5.
-5. **En qué orden se escriben los cinco.** `standing` es el más barato (aparecer, mirar, irse) y
-   `chase` el más caro (puertas + luces + persecución + teletransporte + pisadas + caos). El orden
-   natural es el que deja medible a cada pieza antes de que la siguiente dependa de ella.
+**① La linterna: no hay tiers, y la de HL2 es la normal.** *«En el addon aún no hay linternas, pero
+primero estoy pensando compatibilidad con Cargo, así que usar la linterna de HL2 es lo normal; como
+ítem no haré tiers de linternas para el sandbox.»*
+
+> ⭐ **Eso cierra el bloqueante ③ del lado del diseño.** La medición offline decía que el addon no
+> tiene ni una `ProjectedTexture` — correcto, y **ya no importa**: la linterna que va a iluminar al
+> fantasma es la del jugador de GMod, que **sí** lo es. La pregunta que queda es una sola y sigue
+> costando diez segundos: **si esa linterna proyecta la sombra del nextbot**, que depende de
+> `r_flashlightdepthtexture` (convar de cliente). *Una decisión de alcance puede cerrar un bloqueante
+> sin escribir una línea: el obstáculo no se salvó, se salió del camino.*
+>
+> **Y la UV sale de la misma pieza:** *«las linternas UV puede ser la misma linterna de HL2 pero color
+> violeta, esa se puede obtener y meter al inventario desbloqueando una opción extra en el
+> wheelmenu»*. O sea que la evidencia UV —que ya tiene las huellas dibujándose y su gate
+> `phantasmagoria_uv`— pasa a colgar de **Cargo** y no de un ítem propio. Eso saca un asset del
+> alcance de este addon y mete una dependencia de otro. Va anotado acá porque el gate provisional
+> (`phantasmagoria_uv 1` a mano) tiene ahora un destino nombrado.
+
+**② La actividad: los eventos de hoy quedan DEBAJO de las manifestaciones.** *«La actividad proviene
+de acciones del fantasma, los "eventos" hacen actividad de unos segundos bajo 6.»* Con eso la escala
+queda completa por primera vez:
+
+| Actividad | Qué la produce |
+|---|---|
+| **< 6**, unos segundos | los **ocho eventos** que ya existen (`throw`, `knock`, `creak`, `door`, `light`, `sound`, `prop`, `furniture`) |
+| **6-7** | `standing` |
+| **7-8** | `mist`, `singing`, `appear` |
+| **8-9** | `chase` |
+| **10** | el hunt |
+
+> ⭐ **Y eso convierte al motor de eventos que ya cerró en juego en el primer productor del dato.** Los
+> ocho eventos existen, disparan, y hoy no reportan actividad porque no hay dónde. *La escala no hace
+> falta inventarla: hace falta enchufarla, y la mitad de abajo ya está corriendo.*
+
+**③ El canto se CORTA.** *«Si `singing` se corta y está bien, hay que hacer `StopSound` al terminar la
+manifestación.»* Cierra el choque de §22.5 — las otras dos salidas (alargar la manifestación, o
+sortear sólo los clips cortos) quedan descartadas.
+
+> ⚠ **`StopSound` sobre un `EmitSound` de la entidad, y no `sound.Play`.** El canto tiene que salir por
+> `ghost:EmitSound` para que exista algo que parar: `sound.Play` **no devuelve nada que se pueda
+> apagar**, y eso ya está escrito en este árbol como el motivo por el que los `_loop` de `prop/`
+> quedaron fuera del banco de eventos. *Un sonido que hay que poder cortar se elige por cómo se apaga,
+> no por cómo se dispara.* Y hay precedente medido a favor: el bloque del prop roto cerró que un
+> `StopSound` **llega a tiempo** sobre una entidad que se está yendo.
+
+**④ Las pisadas: sí, se abre la condición.** *«Hay que arreglar ahí para permitir lo nuestro.»*
+Confirmado el bloqueante ②: `server_steps.lua` pasa de *«está cazando»* a *«está cazando **o** en una
+manifestación que suena»*.
+
+**⑤ La cordura la termina el autor** — *«sí, la cordura aún no existe, tengo que terminarla»*. Y trae
+un dato que la desbloquea: *«estaba mejorando Cargo para poder tener las pastillas de equipamiento
+utilizables, esa parte de Cargo ya se arregló, las pastillas son consumibles de un solo uso
+stackeable»*. **La vía de recuperación que §19.8 diseñó ya tiene su pieza del lado de Cargo.**
+
+**⑥ `scare_light` y `scare_strong` quedaron registradas** en los bancos por voz de `server_events.lua`
+(*«hay que agregarlas en el archivo de Lua de los sonidos»*), **sin consumidor todavía y dicho así**.
+El barrido de rutas pasó de **179 a 183** citadas: desde hoy, si alguien las borra, salta — que es
+exactamente lo que acababa de pasar con `male.ogg` y `female.ogg`.
+
+### 22.7 Lo que sigue abierto — es poco y nada bloquea
+
+- ⚠ **Los cuatro sustos no coinciden entre sí:** `scare_strong/voice_1` es **mono** y los otros tres
+  **estéreo**, y Source no espacializa estéreo. Sea cual sea la decisión —2D a propósito, que es
+  defendible para un susto de contacto, o posicional— **hoy uno de los cuatro se comporta distinto que
+  sus hermanos**, y el síntoma sería *«a veces el susto se oye de lejos y a veces no»*. `dev/mono_posicionales.py`
+  **no** los toca y no hay que ampliarlo sin decidir esto: *una conversión de assets ejecuta una
+  decisión, no la toma.*
+- **Las pisadas de `mist`, `singing` y `standing`.** La spec las fija para `chase` (sí) y `appear` (no).
+  Un `mist` que es nube sin silueta no debería hacerlas; las otras dos están abiertas.
+- **Si `standing` hace gritar al equipo.** Es la actividad más baja de las cinco (6-7) y no se dijo.
+  Con la regla que el propio autor fijó —el caos **no** se sigue de la actividad— no se puede deducir.
+- **Cuánto dura `appear`.** Se asume como `chase` (10 s) porque se describió por diferencia.
+- **En qué orden se escriben los cinco.** `standing` es el más barato (aparecer, mirar, irse) y `chase`
+  el más caro (puertas + luces + persecución + teletransporte + pisadas + caos).
+
+> **El orden natural del bloque entero, con lo que se sabe hoy:** primero la **cordura** (la está
+> terminando el autor y cuatro de los cinco eventos la necesitan), después las **tres formas** (que son
+> render y no dependen de nada), y recién después los **cinco eventos**, del más barato al más caro.
+> Las formas se pueden medir solas: *un evento sin forma no se ve, pero una forma sin evento se puede
+> forzar con una convar.*
 

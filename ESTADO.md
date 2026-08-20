@@ -13,6 +13,37 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-20): LAS MANIFESTACIONES DISEÑADAS Y DECIDIDAS — §22 completa. LO
+> SIGUIENTE ES LA CORDURA.** Detalle en el CHANGELOG **(55)** y **(56)**. **Ninguna línea de código de
+> las manifestaciones está escrita, y es a propósito.**
+>
+> ⭐⭐ **De los tres bloqueantes queda UNO.** ShadowForm se destrabó con una decisión de **alcance**:
+> no habrá tiers de linterna como ítem, se usa **la de HL2** (compatibilidad con Cargo primero), y la
+> **UV es la misma en violeta**, desbloqueable desde el wheelmenu. La medición de (55) —cero
+> `ProjectedTexture` en el addon— era correcta y **quedó sin objeto**. *El obstáculo no se salvó, se
+> salió del camino.* Queda medir si esa linterna proyecta la sombra del nextbot
+> (`r_flashlightdepthtexture`): diez segundos.
+>
+> ⭐ **La escala de actividad quedó completa y su mitad de abajo ya corre:** los **ocho eventos** que
+> ya cerraron en juego hacen actividad **< 6**; `standing` 6-7; `mist`/`singing`/`appear` 7-8; `chase`
+> 8-9; el hunt 10. *No hay que inventarla, hay que enchufarla.*
+>
+> ⭐ **`scare_light` y `scare_strong` registradas** (179 → **183** rutas vigiladas), **sin consumidor y
+> dicho así**. Y que no puedan sonar solas se **leyó** antes de escribirlas: el sorteo recorre una lista
+> fija, nunca `pairs`.
+>
+> ⚠⚠ **Los cuatro sustos NO coinciden entre sí:** `scare_strong/voice_1` es **mono** y los otros tres
+> **estéreo**, y Source no espacializa estéreo. 2D puede ser lo correcto para un susto de contacto —
+> **lo que no puede ser es que uno se comporte distinto que sus hermanos**. Decisión abierta;
+> `mono_posicionales.py` **no** los toca a propósito.
+>
+> ⚠ **El canto se CORTA** con `StopSound` al terminar la manifestación — lo que obliga a que salga por
+> `ghost:EmitSound` y no por `sound.Play`, que no devuelve nada que se pueda apagar.
+>
+> 🔜 **LO SIGUIENTE ES LA CORDURA**, y el autor la termina él. Su dependencia de Cargo **ya está
+> resuelta**: las pastillas son consumibles de un solo uso, stackeables. Después van las **tres
+> formas** (render puro) y recién después los **cinco eventos**.
+
 > ✅ **EL BLOQUE DEL BOT PEGADO Y EL VIDRIO SE CIERRA SIN ESCRIBIR CÓDIGO (2026-08-20).** Lo pidió el
 > autor hace seis rondas, nunca tuvo línea de investigación, y **las dos mitades resultaron no ser del
 > addon**. Las contestó él:

@@ -1333,6 +1333,30 @@ local VOZ = {
             "phantasmagoria/ghost/humming/voice_1_musicbox.ogg",    -- 28,97 s
             "phantasmagoria/ghost/humming/voice_1_singing_2.ogg",   -- 25,14 s  ( reemplaza a female.ogg )
         },
+
+        -- ⭐ LOS DOS SUSTOS, REGISTRADOS EL 2026-08-20 A PEDIDO DEL AUTOR
+        -- ( *"si scare_light y strong hay que agregarlas en el archivo de Lua de
+        -- los sonidos"* ). Son los sonidos del CONTACTO en las manifestaciones de
+        -- Diseno 22: `scare_light` cuando el `mist` o el `appear` te alcanzan, y
+        -- `scare_strong` cuando el `chase` te toca y se teletransporta.
+        --
+        -- ⚠⚠⚠ HOY NO LOS CONSUME NADIE, Y ESO ES DELIBERADO. Las cinco
+        -- manifestaciones no estan escritas. Registrarlos aca hace UNA cosa que
+        -- si vale desde el minuto cero: los pone bajo la vigilancia de
+        -- `dev/rutas_de_sonido.py`, que hasta hoy no los miraba porque **ningun
+        -- .lua los nombraba** -- cuatro clips en disco, cero citas. Si alguien
+        -- los borra o los renombra, ahora salta. Es exactamente lo que acaba de
+        -- pasar con `male.ogg` y `female.ogg`.
+        --
+        -- ⚠ UN BANCO SIN CONSUMIDOR SE LEE COMO UN MECANISMO. Queda escrito acá
+        -- y en el reporte: *estos dos no suenan todavia*. No estan en el sorteo
+        -- ambiente y **no pueden estarlo por accidente**: ese sorteo recorre una
+        -- lista FIJA ( `orden = { "voice", "breath", "humming" }` ) y nunca
+        -- `pairs( bancos )`, y `_todaLaVoz` se arma nombrando `whisper` y `voice`
+        -- uno por uno. O sea que agregar claves a esta tabla es inerte **por
+        -- construccion y no por suerte** -- leido antes de escribirlas.
+        scare_light  = { "phantasmagoria/ghost/scare_light/voice_1.ogg" },   -- 4,05 s  ⚠ ESTEREO
+        scare_strong = { "phantasmagoria/ghost/scare_strong/voice_1.ogg" },  -- 4,34 s     mono
     },
 
     [ 2 ] = {
@@ -1369,8 +1393,44 @@ local VOZ = {
             "phantasmagoria/ghost/humming/voice_2_musicbox.ogg",    -- 29,55 s
             "phantasmagoria/ghost/humming/voice_2_singing_2.ogg",   -- 25,44 s  ( reemplaza a male.ogg )
         },
+
+        -- Los gemelos de la voz 1. Ver el comentario de arriba: registrados, sin
+        -- consumidor todavia, y fuera del sorteo por construccion.
+        scare_light  = { "phantasmagoria/ghost/scare_light/voice_2.ogg" },   -- 2,35 s  ⚠ ESTEREO
+        scare_strong = { "phantasmagoria/ghost/scare_strong/voice_2.ogg" },  -- 4,00 s  ⚠ ESTEREO
     },
 }
+
+---------------------------------------------------------------------------
+-- ⚠⚠ LOS CUATRO SUSTOS **NO COINCIDEN ENTRE SI**, Y HAY QUE DECIDIRLO ANTES DE
+-- QUE SUENEN
+---------------------------------------------------------------------------
+-- Medido el 2026-08-20 con `dev/duracion_ogg.py` y el lector calibrado 4/4 en la
+-- misma corrida:
+--
+--   scare_light/voice_1.ogg    4,05 s   ESTEREO
+--   scare_light/voice_2.ogg    2,35 s   ESTEREO
+--   scare_strong/voice_1.ogg   4,34 s   MONO      <-- el unico
+--   scare_strong/voice_2.ogg   4,00 s   ESTEREO
+--
+-- Y en este taller ya esta medido que **Source NO espacializa un sonido
+-- estereo**: lo reproduce en 2D, sin posicion. O sea que tres de estos cuatro se
+-- van a oir IGUAL desde cualquier lado, y el cuarto no.
+--
+-- ⚠ ESO NO ES NECESARIAMENTE UN DEFECTO. Un susto de contacto es, en
+-- Phasmophobia, un golpe "en la cabeza" del jugador: 2D puede ser exactamente lo
+-- que se quiere, y tres de los cuatro clips ya vienen asi. **Lo que si es un
+-- defecto es que no coincidan**: sea cual sea la decision, hoy uno de los cuatro
+-- se comporta distinto que sus hermanos, y el sintoma en juego seria *"a veces
+-- el susto se oye de lejos y a veces no"* -- que se lee como un bug del evento y
+-- es del asset.
+--
+-- ⚠⚠ `dev/mono_posicionales.py` **NO los convierte y NO hay que ampliarlo sin
+-- decidir esto primero**. Su alcance esta acotado a proposito a las dos fuentes
+-- que PROMETEN sonar desde un punto del mapa ( `PROP_CONSUJETO` y
+-- `CLIC_APAGADO` ), y meter los sustos ahi seria contestar la pregunta de
+-- diseno con una herramienta. *Una conversion de assets ejecuta una decision;
+-- no la toma.*
 
 ---------------------------------------------------------------------------
 -- BITACORA

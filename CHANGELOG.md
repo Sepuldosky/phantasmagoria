@@ -7,6 +7,101 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-20 (56) — **El autor contesta las seis preguntas de §22 y los tres bloqueantes bajan a uno. `scare_light` y `scare_strong` registradas: el barrido pasa de 179 a 183 rutas — y los cuatro clips no coinciden entre sí.**
+
+### ⭐⭐ Un bloqueante se cerró con una decisión de ALCANCE, sin escribir una línea
+
+*«En el addon aún no hay linternas, pero primero estoy pensando compatibilidad con Cargo, así que usar
+la linterna de HL2 es lo normal; como ítem no haré tiers de linternas para el sandbox.»*
+
+La entrada (55) había medido offline que **el addon no tiene ni una `ProjectedTexture` ni un
+`DynamicLight`**, y la conclusión era que ShadowForm dependía de una luz inexistente. La medición era
+correcta y **quedó sin objeto**: la luz va a ser la del jugador de GMod, que sí es una projected
+texture. *El obstáculo no se salvó, se salió del camino.* Queda una sola pregunta y sigue costando
+diez segundos: si esa linterna proyecta la sombra del nextbot (`r_flashlightdepthtexture`).
+
+Y la UV sale de la misma pieza: *«la misma linterna de HL2 pero color violeta, esa se puede obtener y
+meter al inventario desbloqueando una opción extra en el wheelmenu»*. **La evidencia UV pasa a colgar
+de Cargo**, así que el gate provisional `phantasmagoria_uv 1` tiene por fin un destino nombrado.
+
+### ⭐ La escala de actividad queda completa, y su mitad de abajo YA ESTÁ CORRIENDO
+
+*«La actividad proviene de acciones del fantasma, los "eventos" hacen actividad de unos segundos bajo
+6.»*
+
+    < 6   los OCHO eventos que ya existen ( throw, knock, creak, door, light, sound, prop, furniture )
+    6-7   standing
+    7-8   mist · singing · appear
+    8-9   chase
+    10    el hunt
+
+El motor de eventos cerró en juego hace rondas y dispara los ocho; lo único que falta es que reporten
+el número. *La escala no hay que inventarla: hay que enchufarla, y la mitad de abajo ya funciona.*
+
+### ⭐ El canto se corta — y la decisión trae su propia trampa de implementación
+
+*«Si `singing` se corta y está bien, hay que hacer `StopSound` al terminar la manifestación.»* Cierra
+el choque de §22.5 (la manifestación dura ~15 s y dos de los cuatro clips duran 25).
+
+> ⚠ **Eso obliga a que el canto salga por `ghost:EmitSound` y no por `sound.Play`**, porque
+> `sound.Play` **no devuelve nada que se pueda apagar** — está escrito en este mismo archivo como el
+> motivo por el que los `_loop` de `prop/` quedaron fuera del banco de eventos. *Un sonido que hay que
+> poder cortar se elige por cómo se apaga, no por cómo se dispara.* Y hay precedente medido a favor: el
+> bloque del prop roto cerró que un `StopSound` **llega a tiempo**.
+
+### `scare_light` y `scare_strong` registradas — 179 → 183 rutas vigiladas
+
+*«Hay que agregarlas en el archivo de Lua de los sonidos.»* Entraron a los bancos por voz de
+`server_events.lua`, **sin consumidor todavía y dicho así en el código**: las cinco manifestaciones no
+existen.
+
+**Registrarlas hace una cosa que vale desde hoy:** las pone bajo `dev/rutas_de_sonido.py`, que hasta
+ahora no las miraba porque **ningún `.lua` las nombraba**. Es exactamente el agujero por el que se
+colaron `male.ogg` y `female.ogg` en la entrada (55).
+
+> ⚠ **Y que no puedan sonar solas se LEYÓ antes de escribirlas, no se supuso:** el sorteo ambiente
+> recorre una lista **fija** (`orden = { "voice", "breath", "humming" }`) y nunca `pairs( bancos )`, y
+> `_todaLaVoz` se arma nombrando `whisper` y `voice` uno por uno. Agregar claves a `VOZ` es inerte
+> **por construcción y no por suerte**. *Antes de meter una entrada en una tabla compartida, leer quién
+> la recorre — un `pairs` y una lista fija se ven igual desde afuera y no se comportan igual.*
+
+### ⚠⚠ Y el hallazgo del día: **los cuatro sustos no coinciden entre sí**
+
+Medidos con `dev/duracion_ogg.py`, lector calibrado 4/4 en la misma corrida:
+
+    scare_light/voice_1.ogg    4,05 s   ESTEREO
+    scare_light/voice_2.ogg    2,35 s   ESTEREO
+    scare_strong/voice_1.ogg   4,34 s   MONO      <-- el unico
+    scare_strong/voice_2.ogg   4,00 s   ESTEREO
+
+En este taller ya está medido que **Source no espacializa un sonido estéreo**: lo reproduce en 2D. O
+sea que tres de estos cuatro se van a oír igual desde cualquier lado y el cuarto no.
+
+**Que sean 2D no es necesariamente un defecto** — un susto de contacto «en la cabeza» es defendible, y
+tres de los cuatro ya vienen así. **Lo que sí es un defecto es que no coincidan**: sea cual sea la
+decisión, hoy uno se comporta distinto que sus hermanos, y el síntoma en juego sería *«a veces el susto
+se oye de lejos y a veces no»* — que se lee como un bug del evento y es del asset.
+
+> ⚠ `dev/mono_posicionales.py` **no los convierte y no hay que ampliarlo sin decidir esto primero**. Su
+> alcance está acotado a propósito a las dos fuentes que *prometen* sonar desde un punto del mapa.
+> *Una conversión de assets ejecuta una decisión; no la toma.*
+
+### Lo que queda, y el orden
+
+La **cordura** la termina el autor, y trae su pieza desbloqueada: *«esa parte de Cargo ya se arregló,
+las pastillas son consumibles de un solo uso stackeable»* — la vía de recuperación que §19.8 diseñó ya
+tiene su mitad del lado del inventario.
+
+**Orden propuesto en §22.7:** primero la cordura (cuatro de los cinco eventos la necesitan), después
+las **tres formas** (render puro, no dependen de nada) y recién después los **cinco eventos**, del más
+barato al más caro. *Un evento sin forma no se ve, pero una forma sin evento se puede forzar con una
+convar.*
+
+Sigue abierto y no bloquea: el estéreo de los sustos, las pisadas de `mist`/`singing`/`standing`, si
+`standing` hace gritar al equipo, y cuánto dura `appear`.
+
+---
+
 ## 2026-08-20 (55) — **Dos preguntas viejas cerradas sin escribir una línea, dos rutas de sonido que ya estaban muertas, y las manifestaciones escritas en el diseño: TRES formas y CINCO eventos.**
 
 ### ✅ El bloque del bot pegado y el vidrio se cierra, y ninguna mitad era del addon
