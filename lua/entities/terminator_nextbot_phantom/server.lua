@@ -1149,6 +1149,39 @@ function ENT:phantom_SetHunting( hunting )
     self.phantom_Hunting = hunting
     self:SetNWBool( "phantasmagoria_hunting", hunting )
 
+    -- ⚠⚠ Y DESDE EL 2026-08-20 DE ACA CUELGA TAMBIEN EL CORTE DE LA TAREA EN
+    -- CURSO ( `server_hunt.lua` ). MEDIDO EN JUEGO: prender el hunt NO
+    -- interrumpia nada -- el flag prendia, el enemigo pasaba a ser valido, y el
+    -- bot seguia en `movement_biginertia` caminando a un punto al azar a
+    -- 5000-6000 u. El detalle esta en la seccion 6 de ese archivo.
+    --
+    -- Cuelga de la PUERTA por el mismo motivo que la voz: el dia que la cordura
+    -- ( Diseno 19 ) mueva el flag, el corte la sigue sin que nadie se acuerde de
+    -- engancharlo.
+    --
+    -- SE LLAMA EN LAS DOS DIRECCIONES a proposito, y el propio metodo explica por
+    -- que: al APAGAR el hunt hay que cortar igual, o el bot se queda en
+    -- `movement_followenemy` persiguiendo a alguien que ya no es enemigo -- un
+    -- fantasma "en calma" que te corre atras, que es peor que el defecto original
+    -- porque parece un hunt.
+    --
+    -- Con guarda y aviso de una sola vez, como la voz: server_hunt.lua se incluye
+    -- despues y su include podria fallar.
+    local cortar = self.phantom_HuntSwitched
+
+    if isfunction( cortar ) then
+        cortar( self, hunting )
+
+    elseif not PHANTASMAGORIA.avisoHuntCorte then
+        PHANTASMAGORIA.avisoHuntCorte = true
+
+        ErrorNoHalt( "[Phantasmagoria] `phantom_HuntSwitched` NO EXISTE ( deberia venir de " ..
+            "server_hunt.lua ). Prender el hunt no va a interrumpir la tarea en curso: el fantasma " ..
+            "puede seguir vagabundeando a 5000 u con la caceria encendida, y el sintoma es " ..
+            "'tarda en reaccionar'.\n" )
+
+    end
+
     -- ⚠ CON GUARDA Y AVISO DE UNA SOLA VEZ, como `SonarLlave` en server_doors:
     -- estos metodos los define `server_events.lua`, que es el ULTIMO include de
     -- este archivo. Si ese include muriera, el hunt se quedaria mudo Y sin decir
@@ -1272,6 +1305,24 @@ function ENT:BehaveUpdate( interval )
     -- server_cloak.lua comprueba el otro sentido: que esta llamada exista.
     if myTbl.phantom_ReconcileVisibility then
         myTbl.phantom_ReconcileVisibility( self, myTbl )
+
+    end
+
+    -- EL CONTACTO Y EL PERRO GUARDIAN DEL HUNT ( server_hunt.lua ), y van aca por
+    -- el MISMO motivo que el reconciliador de arriba: la base corre `RunTask`
+    -- adentro de su corrutina de prioridad ( behaviouroverrides.lua:694-695 ), que
+    -- no corre mientras un jugador maneja al bot. Un desenlace que solo dispara
+    -- cuando el bot piensa no es un desenlace: es una condicion de carrera.
+    --
+    -- ⚠ Y ES **UN** ENGANCHE Y NO DOS. El contacto y el perro guardian se llaman
+    -- desde `phantom_HuntTick` y no desde aca por separado, para que este archivo
+    -- tenga una sola linea que mantener: el dia que el hunt sume un tercer paso
+    -- por tick, no hay que volver a tocar server.lua.
+    --
+    -- Va DESPUES del BaseClass: lo que se mide -- distancia, tareas activas -- es
+    -- el estado con el que el cerebro TERMINO este tick, no el que traia.
+    if myTbl.phantom_HuntTick then
+        myTbl.phantom_HuntTick( self, myTbl )
 
     end
 
@@ -4113,6 +4164,29 @@ include( "server_collision.lua" )
 -- la correa compitiera con el rescate, el instrumento de atascos empezaria a
 -- contar un defecto que introdujo esta.
 include( "server_leash.lua" )
+
+-- EL HUNT DIRECTO ( 2026-08-20 ). Pedido del autor: *"la idea del hunt es que no
+-- tome en cuenta ninguna logica asi, que si ve al jugador busque la posicion mas
+-- directa para atacarlo"*, con el alcance que puso el mismo -- *"perseguir,
+-- perderte y seguir buscando"*. Ademas le da el DESENLACE, que hasta hoy no
+-- existia: no habia una sola linea en el addon que le hiciera dano al jugador.
+--
+-- VA DESPUES de server_stuck.lua, Y NO ES INDISTINTO -- son TRES dependencias de
+-- orden y las tres son duras:
+--
+--   ( a ) La compuerta de tareas cuelga de `ENT:StartTask`, cuyo dueno unico es
+--         server_stuck.lua. Este archivo NO lo redeclara ( eso lo BORRARIA, no lo
+--         encadenaria ): aquel lo consulta por nombre. Su guarda del final
+--         comprueba que ese override exista Y que venga de esta carpeta, y eso
+--         solo se puede comprobar despues.
+--   ( b ) `phantom_HuntSwitched` lo llama `phantom_SetHunting`, que se declara
+--         arriba en este mismo archivo. La guarda del final tambien lo verifica.
+--   ( c ) `phantom_OnCatchMode` lee `phantom_Type`, que resuelve server_type.lua.
+--
+-- ⚠ NO usa ENT.MyClassTask ni ENT:AdditionalThink -- las dos ya tienen dueno y la
+-- segunda no encadena, BORRA. El contacto cuelga de ENT:BehaveUpdate, con el
+-- mismo patron de llamada guardada que ya usa el reconciliador de la ausencia.
+include( "server_hunt.lua" )
 
 -- Diseno 20 ①: fuera del hunt el fantasma NO SE VE.
 --

@@ -1038,7 +1038,51 @@ function ENT:StartTask( task, data, reason )
     -- mismo argumento que ella va a leer -- sin esto el motivo del handler, que
     -- viaja en la tercera posicion con un nil en el medio, se leeria igual, pero
     -- cualquier otro call site del proyecto no.
-    local motivo = isstring( data ) and data or reason
+    --
+    -- ⚠ SE NORMALIZA DE VERDAD, Y NO SOLO SE LEE. Antes esto derivaba `motivo` y
+    -- dejaba los argumentos como venian. Ahora abajo hay un SEGUNDO consumidor
+    -- -- la compuerta del hunt -- y dos lectores que re-derivan el mismo shim son
+    -- dos lugares donde puede quedar distinto. La base lo vuelve a hacer al
+    -- recibirlos, y es inofensivo: con `data` ya en nil, su propio `isstring`
+    -- no dispara.
+    if isstring( data ) then
+        reason = data
+        data   = nil
+
+    end
+
+    ---------------------------------------------------------------------------
+    -- ⚠ LA COMPUERTA DEL HUNT, Y VA ANTES DE TODO LO DEMAS
+    ---------------------------------------------------------------------------
+    -- Este override es EL CUELLO UNICO por el que pasan las once puertas
+    -- tacticas de la base ( server_hunt.lua, seccion 5 ). El desvio vive alla --
+    -- este archivo mide atascos y no decide comportamiento -- y aca solo se lo
+    -- consulta.
+    --
+    -- VA PRIMERO para que la anotacion de abajo describa la tarea que DE VERDAD
+    -- va a arrancar. Puesta despues, el reporte de atascos diria el nombre de una
+    -- tarea que nunca corrio, y ese es exactamente el modo de falla que este
+    -- archivo existe para no tener.
+    --
+    -- Con guarda y aviso de una sola vez, como `SonarLlave` y como la voz de la
+    -- caceria: `server_hunt.lua` se incluye DESPUES que este archivo, asi que si
+    -- ese include muriera, el hunt volveria a la escalera de la base sin un solo
+    -- error -- y el sintoma seria "el bloque del hunt no cambio nada", que es
+    -- indistinguible de la convar en 0.
+    if isfunction( self.phantom_HuntTaskGate ) then
+        task, data, reason = self:phantom_HuntTaskGate( task, data, reason )
+
+    elseif not PHANTASMAGORIA.avisoHuntGate then
+        PHANTASMAGORIA.avisoHuntGate = true
+
+        ErrorNoHalt( "[Phantasmagoria] la compuerta del hunt NO EXISTE: `phantom_HuntTaskGate` deberia " ..
+            "venir de server_hunt.lua. Sin ella, en hunt siguen entrando movement_watch, " ..
+            "movement_stalkenemy, movement_camp y movement_perch, o sea la escalera tactica entera. " ..
+            "Mirar si server_hunt.lua cargo.\n" )
+
+    end
+
+    local motivo = reason
 
     if isstring( motivo ) then
         local hit = MOTIVOS[ motivo ]
