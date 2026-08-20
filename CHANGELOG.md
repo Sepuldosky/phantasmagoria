@@ -7,6 +7,52 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-20 (60) — **§22 cierra: el 0,5%/s del Phantom SUMA. Y el prompt de la cordura escrito, acotado a la tajada B1.**
+
+### El Phantom suma, y eso decide una forma del código antes de escribirlo
+
+*«Del Phantom suma al drenaje base.»* Con eso mirar un `singing` entero de un Phantom cuesta
+**10% + 7,5% = 17,5%**, y un `chase` de 10 s **15% + 5% = 20%**.
+
+> ⚠⚠⚠ **Y obliga a que la cordura sepa expresar DOS FORMAS de drenaje desde el primer día:** el
+> **plano** (un número, una vez, con un motivo — las manifestaciones y los ocho eventos) y el
+> **continuo condicionado** (una tasa por segundo mientras algo se cumple — la presencia, la
+> oscuridad, y el Phantom). La presencia de §19.8.2 ya era de la segunda familia, así que las dos
+> hacen falta igual. *Lo que no se puede hacer es escribir la primera y asumir que la segunda se
+> agrega después: el rasgo del Phantom no entraría, y el instrumento no lo diría.* Es la única cosa de
+> B1 que, escrita mal, **no se arregla agregando código — se arregla rehaciendo B1**.
+
+Con eso **§22 queda cerrada**: tres formas, cinco eventos, la tabla de probabilidades sumando 1 en las
+seis filas, los drenajes con sus tres modificadores por tipo, las pisadas, y el objetivo de la Banshee.
+**Cero código de manifestaciones**, y es lo correcto: cuatro de los cinco eventos necesitan la cordura.
+
+### El prompt de la cordura — `dev/PROMPT_phantasmagoria_cordura_B1.txt`
+
+Acotado a **B1** (la variable + la presencia + la recuperación + los instrumentos; archivo nuevo, **no
+toca `server_events.lua`**), que es el orden que §19.8.8 ya fijaba. **B2 y C quedan fuera**: meter el
+gatillo del hunt en B1 haría que un rojo tuviera dos causas posibles.
+
+Lo que el prompt incorpora y §19 no sabía:
+
+- **Las pastillas de Cargo ya están** — §19.9.8 decía *«sin Cargo no hay camino todavía»* y quedó
+  viejo.
+- **El medidor de actividad ya tiene números** — §19.3 lo daba por sin diseñar y §22 le puso la escala,
+  con su mitad de abajo ya corriendo.
+- **El consumidor existe y está vacío** — el monitor del camión dibuja 61 enteros 0..10 y admite que
+  nadie los llena.
+- **Las dos decisiones que siguen abiertas** y hay que preguntar antes de escribir: la calibración de
+  la regeneración pasiva (0,2%/s con retardo de 45 s **o** 0,05%/s sin retardo) y el techo de la zona
+  segura (100% o 80%), que **no tienen por qué ser el mismo número**.
+
+Y las seis filas que la planilla no puede no tener, con la **04** como la que ninguna otra puede ver:
+que la forma **continua** existe y deja de drenar cuando la condición deja de cumplirse. *Es la fila que
+prueba que el rasgo del Phantom va a poder entrar.*
+
+⚠ El prompt deja escrito que **`server_hunt.lua`, `server.lua` y `server_stuck.lua` no se tocan**: son
+del bloque del hunt directo que otra sesión acaba de cerrar (`f78a0ae`).
+
+---
+
 ## 2026-08-20 (59) — **La tabla de manifestaciones queda cerrada: las seis filas suman 1. El arreglo del Oni salió de leer cómo paga su cambio cada una de las otras cinco — y de descubrir que el `chase` doblado NO es el rasgo que ya estaba implementado.**
 
 ### ⭐⭐ La gramática de la tabla: **cada fila paga lo que gasta**, y el Oni era el único que no

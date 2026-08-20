@@ -4006,9 +4006,12 @@ del terror—.
 
 ### 22.15 Lo que sigue abierto
 
-1. **El 0,5%/s del Phantom**: ¿además del drenaje plano de la manifestación, o en su lugar? Confirmado
-   por el autor que **es otra regla y no un multiplicador**, tal como salía en la wiki — falta sólo si
-   se suma o reemplaza.
+1. ~~**El 0,5%/s del Phantom**~~ — **CERRADO el 2026-08-20: SUMA al drenaje base.** Es otra regla y no
+   un multiplicador (confirmado contra la wiki). O sea que mirar un `singing` de 15 s entero de un
+   Phantom cuesta **10% + 7,5% = 17,5%**, y un `chase` de 10 s mirado entero **15% + 5% = 20%**.
+   ⚠ **Y eso obliga a que la cordura sepa expresar DOS FORMAS de drenaje desde el primer día**: el
+   plano por evento y el **continuo condicionado** (mirándolo, dentro de 525 u). Si la tajada B1 se
+   escribe sólo con la primera, el rasgo del Phantom **no va a entrar después sin rehacerla**.
 2. **Elegir jugador**: las tres manifestaciones dirigidas necesitan destinatario y las dos restantes un
    observador. **Ninguna de las dos elecciones existe hoy**, y es previa a los cinco eventos.
 3. **En qué orden se escriben los cinco.** `standing` ya no es el más barato (arrastra el arreglo de la

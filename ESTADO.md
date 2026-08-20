@@ -13,6 +13,29 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> 🔜 **LO SIGUIENTE ES LA CORDURA — el prompt está escrito: `dev/PROMPT_phantasmagoria_cordura_B1.txt`.**
+> CHANGELOG **(60)**. Acotado a **B1** (la variable + la presencia + la recuperación + los
+> instrumentos; archivo nuevo, **no toca `server_events.lua`**). B2 y C quedan fuera a propósito.
+>
+> ✅ **§22 CIERRA.** El 0,5%/s del Phantom **SUMA** al drenaje base. Tres formas, cinco eventos, la
+> tabla sumando 1 en las seis filas, los drenajes con sus tres modificadores, las pisadas y el objetivo
+> de la Banshee. **Cero código de manifestaciones, y es lo correcto**: cuatro de los cinco necesitan la
+> cordura.
+>
+> ⚠⚠⚠ **LO ÚNICO DE B1 QUE, ESCRITO MAL, NO SE ARREGLA AGREGANDO CÓDIGO:** la API tiene que saber
+> expresar **dos formas** de drenaje desde el primer día — el **plano** (un número, una vez: las
+> manifestaciones y los ocho eventos) y el **continuo condicionado** (una tasa por segundo mientras
+> algo se cumple: la presencia, la oscuridad y el Phantom). *Escribir sólo la primera deja al rasgo del
+> Phantom sin poder entrar, y el instrumento no lo diría.*
+>
+> ⚠ **Dos decisiones del autor siguen abiertas y hay que preguntarlas antes de escribir:** la
+> calibración de la regeneración pasiva (0,2%/s con retardo de 45 s **o** 0,05%/s sin retardo) y el
+> techo de la zona segura (100% u 80%) — que **no tienen por qué ser el mismo número**.
+>
+> ⭐ **Tres cosas que §19 no sabía y el prompt incorpora:** las pastillas de Cargo **ya están** (§19.9.8
+> quedó viejo), el medidor de actividad **ya tiene números** (§22 le puso la escala), y el consumidor
+> **existe y está vacío** (el monitor del camión dibuja 61 enteros 0..10 que nadie llena).
+
 > ⭐⭐ **LO ÚLTIMO (2026-08-20, cuarta tanda): LA TABLA DE MANIFESTACIONES CERRADA — las seis filas
 > suman 1.** CHANGELOG **(59)**, diseño §22.12-§22.15. Sigue sin haber código de manifestaciones.
 >

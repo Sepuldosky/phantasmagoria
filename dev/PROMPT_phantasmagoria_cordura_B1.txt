@@ -1,0 +1,285 @@
+PROMPT — Phantasmagoria · LA CORDURA, tajada B1 (2026-08-20)
+
+> El autor lo dijo asi al cerrar el bloque de las manifestaciones: *"si, la cordura
+> aun no existe, tengo que terminarla"*. Es LA pieza que falta: §18 diseño COMO
+> caza el fantasma y la cordura decide CUANDO. Sin ella, §18 es un motor sin llave
+> -- y ademas cuatro de las cinco manifestaciones de §22 la necesitan para existir.
+>
+> ⚠⚠⚠ ESTE PROMPT ES **SOLO B1**. La tajada B esta partida en tres y el orden lo
+> fija §19.8.8:
+>
+>   B1  la variable + la presencia + la recuperacion + los instrumentos
+>       ARCHIVO NUEVO. **No toca server_events.lua.**            <-- ESTE PROMPT
+>   B2  la esfera de los eventos: el tercer retorno `pos` en los ocho
+>       server_events.lua + ghost_flags.lua
+>   C   el gatillo contra el hunt.threshold del tipo; jubila la convar
+>       andamio `phantasmagoria_hunt`   ( server.lua )
+>
+> **B2 y C no se escriben aca.** Meter el gatillo en B1 haria que un rojo tuviera
+> dos causas posibles -- la cordura o el gate -- y este taller ya pago por eso.
+
+
+===============================================================================
+1 · QUE SE QUIERE, EN UNA LINEA
+===============================================================================
+
+Que exista un numero por jugador que baje cuando el fantasma esta cerca o pasa
+algo, suba cuando el jugador se refugia, y que el instrumento diga **QUE lo
+bajo**.
+
+⚠ La escala de §19.2 es la VARA y no un reloj: **10-20 minutos de partida con
+actividad normal** para llegar al umbral de hunt. Si la corrida da 3 min o 40, lo
+que esta mal son los numeros y no el mecanismo.
+
+
+===============================================================================
+2 · LO QUE YA ESTA DISEÑADO. NO SE VUELVE A DISEÑAR, SE LEE.
+===============================================================================
+
+**Diseño §19 entero, y sobre todo §19.8 y §19.9.** Ahi estan, ya decididas por el
+autor y con su justificacion:
+
+  · §19.8.1  las dos familias de causas ( presencia y eventos ) y por que son de
+             naturalezas distintas
+  · §19.8.2  la presencia: **area esferica, SIN linea de visión** ( decision )
+  · §19.8.3  por que "drena mas si lo estas mirando" **se descarto** -- ⚠ leerlo
+             ANTES de proponerlo de nuevo
+  · §19.8.5  la recuperacion: cuatro vias de goteo y dos por desenlace, y **la
+             muerte SI restaura**
+  · §19.8.7  donde vive el numero y la trampa de la oscilacion
+  · §19.9.1  el gate del hunt: promedio en gamemode, CICLADO en sandbox
+  · §19.9.2  la oscuridad es un **MODULADOR**, no una causa propia
+  · §19.9.4  **la cordura NO se dibuja**: el indicador es el MUNDO
+  · §19.9.6  valor inicial **100%**, con convar
+  · §19.9.7  las pastillas son **instantaneas**; el precedente es Craving
+
+**Nada de eso se re-decide.** Si algo parece mal, se dice y se pregunta -- no se
+cambia en silencio.
+
+-------------------------------------------------------------------------------
+2.1 · LO QUE CAMBIO DESDE QUE §19 SE ESCRIBIO, Y HAY QUE INCORPORARLO
+-------------------------------------------------------------------------------
+
+⭐ **Las pastillas de Cargo YA ESTAN.** §19.9.8 decia *"sin Cargo no hay camino
+todavia"* y eso **quedo viejo**: el autor lo cerro el 2026-08-20 -- *"esa parte de
+Cargo ya se arreglo, las pastillas son consumibles de un solo uso stackeable"*.
+La via de recuperacion por pastillas tiene su mitad del lado del inventario.
+
+⭐ **El medidor de actividad ya tiene numeros.** §19.3 lo daba por "sin diseñar";
+§22 le puso la escala entera, y su mitad de abajo **ya corre**:
+
+    < 6   los OCHO eventos que ya cerraron en juego, unos segundos
+    6-7   standing
+    7-8   mist · singing · appear
+    8-9   chase
+    10    el hunt
+
+⚠ **La actividad NO es B1** -- se nombra para que nadie la invente distinta.
+
+⭐ **Y el consumidor del numero existe hace rondas y esta vacio:** el monitor del
+camion ( `phantasmagoria_trucktv_screen.lua` ) dibuja *"61 enteros 0..10, el
+indice 1 es AHORA"* y su comentario admite *"hoy no hay nada que mida cordura,
+sonido, movimiento ni actividad"*.
+
+
+===============================================================================
+3 · LO QUE HAY QUE ESCRIBIR
+===============================================================================
+
+-------------------------------------------------------------------------------
+3.1 · ⚠⚠⚠ LA API TIENE QUE SABER EXPRESAR **DOS FORMAS** DE DRENAJE, Y ESO SE
+       DECIDE EL PRIMER DIA
+-------------------------------------------------------------------------------
+Esta es la unica cosa de este prompt que, si se escribe mal, **no se arregla
+agregando codigo despues: se arregla rehaciendo B1**.
+
+Las manifestaciones de §22 drenan **plano, una vez, cuando el evento ocurre**:
+
+    standing 5%   ·   mist / singing / appear 10%   ·   chase 15%
+
+Pero el **Phantom** ( §22.10, cerrado el 2026-08-20 ) drena **0,5% POR SEGUNDO
+mientras el jugador lo mire, dentro de 10 m = 525 u**, y eso **SUMA al drenaje
+base**: mirar un `singing` entero de un Phantom cuesta **10% + 7,5% = 17,5%**.
+
+O sea que hay dos naturalezas:
+
+    PLANO       un numero, una vez, con un motivo         ( eventos, manifestaciones )
+    CONTINUO    una tasa por segundo, condicionada a algo  ( presencia, oscuridad, Phantom )
+                que cambia tick a tick
+
+⚠ La **presencia** de §19.8.2 ya es de la segunda familia, asi que las dos hacen
+falta igual. Lo que hay que no hacer es escribir la primera y asumir que la
+segunda "se agrega despues": el rasgo del Phantom **no entraria**, y el
+instrumento no lo diria.
+
+-------------------------------------------------------------------------------
+3.2 · LA PUERTA UNICA, Y QUE LA USEN LOS QUE TODAVIA NO EXISTEN
+-------------------------------------------------------------------------------
+§22.4 ya dejo escrito el contrato que las manifestaciones van a usar:
+
+    PHANTASMAGORIA.DrainSanity( ply, n, motivo )
+
+⚠⚠ **Que sea UNA puerta no alcanza, y esto ya se pago ( catalogo nº 89 ):** un
+control que mide el HELPER no descubre que alguien NO lo llama. Sabotear la
+funcion da rojo, y un sitio que drene por su cuenta deja la pasada entera en
+verde. **Cada vez que un cambio es "ahora todos pasan por X", hace falta un
+control que cuente los que NO pasan** -- sobre el texto fuente, no sobre el
+comportamiento.
+
+-------------------------------------------------------------------------------
+3.3 · LOS INSTRUMENTOS, QUE SON LA MITAD DEL TRABAJO Y NO EL ADORNO
+-------------------------------------------------------------------------------
+§19.8.8 lo dice y hay que cumplirlo tal cual: **una barra que baja no dice QUE la
+bajo**. El reporte imprime, POR JUGADOR:
+
+  · el valor actual
+  · el **desglose acumulado por causa**: presencia en calma · presencia en hunt ·
+    cada una de las ocho categorias de evento · oscuridad · y **cada via de
+    recuperacion por separado**
+  · la ultima causa, con su timestamp
+
+Y **una perilla por causa, con el 0 como CONTROL**, para poder correr el A/B de
+cada una con el resto apagado.
+
+⚠ Convencion de la casa para las perillas de tres estados:
+`0 = nadie ( control ) · 1 = respeta el flag · 2 = todos`. Las de tasa son
+numeros continuos y **van en su propio renglon del reporte**, no mezcladas con las
+de tres estados -- tres significados para el mismo digito en la misma pantalla es
+como se pierde una corrida.
+
+
+===============================================================================
+4 · LAS DOS DECISIONES DEL AUTOR QUE SIGUEN ABIERTAS
+===============================================================================
+
+⚠ **Preguntarlas ANTES de escribir, no elegirlas en silencio.** Las dos estan en
+§19.8.8 con su aritmetica al lado.
+
+  (a) **La regeneracion pasiva**, con dos salidas escritas:
+        · **0,2 %/s con retardo de 45 s**  ( conserva el numero del autor )
+        · **0,05 %/s sin retardo**         ( conserva la simplicidad )
+      ⚠ Y sea cual sea, **la fila que la juzgue tiene que medir el NETO**: la
+      pregunta no es *"¿se regenera?"* sino *"¿la barra puede llegar al umbral en
+      una partida normal?"*.
+
+  (b) **El techo de la zona segura**: ¿100%, o menos ( p. ej. 80% ) para que las
+      pastillas tengan un lugar que el camion no cubre? La misma pregunta vale
+      para el techo de la regeneracion pasiva, y **no tienen por que ser el mismo
+      numero**: un camion que llega a 100 y un goteo que llega a 80 dejarian las
+      tres vias con territorio propio.
+
+
+===============================================================================
+5 · LO QUE **NO** SE ESCRIBE EN ESTE BLOQUE
+===============================================================================
+
+  · **El gatillo del hunt.** Es la tajada C. La convar andamio
+    `phantasmagoria_hunt` **no se jubila todavia**.
+  · **La esfera de los eventos** ( el tercer retorno `pos` en los ocho ). Es B2 y
+    toca `server_events.lua`, que este prompt no toca.
+  · **Las cinco manifestaciones de §22.** Consumen la cordura, no la traen.
+  · **El medidor de actividad.** Tiene numeros ( §2.1 ) y no es esto.
+  · **Dibujar la barra.** §19.9.4: la cordura NO se dibuja, el indicador es el
+    mundo.
+  · ⚠⚠ **`server_hunt.lua`, `server.lua` y `server_stuck.lua`.** OTRA SESION
+    acaba de escribirlos ( commit `f78a0ae`, el hunt directo ). **No se tocan.**
+
+
+===============================================================================
+6 · LO QUE HAY QUE MEDIR ANTES DE ESCRIBIR
+===============================================================================
+
+  1. **Leer §19 entero.** No es opcional: nueve subsecciones son decisiones del
+     autor con su porque, y tres de ellas ( §19.8.3, §19.9.2, §19.9.4 ) existen
+     para que no se reproponga algo que ya se descarto.
+
+  2. **Censar quien dice "cordura" hoy y no la tiene.** Hay al menos siete
+     archivos con la palabra y **cero codigo**: son andamios que hablan de ella en
+     futuro ( *"cuando exista la cordura"* ). Cada uno es un sitio que va a querer
+     engancharse, y **uno de ellos dice ser un andamio que se tira**
+     ( `server.lua:3857` ).
+
+  3. **Leer `memory/controles-que-premian-su-modo-de-falla.md`**, y en particular:
+       nº 42  un falso ROJO se descubre la primera vez; un falso VERDE ACREDITA
+       nº 89  el control que mide el helper y no que alguien lo llame
+       nº 91  la precondicion enumera los sujetos y no la perilla que los invalida
+       nº 92  la precondicion que APAGA el mecanismo que la fila mide
+
+
+===============================================================================
+7 · LOS INSTRUMENTOS OFFLINE. TODOS CON AUTO-CONTROL Y NINGUNO NECESITA EL JUEGO.
+===============================================================================
+
+    find lua -name '*.lua' -print0 | xargs -0 python dev/luacheck_gmod.py
+    python dev/parsear_sintaxis_glua.py lua
+    python dev/auditar_returns_de_hooks.py lua
+    python dev/rutas_de_sonido.py
+
+⚠ `luacheck_gmod.py` **sin argumentos revisa cero archivos y sale 0** -- verde sin
+medir. Va siempre con el `find ... | xargs`.
+
+Y los tres de planilla, antes de entrar al juego:
+
+    python dev/auditar_planilla.py dev/checks/<planilla>.html
+    python dev/verificar_citas_de_planilla.py dev/checks/<planilla>.html --addon phantasmagoria --control
+    python dev/parsear_cmds_planilla.py dev/checks/<planilla>.html
+
+⚠ El auditor cuenta los checks con `id: "c<N>"`: **un id fuera de esa convencion
+lo deja contando CERO y pasando en verde**.
+
+
+===============================================================================
+8 · LA PLANILLA
+===============================================================================
+
+`<workspace>/dev/checks/`, con la forma de siempre. ⚠ **No es un repo git**: el
+reporte pegado hay que guardarlo en `phantasmagoria/dev/CORRIDA_*.md`, que si
+viaja. Un comando por linea; la consola de Source **corta en 255 y no avisa**.
+
+Las filas que no pueden faltar:
+
+  00  ⚠⚠⚠ **el control**: con todas las perillas de causa en 0, la barra **no se
+      mueve** en varios minutos. Si esta fila no sale verde, el resto no vale.
+      ⚠ Y tiene que probar que **se corrio**: que el fantasma estuvo cerca ( un
+      contador de "ticks con el jugador en la esfera" ), o el cero no dice nada.
+
+  01  la **presencia** sola: el resto apagado, el fantasma cerca, y el desglose
+      atribuye TODO a presencia. ⚠ El discriminante es el desglose, no la barra.
+
+  02  la **recuperacion** sola: sin fantasma cerca, la barra sube y el desglose
+      dice por que via.
+
+  03  ⚠⚠ **el NETO** ( §19.8.8 ): con actividad normal, ¿la barra llega al umbral
+      en la ventana de **10-20 min**? Es la unica fila que juzga los numeros y no
+      el mecanismo, y no se puede reemplazar por "se regenera SI/NO".
+
+  04  ⚠⚠⚠ **la forma CONTINUA existe y funciona**: una causa por segundo
+      condicionada ( la presencia sirve ) drena mientras la condicion se cumple y
+      **deja de drenar cuando deja de cumplirse**. Es la fila que prueba que el
+      rasgo del Phantom va a poder entrar. **Ninguna otra la puede ver.**
+
+  05  el **desglose no miente**: apagar una causa y comprobar que su renglon
+      queda en 0 mientras los otros siguen. Una por una.
+
+  06  **no romper lo que cerro**: el hunt sigue disparandose por
+      `phantasmagoria_hunt` ( la convar andamio, que B1 no jubila ), los ocho
+      eventos siguen andando, y las puertas / el `+USE` / el pestillo tambien.
+
+
+===============================================================================
+9 · REGLAS DE LA CASA
+===============================================================================
+
+  · El autor es **chileno**: escribirle de **tu**, sin voseo. Vale para este
+    archivo y para los documentos, que los lee el.
+  · **Commits sin `Co-Authored-By`.**
+  · ⚠⚠ **Hay varias sesiones trabajando este repo al mismo tiempo.** **Nunca
+    `git add -A`.** Stagear rutas explicitas y commitear con
+    `git commit -F- -- rutas`, que no deja ventana. **Y mirar `git log` DESPUES**
+    -- un `push` puede llevarse commits ajenos que estaban sin pushear.
+  · `lua/autorun/client/phantasmagoria_eq_check.lua` esta modificado por otra
+    sesion: **no stagearlo**.
+  · **Leer el `git diff` entero antes de stagear**, y contar los borrados: un
+    recorte que termina en "el proximo renglon en blanco" no tiene donde parar
+    dentro de un blockquote.
+  · La ultima entrada propia del CHANGELOG es la **(59)**.
