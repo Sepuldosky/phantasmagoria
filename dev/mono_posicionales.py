@@ -81,6 +81,26 @@ FUENTES = [
     ("CLIC_APAGADO    ( el clic del +USE )",
      "local CLIC_APAGADO = {",
      "-- FIN DE CLIC_APAGADO"),
+
+    # LOS SUSTOS DEL CONTACTO ( Diseno 22 ), agregados el 2026-08-20 POR DECISION
+    # DEL AUTOR y no por criterio del script: *"puedes arreglar el estereo ahora"*.
+    # Hasta ese momento el archivo se negaba a tocarlos a proposito -- estaba
+    # escrito en server_events.lua que *una conversion de assets ejecuta una
+    # decision, no la toma*. La decision existe, asi que entran.
+    #
+    # ⚠ VAN EN **DOS** FUENTES Y NO EN UNA, y no es prolijidad: las dos parejas
+    # viven en ramas distintas de la tabla VOZ ( una por voz ), y un solo par de
+    # marcas que fuera de la voz 1 a la voz 2 se llevaria puesto TODO lo que hay
+    # en el medio -- whisper, voice, breath y humming de la voz 2 --, o sea 30
+    # clips que **el autor ya escucho y dio por buenos**. Ese es justo el error
+    # que el encabezado de este archivo prohibe. Dos fuentes acotadas, y cada una
+    # con su propio "cero rutas aborta".
+    ("SUSTOS voz 1    ( scare_light / scare_strong )",
+     "-- SUSTOS voz 1",
+     "-- FIN SUSTOS voz 1"),
+    ("SUSTOS voz 2    ( scare_light / scare_strong )",
+     "-- SUSTOS voz 2",
+     "-- FIN SUSTOS voz 2"),
 ]
 
 

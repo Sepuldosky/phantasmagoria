@@ -3511,8 +3511,8 @@ Todo lo de esta tabla es **spec del autor**, no lectura mía. Donde él no dijo,
 | **mist** | *(ninguna: es nube sin silueta)* | 10-15 s | 7-8 | **no** | — | — | *(sin decidir)* | `scare_light` y se disipa | daña |
 | **chase** | 1 y 3 (los Shade suelen ser 3) | 10 s | 8-9 | **sí** | **cierra TODAS de golpe**, sin pestillo | parpadean **todas las cercanas** | **sí** | daño **grande** + `scare_strong` + desaparece (**se teletransporta**) | grande |
 | **singing** | 1, 2 y 3 | ~15 s | 7-8 | **no** | — | — | *(sin decidir)* | *(no se toca)* | **poca**, como el mist |
-| **standing** | 1, 2 y 3 | unos segundos | 6-7 | *(sin decidir)* | — | parpadean **o ninguna** (sorteo) | *(sin decidir)* | *(no se toca)* | **ligera** |
-| **appear** | **sólo 2 o 3** | *(sin decidir; se asume como chase)* | 7-8 | **sí** | **no cierra** | **no** | **no** | `scare_light` | ataca acercándose |
+| **standing** | 1, 2 y 3 | unos segundos | 6-7 | **según la variante** ⬍ | — | parpadean **o ninguna** (sorteo) | *(sin decidir)* | *(no se toca)* | **ligera** |
+| **appear** | **sólo 2 o 3** | **10 s** (igual que `chase`) | 7-8 | **sí** | **no cierra** | **no** | **no** | `scare_light` | ataca acercándose |
 
 **El vocabulario que el autor fijó, y que hay que usar tal cual:**
 
@@ -3681,21 +3681,78 @@ stackeable»*. **La vía de recuperación que §19.8 diseñó ya tiene su pieza 
 El barrido de rutas pasó de **179 a 183** citadas: desde hoy, si alguien las borra, salta — que es
 exactamente lo que acababa de pasar con `male.ogg` y `female.ogg`.
 
-### 22.7 Lo que sigue abierto — es poco y nada bloquea
+### 22.7 **Segunda tanda de decisiones — 2026-08-20**
 
-- ⚠ **Los cuatro sustos no coinciden entre sí:** `scare_strong/voice_1` es **mono** y los otros tres
-  **estéreo**, y Source no espacializa estéreo. Sea cual sea la decisión —2D a propósito, que es
-  defendible para un susto de contacto, o posicional— **hoy uno de los cuatro se comporta distinto que
-  sus hermanos**, y el síntoma sería *«a veces el susto se oye de lejos y a veces no»*. `dev/mono_posicionales.py`
-  **no** los toca y no hay que ampliarlo sin decidir esto: *una conversión de assets ejecuta una
-  decisión, no la toma.*
+**⑦ `appear` dura lo mismo que `chase`: 10 s.** Cierra la única duración que faltaba.
+
+**⑧ `standing` NO hace gritar al equipo… salvo una variante.** *«A menos que sea `standing` haciendo
+parpadear continuamente las luces cercanas.»* O sea que el caos **no** cuelga del evento sino de
+**qué está haciendo dentro del evento**, y eso vuelve a `standing` el único de los cinco con dos
+comportamientos de equipo:
+
+| variante de `standing` | luces | ¿grita el equipo? |
+|---|---|---|
+| aparece, mira y se va | ninguna | **no** |
+| aparece y hace parpadear las luces cercanas **de forma continua** | sí, sostenido | **sí** |
+
+> ⭐ **Eso refuerza la regla que él mismo fijó y la vuelve más fina:** el caos no se sigue de la
+> actividad (§22.2) **ni del evento** — se sigue de la manifestación **sostenida**. Un parpadeo suelto
+> no enloquece un instrumento; un parpadeo continuo sí. *La misma categoría de evento puede tener dos
+> respuestas del equipo, y lo que decide es la duración del efecto y no su nombre.*
+
+**⑨ Los sustos quedaron en MONO.** *«Puedes arreglar el estéreo ahora.»* `mono_posicionales.py --aplicar`
+convirtió los tres, con backup verificado por sha256 y re-lectura del disco: **3 de 3, un canal,
+delta 0,000 s**. Los cuatro son ahora mono a 44100 y el modo seco dice **29 mono / 0 estéreo**. La
+decisión implícita es que **los sustos son POSICIONALES**: se oyen desde donde está el fantasma.
+
+### 22.8 ⚠⚠⚠ La cordura y el parpadeo — **el drenaje que se contaría dos veces**
+
+**Observación del autor, y es de las que cambian una arquitectura antes de que exista:**
+
+> *«El evento de las luces no debería quitar cordura, porque las manifestaciones hacen uso de ese
+> parpadeo de las luces — a menos que las manifestaciones puedan hacer uso del parpadeo sin que pase
+> por "event light", porque te drenarían la cordura de manera gigante.»*
+
+**El problema es real y es de contabilidad.** `chase` hace parpadear *todas* las luces cercanas y
+`standing` puede hacerlo de forma continua. Si el parpadeo se pide disparando `EV.light`, cada
+manifestación cobraría **el drenaje del evento tantas veces como luces toque**, además del suyo
+propio. Y no se vería como un bug: se vería como *«la cordura se me va sola»*.
+
+**La pregunta que él dejó abierta —¿se puede parpadear sin pasar por `EV.light`?— hoy se contesta que
+NO, y es un dato leído, no una opinión.** `EV.light` es una función monolítica: hace el censo de luces
+cercanas, el reporte del vacío medido, el sorteo del estallido y el parpadeo, **todo inline**. No hay
+un helper de parpadeo al que otro pueda llamar.
+
+**Decisión propuesta, y es la salida (b) de las dos que él planteó:** extraer el parpadeo a una
+función propia y que `EV.light` pase a ser **un llamador más**. Entonces cada consumidor paga lo suyo:
+el evento cobra su drenaje como evento, y una manifestación usa **el efecto** sin disparar la
+contabilidad del evento. *El drenaje pertenece al EVENTO, no al EFECTO* — y hoy están pegados porque
+nunca hubo un segundo consumidor.
+
+> ⚠⚠ **Y esa refactorización trae su propio modo de falla, ya pagado en este taller (nº 89):** cuando
+> un cambio consiste en *«ahora todos pasan por X»*, **el control de X no alcanza**. Sabotear el helper
+> daría rojo y aun así podría quedar un sitio que sigue parpadeando por su cuenta, con la pasada
+> entera en verde. Hace falta un control que **cuente los que NO pasan** — sobre el texto fuente, no
+> sobre el comportamiento.
+>
+> ⚠ La alternativa (a) —que `EV.light` simplemente no drene— es más barata y **peor**: deja sin costo
+> a un evento ambiente que en Phasmophobia sí lo tiene, y resuelve el síntoma tapando el eje. Queda
+> escrita como descartada para que nadie la reproponga como si fuera nueva.
+
+### 22.9 Lo que sigue abierto — es poco y nada bloquea
+
 - **Las pisadas de `mist`, `singing` y `standing`.** La spec las fija para `chase` (sí) y `appear` (no).
   Un `mist` que es nube sin silueta no debería hacerlas; las otras dos están abiertas.
-- **Si `standing` hace gritar al equipo.** Es la actividad más baja de las cinco (6-7) y no se dijo.
-  Con la regla que el propio autor fijó —el caos **no** se sigue de la actividad— no se puede deducir.
-- **Cuánto dura `appear`.** Se asume como `chase` (10 s) porque se describió por diferencia.
+- **Cuánto drena cada manifestación**, en números. §19.8 tiene el costo por evento justificado; las
+  cinco manifestaciones son consumidores nuevos de esa tabla.
 - **En qué orden se escriben los cinco.** `standing` es el más barato (aparecer, mirar, irse) y `chase`
   el más caro (puertas + luces + persecución + teletransporte + pisadas + caos).
+
+> **El orden natural del bloque entero, con lo que se sabe hoy:** primero la **cordura** (la está
+> terminando el autor y cuatro de los cinco eventos la necesitan), después las **tres formas** (que son
+> render y no dependen de nada), y recién después los **cinco eventos**, del más barato al más caro.
+> Las formas se pueden medir solas: *un evento sin forma no se ve, pero una forma sin evento se puede
+> forzar con una convar.*
 
 > **El orden natural del bloque entero, con lo que se sabe hoy:** primero la **cordura** (la está
 > terminando el autor y cuatro de los cinco eventos la necesitan), después las **tres formas** (que son

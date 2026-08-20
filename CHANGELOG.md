@@ -7,6 +7,101 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-20 (57) — **Los cuatro sustos quedaron en MONO (3 de 3, delta 0,000 s), `appear` ya tiene duración, y el `standing` que hace parpadear las luces resultó tener DOS comportamientos de equipo. Más el drenaje de cordura que se habría contado dos veces.**
+
+### ⭐ El estéreo, arreglado — y la herramienta se amplió recién cuando existió la decisión
+
+*«Puedes arreglar el estéreo ahora.»* Hasta ayer `dev/mono_posicionales.py` **se negaba a tocarlos a
+propósito**, y estaba escrito así en el código: *una conversión de assets ejecuta una decisión, no la
+toma*. La decisión llegó, así que entraron.
+
+    ya mono   26        ->  29
+    estereo    3        ->   0
+    convertidos 3 de 3  ·  1 canal  ·  delta 0,000 s  ·  backup verificado por sha256
+
+Los cuatro sustos son ahora **mono a 44100**, verificado con un **segundo instrumento**
+(`duracion_ogg.py`, calibrado 4/4 en la misma corrida) y no sólo con la re-lectura del propio script.
+La decisión implícita queda escrita: **los sustos son POSICIONALES**, se oyen desde donde está el
+fantasma.
+
+> ⚠⚠ **Las rutas entraron en DOS fuentes y no en una, y eso evitó llevarse 30 clips por delante.** Las
+> dos parejas viven en ramas distintas de la tabla `VOZ` (una por voz). Un solo par de marcas que
+> fuera de la voz 1 a la voz 2 habría barrido **todo lo que hay en el medio** — `whisper`, `voice`,
+> `breath` y `humming` de la voz 2 —, o sea clips **que el autor ya escuchó y dio por buenos** en la
+> r1 y la r2. Ese es justo el error que el encabezado del script prohíbe por escrito.
+>
+> ⭐ **Y el denominador por fuente probó que ampliar no cegó lo viejo:** `PROP_CONSUJETO` siguió
+> aportando **30** y `CLIC_APAGADO` **2**, igual que antes. Esa es la defensa que el script tiene
+> justamente contra *«tocar el extractor para leer una fuente nueva puede dejar de ver la vieja sin
+> que nada avise»*.
+
+> ⚠ **La conversión NO viaja en este commit.** `sound/` está gitignoreado (sólo viajan los
+> `about.txt`), así que el diff no muestra ni un `.ogg`: los archivos cambiaron **en disco** y viajan
+> en el `.gma` al publicar. El respaldo está en `dev/other/OLD/…(BACKUP BEFORE MONO POSICIONALES)`,
+> que ahora tiene 21 clips — los 18 de la vez anterior más estos 3. *Cuando git no es la red, hay que
+> decir dónde está la red.*
+>
+> ⚠ Y las marcas `-- SUSTOS voz N` del Lua **son parte del instrumento, no comentarios**: el script
+> extrae las rutas entre ellas y **revienta con `ValueError` si alguien las borra**.
+
+### `appear` dura 10 s, igual que `chase`
+
+Cierra la única duración que faltaba de los cinco eventos.
+
+### ⭐⭐ `standing` tiene DOS comportamientos de equipo, y eso afina la regla
+
+*«`standing` no hace gritar al equipo, a menos que sea `standing` haciendo parpadear continuamente las
+luces cercanas.»*
+
+| variante | luces | ¿grita el equipo? |
+|---|---|---|
+| aparece, mira y se va | ninguna | **no** |
+| aparece y hace parpadear las luces **de forma continua** | sí, sostenido | **sí** |
+
+> ⭐ **Eso refuerza la regla que el propio autor había fijado y la vuelve más fina.** El caos no se
+> sigue de la actividad (§22.2) **ni del evento**: se sigue de la manifestación **sostenida**. Un
+> parpadeo suelto no enloquece un instrumento; uno continuo sí. *La misma categoría de evento puede
+> tener dos respuestas del equipo, y lo que decide es la duración del efecto, no su nombre.*
+
+### ⚠⚠⚠ El drenaje de cordura que se habría contado dos veces — y la pregunta se contestó leyendo
+
+Observación del autor, de las que cambian una arquitectura **antes** de que exista:
+
+> *«El evento de las luces no debería quitar cordura, porque las manifestaciones hacen uso de ese
+> parpadeo — a menos que las manifestaciones puedan hacer uso del parpadeo sin que pase por "event
+> light", porque te drenarían la cordura de manera gigante.»*
+
+**El problema es real y es de contabilidad.** `chase` hace parpadear *todas* las luces cercanas y
+`standing` puede hacerlo continuo. Si el parpadeo se pidiera disparando `EV.light`, cada manifestación
+cobraría el drenaje del evento **tantas veces como luces toque**, además del suyo. Y no se vería como
+un bug: se vería como *«la cordura se me va sola»*.
+
+**Su pregunta —¿se puede parpadear sin pasar por `EV.light`?— hoy se contesta que NO, y es un dato
+leído.** `EV.light` es monolítica: censo de luces, reporte del vacío medido, sorteo del estallido y
+parpadeo, **todo inline**. No hay helper al que otro pueda llamar.
+
+**Decisión propuesta — la salida (b) de las dos que él planteó:** extraer el parpadeo a una función y
+que `EV.light` pase a ser **un llamador más**. Cada consumidor paga lo suyo: el evento cobra como
+evento, la manifestación usa **el efecto** sin disparar la contabilidad del evento. *El drenaje
+pertenece al EVENTO, no al EFECTO* — y hoy están pegados sólo porque nunca hubo un segundo consumidor.
+
+> ⚠⚠ **Esa refactorización trae su propio modo de falla, ya pagado acá (nº 89):** cuando un cambio es
+> *«ahora todos pasan por X»*, **el control de X no alcanza**. Sabotear el helper daría rojo y aun así
+> podría quedar un sitio parpadeando por su cuenta con la pasada entera en verde. Hace falta un control
+> que **cuente los que NO pasan**, sobre el texto fuente.
+>
+> ⚠ La alternativa (a) —que `EV.light` simplemente no drene— es más barata y **peor**: deja sin costo a
+> un evento ambiente que en Phasmophobia sí lo tiene, y resuelve el síntoma tapando el eje. Queda
+> escrita como **descartada** para que nadie la reproponga como nueva.
+
+### Estado
+
+§22 quedó con **nueve decisiones tomadas** y tres cosas abiertas que no bloquean: las pisadas de
+`mist`/`singing`/`standing`, cuánto drena cada manifestación en números, y en qué orden se escriben
+los cinco. **Cero código de manifestaciones, a propósito.** Lo siguiente es la cordura.
+
+---
+
 ## 2026-08-20 (56) — **El autor contesta las seis preguntas de §22 y los tres bloqueantes bajan a uno. `scare_light` y `scare_strong` registradas: el barrido pasa de 179 a 183 rutas — y los cuatro clips no coinciden entre sí.**
 
 ### ⭐⭐ Un bloqueante se cerró con una decisión de ALCANCE, sin escribir una línea

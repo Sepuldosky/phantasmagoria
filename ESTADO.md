@@ -13,6 +13,30 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ⭐⭐ **LO ÚLTIMO (2026-08-20, segunda tanda): LOS CUATRO SUSTOS EN MONO Y §22 CON NUEVE DECISIONES
+> TOMADAS.** CHANGELOG **(57)**. Sigue sin haber una línea de código de las manifestaciones.
+>
+> ⭐ **`mono_posicionales.py --aplicar`: 3 de 3, un canal, delta 0,000 s**, backup por sha256 y
+> verificado además con un **segundo instrumento**. Los sustos son **posicionales**. ⚠ **No viaja en
+> el commit**: `sound/` está gitignoreado, los `.ogg` cambiaron en disco y viajan en el `.gma`.
+> El respaldo está en `dev/other/OLD/…(BACKUP BEFORE MONO POSICIONALES)`, ahora con 21 clips.
+>
+> ⚠ **Las marcas `-- SUSTOS voz N` del Lua son parte del instrumento**: el script extrae entre ellas y
+> revienta si alguien las borra. Van **dos pares** porque un solo par se habría llevado los 30 clips de
+> la voz 2 **que el autor ya dio por buenos**.
+>
+> ⭐ **`appear` dura 10 s** (igual que `chase`), y **`standing` tiene DOS comportamientos de equipo**:
+> no grita, salvo la variante que hace parpadear las luces **de forma continua**. *El caos no se sigue
+> de la actividad ni del evento: se sigue de la manifestación SOSTENIDA.*
+>
+> ⚠⚠⚠ **El drenaje de cordura que se habría contado dos veces.** Si el parpadeo de las manifestaciones
+> pasara por `EV.light`, cada una cobraría el drenaje del evento **por cada luz que toque**. La
+> pregunta del autor —¿se puede parpadear sin pasar por el evento?— se contestó **leyendo**: hoy
+> **no**, `EV.light` es monolítica (censo + estallido + parpadeo inline). **Decisión: extraer el
+> parpadeo y que el evento sea un llamador más** — *el drenaje pertenece al EVENTO, no al EFECTO*. ⚠ Y
+> esa refactorización necesita un control que **cuente los que NO pasan** por el helper (nº 89), no
+> sólo uno que sabotee el helper.
+
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-20): LAS MANIFESTACIONES DISEÑADAS Y DECIDIDAS — §22 completa. LO
 > SIGUIENTE ES LA CORDURA.** Detalle en el CHANGELOG **(55)** y **(56)**. **Ninguna línea de código de
 > las manifestaciones está escrita, y es a propósito.**

@@ -1355,8 +1355,10 @@ local VOZ = {
         -- `pairs( bancos )`, y `_todaLaVoz` se arma nombrando `whisper` y `voice`
         -- uno por uno. O sea que agregar claves a esta tabla es inerte **por
         -- construccion y no por suerte** -- leido antes de escribirlas.
-        scare_light  = { "phantasmagoria/ghost/scare_light/voice_1.ogg" },   -- 4,05 s  ⚠ ESTEREO
-        scare_strong = { "phantasmagoria/ghost/scare_strong/voice_1.ogg" },  -- 4,34 s     mono
+        -- SUSTOS voz 1
+        scare_light  = { "phantasmagoria/ghost/scare_light/voice_1.ogg" },   -- 4,05 s  mono
+        scare_strong = { "phantasmagoria/ghost/scare_strong/voice_1.ogg" },  -- 4,34 s  mono
+        -- FIN SUSTOS voz 1
     },
 
     [ 2 ] = {
@@ -1396,41 +1398,46 @@ local VOZ = {
 
         -- Los gemelos de la voz 1. Ver el comentario de arriba: registrados, sin
         -- consumidor todavia, y fuera del sorteo por construccion.
-        scare_light  = { "phantasmagoria/ghost/scare_light/voice_2.ogg" },   -- 2,35 s  ⚠ ESTEREO
-        scare_strong = { "phantasmagoria/ghost/scare_strong/voice_2.ogg" },  -- 4,00 s  ⚠ ESTEREO
+        -- SUSTOS voz 2
+        scare_light  = { "phantasmagoria/ghost/scare_light/voice_2.ogg" },   -- 2,35 s  mono
+        scare_strong = { "phantasmagoria/ghost/scare_strong/voice_2.ogg" },  -- 4,00 s  mono
+        -- FIN SUSTOS voz 2
     },
 }
 
 ---------------------------------------------------------------------------
--- ⚠⚠ LOS CUATRO SUSTOS **NO COINCIDEN ENTRE SI**, Y HAY QUE DECIDIRLO ANTES DE
--- QUE SUENEN
+-- LOS CUATRO SUSTOS QUEDARON EN MONO -- 2026-08-20
 ---------------------------------------------------------------------------
--- Medido el 2026-08-20 con `dev/duracion_ogg.py` y el lector calibrado 4/4 en la
--- misma corrida:
+-- ⚠ ESTE BLOQUE DECIA "NO COINCIDEN ENTRE SI Y HAY QUE DECIDIRLO", Y YA SE
+-- DECIDIO. Se reescribe en vez de dejarse al lado de su propia refutacion.
 --
---   scare_light/voice_1.ogg    4,05 s   ESTEREO
---   scare_light/voice_2.ogg    2,35 s   ESTEREO
---   scare_strong/voice_1.ogg   4,34 s   MONO      <-- el unico
---   scare_strong/voice_2.ogg   4,00 s   ESTEREO
+-- Lo que se habia medido, con `dev/duracion_ogg.py` y el lector calibrado 4/4:
+-- tres de los cuatro clips eran ESTEREO y `scare_strong/voice_1` era el unico
+-- mono. Y en este taller ya esta medido que **Source NO espacializa un sonido
+-- estereo**: lo reproduce en 2D, sin posicion. O sea que tres se iban a oir
+-- igual desde cualquier lado y el cuarto no.
 --
--- Y en este taller ya esta medido que **Source NO espacializa un sonido
--- estereo**: lo reproduce en 2D, sin posicion. O sea que tres de estos cuatro se
--- van a oir IGUAL desde cualquier lado, y el cuarto no.
+-- **Que fueran 2D no era necesariamente un defecto** -- un susto de contacto "en
+-- la cabeza" es defendible -- pero **que no coincidieran si lo era**: el sintoma
+-- habria sido *"a veces el susto se oye de lejos y a veces no"*, que se lee como
+-- un bug del evento y es del asset.
 --
--- ⚠ ESO NO ES NECESARIAMENTE UN DEFECTO. Un susto de contacto es, en
--- Phasmophobia, un golpe "en la cabeza" del jugador: 2D puede ser exactamente lo
--- que se quiere, y tres de los cuatro clips ya vienen asi. **Lo que si es un
--- defecto es que no coincidan**: sea cual sea la decision, hoy uno de los cuatro
--- se comporta distinto que sus hermanos, y el sintoma en juego seria *"a veces
--- el susto se oye de lejos y a veces no"* -- que se lee como un bug del evento y
--- es del asset.
+-- El autor decidio POSICIONAL ( *"puedes arreglar el estereo ahora"* ) y
+-- `dev/mono_posicionales.py --aplicar` convirtio los tres, con backup verificado
+-- por sha256 y re-lectura del disco: **3 de 3, un canal, delta 0,000 s**. Los
+-- cuatro quedaron mono a 44100:
 --
--- ⚠⚠ `dev/mono_posicionales.py` **NO los convierte y NO hay que ampliarlo sin
--- decidir esto primero**. Su alcance esta acotado a proposito a las dos fuentes
--- que PROMETEN sonar desde un punto del mapa ( `PROP_CONSUJETO` y
--- `CLIC_APAGADO` ), y meter los sustos ahi seria contestar la pregunta de
--- diseno con una herramienta. *Una conversion de assets ejecuta una decision;
--- no la toma.*
+--   scare_light/voice_1.ogg    4,05 s   mono
+--   scare_light/voice_2.ogg    2,35 s   mono
+--   scare_strong/voice_1.ogg   4,34 s   mono   ( ya lo estaba )
+--   scare_strong/voice_2.ogg   4,00 s   mono
+--
+-- ⚠ Y LAS MARCAS `-- SUSTOS voz N` DE ARRIBA SON PARTE DEL INSTRUMENTO, no un
+-- comentario: `mono_posicionales.py` extrae las rutas del Lua entre esas marcas
+-- y **revienta con ValueError si alguien las borra**. Van DOS pares y no uno
+-- porque las dos parejas viven en ramas distintas de `VOZ`, y un solo par que
+-- fuera de la voz 1 a la voz 2 se llevaria puesto todo lo que hay en el medio --
+-- 30 clips **que el autor ya escucho y dio por buenos**.
 
 ---------------------------------------------------------------------------
 -- BITACORA
