@@ -65,6 +65,36 @@ todavia"* y eso **quedo viejo**: el autor lo cerro el 2026-08-20 -- *"esa parte 
 Cargo ya se arreglo, las pastillas son consumibles de un solo uso stackeable"*.
 La via de recuperacion por pastillas tiene su mitad del lado del inventario.
 
+⭐⭐ **Y LOS MODELOS DE LOS TRES TIERS TAMBIEN ESTAN, COMPLETOS.** Censado en disco
+el 2026-08-20 -- no es una suposicion:
+
+    models/phantasmagoria/eq/sanity_medication_i.mdl     ( + .phy .vvd .vtx )
+    models/phantasmagoria/eq/sanity_medication_ii.mdl    ( + .phy .vvd .vtx )
+    models/phantasmagoria/eq/sanity_medication_iii.mdl   ( + .phy .vvd .vtx )
+
+con sus materiales en `materials/models/phantasmagoria/eq/sanity_medication_*`.
+**Traen `.phy`**, o sea que tienen colision y pueden ser props fisicos.
+
+⚠⚠ **Y LOS TRES TIERS NO SON LA MISMA PASTILLA TRES VECES -- EL SONIDO LO DELATA:**
+
+    sound/phantasmagoria/equipment/sanity_meds/t1_drink.ogg        <- una BEBIDA
+    sound/phantasmagoria/equipment/sanity_meds/t2_pills.ogg        <- PASTILLAS
+    sound/phantasmagoria/equipment/sanity_meds/t3_adrenaline.ogg   <- ADRENALINA
+
+Eso importa para B1 por dos motivos y ninguno es cosmetico. **Uno:** el efecto de
+§19.8.6 ( +25 / +40 / +60 % ) es *el mismo mecanismo con tres numeros*, pero el
+FEEDBACK es de tres objetos distintos, asi que el sonido **sale del tier y no de
+la accion** -- un unico clip para los tres suena mal justo en el momento en que el
+jugador esta gastando dinero. **Dos:** "adrenalina" no es "pastilla", y llamar
+`pills` a la funcion que sirve a los tres deja un nombre que miente en el tercio
+mas caro. *El nombre de una funcion que atiende tres cosas tiene que nombrar lo
+que hacen, no a la primera de las tres.*
+
+⚠ **Hoy NINGUN codigo de gameplay los toca.** El unico `.lua` que los nombra es
+`lua/autorun/client/phantasmagoria_eq_check.lua`, que es el verificador de assets
+de OTRA SESION -- o sea que son modelos instalados y verificados, **sin
+consumidor**. Igual que `scare_light` / `scare_strong` antes de §22.
+
 ⭐ **El medidor de actividad ya tiene numeros.** §19.3 lo daba por "sin diseñar";
 §22 le puso la escala entera, y su mitad de abajo **ya corre**:
 
@@ -182,7 +212,17 @@ como se pierde una corrida.
   · **Dibujar la barra.** §19.9.4: la cordura NO se dibuja, el indicador es el
     mundo.
   · ⚠⚠ **`server_hunt.lua`, `server.lua` y `server_stuck.lua`.** OTRA SESION
-    acaba de escribirlos ( commit `f78a0ae`, el hunt directo ). **No se tocan.**
+    acaba de escribirlos ( commit `f78a0ae` ). **No se tocan.**
+
+    Y conviene saber QUE hace, porque la frontera se entiende mejor que se
+    obedece: ese bloque le **saca al fantasma los comportamientos base del
+    Terminator** para que el hunt sea **directo al jugador, sin miedo ni
+    titubeos**, como en Phasmophobia. O sea que esta reescribiendo *como persigue*
+    -- y B1 no toca la persecucion: **B1 escribe el numero que decide CUANDO
+    empieza**, y ni siquiera eso ( el gatillo es la tajada C ).
+    ⚠ Las dos cosas se van a encontrar en C, no antes. Si B1 empieza a opinar
+    sobre el hunt, las dos sesiones van a estar escribiendo la misma decision con
+    dos modelos distintos en la cabeza.
 
 
 ===============================================================================
