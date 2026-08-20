@@ -7,6 +7,113 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-20 (59) — **La tabla de manifestaciones queda cerrada: las seis filas suman 1. El arreglo del Oni salió de leer cómo paga su cambio cada una de las otras cinco — y de descubrir que el `chase` doblado NO es el rasgo que ya estaba implementado.**
+
+### ⭐⭐ La gramática de la tabla: **cada fila paga lo que gasta**, y el Oni era el único que no
+
+Factor de cada fila contra el Standard, **por bucket** (`standing` son sus tres columnas juntas):
+
+| fila | singing | standing | chase | mist | appear |
+|---|---|---|---|---|---|
+| **Banshee** | ×7/3 | ×2/3 | ×2/3 | ×2/3 | ×2/3 |
+| **Kormos** | ×5/3 | ×5/3 | ×0 | ×0 | ×5/3 |
+| **Mare** | ×1 | ×1 | ×1 | ×1 | ×1 |
+| **Shade** | ×0 | ×1 | ×1 | ×3 | ×0 |
+
+**La Banshee tomó exactamente 1/3 de cada bucket que no era `singing`.** El Kormos repartió en partes
+iguales lo que liberaron sus ceros; el Shade le dio todo a `mist`; y el **Mare da ×1 en los cinco**,
+porque lo suyo fue una redistribución *dentro* del bucket `standing`.
+
+*Las columnas subdividen, el bucket es la unidad, y las cuatro filas modificadas pagan.* Con eso el
+120% del Oni deja de ser «un número raro» y pasa a ser **la única fila que no aplicó la operación que
+las otras aplican**.
+
+### ⚠ Y el `rate = 1.6` del Oni **no** convierte al 120% en un duplicado
+
+`ghost_flags.lua` ya trae `rate = 1.6` para el Oni, con la línea de la fuente al lado
+(*«More active around multiple people»*). Era tentador declarar el 120% como esa misma propiedad
+contada dos veces — **y sería falso**: son **dos líneas distintas de la wiki**. *«More active»* es
+**frecuencia**, y ya está implementada; el `chase` al doble es **distribución** —cuándo manifiesta, qué
+manifiesta— y sigue haciendo falta. Lo que falta es que se pague. *Dos rasgos que empujan en la misma
+dirección no son el mismo rasgo, y acusarlos de serlo habría borrado uno.*
+
+### Las tres salidas, calculadas — y por qué la recomendada no es la que parece neutral
+
+| | suma | chase | ¿sigue siendo el doble? | esperado | con su ×2 |
+|---|---|---|---|---|---|
+| **(0)** como estaba | **120%** | 40,00% | ×2 | 13,00% | 26,00% |
+| **(1)** normalizar a pesos | 100% | **33,33%** | ✗ **×1,67** | 10,83% | 21,67% |
+| **(2)** descuento **proporcional** ⭐ | 100% | **40,00%** | ✓ **×2 exacto** | 11,25% | **22,50%** |
+| **(3)** `singing` a cero | 100% | 40,00% | ✓ ×2 exacto | 11,00% | 22,00% |
+
+**Recomendada la (2):** es **la operación que la tabla ya hace** (la Banshee saca 1/3, el Oni saca 1/4),
+conserva el rasgo **exacto**, y no inventa carácter.
+
+> ⚠ **La (1) es la trampa, porque parece la más neutral.** Normalizar no decide nada… salvo que deja el
+> `chase` del Oni en **×1,67** del Standard en vez de ×2: *el rasgo se diluye sin que nadie lo haya
+> decidido*. La (3) también cierra, pero afirma que **el Oni no canta**, y eso no lo dice ninguna
+> fuente — *un arreglo aritmético no debería meter un rasgo de personalidad de contrabando*.
+>
+> ⚠ **Y hay que decir lo que cuesta:** el Oni baja de **26% a 22,50%** de drenaje esperado. El 120% lo
+> estaba inflando un **16%**. Si en juego se siente flojo, la perilla es su ×2 o su `rate`, **no volver
+> a romper la suma**.
+
+### La columna Red light, plegada — con el control de que el bucket no se mueve
+
+Decisión del autor: repartirla entre las otras dos standings. Se comprobó en **las seis filas** que el
+bucket `standing` **no cambia de peso**: repartir adentro no mueve cuánto pesa `standing` frente a los
+otros cuatro eventos. *Si el bucket se hubiera movido, el plegado habría cambiado el diseño de los
+otros cuatro sin decirlo.*
+
+**Tabla final, las seis sumando 1:**
+
+| Ghost | Singing | Stand.(Std) | Stand.(Light) | Chasing | Mist | Appear | esperado |
+|---|---|---|---|---|---|---|---|
+| Standard | 20,00% | 10,00% | 10,00% | 20,00% | 20,00% | 20,00% | **10,00%** |
+| Banshee | 46,67% | 6,67% | 6,67% | 13,33% | 13,33% | 13,33% | **10,00%** |
+| Kormos | 33,33% | 16,67% | 16,67% | 0% | 0% | 33,33% | 8,33% |
+| Mare | 20,00% | 6,67% | 13,33% | 20,00% | 20,00% | 20,00% | **10,00%** |
+| Oni | 15,00% | 7,50% | 7,50% | 40,00% | 15,00% | 15,00% | 11,25% *(×2 → 22,50%)* |
+| Shade | 0% | 10,00% | 10,00% | 20,00% | 60,00% | 0% | **10,00%** |
+
+### ⭐⭐ El objetivo de la Banshee — y la clasificación que salió de su spec
+
+El autor confirmó que el concepto puede vivir con otro nombre, y lo adaptó: **se marca al ver por
+primera vez a un jugador**, va por él en manifestaciones y en hunt (con **prioridad**, no
+exclusividad), y **en calma lo stalkea** — *roaming stalking*: darle la posición del jugador cada
+cierto tiempo para acercarse, de cara a las manifestaciones o al hunt.
+
+> ⭐⭐ **Y de su frase salió una clasificación que el diseño no tenía y que hace falta para escribir
+> cualquiera de los cinco eventos.** Nombró *«el chase, el appear y el mist»* como las manifestaciones
+> **dirigidas**: son las tres que **viajan hacia** alguien. `singing` y `standing` ocurren **ante**
+> alguien —lo miran— pero no lo persiguen.
+>
+> *Sin esa distinción, «la Banshee dirige sus manifestaciones al objetivo» no se puede implementar: no
+> se sabe cuáles.* Y vale para los 30 tipos: las tres dirigidas necesitan **elegir un jugador**, las dos
+> restantes **elegir un observador**, y **hoy ninguna de las dos elecciones existe**. Es previa a los
+> cinco eventos.
+
+⚠⚠ **El roaming-stalk toca maquinaria que OTRA SESIÓN está escribiendo ahora mismo.** El propio autor
+identificó que el «bot pegado» eran `movement_watch` y `movement_stalk` y que otra sesión lo resuelve
+— y en el árbol de trabajo hay un `server_hunt.lua` nuevo sin commitear más `server.lua` y
+`server_stuck.lua` modificados. **No se toca desde acá hasta que ese bloque cierre**, o las dos
+sesiones escriben sobre el mismo comportamiento con dos modelos distintos.
+
+⚠ **Tres preguntas que la marca abre y no están en la spec:** qué pasa si el objetivo muere o se
+desconecta; si la marca sobrevive a perderlo de vista (por el *«al ver por primera vez»* se diría que
+sí, es permanente); y si el jugador puede saber que está marcado (en Phasmophobia **no**, y eso es
+parte del terror).
+
+### El Phantom, confirmado
+
+*«Es otra regla exactamente, no un multiplicador, eso mismo salía en la wiki.»* Queda como está en
+§22.10: un **Think con línea de vista y distancia** (10 m = **525 u**). Falta sólo decidir si el
+0,5%/s **suma** al drenaje plano de la manifestación o lo **reemplaza**.
+
+**Cero código de manifestaciones, a propósito.**
+
+---
+
 ## 2026-08-20 (58) — **Las probabilidades y el drenaje: cuatro de los seis tipos dan exactamente 10% de esperado —la base del juego— y la fila del Oni suma 120%. Las pisadas cerradas, y el `standing` dejó de ser el evento barato.**
 
 El autor pasó la tabla de chances por tipo y los números de drenaje. Todo en §22.9 a §22.12.

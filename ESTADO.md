@@ -13,6 +13,33 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ⭐⭐ **LO ÚLTIMO (2026-08-20, cuarta tanda): LA TABLA DE MANIFESTACIONES CERRADA — las seis filas
+> suman 1.** CHANGELOG **(59)**, diseño §22.12-§22.15. Sigue sin haber código de manifestaciones.
+>
+> ⭐⭐ **El arreglo del Oni salió de leer cómo paga su cambio CADA UNA de las otras cinco filas.** La
+> Banshee toma exactamente **1/3 de cada bucket** ajeno para pagar su `singing`; el Kormos reparte en
+> partes iguales lo que liberan sus ceros; el Shade le da todo a `mist`; el Mare redistribuye **dentro**
+> del bucket. *Las columnas subdividen, el bucket es la unidad, y las cuatro pagan.* El Oni era la única
+> que no aplicaba la operación. **Recomendada: descuento proporcional** (le saca 1/4 a cada bucket que
+> no es `chase`) — conserva el `chase` en **×2 exacto** y no inventa carácter.
+>
+> ⚠ **La trampa era normalizar**, que parece lo neutral: deja el `chase` en ×1,67 y *diluye el rasgo sin
+> que nadie lo decida*. Y el arreglo **cuesta**: el Oni baja de **26% a 22,50%** de drenaje esperado —
+> el 120% lo inflaba un 16%. Si se siente flojo, la perilla es su ×2 o su `rate`, no romper la suma.
+>
+> ⚠ **El `rate = 1.6` que el Oni YA tiene no lo vuelve un duplicado:** *«more active»* es **frecuencia**
+> y el `chase` doblado es **distribución**. Son dos líneas distintas de la wiki. *Dos rasgos que empujan
+> en la misma dirección no son el mismo rasgo* — acusarlos habría borrado uno.
+>
+> ⭐⭐ **Y de la spec de la Banshee salió una clasificación que faltaba:** `chase`, `appear` y `mist` son
+> las manifestaciones **DIRIGIDAS** (viajan hacia alguien); `singing` y `standing` ocurren **ante**
+> alguien. **Las tres dirigidas necesitan elegir un jugador y las dos restantes un observador, y hoy
+> ninguna de las dos elecciones existe.** Es previa a los cinco eventos.
+>
+> ⚠⚠ **El roaming-stalk de la Banshee toca lo que OTRA SESIÓN escribe ahora** (`server_hunt.lua` nuevo,
+> más `server.lua` y `server_stuck.lua` modificados en el árbol). **No se toca desde acá hasta que ese
+> bloque cierre.**
+
 > ⭐⭐ **LO ÚLTIMO (2026-08-20, tercera tanda): LAS PROBABILIDADES Y EL DRENAJE.** CHANGELOG **(58)**,
 > diseño §22.9-§22.12. Sigue sin haber una línea de código de las manifestaciones.
 >

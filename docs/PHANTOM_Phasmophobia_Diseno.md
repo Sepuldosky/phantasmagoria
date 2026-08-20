@@ -3877,16 +3877,143 @@ que el `mist` necesita para acercarse.
 > ese defecto rompe. **Si `standing` se escribe antes de arreglar la mirada, sale un fantasma quieto
 > con la cara mirando a otro lado**, y el síntoma se leería como un bug del evento nuevo.
 
-### 22.12 Lo que sigue abierto
+### 22.12 **El Oni: la recomendación, con las tres salidas calculadas** [2026-08-20]
 
-1. ⚠ **El 120% del Oni** — descontar 1/5 a alguna columna, o declarar pesos y corregir los % impresos.
-2. ⚠ **La columna Red light** — plegarla sobre `Standing (Standard)` es la salida barata; borrarla a
-   secas rompe las cinco filas que cierran.
-3. **El 0,5%/s del Phantom**: ¿además del drenaje plano o en su lugar?
-4. **El objetivo de la Banshee**: hay que crearlo, y lo necesita también el hunt.
-5. **En qué orden se escriben los cinco.** `standing` parecía el más barato y **ya no lo es**: arrastra
-   el arreglo de la mirada. Con lo que se sabe hoy, el más barato es **`appear`** (aparecer en forma 2
-   o 3, acercarse, tocar, `scare_light`, irse a los 10 s) y el más caro sigue siendo `chase`.
+El autor: *«el Oni pudo ser mal hecho, lo saqué de la wiki; tal vez puedas escribir tus
+recomendaciones»*. Antes de recomendar, dos cosas que hubo que medir.
+
+#### La gramática de la tabla: **cada fila paga su cambio**, y el Oni es el único que no
+
+Factor de cada fila contra el Standard, **por bucket** (el bucket `standing` son sus tres columnas
+juntas):
+
+| fila | singing | standing | chase | mist | appear |
+|---|---|---|---|---|---|
+| **Banshee** | ×7/3 | ×2/3 | ×2/3 | ×2/3 | ×2/3 |
+| **Kormos** | ×5/3 | ×5/3 | **×0** | **×0** | ×5/3 |
+| **Mare** | ×1 | ×1 | ×1 | ×1 | ×1 |
+| **Shade** | **×0** | ×1 | ×1 | ×3 | **×0** |
+
+**La Banshee tomó exactamente 1/3 de cada bucket que no era `singing`.** El Kormos repartió en partes
+iguales lo que liberaron sus dos ceros. El Shade le dio todo a `mist`. Y el **Mare da ×1 en los cinco
+buckets**: lo suyo fue una redistribución **dentro** del bucket `standing`, dejándolo en su total.
+
+*O sea que las columnas subdividen y el bucket es la unidad, y las cuatro filas modificadas pagan lo
+que gastan.* El Oni es el único que suma un bucket sin restarlo de ningún lado.
+
+#### Y el Oni **ya tiene** su «más activo» implementado — pero no es el mismo rasgo
+
+`ghost_flags.lua` trae, con la línea de la fuente al lado:
+
+```lua
+F[ "oni" ] = {
+    -- (:368) "More active around multiple people"
+    rate    = 1.6,
+    -- (:372) parpadea mas en la caza.
+    hunt    = { rate = 1.4 },
+}
+```
+
+⚠ **Eso NO convierte al 120% en un duplicado, y conviene no acusarlo de serlo.** Son **dos líneas
+distintas de la wiki**: *«more active»* es **frecuencia** —y ya está, en `rate`— mientras que el
+`chase` al doble es **distribución**: cuándo manifiesta, qué manifiesta. La segunda sigue haciendo
+falta; lo que falta es que se pague.
+
+#### Las tres salidas, calculadas
+
+| | suma | chase | ¿sigue siendo el doble? | esperado | con su ×2 |
+|---|---|---|---|---|---|
+| **(0)** como está hoy | **120%** | 40,00% | ×2 | 13,00% | 26,00% |
+| **(1)** normalizar a pesos | 100% | **33,33%** | ✗ **×1,67** | 10,83% | 21,67% |
+| **(2)** descuento **proporcional** ⭐ | 100% | **40,00%** | ✓ **×2 exacto** | 11,25% | **22,50%** |
+| **(3)** `singing` a cero | 100% | 40,00% | ✓ ×2 exacto | 11,00% | 22,00% |
+
+**RECOMENDACIÓN: la (2).** Los tres motivos, en orden de peso:
+
+1. **Es la operación que la tabla ya hace.** La Banshee le sacó 1/3 a cada bucket ajeno para pagar su
+   `singing`; el Oni le saca **1/4** a cada bucket que no es `chase` para pagar el suyo. No hay que
+   inventar una regla: hay que aplicar la que ya está usada una fila más arriba.
+2. **Conserva el rasgo exacto.** `chase` queda en 40%, que es **el doble justo** del Standard. La (1)
+   lo deja en ×1,67 y *el rasgo del Oni se diluye sin que nadie lo decida* — es el peor de los tres
+   porque parece el más neutral.
+3. **No inventa carácter.** La (3) funciona y usa un idioma que la tabla tiene (el Shade y el Kormos
+   traen ceros), pero afirma que **el Oni no canta**, y eso no lo dice ninguna fuente. *Un arreglo
+   aritmético no debería agregar un rasgo de personalidad de contrabando.*
+
+⚠ **Y hay que decir lo que el arreglo cuesta, sea cual sea:** el Oni baja de **26% a ~22,5%** de
+drenaje esperado. El 120% lo estaba inflando un **16%**. Si en juego el Oni se siente flojo, la perilla
+correcta es su `×2` o su `rate`, **no volver a romper la suma**.
+
+### 22.13 La columna **Red light**, plegada — y la tabla final
+
+Decisión del autor: *«puedes dividirla entre las otras standings»*. Cada fila reparte su
+`Standing (Red light)` **por mitades** entre `Standard` y `Light-breaking`.
+
+> ⭐ **El control es que el bucket no se mueva**, y se comprobó en las seis filas: repartir dentro del
+> bucket **no cambia cuánto pesa `standing` en total**, sólo cómo se reparte adentro. Es exactamente la
+> operación que el Mare ya hacía. *Si el bucket se moviera, el plegado estaría cambiando el diseño de
+> los otros cuatro eventos sin decirlo.*
+
+**Tabla final** — Oni con descuento proporcional, Red light plegada, las seis sumando 1:
+
+| Ghost | Singing | Standing (Std) | Standing (Light-breaking) | Chasing | Mist | Appear | esperado |
+|---|---|---|---|---|---|---|---|
+| **Standard** | 20,00% | 10,00% | 10,00% | 20,00% | 20,00% | 20,00% | **10,00%** |
+| **Banshee** | 46,67% | 6,67% | 6,67% | 13,33% | 13,33% | 13,33% | **10,00%** |
+| **Kormos** | 33,33% | 16,67% | 16,67% | 0% | 0% | 33,33% | 8,33% |
+| **Mare** | 20,00% | 6,67% | 13,33% | 20,00% | 20,00% | 20,00% | **10,00%** |
+| **Oni** | 15,00% | 7,50% | 7,50% | **40,00%** | 15,00% | 15,00% | 11,25% *(×2 → 22,50%)* |
+| **Shade** | 0% | 10,00% | 10,00% | 20,00% | **60,00%** | 0% | **10,00%** |
+
+### 22.14 El **objetivo de la Banshee** — spec del autor, adaptada a GMod
+
+El autor confirmó que el concepto puede existir con otro nombre y lo mejoró para este addon:
+
+- **Se marca al VER por primera vez a un jugador.** A partir de ahí lo ataca **a él en particular**.
+- **Con varios jugadores en una sala, va por el marcado** — en manifestaciones y en el hunt.
+- **En hunt puede atacar al resto, pero cambia su ataque o su manifestación dirigida al objetivo en
+  cuanto lo detecta.** O sea: el objetivo tiene **prioridad**, no exclusividad.
+- **En calma, lo stalkea** dentro del área donde merodea. La wiki lo llama *roaming stalking*, y la
+  lectura del autor es: **darle la posición del jugador cada cierto tiempo para que se mueva hacia
+  allá**, como forma de acercarla para las manifestaciones o para el hunt.
+
+> ⭐⭐ **Y de esa frase sale una clasificación que el diseño no tenía y que hace falta para escribir
+> cualquiera de las cinco:** el autor nombra *«el chase, el appear y el mist»* como las
+> **manifestaciones DIRIGIDAS**. Son las tres que **viajan hacia** un jugador. `singing` y `standing`
+> ocurren **ante** un jugador —lo miran— pero no lo persiguen.
+>
+> | | dirigida ( viaja hacia alguien ) |
+> |---|---|
+> | `chase` · `appear` · `mist` | **sí** — necesitan destinatario |
+> | `singing` · `standing` | no — necesitan un espectador, que es otra cosa |
+>
+> *Sin esa distinción, «la Banshee dirige sus manifestaciones al objetivo» no se puede implementar: no
+> se sabe cuáles.* Y vale para todos los tipos, no sólo para ella — las tres dirigidas necesitan
+> **elegir un jugador** y las dos restantes necesitan **elegir un observador**, y hoy ninguna de las
+> dos elecciones existe.
+
+⚠⚠ **El roaming-stalk toca maquinaria que OTRA SESIÓN está escribiendo ahora mismo.** El propio autor
+identificó que el *«bot pegado»* eran `movement_watch` y `movement_stalk`, y que **otra sesión lo está
+resolviendo**. Darle a la Banshee una posición para merodear hacia ella es exactamente ese territorio.
+*No se toca desde acá hasta que ese bloque cierre*, o las dos sesiones van a estar escribiendo sobre el
+mismo comportamiento con dos modelos distintos en la cabeza.
+
+⚠ **Tres preguntas que la marca abre y que no están en la spec:** qué pasa si el objetivo **muere o se
+desconecta** (¿se re-marca al siguiente que la vea, o se queda sin objetivo?); si la marca **sobrevive**
+a que el fantasma pierda de vista al jugador (por el *«al ver por primera vez»* se diría que sí, es
+permanente); y si el jugador **puede saber** que está marcado —en Phasmophobia no puede, y eso es parte
+del terror—.
+
+### 22.15 Lo que sigue abierto
+
+1. **El 0,5%/s del Phantom**: ¿además del drenaje plano de la manifestación, o en su lugar? Confirmado
+   por el autor que **es otra regla y no un multiplicador**, tal como salía en la wiki — falta sólo si
+   se suma o reemplaza.
+2. **Elegir jugador**: las tres manifestaciones dirigidas necesitan destinatario y las dos restantes un
+   observador. **Ninguna de las dos elecciones existe hoy**, y es previa a los cinco eventos.
+3. **En qué orden se escriben los cinco.** `standing` ya no es el más barato (arrastra el arreglo de la
+   mirada, §22.11). Con lo que se sabe hoy el más barato es **`appear`** y el más caro sigue siendo
+   `chase`.
 
 > **El orden natural del bloque entero, con lo que se sabe hoy:** primero la **cordura** (la está
 > terminando el autor y cuatro de los cinco eventos la necesitan), después las **tres formas** (que son
