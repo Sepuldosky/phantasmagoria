@@ -7,6 +7,144 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-20 (64) — **La r1 del hunt directo CORRIÓ: 4 pasa · 0 falla · 10 sin correr, y en juego el bot hace lo que tiene que hacer. Los dos arreglos de la sesión salieron de LEER la corrida, no de correrla: el perro guardián acusaba a dos mecanismos APAGADOS, y un registro viejo se comía el corte del apagado.**
+
+Reporte íntegro y análisis en [`dev/CORRIDA_hunt_directo_r1.md`](dev/CORRIDA_hunt_directo_r1.md).
+Planilla `dev/checks/phantasmagoria-hunt-directo-r1.html`, 14 filas. El bloque es de **(f78a0ae)** y
+**(d60dc5a)**; esta entrada es la corrida.
+
+### El veredicto que ninguna fila mide
+
+Textual del autor: *«el hunt directo probándolo ingame está bien como gameplay, el bot hace lo que se
+supone que debe hacer»*. La planilla quedó a medias porque se fue a almorzar, no porque algo se
+cayera. **Ninguna fila roja.**
+
+Y el pedido original está **entero** en el log de la fila 02: `hunt: derecho a el` →
+`where did they go` → `i got there but nobody's here` → `hunt: derecho a el`. **Perseguir, perder,
+buscar**, que es palabra por palabra el alcance que puso el autor. Sin `movement_watch` ni
+`movement_stalkenemy`.
+
+⚠ Y lo que vuelve eso una medición y no una impresión: **el motivo dice de quién es la decisión.**
+`hunt: derecho a el` lo escribe nuestra escalera; la base dice
+`ea, im just gonna rush them, nothing fancy`, y las dos frases conviven en la misma corrida sobre el
+mismo fantasma. *El A/B no depende de acordarse de en qué estaba la perilla: está en el texto de la
+línea.*
+
+### ⚠⚠⚠ El perro guardián acusaba a dos mecanismos que no podían haber corrido
+
+Lo vio el autor: *«cuando está en calma, el watchdog dice que está zombie cuando en realidad ese
+estado no importa, ese watchdog no debería ser para el hunt?»*.
+
+Gritó **dos veces, las dos en calma** (el #93 de la P0 y el #59 de la fila 05, éste con `huntdirect`
+ya en 0), y el mensaje nombraba *«un StartTask que entró en m_ActiveTasks sin callbacks, o un desvío
+que cayó en el early-out de taskoverride.lua:167»*. **Las dos causas están apagadas fuera del hunt**:
+la compuerta sale por sus dos guardas, la escalera delega en la base, y el corte de estado sale por la
+guarda de `huntdirect`. El episodio es **un agujero de la base sola** — y la misma fila 05 muestra
+cómo termina el suyo: `movement_handler  reallystuck SUCCESS`.
+
+**El arreglo separa la cuenta y la culpa, no el rescate.** Dos casilleros
+(`N en HUNT ( de este bloque ) · N en calma ( de la base sola )`) y un mensaje que dice cuál de los
+dos es, con los valores de `phantom_Hunting` y `huntdirect` adentro del texto. **El rescate se dejó en
+los dos estados**: sacarlo cambiaría el IDLE, que este bloque sólo tenía que no romper, y el gameplay
+que el autor acaba de aprobar corrió con el perro puesto. Queda como pregunta suya, no como defecto.
+
+> *Un instrumento que nombra una causa que no pudo correr no está midiendo: está eligiendo.*
+
+### ⚠⚠ El corte del APAGADO se perdía en silencio después de un A/B
+
+Salió de leer un `0`: el reporte del #565 decía `cortes de tarea al cambiar de estado 0`. No es que el
+corte esté roto — es **el orden en que se flipearon las perillas**: el hunt se prendió con `huntdirect`
+todavía en 0 (fila 01) y `huntdirect` subió a 1 después (fila 02), que no pasa por
+`phantom_HuntSwitched`. **Para ese fantasma nunca hubo una transición con la perilla puesta**, así que
+la fila 08 no se puede cerrar con él.
+
+Y ahí apareció el defecto: la guarda de `huntdirect` salía **antes** de actualizar
+`phantom_huntCutFor`, o sea que el registro de *«sobre qué valor actué»* quedaba viejo.
+
+```
+huntdirect 0 · se PRENDE el hunt      -> sale por la guarda, huntCutFor sigue en false
+huntdirect 1                             ( la perilla no pasa por esta funcion )
+se APAGA el hunt ( hunting = false )  -> false == false, sale por la idempotencia
+=> el corte del APAGADO no ocurre
+```
+
+Y el del apagado es justo el que `server.lua:1231` llama el importante: sin él el bot se queda en
+`movement_followenemy` **corriéndote atrás con la cacería apagada** — *un fantasma en calma que te
+persigue, que parece un hunt y no lo es*. Arreglado poniendo el registro en `nil` cuando la perilla
+está en 0: *no sé sobre qué valor actué*, así que la próxima transición real corta. **El costo máximo
+es un corte de más, y de los dos errores posibles ése es el barato.**
+
+### ⚠⚠ La fila 04 baja a PASA PARCIAL, y la 05 resultó no ser binaria
+
+**La 04** tiene la mitad de control sólida —con `truerange 0` salen `ea, camp or perch, perch` y
+`ea, camp or perch, camped because we're already in a good spot`— y el log **se demuestra a sí mismo**
+que la perilla estaba en 0, porque con ella en 1 esas dos líneas son imposibles. Lo que falta es la
+mitad de tratamiento, **y la candidata obvia no discrimina**:
+`campIsGood = ( boredOrRand and not veryHighHealth ) or weapRange > 6000` (`shared.lua:2405`) tiene
+**dos** candados, y con el fantasma a HP lleno se cierran los dos a la vez.
+
+> *Con dos candados posibles y uno solo medido, una ausencia no dice cuál de los dos cerró.*
+
+Se cierra en un minuto: fantasma **herido**, a más de **1400 u**, `huntdirect 0` + `truerange 1`.
+
+**La 05** el autor la forzó (*«al iniciar uno nuevo siempre hay un error de Lua con truerange 0»*)
+cuando el handoff la daba por imposible de forzar. Y ese *siempre* tiene un número: el perch de
+`shared.lua:8308` usa `chanceNeeded = 85` cuando `wepRange == math.huge` y `15` cuando no. **La perilla
+no lo apaga: lo baja de 85 % a 15 %.** O sea que una sola corrida limpia con `truerange 1` no cierra
+nada — 85 de cada 100 salen así por azar.
+
+⚠ **Y son TRES `movement_perch` distintos, que el handoff trataba como uno:**
+
+| sitio | motivo | qué lo cierra | ¿determinista? |
+|---|---|---|---|
+| `shared.lua:2458` | `ea, camp or perch, perch` | `notMelee` pasa a false | **sí** |
+| `shared.lua:8201` | `i ran out of places, and i have a real weapon` | `not IsMeleeWeapon` pasa a false | **sí** |
+| `shared.lua:8308` | `i wandered a long time, ill wait here` | baja el chance de 85 a 15 | **no** |
+
+Los tres imprimen el mismo error —*«tried to start already active task: movement_perch»*— y **el
+motivo de la línea es lo único que los separa**.
+
+### Lo que quedó cerrado de rebote, en filas marcadas sin correr
+
+- **El error de Lua del §3.4 está apagado, y lo prueba la fila 01**: su
+  `movement_biginertia  i ran out of unreached spots, going back` es el `elseif` de abajo del perch de
+  `:8201`, y llegar ahí con el fantasma desarmado exige `truerange 1`. *Una línea que prueba la perilla
+  y el arreglo al mismo tiempo.*
+- **El contacto corrió 64 veces sin un error** (61 en la P0, 3 en la fila 03), todas con `sin efecto`
+  porque el autor jugaba con `god`. La cadena entera del §3.5 —distancia → traza → hook
+  `PhantasmagoriaGhostCatch` → `ability.onCatch` → `TakeDamageInfo`— está ejercida. De la fila 09 sólo
+  falta **la muerte**.
+- **Los tres sitios de llamada están vivos**: `perro ticks 22505`, `compuerta vistas 1401`,
+  `escalera ve 44 · no ve 48`. La precondición del §4.1 se cumple.
+- **La fila 00 confirma el §3.1**: 32 tareas registradas, 8 corriendo, y `movement_watch` y
+  `movement_stalkenemy` como *«solo registrada»*. El evento de mirar fijo del Diseño §10 sigue teniendo
+  con qué existir. ⚠ Lo que la fila **no** dice es que ande.
+
+### Un cero que parecía un defecto y no lo es
+
+`escalera ve 44`, `compuerta vistas 1401` y `pozos salvados 507` sobre un fantasma que el reporte
+imprime **en calma y sin enemigo**. Los tres contadores sólo suben en hunt y son **acumulativos por
+fantasma**: el #612 tenía 372 s de vida y ya había cazado. Escrito para que la próxima sesión no lo
+abra como un defecto.
+
+⚠ **Lo que sí es de calma:** `alcance 24373 veces` y `miedo 21274 veces`. Esas tres funciones no tienen
+guarda de estado **a propósito** (el §3.4 las quiere cerradas *«en toda la base»*), así que **el IDLE
+del fantasma también cambió con este bloque y ninguna fila lo mide**. Es de la fila 11.
+
+### Qué queda
+
+Diez filas. La **01** y la **02** sólo necesitan **declarar la banda de 30-40 m** —el log ya trae todo
+lo demás—; la **08** hay que correrla con `huntdirect 1` puesto **antes** de `phantasmagoria_hunt 1`;
+la **09** y la **12** piden **sacarse el `god` y morirse**. Ningún arreglo de esta entrada se corrió en
+juego: los dos son de instrumento y de A/B, y no tocan la escalera, la compuerta ni el contacto.
+
+**Archivos:** `lua/entities/terminator_nextbot_phantom/server_hunt.lua` (+82 −7) y
+`dev/CORRIDA_hunt_directo_r1.md` (nuevo). Controles sobre el archivo ya parcheado:
+`dev/parsear_sintaxis_glua.py` (0 errores, control roto detectado) y `dev/auditar_ent_a_runtime.py`
+(39 archivos, 0 lecturas de `ENT` a runtime, control roto detectado).
+
+---
+
 ## 2026-08-20 (62) — **La r1 de la cordura CORRIÓ: 4 pasa · 0 falla · 8 sin correr. El desglose cierra contra la barra a cero exacto en las cuatro lecturas — y tres defectos del instrumento salieron de leer su propia salida.**
 
 Reporte íntegro y análisis en [`dev/CORRIDA_cordura_b1_r1.md`](dev/CORRIDA_cordura_b1_r1.md).

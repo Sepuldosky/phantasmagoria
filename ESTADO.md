@@ -13,6 +13,42 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ✅ **LA r1 DEL HUNT DIRECTO CORRIÓ: 4 pasa · 0 falla · 10 sin correr.** CHANGELOG **(64)**,
+> reporte íntegro en `dev/CORRIDA_hunt_directo_r1.md`. **Ninguna roja.** Y el veredicto que ninguna
+> fila mide, del autor: *«el hunt directo probándolo ingame está bien como gameplay, el bot hace lo
+> que se supone que debe hacer»*. Quedó a medias porque se fue a almorzar.
+>
+> ⭐⭐⭐ **El pedido está entero en el log de la fila 02**: `hunt: derecho a el` → `where did they go`
+> → `i got there but nobody's here` → `hunt: derecho a el`, sin `watch` ni `stalkenemy`. **El motivo
+> dice de quién es la decisión** —la base dice `ea, im just gonna rush them, nothing fancy`— así que
+> el A/B no depende de acordarse de la perilla.
+>
+> ⚠⚠⚠ **DOS ARREGLOS, LOS DOS DE LEER LA CORRIDA Y NINGUNO CORRIDO EN JUEGO.** ( 1 ) El **perro
+> guardián acusaba a dos mecanismos apagados**: gritaba en calma nombrando la compuerta y la escalera,
+> que sólo corren en hunt — ahora cuenta en dos casilleros y dice de quién es la culpa; **el rescate no
+> se movió**. ( 2 ) El **corte del apagado se perdía** después de un A/B: la guarda de `huntdirect`
+> salía antes de actualizar `phantom_huntCutFor`, y el registro viejo hacía que el apagado saliera por
+> la idempotencia — el síntoma habría sido *un fantasma en calma corriéndote atrás*.
+>
+> ⚠⚠ **LA FILA 04 BAJA A PASA PARCIAL** y **la 05 no es binaria**. La 04 tiene la mitad de control
+> sólida y la de tratamiento no: `campIsGood` tiene **dos** candados y a HP lleno se cierran los dos, o
+> sea que la ausencia de `camp` no dice cuál fue. La 05 descubrió que hay **tres `movement_perch`
+> distintos** y que el de `shared.lua:8308` **no se apaga: baja de 85 % a 15 %**. El error de Lua que
+> el §3.4 prometía cerrar es el de `:8201`, y **ése sí está cerrado** — lo prueba, de rebote, el
+> `i ran out of unreached spots, going back` de la fila 01.
+>
+> 🔜 **LO SIGUIENTE, y es corto:** la **01** y la **02** sólo piden **declarar la banda de 30-40 m**;
+> la **04** pide un fantasma **herido** a más de 1400 u con `truerange 1`; la **08** hay que correrla
+> con `huntdirect 1` puesto **ANTES** de `phantasmagoria_hunt 1` (si no, `phantom_HuntSwitched` sale
+> por su guarda y `cortes` queda en 0); la **09** y la **12** piden **sacarse el `god` y morirse**.
+>
+> ⚠ **Dos preguntas abiertas para el autor**, las dos en el §5 de la CORRIDA: si el rescate del perro
+> guardián tiene que existir **en calma**, y si la 04 se corre o se deja parcial.
+>
+> ⚠⚠ **EL IDLE TAMBIÉN CAMBIÓ Y NINGUNA FILA LO MIDE.** `GetWeaponRange`, `IsMeleeWeapon` y
+> `EnemyIsLethalInMelee` no tienen guarda de estado **a propósito**, y el reporte lo muestra:
+> `alcance 24373 veces · miedo 21274 veces` sobre un fantasma en calma. Es de la fila 11.
+
 > ✅ **LA CORDURA EXISTE, Y LA r1 YA CORRIÓ: 4 pasa · 0 falla · 8 sin correr.** CHANGELOG **(62)**,
 > reporte íntegro en `dev/CORRIDA_cordura_b1_r1.md`.
 >

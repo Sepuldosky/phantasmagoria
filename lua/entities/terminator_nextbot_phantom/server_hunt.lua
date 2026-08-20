@@ -193,7 +193,10 @@ local function stats( ghost )
         cerca = 0, parados = 0, contactos = 0, muertes = 0, sinEfecto = 0, tapados = 0, banish = 0,
 
         -- el perro guardian
-        sinTarea = 0, rescates = 0,
+        -- ⚠ DOS CASILLEROS Y NO UNO: ver el bloque del perro guardian. Un episodio
+        -- en calma no puede ser de este bloque, y sumarlo al mismo numero que los de
+        -- hunt convierte el contador en una acusacion contra un mecanismo apagado.
+        sinTarea = 0, sinTareaCalma = 0, rescates = 0,
 
         -- lo que se le contesto a la base
         rangePedidos = 0, rangeMentira = 0, miedoPedidos = 0,
@@ -872,10 +875,43 @@ end
 -- y no en nil, y esa diferencia importa: `phantom_SetHunting` se llama tambien
 -- desde `AdditionalInitialize` con el valor que el fantasma ya trae, y con nil
 -- esa llamada de arranque contaria como un cambio.
+--
+-- ⚠ EL `nil` SI APARECE, PERO DESPUES Y A PROPOSITO: la guarda de huntdirect lo
+-- pone para decir *"no se sobre que valor actue"* ( ver el bloque de adentro de
+-- la funcion ). O sea que el arranque nunca corta de mas, y una transicion que
+-- llega despues de un rato con la perilla apagada SIEMPRE corta.
 ENT.phantom_huntCutFor = false
 
 function ENT:phantom_HuntSwitched( hunting )
-    if not cvHuntDirect:GetBool() then return end
+    -- ⚠⚠ EL REGISTRO SE INVALIDA ANTES DE SALIR, Y NO ES PROLIJIDAD: SIN ESTA
+    -- LINEA EL CORTE DEL *APAGADO* SE PIERDE EN SILENCIO. Escrito como un `return`
+    -- pelado, la guarda de idempotencia de abajo queda mirando un valor viejo:
+    --
+    --     huntdirect 0 · se PRENDE el hunt  -> salgo aca, huntCutFor sigue en false
+    --     huntdirect 1 ( se prende la perilla, que no pasa por esta funcion )
+    --     se APAGA el hunt ( hunting = false ) -> false == false, salgo por la guarda
+    --
+    -- ...y el corte del apagado NO OCURRE, que es justo el que server.lua:1231
+    -- llama el importante: sin el, el bot se queda en `movement_followenemy`
+    -- corriendote atras con la caceria ya apagada -- *un fantasma en calma que te
+    -- persigue, que parece un hunt y no lo es*.
+    --
+    -- Con `nil` el registro dice lo unico honesto que puede decir despues de un
+    -- rato apagado: NO SE SOBRE QUE VALOR ACTUE. Y como `nil` no es igual ni a
+    -- `true` ni a `false`, la primera transicion real que llegue despues corta.
+    -- El costo maximo es UN corte de mas; el de no hacerlo es un corte de menos, y
+    -- de los dos errores posibles ese es el caro.
+    --
+    -- ⚠ Y ES ALCANZABLE DESDE LA PLANILLA, no en teoria: la r1 flipeo las perillas
+    -- en ese orden exacto sobre el #565 -- `phantasmagoria_hunt 1` con huntdirect
+    -- todavia en 0 ( fila 01 ) y huntdirect a 1 despues ( fila 02 ) -- y el reporte
+    -- salio con `cortes de tarea al cambiar de estado 0`. La fila 08 no se puede
+    -- cerrar con un fantasma que paso por ahi.
+    if not cvHuntDirect:GetBool() then
+        self.phantom_huntCutFor = nil
+        return
+
+    end
 
     -- ⚠ ESTE CONSUMIDOR **SI** SE GUARDA CONTRA LA REPETICION, al reves que la voz
     -- de la caceria, que cuelga de la misma puerta y a la que se le escribio al
@@ -1156,17 +1192,55 @@ function ENT:phantom_HuntWatchdog( myTbl )
 
     if CurTime() - desde < SIN_TAREA_MAX then return end
 
+    -- ⚠⚠ EL EPISODIO SE ATRIBUYE POR ESTADO, Y LO ARREGLA UNA MEDICION DE LA r1.
+    -- Los dos mecanismos que este perro vigila estan APAGADOS los dos fuera del
+    -- hunt: la compuerta sale por sus dos guardas ( phantom_HuntTaskGate ) y la
+    -- escalera propia delega en la base ( EnemyAcquired ). O sea que un episodio en
+    -- CALMA no puede tener ninguna de las dos causas que el mensaje nombraba -- y
+    -- las nombraba igual, con la misma seguridad que en hunt.
+    --
+    -- No es teorico: en la r1 el perro grito DOS VECES con el fantasma en calma
+    -- ( el #93 de la P0 y el #59 de la fila 05, este ultimo con huntdirect ya en 0 ),
+    -- acusando a un desvio que no pudo ocurrir. El autor lo leyo y pregunto justo eso.
+    -- La misma fila 05 muestra como termina el agujero cuando es de la base: lo cierra
+    -- su propio `reallystuck_handler`, mas tarde.
+    --
+    -- EL RESCATE SE DEJA EN LOS DOS ESTADOS A PROPOSITO. Sacarlo cambiaria el IDLE,
+    -- que este bloque solo tenia que NO ROMPER, y el gameplay del hunt ya se ejercio
+    -- con el perro puesto. Lo que se separa es la CUENTA y la CULPA, no el rescate.
+    -- *Un instrumento que nombra una causa que no pudo correr no esta midiendo:
+    -- esta eligiendo.*
+    local propio = myTbl.phantom_Hunting and cvHuntDirect:GetBool()
     local st = stats( self )
-    st.sinTarea = st.sinTarea + 1
+
+    if propio then
+        st.sinTarea = st.sinTarea + 1
+
+    else
+        st.sinTareaCalma = st.sinTareaCalma + 1
+
+    end
 
     if not myTbl.phantom_sinTareaAviso then
         myTbl.phantom_sinTareaAviso = true
 
+        local causa
+
+        if propio then
+            causa = "( un StartTask que entro en m_ActiveTasks sin callbacks, o un desvio que cayo en " ..
+                "el early-out de taskoverride.lua:167 ). Mirar el ultimo StartTask con term_debugtasks 1."
+
+        else
+            causa = "-- pero NO PUEDE SER DE ESTE BLOQUE: la compuerta y la escalera propia solo corren " ..
+                "en hunt, y aca phantom_Hunting = " .. tostring( myTbl.phantom_Hunting or false ) ..
+                " y huntdirect = " .. ( cvHuntDirect:GetBool() and 1 or 0 ) .. ". Es un agujero de la " ..
+                "base sola, y el suyo lo cierra reallystuck_handler."
+
+        end
+
         ErrorNoHalt( "[Phantasmagoria] el fantasma #" .. self:EntIndex() .. " lleva " ..
             string.format( "%.1f", CurTime() - desde ) .. " s SIN NINGUNA TAREA movement_*, que es el " ..
-            "sintoma del zombi ( un StartTask que entro en m_ActiveTasks sin callbacks, o un desvio que " ..
-            "cayo en el early-out de taskoverride.lua:167 ). Se lo rescata con movement_handler. " ..
-            "Mirar el ultimo StartTask con term_debugtasks 1.\n" )
+            "sintoma del zombi " .. causa .. " Se lo rescata con movement_handler.\n" )
 
     end
 
@@ -1380,7 +1454,8 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cerebro", function( ply )
         say( "              props salvados " .. st.propsSalvados .. " · pozos salvados " .. st.pozosSalvados )
 
         say( "    perro     ticks " .. tostring( ghost.phantom_huntTicks or 0 ) ..
-            " · episodios SIN tarea de movimiento " .. st.sinTarea ..
+            " · episodios SIN tarea de movimiento: " .. st.sinTarea .. " en HUNT ( de este bloque ) · " ..
+            st.sinTareaCalma .. " en calma ( de la base sola )" ..
             " · cortes de tarea al cambiar de estado " .. st.rescates )
 
         -- Y ESTA ES LA GUARDA DE QUE EL TICK EXISTA. Si `BehaveUpdate` dejara de
