@@ -222,7 +222,27 @@ end
 -- una decision de diseno. El dia que se quiera que dos fantasmas coordinen, se
 -- sube A PROPOSITO y se mide. El instrumento lo imprime para que un 0 heredado
 -- no pase por olvido.
-ENT.InformRadius = 0
+--
+-- ⚠⚠ EL NUMERO SE GUARDA ADEMAS EN UN LOCAL, Y ESO NO ES REDUNDANCIA: ES EL
+-- ARREGLO DE UN ERROR QUE EL AUTOR SE COMIO EN LA PRIMERA CORRIDA.
+-- `ENT` es un global que **solo existe mientras este archivo se esta cargando**;
+-- apenas termina el chunk vuelve a ser nil. El reporte de mas abajo lo leia como
+-- `ENT.InformRadius`, y el reporte corre DESPUES -- asi que el comando moria con
+--
+--     server_hunt.lua:1217: attempt to index global 'ENT' (a nil value)
+--
+-- justo despues de imprimir las perillas, y se llevaba puesto TODO el bloque por
+-- fantasma, que es el que trae los contadores. Las guardas del final de este
+-- archivo tambien tocan `ENT`, y esas SI valen: corren al cargar.
+-- *Un mismo nombre es valido o nil segun CUANDO se lo lea, y las dos lecturas se
+-- escriben igual.*
+--
+-- El local sobrevive al chunk porque es un upvalue de las funciones de este
+-- archivo. Y de paso el numero queda con UNA sola casa: el campo se asigna
+-- desde el local, no al reves.
+local INFORM_RADIUS = 0
+
+ENT.InformRadius = INFORM_RADIUS
 
 ---------------------------------------------------------------------------
 -- 2 · DECIRLE LA VERDAD A LA BASE SOBRE EL ARMA
@@ -1214,7 +1234,9 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cerebro", function( ply )
         "   ( alcance de arma Y distancia del contacto: es el mismo numero )" )
     say( "  " .. string.format( "%-38s", "phantasmagoria_ghost_huntflank" ) .. " = " .. cvFlank:GetInt() .. " u" ..
         "   ( por debajo de esto se deja entrar movement_flankenemy )" )
-    say( "  " .. string.format( "%-38s", "ENT.InformRadius" ) .. " = " .. tostring( ENT.InformRadius ) ..
+    -- ⚠ `INFORM_RADIUS` y no `ENT.InformRadius`: ver el bloque del campo, arriba.
+    -- Esta linea es la que mato al comando entero en la primera corrida.
+    say( "  " .. string.format( "%-38s", "ENT.InformRadius" ) .. " = " .. INFORM_RADIUS ..
         "   ( la base trae 20000; en 0, followenemy deja de armar el path de 'split up!' )" )
 
     -- LA PRECONDICION QUE CONTAMINA LA MEDICION, ARRIBA DE LAS FILAS Y NO EN UNA
@@ -1273,6 +1295,21 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cerebro", function( ply )
 
         say( "    corriendo " .. ( #corriendo > 0 and table.concat( corriendo, " · " ) or "!! NINGUNA" ) )
 
+        -- ⚠ EL VALOR DE **ESTA** ENTIDAD, Y SOLO SI NO COINCIDE CON EL DE LA CLASE.
+        -- La linea del panel de arriba dice lo que la CLASE declara; un `lua_run`
+        -- sobre un fantasma vivo escribe en la ENTIDAD, y entonces el panel diria
+        -- 0 mientras el bot anda con otro numero. Es exactamente el problema que
+        -- `PHANTASMAGORIA.FlagOverrides` existe para resolver del otro lado, y ya
+        -- costo una ronda entera en este addon: *el default de la clase y el valor
+        -- del sujeto se leen igual y no son lo mismo.*
+        if ( ghost.InformRadius or INFORM_RADIUS ) ~= INFORM_RADIUS then
+            say( "              !! ESTA entidad tiene InformRadius " .. tostring( ghost.InformRadius ) ..
+                ", no " .. INFORM_RADIUS .. ": alguien lo piso en la instancia y el panel de arriba" )
+            say( "                 -- que lee la CLASE -- no lo puede ver. followenemy le vuelve a" )
+            say( "                 armar el path de 'split up!' si hay otro fantasma cerca." )
+
+        end
+
         say( "    escalera  ve " .. st.escaleraVe .. " · no ve " .. st.escaleraNoVe ..
             " · sin enemigo " .. st.escaleraSinEnemigo ..
             " · delegadas a la base " .. st.escaleraBase )
@@ -1320,6 +1357,23 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_cerebro", function( ply )
             say( "                caso quiere decir 'el contacto no existe': llego. )" )
 
         end
+
+        -- ⚠ EL CADAVER DEL JUGADOR, Y VA ACA AUNQUE EL CAMPO SEA DE server.lua.
+        -- Reportado en juego el 2026-08-20: al matarte, el hook global del
+        -- tercero ( terminator_weapon_dropper.lua ) te crea hasta 6 armas en el
+        -- piso a partir de tu inventario. Se apaga con `DontDropPrimary`, que
+        -- cuelga de `phantasmagoria_ghost_pickup`.
+        --
+        -- Se imprime el CAMPO DE LA ENTIDAD y no la convar, y esa es la
+        -- diferencia que hace que la linea sirva: el tercero lee el campo, asi
+        -- que si la sincronizacion de `BehaveUpdate` dejara de correr, la convar
+        -- seguiria diciendo 0 y el jugador seguiria soltando las armas. Un
+        -- `true` aca es la unica prueba de que lo que decide llego a destino.
+        local noSuelta = ghost.DontDropPrimary == true
+
+        say( "    tu cadaver  " .. ( noSuelta and "CONSERVA tus armas" or "!! SUELTA tus armas" ) ..
+            "   ( DontDropPrimary " .. tostring( ghost.DontDropPrimary ) ..
+            ", sincronizado desde phantasmagoria_ghost_pickup )" )
 
         say( "    le contesto a la base:  alcance " .. st.rangePedidos .. " veces ( " .. st.rangeMentira ..
             " de ellas desarmado ) · miedo " .. st.miedoPedidos .. " veces" )

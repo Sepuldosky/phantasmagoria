@@ -898,6 +898,75 @@ function ENT:CanPickupWeapon( wep, doingHolstered, myTbl, wepsTbl )
 end
 
 ---------------------------------------------------------------------------
+-- ⚠⚠ Y AL MATARTE, EL FANTASMA TE HACE SOLTAR TODAS TUS ARMAS
+---------------------------------------------------------------------------
+-- REPORTADO EN JUEGO POR EL AUTOR ( 2026-08-20 ), con el mecanismo ya
+-- identificado por el: *"cuando te mata en hunt te hace lanzar tus armas, que es
+-- parte del comportamiento normal del terminator para poder tener armas de fuego
+-- que tomar"*. Es exactamente eso, y no es de este addon: es un hook GLOBAL del
+-- tercero, `autorun/server/terminator_weapon_dropper.lua`, cuyo propio
+-- encabezado dice *"give the bot some weapons plssss!"*. Escucha `DoPlayerDeath`
+-- ( :99 ) y, si el que te mato es un terminator, te CREA hasta 6 armas nuevas en
+-- el piso a partir de tu inventario y las tira con `ApplyForceCenter`.
+--
+-- Para un Terminator es su economia entera. Para un fantasma de Phasmophobia es
+-- ruido: no las puede levantar ( `pickup 0` ), y el jugador que reaparece
+-- encuentra su propio arsenal desparramado donde murio.
+--
+-- ⚠ LA SALIDA YA EXISTE EN EL TERCERO Y HAY QUE ELEGIR CUAL DE LAS TRES.
+-- El hook tiene tres guardas por bot, y **no cuestan lo mismo**:
+--
+--   attacker.DontDropPrimary               ( :10 )  *"they cant pick it up!"*
+--   attacker.CanFindWeaponsOnTheGround     ( :11 )  *"they dont want to pick up weapons"*
+--   terminator_playerdropweapons 0         ( :13 )  la convar del tercero
+--
+-- Se censaron los OTROS consumidores de cada una antes de elegir, que es lo que
+-- separa "apaga el sintoma" de "apaga el sintoma y algo mas":
+--
+--   · `CanFindWeaponsOnTheGround` tiene CUATRO consumidores mas, y uno muerde:
+--     `canGetWeapon` ( weapons.lua:1398 ) se sale devolviendo `{}`, o sea que el
+--     fantasma **dejaria de caminar hacia las armas**. Eso contradice la decision
+--     escrita veinte lineas mas arriba -- se conservo `movement_getweapon` a
+--     proposito, *"por si algun dia eso sirve de senuelo"* -- y es un cambio que
+--     el autor no pidio.
+--   · La convar del tercero es GLOBAL: apagaria el drop tambien para los
+--     terminators de verdad, y es `FCVAR_ARCHIVE`, o sea que se guarda en la
+--     maquina del que la toca y despues nadie se acuerda.
+--   · `DontDropPrimary` tiene UN solo consumidor mas: `DoFists` ( weapons.lua:1030 ),
+--     donde apenas saltea un `DropWeapon( false )` previo a darse punos. Este
+--     fantasma tiene `TERM_FISTS = false` y no tiene arma que soltar, asi que
+--     **el colateral es cero**.
+--
+-- *Cuando un tercero ofrece tres puertas para lo mismo, la que sirve es la que
+-- tiene menos consumidores del otro lado, no la que se llama parecido.*
+--
+-- ⚠⚠ Y CUELGA DE `pickup`, NO ES UN `true` FIJO: es LA MISMA decision. Con
+-- `pickup 1` -- el control negativo de la r17 -- el fantasma vuelve a usar armas,
+-- y ahi que el cadaver las provea es coherente con el resto de la economia de la
+-- base. Dos flags que dicen lo mismo y se pueden contradecir son dos flags que
+-- algun dia se contradicen.
+--
+-- ⚠ VA COMO CAMPO Y NO COMO METODO, y no se puede elegir: el tercero lo lee como
+-- `attacker.DontDropPrimary`, o sea un acceso de tabla. Un metodo homonimo seria
+-- una funcion, que es truthy siempre, y entonces el drop quedaria apagado incluso
+-- con `pickup 1` -- el mismo defecto del campo pisado por un metodo que ya costo
+-- una ronda en este addon ( ver la guarda del final de este archivo ).
+--
+-- El default de la CLASE acompana al default de la convar, asi que un fantasma
+-- recien spawneado ya esta bien antes de su primer tick.
+ENT.DontDropPrimary = true
+
+-- La sincronizacion vive en `BehaveUpdate` y no en `AdditionalInitialize`, y el
+-- motivo es el de siempre en este addon: un valor copiado UNA vez al spawnear es
+-- una segunda copia del estado, y se desincroniza en silencio en cuanto el autor
+-- mueve la convar a mitad de una corrida -- que es justo lo que hace un A/B.
+-- Cuesta una asignacion de un booleano por tick.
+local function sincronizarDrop( self, myTbl )
+    myTbl.DontDropPrimary = not cvPickup:GetBool()
+
+end
+
+---------------------------------------------------------------------------
 -- ATRAVIESA LAS PUERTAS
 ---------------------------------------------------------------------------
 -- Un fantasma de Phasmophobia atraviesa las puertas; el Alternate de Mandela
@@ -1307,6 +1376,12 @@ function ENT:BehaveUpdate( interval )
         myTbl.phantom_ReconcileVisibility( self, myTbl )
 
     end
+
+    -- Que el cadaver del jugador NO desparrame su arsenal ( bloque
+    -- DontDropPrimary, mas arriba en este archivo ). Es un booleano copiado de la
+    -- convar del pickup: puesto en el spawn se desincronizaria en cuanto el autor
+    -- moviera la perilla a mitad de corrida.
+    sincronizarDrop( self, myTbl )
 
     -- EL CONTACTO Y EL PERRO GUARDIAN DEL HUNT ( server_hunt.lua ), y van aca por
     -- el MISMO motivo que el reconciliador de arriba: la base corre `RunTask`
