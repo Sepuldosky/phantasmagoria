@@ -13,6 +13,38 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ⭐⭐ **LO ÚLTIMO (2026-08-20, tercera tanda): LAS PROBABILIDADES Y EL DRENAJE.** CHANGELOG **(58)**,
+> diseño §22.9-§22.12. Sigue sin haber una línea de código de las manifestaciones.
+>
+> ⭐⭐ **La redistribución del drenaje PRESERVA la base del juego, y eso es un control que nadie
+> pidió:** con `standing` 5%, `mist`/`singing`/`appear` 10% y `chase` 15%, el esperado por
+> manifestación da **10,00% exacto en cuatro de los seis tipos** — que es la base de Phasmophobia. Los
+> dos que se salen tienen motivo (el Kormos no tiene `chase` ni `mist`; el Oni lleva su ×2).
+>
+> ⚠⚠⚠ **LA FILA DEL ONI SUMA 120% Y LAS OTRAS CINCO SUMAN EXACTAMENTE 1** (sumado con fracciones, no
+> con los % redondeados, que habrían dado 100,01 y lo habrían escondido). Que las otras cierren en 1
+> es lo que lo vuelve un **error** y no una convención de pesos. El exceso es exactamente **1/5**, el
+> tamaño de la duplicación de su `chase`: *se le dobló y no se le descontó a nadie.* Si se ejecuta como
+> pesos, su `chase` real sería **33,33%** y no el 40% escrito, y su esperado pasa de **26% a 21,67%**.
+>
+> ⚠⚠ **La columna «Red light» no tiene destino** — el efecto no se replica, pero su probabilidad está
+> contada dentro del 100%. Borrarla a secas deja al Standard en 14/15. Propuesta: **plegarla sobre
+> `Standing (Standard)`**.
+>
+> ⚠⚠⚠ **El Phantom es de otra especie de regla:** 0,5%/s **mientras lo mires**, a 10 m (**525 u**). Los
+> otros dos modificadores (Banshee condicional, Oni ×2) son un número por evento; el suyo es un
+> **Think con línea de vista y distancia**. *Implementado como los otros dos, el rasgo no existe.*
+>
+> ⚠⚠ **El «objetivo de la Banshee» NO EXISTE** — censado, ninguna línea lo nombra. Su regla de drenaje
+> lo necesita, y el hunt también.
+>
+> ✅ **Pisadas cerradas: sólo `chase` suena.** El bloqueante ② se abarata a un `or` con un término.
+>
+> ⚠⚠ **Y `standing` dejó de ser el evento barato:** su precondición es *«quieto, mirando, cerca y en
+> LOS»*, y ahí le cae encima el defecto medido de §21 — **parar al fantasma le congela la cara**. Es el
+> único de los cinco cuyo comportamiento entero es el caso que ese defecto rompe. **El más barato pasa
+> a ser `appear`.**
+
 > ⭐⭐ **LO ÚLTIMO (2026-08-20, segunda tanda): LOS CUATRO SUSTOS EN MONO Y §22 CON NUEVE DECISIONES
 > TOMADAS.** CHANGELOG **(57)**. Sigue sin haber una línea de código de las manifestaciones.
 >

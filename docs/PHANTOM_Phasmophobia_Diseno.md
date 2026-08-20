@@ -3739,14 +3739,154 @@ nunca hubo un segundo consumidor.
 > a un evento ambiente que en Phasmophobia sí lo tiene, y resuelve el síntoma tapando el eje. Queda
 > escrita como descartada para que nadie la reproponga como si fuera nueva.
 
-### 22.9 Lo que sigue abierto — es poco y nada bloquea
+### 22.9 Las PROBABILIDADES por tipo, y la aritmética que las audita [2026-08-20]
 
-- **Las pisadas de `mist`, `singing` y `standing`.** La spec las fija para `chase` (sí) y `appear` (no).
-  Un `mist` que es nube sin silueta no debería hacerlas; las otras dos están abiertas.
-- **Cuánto drena cada manifestación**, en números. §19.8 tiene el costo por evento justificado; las
-  cinco manifestaciones son consumidores nuevos de esa tabla.
-- **En qué orden se escriben los cinco.** `standing` es el más barato (aparecer, mirar, irse) y `chase`
-  el más caro (puertas + luces + persecución + teletransporte + pisadas + caos).
+Tabla del autor. Siete columnas, y **`standing` viene partido en tres variantes**:
+
+| Ghost | Singing | Standing (Standard) | Standing (Light-breaking) | Standing (Red light) | Chasing | Mist Form | Appear |
+|---|---|---|---|---|---|---|---|
+| **Standard** | 20% (1/5) | 6,67% (1/15) | 6,67% (1/15) | 6,67% (1/15) | 20% (1/5) | 20% (1/5) | 20% (1/5) |
+| **Banshee** | 46,67% (7/15) | 4,44% (2/45) | 4,44% (2/45) | 4,44% (2/45) | 13,33% (2/15) | 13,33% (2/15) | 13,33% (2/15) |
+| **Kormos** | 33,33% (1/3) | 11,11% (1/9) | 11,11% (1/9) | 11,11% (1/9) | **0%** | **0%** | 33,33% (1/3) |
+| **Mare** | 20% (1/5) | 4,44% (2/45) | 11,11% (1/9) | 4,44% (2/45) | 20% (1/5) | 20% (1/5) | 20% (1/5) |
+| **Oni** | 20% (1/5) | 6,67% (1/15) | 6,67% (1/15) | 6,67% (1/15) | **40% (2/5)** | 20% (1/5) | 20% (1/5) |
+| **Shade** | **0%** | 6,67% (1/15) | 6,67% (1/15) | 6,67% (1/15) | 20% (1/5) | **60% (3/5)** | **0%** |
+
+#### ⚠⚠⚠ La fila del Oni suma **120%**, y las otras cinco suman exactamente 1
+
+Sumado con **fracciones exactas** (no con los porcentajes redondeados, que darían 100,01 y esconderían
+el caso):
+
+    Standard  100%   OK        Mare    100%   OK
+    Banshee   100%   OK        Oni     120%   !!! NO SUMA 1
+    Kormos    100%   OK        Shade   100%   OK
+
+**Que las otras cinco cierren en 1 exacto es lo que vuelve al Oni un error y no una convención.** Si la
+tabla fuera de *pesos*, ninguna tendría por qué sumar 1; cinco de seis sumando exactamente 1 dice que
+la intención es **probabilidad**. Y el exceso es exactamente **1/5 = 20%**, o sea el mismo tamaño que
+la duplicación de su `chase` (de 1/5 a 2/5): *se le dobló el chase y no se le descontó a nadie.*
+
+⚠ **Y la consecuencia no es cosmética.** Implementado como pesos —que es lo que un sorteo hace
+naturalmente— el Oni queda normalizado y sus números reales serían otros:
+
+| | declarado | real si se normaliza |
+|---|---|---|
+| chase | 40,00% | **33,33%** |
+| singing / mist / appear | 20,00% | 16,67% |
+| cada standing | 6,67% | 5,56% |
+
+**O sea que el número escrito mentiría.** Hay que elegir: descontarle el 20% a alguna columna (y el
+autor decide a cuál), o declarar la tabla como pesos y **corregir los porcentajes que se muestran**.
+*Una tabla que se lee como probabilidad y se ejecuta como peso da dos respuestas distintas a la misma
+pregunta, y sólo una está impresa.*
+
+#### ⚠⚠ La columna «Red light» no tiene destino — y quitarla rompe las cinco filas que cierran
+
+El autor ya decidió que **el evento de las luces rojas no se replica** (§22.2). Pero la probabilidad
+que esa columna aporta **está contada dentro del 100%**: sacarla deja al Standard en 14/15 y a las
+otras cuatro cortadas por el mismo lugar.
+
+**Salida propuesta, y es la barata:** `Standing (Red light)` **se pliega sobre `Standing (Standard)`** —
+es la misma manifestación menos el efecto rojo, y el fantasma sigue apareciendo, mirando y yéndose. Con
+eso el Standard queda `standing std 2/15 · light-breaking 1/15` y **la fila sigue sumando 1**. Lo que
+**no** se puede hacer es borrar la columna y dejar el resto como está.
+
+### 22.10 El DRENAJE de cordura — los números del autor, y el control que los valida
+
+**Base de Phasmophobia: 10% por manifestación.** Cambios del autor:
+
+| manifestación | drena |
+|---|---|
+| `standing` | **5%** |
+| `mist` · `singing` · `appear` | **10%** |
+| `chase` | **15%** |
+
+#### ⭐⭐ El control que nadie pidió: la redistribución **preserva la base**
+
+Multiplicando cada probabilidad por su costo, el drenaje **esperado por manifestación** de cada tipo:
+
+    Standard   10,00%      Mare     10,00%
+    Banshee    10,00%      Oni      13,00%  ( declarado )
+    Kormos      8,33%      Shade    10,00%
+
+**Cuatro de los seis dan exactamente 10%**, que es la base del juego original. Eso no estaba pedido y
+es la mejor prueba de que los tres números elegidos son coherentes: *bajar `standing` a 5 y subir
+`chase` a 15 se cancela contra las frecuencias, y el promedio no se mueve.*
+
+Los dos que se salen, y los dos con motivo:
+
+- **Kormos 8,33%** — no tiene `chase` ni `mist`, así que le falta la manifestación más cara. Sale
+  **más blando** con la cordura, y es consecuencia de la tabla, no de una decisión aparte.
+- **Oni 13%** — y sobre eso va su **×2**, o sea **26%**. ⚠ Pero ese 13% sale de la fila que suma 120%:
+  **si se normaliza, el esperado del Oni es 10,83% y con el ×2 queda en 21,67%**. La diferencia entre
+  26% y 21,67% es del 20%, y cae justo sobre el fantasma más duro. *El 120% no es un detalle
+  aritmético: mueve el número que define al tipo.*
+
+#### Los tres modificadores por tipo
+
+| tipo | regla | forma |
+|---|---|---|
+| **Banshee** | **15%** al cantar, y **15%** en el resto de manifestaciones **si el evento es para el jugador objetivo que ella señaló** | plano, condicional |
+| **Oni** | **el doble** por manifestación — *«es duro contra la cordura»* | plano, multiplicativo |
+| **Phantom** | **0,5% por segundo** mientras lo veas manifestarse **a 10 m** | ⚠ **continuo** |
+
+> ⚠⚠⚠ **El Phantom es de otra especie de regla, y eso decide dónde va el código.** Los otros dos son un
+> número que se aplica **una vez, cuando el evento ocurre**. El suyo es un goteo que depende de **tres
+> cosas que cambian tick a tick**: que el jugador lo esté mirando, que esté dentro del rango, y cuánto
+> tiempo pasa. No es un multiplicador sobre la tabla de arriba: es un **Think con línea de vista y
+> distancia**. Si se implementa como los otros dos —un número por evento— *el rasgo del Phantom
+> simplemente no existe*, y el instrumento no lo diría.
+>
+> **Los 10 m son 525 u** con la constante del addon (52,5 u/m, Diseño 1).
+>
+> ⚠ **Dos cosas que el autor no dijo y hay que decidir:** si el 0,5%/s es **además** del drenaje plano
+> de la manifestación o **en su lugar** (mirar un `singing` de 15 s entero da 7,5%: sumado son 17,5%,
+> en lugar son 7,5%); y si «a 10 m» es el **límite** del efecto (dentro de 525 u drena) o su
+> **umbral**. La primera lectura de las dos es la natural, pero son dos comportamientos distintos.
+
+> ⚠⚠ **El «jugador objetivo que señaló la Banshee» NO EXISTE, ni en el código ni en el diseño.** Censado
+> hoy: ninguna línea del addon lo nombra. La tabla de tipos sí trae el rasgo como prosa de la fuente
+> (*«hunts based on target's sanity»*, *«will only pursue its target during a hunt»*), pero es
+> comentario, no mecanismo. **Su regla de drenaje necesita ese concepto primero**, y la Banshee lo
+> necesita además para el hunt. *Una regla condicional sobre un concepto inexistente no es una regla:
+> es dos tareas.*
+
+### 22.11 Las PISADAS quedan cerradas
+
+*«`mist` no tiene pisadas, `singing` no tiene pisadas, y `standing` por razones obvias no hay pisadas
+porque no se mueve.»*
+
+| | pisadas |
+|---|---|
+| `chase` | **sí** |
+| `mist` · `singing` · `standing` · `appear` | **no** |
+
+**Sólo `chase` suena.** Eso simplifica el bloqueante ② (§22.4): la condición de `server_steps.lua` no
+necesita crecer a *«cualquier manifestación que suena»* — le alcanza con *«está cazando **o** está en
+`chase`»*. Un `or` con un solo término más.
+
+#### Y `standing` gana una precondición de disparo que choca con algo ya medido
+
+*«Se mantiene quieto mirando al jugador a una distancia cercana y en línea de visión.»* Eso no es sólo
+comportamiento: son **dos condiciones para poder disparar el evento** (cercanía y LOS), del mismo tipo
+que el `mist` necesita para acercarse.
+
+> ⚠⚠ **Y le pega de lleno el obstáculo que §21 dejó medido:** *parar al fantasma le congela la cara*,
+> porque el único escritor de la mirada se sale por debajo de 30 u/s — y `standing` es, literalmente,
+> *quieto y mirando*. Es el **único** de los cinco eventos cuyo comportamiento entero es el caso que
+> ese defecto rompe. **Si `standing` se escribe antes de arreglar la mirada, sale un fantasma quieto
+> con la cara mirando a otro lado**, y el síntoma se leería como un bug del evento nuevo.
+
+### 22.12 Lo que sigue abierto
+
+1. ⚠ **El 120% del Oni** — descontar 1/5 a alguna columna, o declarar pesos y corregir los % impresos.
+2. ⚠ **La columna Red light** — plegarla sobre `Standing (Standard)` es la salida barata; borrarla a
+   secas rompe las cinco filas que cierran.
+3. **El 0,5%/s del Phantom**: ¿además del drenaje plano o en su lugar?
+4. **El objetivo de la Banshee**: hay que crearlo, y lo necesita también el hunt.
+5. **En qué orden se escriben los cinco.** `standing` parecía el más barato y **ya no lo es**: arrastra
+   el arreglo de la mirada. Con lo que se sabe hoy, el más barato es **`appear`** (aparecer en forma 2
+   o 3, acercarse, tocar, `scare_light`, irse a los 10 s) y el más caro sigue siendo `chase`.
 
 > **El orden natural del bloque entero, con lo que se sabe hoy:** primero la **cordura** (la está
 > terminando el autor y cuatro de los cinco eventos la necesitan), después las **tres formas** (que son
