@@ -7,7 +7,7 @@ que se **midió**, no lo que se planea.
 
 ---
 
-## 2026-08-19 (54) — **La fila 05 re-corrida con el sujeto en el estado correcto: `x0.412` exacto, y el pedido 2 queda MEDIDO. De paso quedó medido que un Revenant cazando persigue al jugador al 41 % de su velocidad.**
+## 2026-08-19 (54) — **El pedido 2 CERRADO: `x0.412` con la perilla en 0,7 y `x0.588` con la perilla en 1, los dos exactos. Y de paso quedó medido que un Revenant cazando persigue al jugador al 41 % de su velocidad.**
 
 La entrada (53) dejó escrito que el núcleo del pedido 2 no se había medido porque
 `phantasmagoria_ghost_typespeed` estaba en 0. El autor puso las cuatro líneas en orden —`typespeed 1`
@@ -55,13 +55,40 @@ vuelve a decir con el tipo puesto: dos configuraciones distintas, el mismo vered
    original y no una lectura de este addon. Sigue siendo un bloque aparte: 13 de los 30 tipos traen
    segunda velocidad, y son `onLOS`, `inverseDistance` y `rampDuringHunt` — §5.1 entero.
 
+### ⭐⭐⭐ Y LA FILA 06 — EL CONTROL — CERRÓ EN LA MISMA SESIÓN, con el número exacto
+
+`speedmul 1` sobre el mismo Revenant `#88`, sin respawnear:
+
+    multiplic.  x0.588
+                = tipo x0.588 ( campo phantom_SpeedMul ( tipo ) )   ×   global x1.000
+    speed.base  campo x0.588   la tabla dice x0.588   COINCIDEN
+    objetivo    165 u/s      factor x0.299
+    AHORA       deseada 165 u/s   real 165 u/s      marcha CAZANDO
+
+**165 u/s es el número que el criterio pedía escrito de antemano** (`280 × 0.588 = 164,6`): con el
+global en `x1.000` el producto es el `speed.base` del tipo **pelado**. Y eso **no se podía deducir de
+la 05**: aquélla probó que los dos factores se multiplican, y ésta prueba que **multiplicar por 1 no
+mueve a nadie**. Son dos afirmaciones distintas y hacían falta las dos.
+
+⭐ **Las dos mitades de la fila discriminaron, y la segunda era del instrumento:** *«aparece el aviso
+del global con la convar en 1 → el umbral del aviso está mal puesto»*. **No apareció.** La guarda
+`math.abs( global - 1 ) > 0.0005` se calla sola cuando no hay nada que avisar — *un aviso que grita
+siempre no distingue nada.*
+
+### ✅ EL ARCO DEL PEDIDO 2 QUEDA CERRADO
+
+    05   x0.412 = tipo x0.588 × global x0.700   ->  los dos factores SE MULTIPLICAN
+    06   x0.588 = tipo x0.588 × global x1.000   ->  con el default, NADIE se mueve
+
+**Con esto la frase *«las filas de velocidad viejas no hay que re-correrlas»* deja de ser una
+afirmación mía y pasa a ser una medición.** Era exactamente lo que faltaba, y era lo único que la
+entrada (52) había escrito sin poder respaldar: el cambio de precedencia alcanza a quien mueve la
+perilla y a nadie más.
+
 ### Lo que queda sin correr de este arco
 
-- **La fila 06**, el control del pedido 2: `speedmul 1` sobre el mismo sujeto tiene que dar `x0.588`,
-  `= tipo x0.588 × global x1.000` y `objetivo 165 u/s`. *El álgebra lo predice, y este taller ya pagó
-  por confundir predecir con medir.*
-- **La fila 03**, con la precondición arreglada (`phasedoors 1` y el cuerpo en el vano, nunca
-  `phasedoors 0`).
+- **La fila 03** y nada más: la tirada pegajosa, con la precondición arreglada (`phasedoors 1`,
+  `doorchance 0.3`, `reset`, y el cuerpo en el vano — **nunca** `phasedoors 0`).
 
 Las dos precondiciones defectuosas quedaron corregidas en la planilla, y las dos lecciones en el
 catálogo de controles (**91** y **92**).

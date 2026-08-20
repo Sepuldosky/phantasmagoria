@@ -174,12 +174,43 @@ inocente— pero medido en el estado exacto en el que se reportó el síntoma: *
    juego original y no una lectura de este addon. Sigue siendo un bloque aparte, con su propia
    planilla.
 
+## ⭐⭐⭐ Y LA FILA 06 — EL CONTROL — TAMBIÉN CIERRA, con el número exacto
+
+`speedmul 1` sobre el mismo Revenant `#88`, sin respawnear:
+
+    multiplic.  x0.588   [ foto de hace 0.48 s ]
+                = tipo x0.588 ( campo phantom_SpeedMul ( tipo ) )   ×   global x1.000 ( phantasmagoria_ghost_speedmul )
+    speed.base  campo x0.588   la tabla dice x0.588   COINCIDEN
+    objetivo    165 u/s      factor x0.299
+    AHORA       deseada 165 u/s   real 165 u/s
+    marcha      CAZANDO   la decidio: override propio ( cazando, corre )
+
+**165 u/s es el número que el criterio pedía escrito de antemano** (`280 × 0.588 = 164,6`), y con el
+global en `x1.000` el producto es el `speed.base` del tipo **pelado**. O sea: con la perilla en su
+default, la precedencia nueva y la vieja dan **el mismo número sobre un sujeto CON tipo**. Eso es lo
+que hacía falta medir, y no se podía deducir del cambio anterior — la 05 probó que los dos factores se
+multiplican, y ésta prueba que **multiplicar por 1 no mueve a nadie**.
+
+⭐ **Las dos mitades de la fila discriminaron.** La segunda era del instrumento: *«aparece el aviso del
+global con la convar en 1 → el umbral del aviso está mal puesto»*. **No apareció** — la guarda
+`math.abs( global - 1 ) > 0.0005` está bien puesta, y sale sola cuando no hay nada que avisar. Un
+aviso que grita siempre no distingue nada.
+
+### ✅ EL ARCO DEL PEDIDO 2 QUEDA CERRADO
+
+    05   x0.412 = tipo x0.588 × global x0.700   ->  los dos factores SE MULTIPLICAN
+    06   x0.588 = tipo x0.588 × global x1.000   ->  con el default, NADIE se mueve
+
+**Con esto la frase «las filas de velocidad viejas no hay que re-correrlas» deja de ser una
+afirmación y pasa a ser una medición.** Era exactamente lo que faltaba: el cambio de precedencia
+alcanza a quien mueve la perilla y a nadie más.
+
 ### Lo que queda sin correr de este arco
 
-- **La fila 06** (el control del pedido 2: `speedmul 1` sobre el mismo sujeto tiene que dar
-  `x0.588`, `= tipo x0.588 × global x1.000`, `objetivo 165 u/s`). Con el campo escrito, ahora sí
-  puede fallar. *El álgebra lo predice, y este taller ya pagó por confundir predecir con medir.*
-- **La fila 03**, con la precondición arreglada (`phasedoors 1` y el cuerpo en el vano).
+- **La fila 03** y nada más: la tirada pegajosa, con la precondición arreglada (`phasedoors 1`,
+  `doorchance 0.3`, `reset`, y el cuerpo en el vano — **nunca** `phasedoors 0`). El defecto que iba a
+  atrapar está refutado a medias por los `tiradas 3 / vistas 16` y `tiradas 17 / vistas 20` de las
+  filas 01 y 02, pero eso mide el promedio y no los diez segundos pegado.
 
 ---
 

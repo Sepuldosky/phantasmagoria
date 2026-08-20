@@ -35,9 +35,22 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 > no sabe dónde estás y muy rápido cuando te ve — eso *es* la alternancia. **Sospecha no medida:** que
 > el «revenant rapidísimo» sea el recuerdo del juego original y no una lectura de este addon.
 >
-> ⚠ **Queda sin correr, de este arco:** la **fila 06** (el control del pedido 2 — `speedmul 1` sobre el
-> mismo sujeto tiene que dar `x0.588` y `objetivo 165 u/s`; ahora **sí puede fallar**, porque el campo
-> está escrito) y la **fila 03** con la precondición arreglada (`phasedoors 1`, el cuerpo en el vano).
+> ✅ **Y LA FILA 06 CERRÓ EN LA MISMA SESIÓN: `x0.588 = tipo x0.588 × global x1.000`, `objetivo
+> 165 u/s`** — el número que el criterio pedía escrito de antemano (`280 × 0.588 = 164,6`). Con el
+> global en 1 el producto es el `speed.base` del tipo **pelado**, y eso **no se podía deducir de la
+> 05**: aquélla probó que los dos factores se multiplican, ésta que **multiplicar por 1 no mueve a
+> nadie**. Su segunda mitad también discriminó y era del instrumento: el aviso del global **no
+> apareció** con la convar en 1, así que la guarda `math.abs( global - 1 ) > 0.0005` está bien puesta.
+>
+> **EL ARCO DEL PEDIDO 2 QUEDA CERRADO**, y con él la frase *«las filas de velocidad viejas no hay que
+> re-correrlas»* deja de ser una afirmación y pasa a ser una medición — era lo único que el bloque
+> había escrito sin poder respaldar.
+>
+> ⚠ **Queda sin correr, de este arco: la fila 03 y nada más** — la tirada pegajosa, con la
+> precondición arreglada (`phasedoors 1`, `doorchance 0.3`, `reset`, el cuerpo en el vano; **nunca**
+> `phasedoors 0`). El defecto que iba a atrapar está refutado **a medias** por los `tiradas 3 /
+> vistas 16` y `tiradas 17 / vistas 20` de las filas 01 y 02: eso mide el promedio, no los diez
+> segundos pegado.
 
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-19, r1 CORRIDA): 9 DE 9 EN JUEGO, LOS DOS DEFAULTS MOVIDOS… Y TRES DE
 > ESOS NUEVE VERDES NO MIDEN LO QUE DICEN.** Detalle en el CHANGELOG **(53)**; la corrida entera en
