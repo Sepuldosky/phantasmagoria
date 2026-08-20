@@ -234,11 +234,11 @@ del otro lado, no la que se llama parecido.*
 1. Volcar la corrida a **`dev/CORRIDA_hunt_directo_r1.md`**, con el mismo formato que las otras
    `CORRIDA_*.md` del repo: fila por fila, veredicto, y **la nota aunque la fila pase** — casi todo
    lo que se descubre tarde estaba escrito al costado de algo que había pasado.
-2. **Escribir la entrada del CHANGELOG, que está PENDIENTE.** ⚠ En `f78a0ae` y `d60dc5a` **no se
-   tocó `CHANGELOG.md` ni `ESTADO.md`** a propósito: la sesión de la cordura los tenía abiertos con
-   180 líneas sin commitear, y editar el mismo archivo desde dos sesiones es la falla que ningún
-   pathspec separa. **La última entrada committeada es la (60); el número que le toca a este bloque
-   se toma en el momento**, después de mirar qué números consumió la cordura.
+2. **Escribir la entrada del CHANGELOG, que está PENDIENTE.** En `f78a0ae` y `d60dc5a` no se tocó
+   `CHANGELOG.md` ni `ESTADO.md` a propósito: la sesión de la cordura los tenía abiertos, y editar el
+   mismo archivo desde dos sesiones es la falla que ningún pathspec separa. La cordura ya consumió
+   las entradas **(61)** y **(62)**, así que a este bloque le toca la **(63)** — pero **verificar el
+   número antes de escribirlo**, que para eso está el `grep '^## ' CHANGELOG.md | head`.
 3. Actualizar `ESTADO.md` con lo mismo, y con la misma precaución.
 
 ---
@@ -276,10 +276,29 @@ del otro lado, no la que se llama parecido.*
 
 - El autor es **chileno**: escribirle de **tú**, sin voseo. Vale también para este archivo, que lo
   lee él.
-- ⚠⚠ **Hay otra sesión viva sobre este repo.** Nunca `git add -A`: se stagean **rutas explícitas** y
-  se mira `git log` **después**. El *tell* de que se perdió algo es que un archivo que editaste
-  **deje de aparecer** en `git status`. En este bloque la precaución sirvió: la cordura commiteó dos
-  veces mientras se trabajaba y no hubo colisión porque tocaba otros archivos.
+- ⚠⚠⚠ **HAY OTRA SESIÓN VIVA SOBRE ESTE REPO, Y `git add <ruta>` NO ALCANZA. MEDIDO ACÁ, EN ESTE
+  MISMO BLOQUE.** La regla vieja era «nunca `git add -A`, stagear rutas explícitas». Se cumplió al
+  pie de la letra y **falló igual**: el commit `4e0859b`, que iba a llevar un solo archivo, se llevó
+  **siete** — toda la tajada B1 de la cordura (`phantasmagoria_sanity.lua` con sus 1.636 líneas, su
+  CORRIDA, su auditor, y las entradas (61) y (62) del CHANGELOG) bajo un mensaje que describe 292 de
+  2.856 líneas.
+
+  **El índice es de la CARPETA, no de la sesión.** Entre mi `git add` y mi `git commit` pasaron
+  segundos, y en esa ventana la otra sesión stageó lo suyo; mi `commit` se llevó la unión. No hubo
+  hook ni `commit.all`: fue la ventana. *Una precaución que se aplica en dos pasos tiene una ventana
+  entre los dos pasos, y la ventana es el defecto.*
+
+  **La receta endurecida, y es de un paso:**
+
+  ```
+  git commit -F - -- ruta/uno ruta/dos      # commitea SOLO esas rutas, ignorando el resto del indice
+  ```
+
+  Con `-- <rutas>` git arma el commit desde esas rutas y **no** desde lo que otro haya stageado. Y
+  después, siempre: `git show --stat HEAD` y contar los archivos. El *tell* del defecto viejo era que
+  un archivo tuyo **dejara de aparecer** en `git status`; el *tell* de éste es al revés — aparecen
+  archivos ajenos en tu `--stat`, y **el número de archivos del commit no coincide con el que
+  pediste**.
 - Commits **sin** `Co-Authored-By`.
 - **La base Terminator es de un tercero y no se toca.** Todo va en
   `lua/entities/terminator_nextbot_phantom/`.
