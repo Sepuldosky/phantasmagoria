@@ -11,6 +11,21 @@ que se **midió**, no lo que se planea.
 
 Reporte íntegro y análisis en [`dev/CORRIDA_cordura_b1_r1.md`](dev/CORRIDA_cordura_b1_r1.md).
 
+> ⚠⚠ **DÓNDE BUSCAR ESTO EN `git log`, PORQUE EL MENSAJE NO LO NOMBRA.** Las entradas **(61)** y
+> **(62)** viajaron enteras dentro del commit **`4e0859b`**, cuyo mensaje es
+> *«dev: handoff del hunt directo, para correr la planilla desde un chat limpio»* — de **otra sesión**,
+> que commiteó el índice completo mientras esta tenía sus rutas ya stageadas. De las 2.856 líneas de
+> ese commit, **292 son del handoff que el mensaje describe y 2.564 son la cordura**.
+>
+> **No se reescribió la historia a propósito:** ya estaba pusheado y la otra sesión seguía viva, así
+> que un `--force` podía llevarse trabajo en vuelo. *Un rastro cuesta tres renglones; recuperar el
+> trabajo de otro cuesta una tarde.*
+>
+> La lección, que ya estaba escrita y volvió a morder: **stagear rutas explícitas no alcanza cuando el
+> índice es compartido.** Lo que protege es `git commit -F- -- <rutas>`, que no deja ventana entre el
+> `add` y el `commit` — y el tell de que pasó es que **los archivos que editaste dejan de aparecer en
+> `git status`**.
+
 ### ⭐⭐⭐ Lo que ninguna fila sola mide: el desglose CIERRA en las cuatro lecturas
 
 | fila | inicial | desglose | predice | barra | brecha |
