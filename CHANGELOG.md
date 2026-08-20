@@ -7,6 +7,119 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-20 (55) — **Dos preguntas viejas cerradas sin escribir una línea, dos rutas de sonido que ya estaban muertas, y las manifestaciones escritas en el diseño: TRES formas y CINCO eventos.**
+
+### ✅ El bloque del bot pegado y el vidrio se cierra, y ninguna mitad era del addon
+
+El autor lo pidió hace seis rondas, nunca tuvo línea de investigación, y lo contestó él:
+
+- **El vidrio** — *«era el navmesh del mapa, que era bastante malo en la casa grande»*. No es el
+  pathing ni la máscara de atravesar: el bot pedía un camino que el navmesh declaraba válido.
+- **El pegado** — *«era que me estaba mirando con `movement_watch` o parado por `movement_stalk`»*. O
+  sea que **no estaba trabado: estaba haciendo lo que su tarea decía**. Lo resuelve otra sesión.
+
+> ⚠ **Y eso le pone un límite a un instrumento nuestro que nadie había cuestionado.**
+> `phantom_doorWorst` cronometra *«velocidad < 30 u/s con una puerta delante»* y **no lee la TAREA**,
+> así que un `peor 19,7 s` puede ser un `movement_watch` y no una puerta que no abre. *Un cronómetro
+> de atasco que no sabe qué está haciendo el bot mide quietud, no bloqueo.*
+>
+> ⭐ El prompt de aquel bloque traía como pista *«la base Terminator tendría convars para ver el
+> thinking del NPC»* y **nunca hizo falta medirlo**. *Dos rondas de investigación que no se gastaron
+> porque el que mira la pantalla sabe cosas que la consola no imprime.*
+
+### ⚠⚠ Dos rutas de sonido estaban CITADAS Y SIN ARCHIVO — y hoy a la mañana daban verde
+
+El autor rehizo el canto: *«hice 2 de cada sexo con una amplificación de `male.ogg` y `female.ogg` que
+van a ser borrados, actualiza los sonidos»*. Los borró, y el banco de `server_events.lua` seguía
+nombrándolos. `dev/rutas_de_sonido.py`:
+
+    !! 2 ruta(s) CITADAS Y SIN ARCHIVO ( enmudecen sin error ):
+       phantasmagoria/ghost/humming/female.ogg   ( server_events.lua:1322 )
+       phantasmagoria/ghost/humming/male.ogg     ( server_events.lua:1356 )
+
+**El mismo barrido había dicho `179 rutas, 0 faltantes` tres veces el día anterior**, o sea que el
+instrumento no cambió: cambió el disco. *Un banco de sonido es una lista de promesas sobre archivos
+que otro puede borrar, y el único que se entera es el que corre el barrido.* Reemplazadas por los
+`_singing_2` que las heredan, una por voz (la 1 es la femenina). **179 rutas, 0 faltantes.**
+
+Y de paso quedaron medidos los seis clips de `humming`, con el lector calibrado **4/4** en la misma
+corrida: `voice_1_singing` **9,69 s**, `voice_2_singing` **15,29 s**, `voice_1_singing_2` **25,14 s**,
+`voice_2_singing_2` **25,44 s**, más los dos `musicbox` de ~29 s. Todos mono y 44100.
+
+### ⭐⭐⭐ Diseño §22 — las manifestaciones, dictadas por el autor
+
+**Cómo se abrió, y la corrección vale tanto como la spec.** El autor pidió *«la nube de sombras en la
+silueta»*, no existía en el diseño ni en el código, y **él mismo dio el motivo**: *«en Phasmophobia no
+existe como algo separado, creo que lo pensé por otro juego… y porque GM Paranormal hace eso»*.
+
+> ⚠ **Yo estaba a punto de leer esa ausencia como un hueco.** El diseño sale de la wiki y la tabla de
+> tipos sale de datos del juego: que una mecánica no aparezca en ninguno de los dos es **un dato sobre
+> el juego**, no una tarea pendiente. *Antes de escribir lo que falta, preguntar si falta porque nadie
+> lo escribió o porque no está.*
+
+Lo que sí existe son **tres FORMAS** —`FullForm`, `ShadowForm`, `MistForm`— y **cinco EVENTOS** que las
+visten: `mist`, `chase`, `singing`, `standing`, `appear`. La `MistForm` es lo que el autor llamaba nube:
+*«la silueta con partes de nube como material envolvente del modelo, y este material se mueve»* — o
+sea un VMT con la textura desplazándose, no un `SetMaterial` estático.
+
+**Vocabulario que él fijó y que hay que usar tal cual:** *«gritar en caos»* no es «el equipo
+reacciona», es **un modo de falla del instrumento** (spiritbox con estática desenfrenada, EMF
+alternando estados, cámara borrosa). Por eso `mist` y `singing` **no** lo hacen aunque compartan la
+actividad 7-8 con `appear`, que **sí**. *La actividad y el caos son dos ejes y no uno.*
+
+### ⭐⭐ Dos assets y un display que llevaban rondas esperando una mecánica
+
+- **`scare_light` y `scare_strong`: cuatro clips en disco y CERO citas en Lua.** Lo dice
+  `rutas_de_sonido.py` por omisión — cita 179 rutas y ninguna es ésa. La spec de hoy es la primera que
+  les da un disparador (`mist` y `appear` → light; `chase` → strong).
+- **La actividad 0..10 tiene consumidor y no tiene productor.** El monitor del camión dibuja *«61
+  enteros 0..10, el índice 1 es AHORA»* y su propio comentario admite: *«hoy no hay nada que mida
+  cordura, sonido, movimiento ni actividad»*. Los 6-7 / 7-8 / 8-9 que el autor le puso a cada evento
+  serían **el primer productor de ese dato**, y convertirían una pantalla decorativa en un instrumento.
+
+### ⚠⚠⚠ Los tres bloqueantes, y ninguno es de render
+
+**① La cordura no existe y no es nuestra.** Cuatro de los cinco eventos la dañan y es *lo que los hace
+un evento y no una animación*. §19.8 la dejó diseñada con cero código, por pedido del autor, porque la
+implementación es otra sesión. **Salida escrita:** los cinco eventos se pueden escribir enteros con el
+daño saliendo por una función de un renglón que hoy **no haga nada y lo registre en la bitácora**. Lo
+que no hay que hacer es inventar una cordura local: dos dueños de la misma barra es el defecto que §19
+existe para evitar. *Un stub que registra lo que habría hecho es medible; uno que no registra nada es
+una promesa.*
+
+**② Las pisadas tienen una cita escrita y hoy no la cumplen.** `server_steps.lua` dice textual:
+*«cuando existan los eventos, esta condición crece ahí adentro y no en otro lado»*. Y la spec la parte
+en dos: `chase` **sí** suena, `appear` **no**. **Si no se toca, `chase` sale MUDO y sin error**, porque
+con `stepsonlyhunt 1` —el default— un fantasma manifestado que no está en hunt no hace pisadas.
+
+**③ ShadowForm depende de una luz que no existe — y esto se midió OFFLINE, en un grep de diez
+segundos.** **En todo el addon no hay ni una `ProjectedTexture` ni un `DynamicLight`.** Tampoco hay
+entidades de equipamiento: `lua/entities/` tiene una sola carpeta y es el nextbot, las dos SWEPs son
+cámaras de test, y las tres linternas del lote de 66 modelos son **modelos y materiales, sin lógica**.
+
+> **O sea que la pregunta no era «¿la linterna proyecta sombra?» sino «¿hay una linterna?».** Queda en
+> pie la del jugador de GMod, que sí es una `ProjectedTexture`, y si proyecta la sombra del nextbot
+> depende de `r_flashlightdepthtexture` — eso sigue sin medirse y cuesta diez segundos. *Una
+> precondición que se puede cerrar leyendo el árbol no se manda a medir en juego.*
+>
+> ⚠ Y la consecuencia de diseño no es menor: `appear` se muestra **sólo en formas 2 o 3**. Sin
+> ShadowForm queda con **una sola**. *Una forma que no se puede mostrar no recorta un adorno: recorta
+> el sorteo de un evento entero.*
+
+### ⚠ Y un choque ya medido entre la spec y los assets
+
+La manifestación `singing` dura *«casi 15 segundos»* y **dos de los cuatro clips duran 25 s**. El
+fantasma desaparecería con la canción sonando, y el síntoma se leería como un bug de limpieza. Tres
+salidas y hay que elegir una: cortar el clip, alargar la manifestación al largo del clip que salió, o
+sortear sólo entre los que entran. *La duración del asset es parte de la spec del evento, no un detalle
+de implementación.* Además, *«quedarse quieto mirando»* —que es `singing` y `standing`— ya tiene **dos
+obstáculos medidos** al final de §21: parar al fantasma le congela la cara, y «quieto» no tiene una
+pieza limpia.
+
+**Nada de esto tiene código todavía, y las cinco decisiones que faltan están listadas en §22.6.**
+
+---
+
 ## 2026-08-19 (54) — **El pedido 2 CERRADO: `x0.412` con la perilla en 0,7 y `x0.588` con la perilla en 1, los dos exactos. Y de paso quedó medido que un Revenant cazando persigue al jugador al 41 % de su velocidad.**
 
 La entrada (53) dejó escrito que el núcleo del pedido 2 no se había medido porque

@@ -3441,3 +3441,196 @@ del sonido ya existe y se llama `voice`**: el rasgo del tipo la fija (Banshee y 
 be female»*) y si no, se sortea una vez por fantasma. Lo que **no** tiene dónde engancharse es la
 mitad de los modelos: `ENT.Models` es un campo **de clase**, no por instancia. Esa es la pieza nueva,
 y va con §12.2.
+
+
+---
+
+## 22. Las manifestaciones — **TRES FORMAS y CINCO EVENTOS** [2026-08-20]
+
+**Cómo se abrió esta sección, y la corrección vale tanto como la spec.** El autor pidió *«la nube de
+sombras en la silueta del fantasma»*. Busqué esa mecánica en el diseño y en el código y **no existía
+en ningún lado** — y él mismo dio el motivo antes de que yo terminara de preguntar:
+
+> *«Ya veo por qué no hay nube de sombras como diseño propio: es porque en Phasmophobia no existe como
+> algo separado, creo que lo pensé por otro juego de similares características y porque GM Paranormal
+> hace eso.»*
+
+⚠ **Eso es exactamente lo que la ausencia estaba diciendo, y yo estaba a punto de leerla como un
+hueco.** La tabla de los 30 tipos sale de datos del juego; el diseño sale de la wiki y de mediciones.
+Que una mecánica no aparezca en ninguno de los dos es **un dato sobre el juego**, no una tarea
+pendiente. *Antes de escribir lo que falta, preguntar si falta porque nadie lo escribió o porque no
+está.* Es pariente del nº 87: una ausencia sólo vale como dato cuando se sabe que el generador no la
+produjo — acá el «generador» era el juego mismo.
+
+Lo que sí existe, y es de lo que se trata este bloque: **la niebla es una de las tres FORMAS en que el
+fantasma se muestra**, y las formas son el vestuario de **cinco EVENTOS de manifestación**.
+
+### 22.1 Las tres FORMAS — cómo se ve el fantasma cuando se ve
+
+Nombres fijados por el autor, en inglés y sin traducir, para que no se inviertan al leerlos (misma
+precaución que §20.6 tomó con `blinkRate`):
+
+| | Nombre | Qué es | Lo que trae de técnico |
+|---|---|---|---|
+| **1** | **FullForm** | totalmente visible, el modelo como es | nada nuevo: es lo que se dibuja hoy |
+| **2** | **ShadowForm** | como sombra. ⚠ **Necesita una linterna que PROYECTE la sombra.** Los Shade se proyectan generalmente siempre así | ⚠⚠ **la linterna del equipo NO emite luz — medido, ver abajo** |
+| **3** | **MistForm** | la silueta con partes de nube **como material envolvente del modelo**, y **el material se mueve**: eso es lo que lo hace parecer nube | un VMT propio con la textura desplazándose (proxy de scroll). No existe |
+
+> ⭐ **La MistForm es lo que el autor llamó «nube de sombras».** Con la aclaración de que *«en realidad
+> es la silueta con partes de nube como material envolvente»*, la opción correcta de las tres que le
+> ofrecí era la del material — pero **no `SetMaterial` a secas**: el material tiene que estar **en
+> movimiento**, y eso es un proxy o una textura animada, no un VMT estático.
+>
+> ⚠ **Y ShadowForm no es «un material oscuro».** *«Se necesita una linterna que proyecte la sombra»* —
+> o sea que la forma no es un aspecto del modelo, es **una consecuencia de la iluminación**. Eso la
+> vuelve la única de las tres cuya viabilidad **no depende de un VMT nuestro**.
+>
+> ⚠⚠⚠ **Y ACÁ HAY UNA MEDICIÓN OFFLINE QUE CAMBIA EL PLAN, hecha el 2026-08-20 en un grep de diez
+> segundos: EN TODO EL ADDON NO HAY NI UNA `ProjectedTexture` NI UN `DynamicLight`.** Cero. Y tampoco
+> hay entidades de equipamiento: `lua/entities/` tiene **una sola** carpeta y es el nextbot, las dos
+> únicas SWEPs son cámaras de test, y los tres tiers de linterna del lote de 66 modelos son
+> **modelos y materiales, sin lógica**.
+>
+> **O sea que la pregunta no era «¿la linterna proyecta sombra?» sino «¿hay una linterna?», y la
+> respuesta es que todavía no.** Lo que hoy puede iluminar al fantasma es la **linterna del jugador de
+> GMod** (la tecla `F`), que sí es una `ProjectedTexture` — y si proyecta sombra del nextbot depende
+> de `r_flashlightdepthtexture`, que es del cliente. *Eso* sigue sin medirse y sigue costando diez
+> segundos: pararse con la linterna de GMod frente al fantasma y mirar el piso.
+>
+> **Las dos mitades hay que decirlas por separado y el orden importa:** la del equipo está **cerrada**
+> (no existe) y la del jugador está **abierta** (existe y no se sabe si proyecta). Sin separarlas,
+> «ShadowForm no se ve» tendría dos causas que se ven iguales. *Una precondición que se puede cerrar
+> leyendo el árbol no se manda a medir en juego.*
+
+### 22.2 Los cinco EVENTOS — la tabla, con lo que el autor dictó
+
+Todo lo de esta tabla es **spec del autor**, no lectura mía. Donde él no dijo, dice *(sin decidir)*.
+
+| | Formas | Dura | Actividad | ¿grita el equipo? | Puertas | Luces | Pisadas | Al tocar al jugador | Cordura |
+|---|---|---|---|---|---|---|---|---|---|
+| **mist** | *(ninguna: es nube sin silueta)* | 10-15 s | 7-8 | **no** | — | — | *(sin decidir)* | `scare_light` y se disipa | daña |
+| **chase** | 1 y 3 (los Shade suelen ser 3) | 10 s | 8-9 | **sí** | **cierra TODAS de golpe**, sin pestillo | parpadean **todas las cercanas** | **sí** | daño **grande** + `scare_strong` + desaparece (**se teletransporta**) | grande |
+| **singing** | 1, 2 y 3 | ~15 s | 7-8 | **no** | — | — | *(sin decidir)* | *(no se toca)* | **poca**, como el mist |
+| **standing** | 1, 2 y 3 | unos segundos | 6-7 | *(sin decidir)* | — | parpadean **o ninguna** (sorteo) | *(sin decidir)* | *(no se toca)* | **ligera** |
+| **appear** | **sólo 2 o 3** | *(sin decidir; se asume como chase)* | 7-8 | **sí** | **no cierra** | **no** | **no** | `scare_light` | ataca acercándose |
+
+**El vocabulario que el autor fijó, y que hay que usar tal cual:**
+
+- **«gritar en caos»** = *«que se vuelvan locos los instrumentos: el spiritbox haga estática
+  desenfrenada, el EMF alterne en estados, la cámara de video esté borrosa»*. **No** es simplemente
+  «el equipo reacciona»: es un modo de falla del instrumento, y por eso `mist` y `singing` **no** lo
+  hacen aunque tengan la misma actividad 7-8 que `appear`, que **sí**. *La actividad y el caos son dos
+  ejes y no uno.*
+- **La actividad va de 0 a 10 y el 10 es el hunt.** Las cinco manifestaciones caen entre 6 y 9.
+- **`chase` es «como un hunt pero light»** — visible, persigue, suena, y termina en 10 s si no te pilla.
+- **`appear` es «como chase pero sin cerrar las puertas»**, sin luces y sin pisadas.
+- **`standing` es «como un jump scare»**: aparece en la habitación, te mira, se va.
+- **El `mist` deja estela:** *«la nube deja una estela de nubes, es literal como si un orbe de niebla
+  se moviera en el aire»*, y **la nube ES el fantasma como entidad**, no un prop aparte.
+
+⚠ **Lo que el autor sacó explícitamente del alcance:** en Phasmophobia el `standing` puede **tornar
+las luces rojas**. *«Ese evento acá no lo vamos a replicar.»*
+
+### 22.3 Qué de todo esto YA EXISTE — el mapa de enganches, leído hoy
+
+Esto **sí** es lectura mía, con el archivo al lado. Es la parte que decide cuánto cuesta cada evento.
+
+| Pieza que la spec pide | Estado | Dónde |
+|---|---|---|
+| Motor de eventos con sorteo, pesos por tipo, bitácora y comando | **existe y cerró en juego** | `server_events.lua`, 8 categorías |
+| El evento `light` (parpadeo de luces) | **existe** | idem — lo reusan `chase` y `standing` |
+| El evento `door` | **existe y abre**; ⚠ **cerrar de golpe es nuevo** | `server_doors.lua` |
+| `scare_light` / `scare_strong` | ⭐ **4 clips en disco y CERO citas en Lua** | `sound/phantasmagoria/ghost/scare_*` |
+| Banco `paranormal_voice` por voz | **existe**, partido en `whisper` / `voice` / `breath` | `server_events.lua` |
+| `banshee_scream` | carpeta en disco | idem |
+| Canto (`humming`) | **existe**, y hoy es sonido y nada más | idem |
+| El render de la invisibilidad | **existe y está medido**: `ENT:Draw` del cliente lee un NW var | `client.lua:111` |
+| Las tres FORMAS | **nada** | — |
+| Los cinco EVENTOS | **nada** | — |
+| **Cordura** | ⚠⚠⚠ **CERO código.** Diseñada en §19, y su implementación es **de otra sesión por pedido del autor** | — |
+| **Actividad 0..10** | ⚠⚠ **CERO código** — pero **el consumidor ya está construido** | `phantasmagoria_trucktv_screen.lua` |
+
+> ⭐⭐ **`scare_light` y `scare_strong` son cuatro assets esperando una mecánica desde hace rondas.**
+> Están en disco, tienen su voz 1 y su voz 2, y **ningún `.lua` los nombra** — lo dice
+> `dev/rutas_de_sonido.py` por omisión: cita 179 rutas y ninguna es ésa. La spec de hoy es la primera
+> que les da un disparador (`mist` y `appear` → `scare_light`; `chase` → `scare_strong`).
+>
+> ⭐⭐ **La actividad tiene consumidor y no tiene productor.** El monitor del camión dibuja *«61 enteros
+> 0..10, el índice 1 es AHORA»*, y su propio comentario dice: *«Arrancan VACÍOS. Que los llene es
+> trabajo del mod; hoy no hay nada que mida cordura, sonido, movimiento ni actividad.»* **Los números
+> 6-7 / 7-8 / 8-9 / 10 que el autor puso en cada evento serían el primer productor de ese dato.** Eso
+> convierte una pantalla decorativa en un instrumento — y de paso en una fila de check que se lee sin
+> consola.
+
+### 22.4 Los tres bloqueantes, y ninguno es de render
+
+**① La cordura no existe y no es nuestra.** Cuatro de los cinco eventos la dañan, y es *lo que los
+hace un evento y no una animación*. §19.8 la dejó diseñada con las tasas y el costo por evento
+justificados, **y con cero código, por pedido del autor, porque la implementación es otra sesión**.
+
+> **Salida escrita, para no quedarse esperando:** los cinco eventos se pueden escribir enteros con el
+> daño saliendo por **una sola función de un solo renglón** (`PHANTASMAGORIA.DrainSanity( ply, n,
+> motivo )`) que hoy **no haga nada y lo diga en la bitácora**. El día que la cordura exista, se
+> conecta en un lugar. ⚠ Lo que **no** hay que hacer es inventar una cordura local acá: dos dueños de
+> la misma barra es exactamente el defecto que §19 existe para evitar. *Un stub que registra lo que
+> habría hecho es medible; uno que no registra nada es una promesa.*
+
+**② Las pisadas tienen una cita escrita y hoy no la cumplen.** `server_steps.lua` dice, textual:
+*«CUALQUIER fantasma sólo suena cuando está manifestado… hoy no hay eventos, así que el hunt es lo
+único que se le puede atar — cuando existan los eventos, esta condición crece ahí adentro y no en otro
+lado.»* Y la spec de hoy **la parte en dos**: `chase` **sí** suena, `appear` **no**.
+
+> ⚠ **Si esto no se toca, `chase` sale MUDO y no da error.** Con `stepsonlyhunt 1` —que es el default—
+> un fantasma manifestado que no está en hunt no hace pisadas. La condición tiene que pasar de *«está
+> cazando»* a *«está cazando **o** en una manifestación que suena»*, y el `o` lo decide cada evento.
+
+**③ ShadowForm depende de una luz que hoy no existe.** Ver §22.1: **el addon no tiene ni una
+`ProjectedTexture` ni un `DynamicLight`**, y las linternas del lote son modelos sin lógica. Queda en
+pie la linterna del jugador de GMod, y si ésa proyecta la sombra del nextbot **no está medido** —
+cuesta diez segundos.
+
+> ⚠ **Y la consecuencia de diseño no es menor:** `appear` se muestra **sólo en formas 2 o 3**. Si
+> ShadowForm no se puede ver, `appear` queda con **una sola forma** y deja de ser *«2 o 3»* para ser
+> *«3»*. Ese evento es el que más depende de que esto se resuelva antes de escribirse, y por eso la
+> medición **va primero**. *Una forma que no se puede mostrar no recorta un adorno: recorta el sorteo
+> de un evento entero.*
+
+### 22.5 Lo que ya está medido y choca con la spec
+
+**El canto dura más que la manifestación que lo contiene.** Los cuatro clips, medidos hoy con
+`dev/duracion_ogg.py` y el lector calibrado 4/4 en la misma corrida:
+
+| clip | dur |
+|---|---|
+| `voice_1_singing.ogg` | **9,69 s** |
+| `voice_2_singing.ogg` | **15,29 s** |
+| `voice_1_singing_2.ogg` | **25,14 s** |
+| `voice_2_singing_2.ogg` | **25,44 s** |
+
+La manifestación `singing` dura *«casi 15 segundos»*. **Dos de los cuatro clips duran 25 s**, así que
+el fantasma desaparecería con la canción todavía sonando — y el síntoma en juego sería *«se fue y la
+música siguió»*, que se lee como un bug de limpieza y es una decisión de duración sin tomar. Tres
+salidas, y hay que elegir una: cortar el clip al desaparecer, **alargar la manifestación al largo del
+clip que salió**, o sortear sólo entre los que entran. *La duración del asset es parte de la spec del
+evento, no un detalle de implementación.*
+
+**Y quedarse quieto mirando ya tiene dos obstáculos medidos**, escritos al final de §21 cuando el
+autor pidió *«el canto que te mira»*: **parar al fantasma le congela la cara**, porque el único
+escritor de la mirada se sale por debajo de 30 u/s; y *«quedarse quieto»* no tiene una pieza limpia,
+el piso duro es 1 u/s. **Eso alcanza a `singing` y a `standing`, que son los dos eventos que piden
+exactamente eso.**
+
+### 22.6 Lo que falta decidir antes de escribir una línea
+
+1. **Las pisadas de `mist`, `singing` y `standing`** — la spec las nombra para `chase` (sí) y `appear`
+   (no) y calla en las otras tres. Un `mist` que es una nube sin silueta **no debería** hacer pisadas;
+   `singing` y `standing` están abiertos.
+2. **Si `standing` hace gritar al equipo.** Tiene actividad 6-7, la más baja de las cinco, y el autor
+   no lo dijo. Con la regla que él mismo fijó —el caos no se sigue de la actividad— hay que preguntarlo.
+3. **Cuánto dura `appear`.** Se asume «como chase» (10 s) porque él lo describió por diferencia, pero
+   no lo dijo.
+4. **El canto que sobra** — las tres salidas del §22.5.
+5. **En qué orden se escriben los cinco.** `standing` es el más barato (aparecer, mirar, irse) y
+   `chase` el más caro (puertas + luces + persecución + teletransporte + pisadas + caos). El orden
+   natural es el que deja medible a cada pieza antes de que la siguiente dependa de ella.
+

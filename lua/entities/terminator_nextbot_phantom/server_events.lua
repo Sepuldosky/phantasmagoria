@@ -1316,10 +1316,22 @@ local VOZ = {
             "phantasmagoria/ghost/breathing/voice_1_03.ogg",
             "phantasmagoria/ghost/breathing/voice_1_04.ogg",
         },
+        -- ⚠⚠ ERA `female.ogg` Y EL ARCHIVO SE FUE DEL DISCO ( 2026-08-20 ). El
+        -- autor rehizo el canto -- *"hice 2 de cada sexo con una amplificacion de
+        -- male.ogg y female.ogg que van a ser borrados"* -- y los reemplazos son
+        -- los `_singing_2`, uno por voz. La voz 1 es la femenina, asi que la que
+        -- hereda a `female.ogg` es esta.
+        --
+        -- ⚠ LO IMPORTANTE NO ES EL RENOMBRE: una ruta citada que no existe en
+        -- disco **enmudece sin un solo error**. `dev/rutas_de_sonido.py` las
+        -- agarro las dos en la primera corrida despues del borrado, y las habia
+        -- dado por buenas tres veces el dia anterior -- o sea que el barrido
+        -- discrimina y lo que cambio fue el disco. *Un banco de sonido es una
+        -- lista de promesas sobre archivos que otro puede borrar.*
         humming = {
-            "phantasmagoria/ghost/humming/voice_1_singing.ogg",
-            "phantasmagoria/ghost/humming/voice_1_musicbox.ogg",
-            "phantasmagoria/ghost/humming/female.ogg",
+            "phantasmagoria/ghost/humming/voice_1_singing.ogg",     -- 9,69 s
+            "phantasmagoria/ghost/humming/voice_1_musicbox.ogg",    -- 28,97 s
+            "phantasmagoria/ghost/humming/voice_1_singing_2.ogg",   -- 25,14 s  ( reemplaza a female.ogg )
         },
     },
 
@@ -1350,10 +1362,12 @@ local VOZ = {
             "phantasmagoria/ghost/breathing/voice_2_03.ogg",
             "phantasmagoria/ghost/breathing/voice_2_04.ogg",
         },
+        -- La gemela de la voz 1: `male.ogg` se fue del disco y la hereda el
+        -- `_singing_2` de esta voz. Ver el comentario de arriba.
         humming = {
-            "phantasmagoria/ghost/humming/voice_2_singing.ogg",
-            "phantasmagoria/ghost/humming/voice_2_musicbox.ogg",
-            "phantasmagoria/ghost/humming/male.ogg",
+            "phantasmagoria/ghost/humming/voice_2_singing.ogg",     -- 15,29 s
+            "phantasmagoria/ghost/humming/voice_2_musicbox.ogg",    -- 29,55 s
+            "phantasmagoria/ghost/humming/voice_2_singing_2.ogg",   -- 25,44 s  ( reemplaza a male.ogg )
         },
     },
 }

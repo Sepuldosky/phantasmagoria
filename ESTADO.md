@@ -1,6 +1,6 @@
 # Phantasmagoria — Estado actual y handoff
 
-**Última actualización:** 2026-08-19
+**Última actualización:** 2026-08-20
 **Repo:** https://github.com/Sepuldosky/phantasmagoria (público, MIT)
 **Changelog:** ver [CHANGELOG.md](CHANGELOG.md)
 **Diseño vigente:** [docs/PHANTOM_Phasmophobia_Diseno.md](docs/PHANTOM_Phasmophobia_Diseno.md)
@@ -12,6 +12,28 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 ---
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
+
+> ✅ **EL BLOQUE DEL BOT PEGADO Y EL VIDRIO SE CIERRA SIN ESCRIBIR CÓDIGO (2026-08-20).** Lo pidió el
+> autor hace seis rondas, nunca tuvo línea de investigación, y **las dos mitades resultaron no ser del
+> addon**. Las contestó él:
+>
+> · **El vidrio** — *«era el navmesh del mapa, que era bastante malo en la casa grande»*. No es un
+> defecto de nuestro pathing ni de la máscara de atravesar: el bot pedía un camino que el navmesh
+> declaraba válido. **Nada que arreglar acá.** ⚠ Vale como precaución para futuras corridas: un
+> síntoma de navegación medido en un solo mapa puede ser del mapa, y el addon no tiene forma de
+> distinguirlo desde adentro.
+>
+> · **El pegado** — *«era que me estaba mirando con `movement_watch` o parado por `movement_stalk`»*.
+> O sea que **no estaba trabado: estaba haciendo lo que su tarea decía**, y lo que se leía como un
+> atasco era comportamiento deliberado de la base. **Lo está resolviendo otra sesión.** ⚠ Ojo con
+> `phantom_doorWorst`: ese cronómetro cuenta *«velocidad < 30 u/s con una puerta delante»* y **no sabe
+> por qué** el bot está quieto, así que un `peor 19,7 s` puede ser un `movement_watch` y no una puerta
+> que no abre. *Un cronómetro de atasco que no lee la TAREA mide quietud, no bloqueo.*
+>
+> ⭐ **Y las dos juntas dejan una lección barata:** el prompt de aquel bloque traía como pista *«la base
+> Terminator tendría convars para ver el thinking del NPC»*, y **nunca hizo falta medirlo** — el autor
+> lo resolvió mirando el juego. *Dos rondas de investigación que no se gastaron porque el que ve la
+> pantalla sabe cosas que la consola no imprime.*
 
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-19, cierre del pedido 2): `x0.412` EXACTO, Y EL NÚMERO CAE DONDE EL
 > ÁLGEBRA LO PUSO.** Detalle en el CHANGELOG **(54)**. Con el sujeto en el estado correcto
