@@ -1,0 +1,662 @@
+PROMPT — Phantasmagoria · EL HUNT DIRECTO: sacarle el arbol tactico de la base
+a la caceria, y darle el desenlace (2026-08-20)
+
+> Sale de una sesion de INVESTIGACION, sin una linea de codigo escrita. El autor
+> levanto el sintoma, se leyo la base entera, se leyo HIM, y **el autor corrio
+> DOS experimentos en juego con `term_debugtasks 1`**. Todo lo de los §2 y §3 ya
+> esta medido o leido: no se vuelve a averiguar.
+>
+> ⚠⚠⚠ LA ARQUITECTURA CAMBIO A MITAD DE LA INVESTIGACION, Y ESTA EN EL §4.0.
+> La primera propuesta era la forma de HIM -- sacar tareas del registro con
+> `DoCustomTasks`. **ESTA MAL Y NO SE HACE.** El motivo lo dio el propio autor al
+> final del experimento y lo confirma el Diseno §10: `movement_watch` y
+> `movement_stalkenemy` NO son basura a borrar, son **el evento de mirar fijo**
+> que el diseno ya asigno al estado IDLE. Sacarlas del registro las mata en los
+> dos estados. Se cierran POR ESTADO, no por registro.
+>
+> ⚠ UNA AFIRMACION DE ESTA MISMA INVESTIGACION FUE REFUTADA Y DESPUES RESTITUIDA.
+> Esta marcada donde corresponde. La leccion de metodo esta en el §6.6 y vale mas
+> que el bloque: **una corrida entera a menos de 5 m no puede refutar nada de lo
+> que pasa a 30 m, y la refute igual.**
+>
+> Lo que viene DESPUES de este bloque, y no es de aca: la cordura (§19.8, disenada
+> y con cero codigo) es la que tiene que disparar el hunt. Hoy el gatillo sigue
+> siendo el concommand `phantasmagoria_hunt`, que es manual y provisorio.
+
+
+===============================================================================
+1 · QUE SE QUIERE, EN UNA LINEA
+===============================================================================
+
+Que el fantasma EN HUNT vaya derecho a matarte, y que las tareas tacticas de la
+base -- observar, acechar, campear, flanquear de lejos -- dejen de correr durante
+la caceria SIN dejar de existir para el evento de IDLE.
+
+Textual del autor, al abrir:
+
+  *"la idea del hunt es que no tome en cuenta ninguna logica asi, que si ve al
+  jugador busque la posicion mas directa para atacarlo"*
+
+Textual del autor, al cerrar el experimento:
+
+  *"Parece que flankenemy esta bien como accion, watch y stalk no en hunt; a 10
+  metros o menos viene a pegar, a mas se queda ahi observando cuando doy vuelta a
+  una pared y queda en approachlastseen; si es stalk el 'flankeo' donde se retira
+  el fantasma. Tal vez si debamos crear reglas propias para la persecucion porque
+  movement_stalkenemy y movement_watch puede funcionar para asustar al jugador en
+  un evento a lo lejos (En phasmophobia hay un evento donde se te quedan mirando
+  fijo como a 5-10 metros, puede ser intermitente el fantasma o como una nube
+  oscura de la silueta)"*
+
+Y el requisito que puso el autor sobre el alcance, tambien textual:
+
+  *"el NPC deberia ser capaz de perseguirte, perderte y seguir buscando en hunt"*
+
+O sea: **perseguir, perder, buscar. SI. Observar, acechar, campear: NO.**
+
+
+===============================================================================
+2 · LO QUE YA ESTA MEDIDO EN JUEGO. NO SE VUELVE A CORRER.
+===============================================================================
+
+Dos corridas del autor el 2026-08-20 con `term_debugtasks 1`, en
+`ue_macy_state_psych_center_night` y en el parking del mismo mapa.
+
+-------------------------------------------------------------------------------
+2.1 · A DISTANCIA MEDIA/LARGA EL FANTASMA NO PERSIGUE: ACECHA, Y SIN TOPE
+-------------------------------------------------------------------------------
+Fantasma a 39 m, hunt recien prendido. Lo primero que hace la base:
+
+    movement_watch       ea, watching something
+    movement_stalkenemy  thats enough looking
+    movement_stalkenemy  i did a good stalk and i want to do more   x25
+    ...                                                             x40
+    ...                                                             x50
+
+El autor: *"se quedo mirandome y luego se movio"* · *"se mueve en lateral
+mirandome"* · *"se movio tanto a 32 metros que se escondio detras del asilo"* ·
+*"Por stalkearme le dio la vuelta al asilo, ahora esta a 80 metros"*.
+
+**El bucle de acecho NO TIENE TOPE MIENTRAS TE VEA**, y esta medido en el codigo
+(§3.4). No es que aceche mucho: la unica salida del bucle es **perderte de vista**.
+
+-------------------------------------------------------------------------------
+2.2 · EL FANTASMA SE ACECHO A SI MISMO FUERA DE SU PROPIO ALCANCE
+-------------------------------------------------------------------------------
+A los 80 m el log pasa a:
+
+    movement_stalkenemy  [NULL Entity]  i did a good stalk and i want to do more
+    movement_flankenemy  [NULL Entity]  got too far, i'll just close in
+    movement_handler     [NULL Entity]  i cant reach them, im just gonna do something else
+    movement_approachforcedcheckposition  i should check that spot
+
+`phantasmagoria_ghost_sightdist` vale **3000 u ~= 75 m** (es NUESTRA convar, no de
+la base). El fantasma orbito hasta pasarse de su propio limite y **se perdio solo**.
+La orbita del stalk no consulta ese numero por ningun lado.
+
+-------------------------------------------------------------------------------
+2.3 · EL A/B DEL `my enemy wasnt engagable!` — TRES ESCENARIOS, TRES RESULTADOS
+-------------------------------------------------------------------------------
+El bucle `followenemy -> duelenemy_near -> "my enemy wasnt engagable!" ->
+approachlastseen -> followenemy` era el mas frecuente de una corrida vieja en
+`gm_prison`. El autor lo aislo:
+
+  a) **Parking plano, sin props, a 5 m, dando vueltas en circulo.**
+     NO aparece. El autor: *"no deja de perseguirme"*.
+     => `CanMoveRightUpToEnemy` da `true` en piso plano. NO es la causa ahi.
+
+  b) **Mismo lugar con mesas de por medio (congeladas Y descongeladas).**
+     APARECE. El autor: *"Ese approachlastseen fue porque choco con la mesa!"*
+     => la causa es `NothingOrBreakableBetweenEnemy`.
+     ⚠ Y el autor VERIFICO que **el fantasma atraviesa las mesas y las empuja**.
+
+  c) **Crouch-jump del jugador (salto a lo HL1).** APARECE.
+     => la causa es `CanMoveRightUpToEnemy`: al saltar, el punto medio entre los
+     dos origenes queda en el aire y el trace de 18 u hacia abajo no encuentra piso.
+
+**LAS DOS CONDICIONES ESTAN VIVAS, cada una en su circunstancia.** El escenario (c)
+no estaba planeado: lo midio el autor sin querer, y es la tercera fila del A/B.
+
+-------------------------------------------------------------------------------
+2.4 · A MENOS DE ~5 m EL DUELO NO SE ABORTA NUNCA; A MAS, SE RINDE
+-------------------------------------------------------------------------------
+El autor: *"Mientras este a menos de 5 metros no cambia a watch con 'they're just
+running', si me voy mas lejos stalkea, pero nada que aborte el duelo de cerca"*.
+
+La linea que salta al alejarse es:
+
+    movement_watch  Player  they're just running
+
+que es `movement_duelenemy_near`:7932, con este comentario del autor de la base:
+*"the bot isnt just gonna follow you around like a lobotimised lemming"*.
+**La base decidio explicitamente que no te persiga sin parar.** Es correcto para un
+addon de sandbox y es lo contrario de un hunt.
+
+-------------------------------------------------------------------------------
+2.5 · PRENDER EL HUNT NO INTERRUMPE LA TAREA EN CURSO
+-------------------------------------------------------------------------------
+Medido en las dos corridas. Con el fantasma vagabundeando, `phantasmagoria_hunt 1`
+prende el flag, el enemigo pasa a ser valido -- las lineas siguientes ya dicen
+`Player [1][SEPULDOSKY]` -- pero la tarea sigue siendo la vieja:
+
+    movement_biginertia  Player  i still want to wander
+    movement_handler     Player  im all done wandering
+    movement_wait        Player  wait...
+    movement_handler     Player  all done waiting
+    movement_approachlastseen  Player  ea, where'd they go
+
+`movement_biginertia` elige un punto al azar a **5000-6000 u** (shared.lua:8192) y
+solo re-decide si `IsSeeEnemy` (shared.lua:8262). En la corrida vieja de
+`gm_prison` esto hizo que el fantasma **se fuera a la sala de control mirando al
+jugador**, y el autor lo leyo como un flanqueo. No lo era: era un paseo que nadie
+mato.
+
+-------------------------------------------------------------------------------
+2.6 · EL JUEGO IMPRIMIO EL DIAGNOSTICO DEL ARMA, CON STACK
+-------------------------------------------------------------------------------
+En la corrida 2b aparecio solo, sin buscarlo:
+
+    176  movement_perch  [NULL Entity]  i ran out of places, and i have a real weapon
+    [Terminator Nextbot] ... tried to start already active task: movement_perch
+      1. StartTask - taskoverride.lua:176
+       2. callback - shared.lua:8203
+
+Esa rama (shared.lua:8201) pide `not IsMeleeWeapon( GetWeapon() ) and
+GetWeaponRange() > 2000`. **El fantasma desarmado cumple las dos**, porque
+`GetWeaponRange()` sin arma devuelve `math.huge`. La base literalmente dice *"tengo
+un arma de verdad"* sobre un fantasma que no tiene nada, y de paso destapa un bug
+de la base -- arrancar `movement_perch` estando ya activa -- que **solo un bot con
+esas dos propiedades puede disparar**.
+
+-------------------------------------------------------------------------------
+2.7 · EL FANTASMA NO TE PEGA, Y SON DOS INTERRUPTORES, NO UNO
+-------------------------------------------------------------------------------
+Reporte del autor: *"el bot no me mata, llega cerca y se pega a mi. Pero no me
+golpea ni ataca realmente"*. Su hipotesis era el pickup; es la mitad:
+
+  · `phantasmagoria_ghost_pickup 0` (server.lua:884) -- no levanta armas del piso.
+    Deliberado, y el motivo (animaciones) esta escrito ahi.
+  · `ENT.TERM_FISTS = false` (server.lua:841) -- y el punetazo de la base esta
+    detras de ese flag: `if fistiCuffs and self.TERM_FISTS then` (shared.lua:7686).
+
+Con el pickup en 1 seguiria sin pegarte si no hay un arma tirada. Y en todo el
+addon **no hay una sola linea que le haga dano al jugador**: los unicos
+`TakeDamage` son del fantasma contra si mismo (server_steps.lua, caida).
+
+
+===============================================================================
+3 · LO QUE YA ESTA LEIDO EN EL CODIGO. NO SE VUELVE A BUSCAR.
+===============================================================================
+
+Rutas relativas a `dev/other/phantom/dev2/terminator nextbot/lua/entities/`.
+Todo con archivo y linea, leido el 2026-08-19/20.
+
+-------------------------------------------------------------------------------
+3.1 · LA ESCALERA. `ENT:EnemyAcquired`, terminator_nextbot/shared.lua:2360
+-------------------------------------------------------------------------------
+Es el embudo: la llaman 21 sitios. La persecucion directa es el ULTIMO `else`.
+Orden real de las ramas, con su linea:
+
+   :2376  si `term_ExpensivePath` y el path sirve -> **SALE SIN DECIDIR**
+   :2378  tooDangerousToApproach = EnemyIsLethalInMelee( enemy )
+    -1    intercept / isBeingFooled / `not seeEnemy` -> approachlastseen
+    -2    doBaitWatch                                -> movement_watch
+   :2410  doNormalWatch / beginFirstWatch            -> **movement_watch**
+    -3    campDangerousEnemy                         -> movement_camp
+   :2412  doCamp                                     -> **movement_camp / perch**
+    -4    canRushKiller                              -> flankenemy
+    -5    tooDangerousToApproach                     -> stalk / backthehellup / camp
+   :2417  doStalk                                    -> **movement_stalkenemy**
+   :2420  doFlank                                    -> **movement_flankenemy**
+    -6    else                                       -> movement_followenemy
+
+Los factores, con su linea:
+
+   :2386  weapRange   = GetWeaponRange()
+   :2387  notMelee    = not IsMeleeWeapon( GetWeapon() )
+   :2391  withinWeapRange = weapRange == math.huge or ...
+   :2397  lowOrRand   = ( damaged and rand>15 ) or rand>85     -- ~15% a vida entera
+   :2401  enemyIsNotClose = dist > 500
+   :2404  veryHighHealth  = myHp == maxHp
+   :2405  campIsGood  = ( boredOrRand and not veryHighHealth ) or weapRange > 6000
+   :2412  doCamp      = dist>1400 and ( not doWatch ) and campIsGood and withinWeapRange and notMelee
+   :2417  doStalk     = enemySeesMe(bearing<20) and seeEnemy and ( lowOrRand or veryDamaged ) and sameZ
+   :2420  doFlank     = ( lowOrRand or killer ) and dist >= 400
+
+Tres cosas leidas que hay que saber:
+
+  · **`doWatch` de :2412 NO EXISTE en la funcion.** Es un global `nil`, asi que
+    `not doWatch` es `true` siempre. Defecto de la base; solo abre mas la rama camp.
+  · **`beginFirstWatch` (:2408) esta MUERTO.** Pide `self.watchCount == 0` y
+    `watchCount` nunca se inicializa: arranca `nil` y el primer escritor le pone
+    0.4 o 1. Nunca vale 0.
+  · **`term_DoesntFlank`** existe (:2463 y :2502) y **cubre solo 2 de las ramas**.
+    No sirve como perilla.
+
+-------------------------------------------------------------------------------
+3.2 · DOS VALORES DERIVADOS MIENTEN, Y DE AHI SALE LA MITAD DE TODO
+-------------------------------------------------------------------------------
+**(a) `GetWeaponRange()` devuelve `math.huge` sin arma** --
+terminator_nextbot/weapons.lua:1935, con el comentario del autor de la base:
+*"our eyes have infinite range"*. Consecuencia: para un fantasma desarmado
+
+    campIsGood      = true SIEMPRE   ( weapRange > 6000 )
+    withinWeapRange = true SIEMPRE
+    notMelee        = true SIEMPRE   ( IsFists false + sin arma activa; weapons.lua:978 )
+
+y ademas dan `true` todas las comparaciones de alcance de la base: `> 1250`
+(shared.lua:7439 y :6968), `> 2000` (shared.lua:8201, el del §2.6), `> 6000`.
+**Un fantasma que solo mata tocandote esta siendo tratado como francotirador.**
+
+**(b) `EnemyIsLethalInMelee()`** -- shared.lua:2740. Da `true` si
+`EnemyIsUnkillable` (:2720: vida > 10000 **o godmode**) o si el jugador mato dos
+NPC de la base a menos de 350 u en los ultimos 15 min (hook `terminator_markkillers`,
+:2755). Prende `tooDangerousToApproach`, el creeping agachado, y
+`movement_backthehellup`.
+⚠ **Testear con `god` puesto cambia el comportamiento del bot.** Anotarlo en la
+planilla como precondicion.
+
+-------------------------------------------------------------------------------
+3.3 · EL FLANQUEO ES LITERAL
+-------------------------------------------------------------------------------
+`SetupFlankingPath` (terminator_nextbot/pathoverrides.lua:408) **le suma costo a
+las navareas entre el bot y vos** para que A* las esquive:
+`flankAroundCorridorBetween` (:451) infla el corredor directo y
+`FlankAroundEasyEntraceToThing` (:463) castiga la entrada facil con
+`FLANK_DEFAULT_COST * 2`. La ruta larga es el objetivo declarado, no un efecto.
+
+⚠ **`movement_flankenemy` SIEMPRE construye un path de flanqueo**, aun cuando entra
+como `"too close pal"`. A 2 m eso es un no-op; a 30 m es el desvio. Lo que se acepta
+no es la tarea: **es la distancia a la que se la deja entrar.**
+
+Y aunque no este flanqueando, el path tampoco es recto:
+`NavMeshPathCostGenerator` (pathoverrides.lua:551) **descuenta x0,7 las navareas
+grandes** (:632, *"prefer paths thru simple terrain"*), x0,25 las que ya uso otro
+bot, y penaliza x5..x8 los desniveles. "Pasillo ancho que da la vuelta" le gana a
+"escalera angosta".
+
+-------------------------------------------------------------------------------
+3.4 · EL BUCLE DE ACECHO, Y POR QUE NO TIENE TOPE
+-------------------------------------------------------------------------------
+`movement_stalkenemy` = shared.lua:6402. El reinicio esta en :6972:
+
+    elseif ( data.stalksSinceLastSeen or 0 ) < ( ratio * 5 ) then
+        ...
+        self:StartTask( "movement_stalkenemy", newDat, "i did a good stalk and i want to do more" )
+
+`ratio` vale **1** con la vida entera. Y `stalksSinceLastSeen`:
+
+    :6408  OnStart -> 0
+    :6618  si TE VE           -> 0
+    :6622  si NO te ve        -> +1
+
+O sea: **mientras te vea, el contador queda clavado en 0, `0 < 5` es true, y el
+acecho se reinicia para siempre.** Eso es el x50 del §2.1.
+
+-------------------------------------------------------------------------------
+3.5 · EL DUELO SE RINDE POR DISENO, Y CONTRA UN JUGADOR NO PERDONA NI UN TICK
+-------------------------------------------------------------------------------
+`movement_duelenemy_near` = shared.lua:7495.
+
+   :7505  data.quitTime = CurTime() + Clamp( 15*mul + quitEat, 4, 8 )   -- 4 a 8 s
+   :7573  if enemy:IsPlayer() then data.fightingPlayer = true end
+   :7595  badEnemy si:
+            not IsValid( enemy )
+            ( not canCover and not NothingOrBreakableBetweenEnemy )
+            ( canCover and not IsSeeEnemy )
+            ( not rangedWep and not CanMoveRightUpToEnemy( enemy ) )
+   :7636  if data.badEnemyCounts > 6 **or data.fightingPlayer** then -> abandonar
+   :7649  -> movement_approachlastseen, "my enemy wasnt engagable!"
+   :7686  if fistiCuffs **and self.TERM_FISTS** then ...   <- el punetazo
+   :7932  -> movement_watch, "they're just running"        <- el "lemming"
+
+`canCover` exige **arma a distancia**, asi que para el fantasma es `false` siempre
+y las dos condiciones que quedan son las del A/B del §2.3.
+**Contra un NPC la base tolera 6 ticks malos; contra un jugador aborta en el primero.**
+
+-------------------------------------------------------------------------------
+3.6 · LAS DOS FUNCIONES DEL A/B, Y POR QUE SON NUESTRO PROBLEMA
+-------------------------------------------------------------------------------
+**`CanMoveRightUpToEnemy`** -- terminator_nextbot/enemyoverrides.lua:1256. Si no
+`Term_Leaps`, delega en `GetIsFlatGroundToEnemy` (:1201): toma **el punto medio
+exacto entre los dos origenes** y traza `StepHeight` (18 u) hacia abajo con
+`MASK_SOLID_BRUSHONLY | CONTENTS_MONSTERCLIP`. Cachea 0,5 s, **y el cache sobrevive
+a un cambio de enemigo** (lo dice su propio docstring: *"very lazy check"*).
+Da `false` con pisos distintos, huecos de escalera, y con el jugador en el aire.
+
+**`NothingOrBreakableBetweenEnemy`** -- se escribe en shared.lua:3315-3327 desde
+`ClearOrBreakable` (terminator_nextbot/motionoverrides.lua:76-121): un **hull trace
+con `MASK_SOLID`** de shootpos a shootpos. El rescate del segundo trace
+(shared.lua:3317) solo corre si `DontShootThroughProps`, que **unicamente lo pone el
+csoldier** (terminator_nextbot_csoldier.lua:113).
+
+⚠ **ACA ESTA EL DESACOPLE Y ES NUESTRO, NO DE LA BASE.** El fantasma tiene su
+propia solidez y su propio phase-through (`server_doors.lua` le escribe
+`SetSolidMask`), y el autor **verifico en juego que atraviesa las mesas**. Pero
+las dos funciones de arriba trazan sin consultarlo. *La base esta calculando el
+alcance de un bot que no es el nuestro.*
+
+-------------------------------------------------------------------------------
+3.7 · EL REPARTO ENTRE HUNTERS, QUE HOY ESTA PRENDIDO
+-------------------------------------------------------------------------------
+`ENT.InformRadius = 20000` en la base (terminator_nextbot/shared.lua:135) y el
+fantasma **no la pisa**. Con eso `GetNearbyAllies` (enemyoverrides.lua:1603)
+devuelve vecinos y `GetOtherHuntersProbableEntrance` (:1331) devuelve un punto, y
+entonces **`movement_followenemy` construye un path de FLANQUEO** en su propio
+`OnStart` (shared.lua:7381, *"split up!"*), aunque no este flanqueando.
+
+Con un solo fantasma no muerde. Con dos, si. **HIM pone `InformRadius = 0`**
+(dev/other/phantom/dev2/him/lua/entities/terminator_nextbot_homeless/server.lua:17).
+
+-------------------------------------------------------------------------------
+3.8 · COMO SE ARMA LA LISTA DE TAREAS (y por que el §4.0 dice lo que dice)
+-------------------------------------------------------------------------------
+`ENT:SetupTasks` -- terminator_nextbot/taskoverride.lua:390:
+
+   1. `DoDefaultTasks`  -> llena `self.TaskList` con las ~32 de la base
+   2. `DoCustomTasks( self, TaskList )` -> el hook oficial, taskoverride.lua:276.
+      Su docstring dice *"create a new brain"* y trae **un ejemplo comentado**
+      adentro del archivo mostrando como quedarse con los handlers por nombre.
+   3. `DoClassTasks` (:344) -> agrega `<clase>_handler` desde cada `ENT.MyClassTask`
+      del arbol de bases. **Corre DESPUES**, asi que reasignar `TaskList` NO rompe
+      los `MyClassTask` del fantasma (server_speed.lua, server_doors.lua).
+   4. copia `TaskList` a `m_TaskList` -- **copia, nunca vacia**.
+
+`m_TaskList` es POR INSTANCIA (terminator_nextbot_base/init.lua:140).
+`ENT:HasTask( nombre )` existe (taskoverride.lua:147) y **la base no lo consulta
+antes de ningun `StartTask`**.
+
+HIM usa el hook y reasigna `self.TaskList` entero con **cinco tareas**
+(him/.../server.lua:997): `shooting_handler`, `enemy_handler`, `reallystuck_handler`,
+`movement_handler` (que en `OnStart` salta a la de abajo) y `movement_walkintolos`.
+Su `movement_handler` **nunca llama `EnemyAcquired`**, asi que para HIM la escalera
+del §3.1 es codigo muerto. **Esa es la tecnica; ver el §4.0 para por que NO se copia.**
+
+Y HIM tampoco te pega: su contacto es `Homeless_InstantScorn( enemy )`, disparado
+**desde adentro de su propia tarea de movimiento** (him/.../server.lua:2019), con un
+hook de override (`homeless_ScornOverride`) que un spawnset usa para volverlo letal.
+**Esa parte SI se copia: el desenlace es un paso de la tarea, no un arma.**
+
+-------------------------------------------------------------------------------
+3.9 · EL CENSO QUE DECIDE EL TAMANO DEL TRABAJO
+-------------------------------------------------------------------------------
+En `terminator_nextbot/shared.lua` hay **64 `StartTask` apuntando a las tareas que
+sobran** (19 stalkenemy, 14 perch, 12 flankenemy, 9 camp, 6 watch, 4 backthehellup).
+
+Pero **solo 11 viven adentro de las tareas que se conservan**, y estan contados uno
+por uno:
+
+    movement_handler          :4143 EnemyAcquired
+    movement_search           :5593 EnemyAcquired · :5712 perch
+    movement_searchlastdir    :5905 EnemyAcquired · :5952 EnemyAcquired
+    movement_approachlastseen :7325 perch · :7328 EnemyAcquired
+    movement_followenemy      :7436 stalkenemy · :7439 camp · :7446 stalkenemy · :7449 perch
+    movement_duelenemy_near   :7662 perch · :7667 stalkenemy · :7671 EnemyAcquired
+                              :7689 stalkenemy · :7932 watch
+
+Los otros 53 estan dentro de tareas que, con la guarda puesta, no arrancan.
+**Once sitios, no sesenta y cuatro.**
+
+De esos 11, dos se caen solos al arreglar el §4.1: :7436 pide
+`EnemyIsLethalInMelee`, :7439 pide `GetWeaponRange() > 1250`. Lo que queda es la
+familia **"no puedo llegar"** (`data.Unreachable`), que es un problema distinto.
+
+-------------------------------------------------------------------------------
+3.10 · EL DESENLACE YA ESTA DECIDIDO EN EL DISENO
+-------------------------------------------------------------------------------
+`docs/PHANTOM_Phasmophobia_Diseno.md` §5.4, marcada **[decision del autor]**:
+
+    ability.onCatch = "kill"     -- Demon, Revenant, Oni, Hantu, Moroi...
+    ability.onCatch = "banish"   -- Shade, Yurei, Phantom, Wraith, Goryo...
+
+El Revenant, que es el tipo con el que el autor corrio los dos experimentos, es
+de los letales. **El contacto se escribe con el gancho `onCatch` desde el dia uno**,
+con `kill` implementado y `banish` como rama declarada. Si se hardcodea, hay que
+volver a abrir el cerebro.
+
+
+===============================================================================
+4 · LO QUE HAY QUE ESCRIBIR
+===============================================================================
+
+-------------------------------------------------------------------------------
+4.0 · LA DECISION DE ARQUITECTURA. LEER ANTES QUE NADA.
+-------------------------------------------------------------------------------
+**NO se usa `DoCustomTasks` para sacar tareas del registro.** Se conserva TODO
+registrado y se cierra **por estado**, con `phantom_Hunting`.
+
+Los tres motivos, en orden de peso:
+
+  1. **`movement_watch` y `movement_stalkenemy` tienen una segunda vida, y el
+     diseno ya se la asigno.** §10 del diseno, tabla de reubicacion:
+       | Te observa de lejos, se aleja si lo miras | El estado **IDLE/ROAMING** |
+       | `movement_watch` con `enemyBearingToMeAbs` | El rasgo `shyness`        |
+     Y `docs/PHANTOM_Referencia.md` §5.1 (:242) la documenta como *"el
+     comportamiento HIM, ya escrito"*. **El autor llego a lo mismo solo, mirando
+     el log.** Sacarlas del registro las mata en los dos estados.
+  2. **`TaskList` se arma UNA SOLA VEZ al spawnear** (§3.8). No expresa "lista de
+     hunt" contra "lista de calma".
+  3. **Sacar una tarea del registro y dejar un `StartTask` apuntandole no da
+     error: da un zombi.** Ver §6.1.
+
+-------------------------------------------------------------------------------
+4.1 · DECIR LA VERDAD SOBRE EL ARMA Y SOBRE EL PELIGRO
+-------------------------------------------------------------------------------
+Dos overrides en el fantasma:
+
+  · `ENT:GetWeaponRange` -> un alcance de melee real cuando no hay arma, en vez de
+    `math.huge`. Encadenar a la base cuando SI hay arma (el pickup puede volver a 1).
+  · `ENT:EnemyIsLethalInMelee` -> neutralizado para el fantasma.
+
+**Es lo que mas paga por linea escrita**: cierra `camp` y `perch` en toda la base a
+la vez -- incluidas ramas que no estan en la lista de las 11 -- y **mata el error de
+Lua del §2.6**, que hoy sale en consola con stack.
+
+⚠ El A/B tiene que existir: una convar que devuelva el comportamiento viejo, o esto
+no se puede medir. Y el criterio de la fila **no puede ser "no aparece camp"**: eso
+lo cumple igual un fantasma que no arranca (control #93 del catalogo). Hace falta
+un control POSITIVO en la misma corrida.
+
+-------------------------------------------------------------------------------
+4.2 · `ENT.InformRadius = 0`
+-------------------------------------------------------------------------------
+Una linea (§3.7). Cierra el flanqueo por reparto entre fantasmas. Como HIM.
+Si algun dia se quiere que dos fantasmas coordinen, se sube a proposito y se mide.
+
+-------------------------------------------------------------------------------
+4.3 · ENSENARLE A LA BASE COMO ES ESTE BOT
+-------------------------------------------------------------------------------
+`NothingOrBreakableBetweenEnemy` y `CanMoveRightUpToEnemy` tienen que respetar que
+**este fantasma atraviesa props y no le importa un pozo de 18 u** (§3.6).
+
+Es donde vive el `my enemy wasnt engagable!` del §2.3, y es **nuestro desacople**:
+la solidez del fantasma tiene un dueno unico que es `server_doors.lua`, y esas dos
+funciones trazan sin consultarlo. Los dos escenarios del A/B (props, y jugador en
+el aire) tienen que quedar cubiertos, **y cada uno con su fila**: son dos funciones
+distintas y arreglar una no acredita la otra.
+
+-------------------------------------------------------------------------------
+4.4 · LA GUARDA DE `phantom_Hunting`
+-------------------------------------------------------------------------------
+En `EnemyAcquired` y en las 11 puertas del §3.9. En hunt, la escalera se reduce a:
+
+    ve al jugador          -> movement_followenemy
+    no lo ve               -> movement_approachlastseen
+    llego                  -> el contacto (§4.5)
+    lo perdio del todo     -> movement_search / movement_searchlastdir
+
+`watch`, `stalkenemy`, `camp`, `perch`, `flankenemy`, `backthehellup` **siguen
+registradas y disponibles** para el evento del §10 del diseno.
+
+**El punto de enganche mas barato ya existe y es nuestro:** el fantasma **ya
+overridea `ENT:StartTask`** (`server_stuck.lua:1035`). Es un cuello unico por el que
+pasan las 11 puertas Y la escalera. Evaluar si conviene ahi o en cada sitio -- pero
+ver la trampa del §6.2 antes de decidir, que no es gratis.
+
+⚠ Y `movement_inertia` / `movement_biginertia` **se conservan**: son el vagabundeo
+de fuera del hunt y de ahi cuelga `server_leash.lua`. Se apagan por condicion
+durante el hunt, no por registro. Esto incluye **matar la tarea de movimiento en
+curso al prender el hunt** (§2.5): el mecanismo existe y aparece en los propios logs
+del autor como `KILLED n TASKS CONTAINING: movement` (taskoverride.lua:136).
+
+-------------------------------------------------------------------------------
+4.5 · EL CONTACTO, CON `onCatch`
+-------------------------------------------------------------------------------
+Como HIM (§3.8): **un paso de nuestra tarea**, no `TERM_FISTS` + `duelenemy_near`.
+Aunque se prendieran los punos, el `quitTime` de 4-8 s y el *"lobotimised lemming"*
+(§3.5) devuelven el problema por otro lado.
+
+Bifurca en `ability.onCatch` (§3.10): `kill` implementado, `banish` declarada.
+Hoy no hay tipos con rasgos: el default es `kill`, y el gancho tiene que existir.
+
+
+===============================================================================
+5 · LO QUE **NO** SE ESCRIBE EN ESTE BLOQUE
+===============================================================================
+
+· **La cordura.** Sigue disparandose con `phantasmagoria_hunt`, manual. §19.8 esta
+  disenada con cero codigo y es otra sesion, por pedido del autor.
+· **El evento de mirar fijo** (§10 del diseno, el que el autor describio: *"se te
+  quedan mirando fijo como a 5-10 metros, puede ser intermitente el fantasma o como
+  una nube oscura de la silueta"*). Este bloque solo tiene que **no romperlo**:
+  dejar `watch` y `stalkenemy` registradas y sanas. Escribirlo es despues.
+· **`shouldNotSeeEnemy` / la deteccion (§18.3 del diseno).** El experimento del §2
+  descarto que sea la causa de lo que el autor vio. Sigue siendo trabajo real y
+  sigue siendo otra sesion.
+· **Los 30 tipos y sus rasgos.** `onCatch` se deja enganchado, no poblado.
+· **El bug de la base** de arrancar `movement_perch` estando ya activa (§2.6). Se
+  apaga solo al arreglar el §4.1. **No se parchea la base.**
+
+
+===============================================================================
+6 · LAS TRAMPAS QUE YA SE VEN DESDE ACA
+===============================================================================
+
+6.1 · **UN `StartTask` A UNA TAREA NO REGISTRADA NO DA ERROR: DA UN ZOMBI.**
+      Entra igual en `m_ActiveTasks` -- `IsTaskActive` dice que si y el debug la
+      imprime -- pero `RunTask` la saltea porque no encuentra sus callbacks
+      (taskoverride.lua:39-40). El bot se queda parado, sin tarea de movimiento, en
+      silencio y sin una linea en consola, hasta que lo rescate `reallystuck_handler`.
+      Por eso las puertas se cierran **en la condicion**, no dejandolas apuntar al
+      vacio. `HasTask` como red, y que **grite**.
+
+6.2 · **REDIRIGIR DESDE `StartTask` TIENE UN BORDE.** La base sale temprano si la
+      tarea ya esta activa (taskoverride.lua:167). Si se redirige X -> followenemy
+      en un sitio donde followenemy **ya** estaba activa, el `StartTask` no hace
+      nada y la tarea vieja ya se cerro con `TaskComplete`: **el bot queda sin
+      ninguna**. Hay que revisar sitio por sitio si el llamador hace
+      `TaskComplete`/`TaskFail` antes.
+
+6.3 · **NO SE COPIAN LOS CUERPOS DE LAS TAREAS DE LA BASE.** Una copia de codigo de
+      tercero conserva la propiedad de discriminar mientras envejece -- control #87
+      del catalogo, el que costo dos dias. Se guarda, no se copia.
+
+6.4 · **`term_ExpensivePath` (shared.lua:2376) SALTEA LA ESCALERA ENTERA.** Si el
+      path costo mas de 0,75 s (pathoverrides.lua:854), `EnemyAcquired` devuelve sin
+      decidir. Una fila que espere ver una rama y no la vea puede estar midiendo
+      esto y no el arreglo. **Si una fila sale vacia, el vacio tiene que ser una
+      medicion** -- la leccion de la mirada de Artagdoll.
+
+6.5 · **TESTEAR CON `god` CAMBIA EL BOT.** `EnemyIsUnkillable` (:2720) mira
+      `HasGodMode()` y vida > 10000. Va como precondicion de la planilla.
+
+6.6 · **LA LECCION DE METODO DE ESTA INVESTIGACION, Y ES LA QUE MAS PAGA.**
+      La prediccion *"`doNormalWatch` domina a mas de 500 u"* se hizo leyendo el
+      codigo. Un log del autor en `gm_prison` la refuto y yo me corregi. **La
+      refutacion era falsa**: esa corrida fue casi entera a menos de 5 m, donde
+      `enemyIsNotClose` es falso y la rama **no puede aparecer**. El experimento
+      del §2.1, en la banda correcta, la restituyo palabra por palabra.
+      *Una medicion solo refuta lo que sabe leer* -- ya estaba en la memoria, por
+      el ragdoll del fantasma, y volvi a pisarla igual.
+      **Corolario para la planilla: toda fila que hable de una rama de la escalera
+      tiene que declarar LA BANDA DE DISTANCIA en su precondicion.**
+
+
+===============================================================================
+7 · LOS INSTRUMENTOS QUE YA EXISTEN. NO SE REESCRIBEN.
+===============================================================================
+
+· `term_debugtasks 1` -- de la base. Imprime `entindex · tarea · enemigo · MOTIVO`
+  en cada `StartTask` (taskoverride.lua:210). Los motivos de `EnemyAcquired` son
+  **unicos por rama** (`"ea, watching something"`, `"ea, stalk them"`,
+  `"ea, flank them"`, `"ea, camp or perch, perch"`,
+  `"ea, im just gonna rush them, nothing fancy"`), asi que **una corrida da el
+  reparto sin escribir un instrumento**. Es lo que uso el autor.
+  ⚠ Su propio banner avisa: *"this enables some laggy debug trackers"*.
+· `phantasmagoria_ghost_where` -- nuestro. Cruza `m_TaskList` (registro estatico)
+  contra `m_ActiveTasks` (lo que corre). **La diferencia importa**: en una sesion
+  vieja se leyo "32 tareas" como "32 corriendo" y era falso.
+· `phantasmagoria_ghost_sightdist` -- nuestro, 3000 u por defecto. El del §2.2.
+· El override propio de `ENT:StartTask` en `server_stuck.lua:1035`, que ya anota
+  motivos. Es el mismo cuello del §4.4.
+· ⚠ **La consola de Source trunca en 255 y el sintoma es un error de sintaxis de
+  Lua.** Vale para cualquier `lua_run` de medicion. Y el `console.log` del autor se
+  puede leer desde el workspace: `D:\Steam\steamapps\common\GarrysMod`.
+
+
+===============================================================================
+8 · LA PLANILLA — VA DESPUES DEL CODIGO
+===============================================================================
+
+**Decision del autor, textual:** *"hace un prompt y la planilla despues de hacer el
+codigo en la otra sesion"*.
+
+O sea: primero el codigo, **la planilla se escribe al final de esa misma sesion**,
+antes de que el autor prenda el juego. Formato: `dev/PLANTILLA_CHECKS.md`, hoja en
+`dev/checks/`, un boton por fila.
+
+Las filas que este bloque ya se gano, con lo que cada una tiene que discriminar:
+
+   · el arma no miente mas    -- A/B con la convar; **con control positivo**, no
+                                solo la ausencia de `camp` (§4.1)
+   · el error de Lua del §2.6 -- desaparece con el §4.1. Precondicion:
+                                reproducirlo primero con el A/B en el lado viejo
+   · props de por medio       -- el escenario 2b del §2.3
+   · jugador en el aire       -- el escenario 2c del §2.3, **fila aparte**
+   · la escalera en hunt      -- **con banda de distancia declarada** (§6.6):
+                                una corrida a 30-40 m y otra a menos de 5 m
+   · watch/stalk siguen vivas fuera del hunt -- si no, se rompio el §10 del diseno
+   · el vagabundeo se corta al prender el hunt (§2.5)
+   · el contacto mata, y pasa por `onCatch`
+   · el tope de orbita contra `sightdist` (§10 de este archivo, frontera abierta)
+
+⚠ **Leer el catalogo de controles que dieron el veredicto equivocado -- numerado
+hasta el 99 -- ANTES de escribir la primera fila.** Esta ordenado por familias y
+las ultimas viven arriba de todo en el archivo, asi que se elige que leer sin
+traerlo entero.
+
+
+===============================================================================
+9 · REGLAS DE LA CASA
+===============================================================================
+
+· El autor es CHILENO: escribirle de **tu**, sin voseo. Vale tambien para este
+  archivo, que lo lee el.
+· **Nunca `git add -A`**: hay sesiones paralelas sobre los mismos repos. Se
+  stagean rutas explicitas y se mira `git log` DESPUES.
+· Commits **SIN** `Co-Authored-By`.
+· `dev/other/` esta fuera de todo repo. `phantasmagoria/dev/` SI esta en git.
+· **La base Terminator es de un tercero y no se toca.** Todo lo de este bloque va
+  en `lua/entities/terminator_nextbot_phantom/`.
+· Si el juego contradice a los documentos, **gana el juego**.
+· Antes de teorizar sobre un sintoma en juego, **leer el `console.log`**.
+
+
+===============================================================================
+10 · FRONTERAS ABIERTAS (no son tareas de este bloque)
+===============================================================================
+
+· **El tope de la orbita del stalk contra `sightdist`** (§2.2). Hoy el fantasma
+  puede acecharse hasta perderse solo. Cualquiera sea el estado donde el stalk
+  sobreviva -- y va a sobrevivir, porque es el evento del §10 del diseno -- ese
+  tope tiene que existir. **Se anota como fila, no como codigo de este bloque.**
+· **`doFlank` de la escalera (:2420) no aparecio ni una vez en los experimentos.**
+  Los `movement_flankenemy` de los logs entraron todos como `"too close pal"` o
+  `"enemy is close, gonna rush em"`, o sea cerrando desde cerca. El rodeo largo
+  esta leido en el codigo (§3.3) pero **no esta observado en juego**. No se
+  acredita como visto.
+· **El `movement_search` se ve como un flanqueo** y es lo que el autor quiere
+  conservar. Asumido a proposito. Si algun dia molesta, el numero a tocar es el
+  radio que crece 500 u por reintento (shared.lua:5631).
+· **`GetIsFlatGroundToEnemy` cachea 0,5 s y el cache sobrevive a un cambio de
+  enemigo** (§3.6). Con un solo jugador no muerde; con dos, puede.
