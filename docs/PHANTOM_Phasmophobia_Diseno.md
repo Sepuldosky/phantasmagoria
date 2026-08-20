@@ -2400,7 +2400,7 @@ C necesita las dos cuentas de todas formas.
 
 | | qué es | qué toca |
 |---|---|---|
-| **B1** | la variable + la presencia + la recuperación + los instrumentos | archivo nuevo. **No toca `server_events.lua`** |
+| **B1** | la variable + la presencia + la recuperación + los instrumentos | **ESCRITA el 2026-08-20, sin pasada en juego** — `lua/autorun/phantasmagoria_sanity.lua`, planilla `phantasmagoria-cordura-b1`. **No toca `server_events.lua`** |
 | **B2** | la esfera de los eventos: el tercer retorno `pos` en los ocho y la pasada única | `server_events.lua` + `ghost_flags.lua` |
 | **C** | el gatillo contra el `hunt.threshold` del tipo; jubila la convar andamio `phantasmagoria_hunt` | `server.lua:3815` |
 
@@ -2415,15 +2415,40 @@ estos números y no el mecanismo.
 **Abierto, y son decisiones del autor:**
 
 - ~~**¿La muerte cura?**~~ **CERRADO el 2026-08-18: sí** (§19.8.5).
-- **La calibración de la regeneración pasiva**, que es lo único que quedó con dos salidas escritas:
-  **0,2 %/s con retardo de 45 s** (conserva el número del autor) contra **0,05 %/s sin retardo**
-  (conserva la simplicidad). La aritmética de las dos está en §19.8.5. ⚠ Y sea cual sea, **la fila de
-  la planilla que la juzgue tiene que medir el NETO**, no la tasa: la pregunta que importa no es «¿se
-  regenera?» sino «¿la barra puede llegar al `hunt.threshold` en una partida normal?».
-- **El techo de la zona segura:** ¿100 %, o menos (p. ej. 80 %) para que las pastillas sigan teniendo
-  un lugar que el camión no cubre? La misma pregunta vale ahora para el techo de la regeneración
-  pasiva, y **no tienen por qué ser el mismo número**: un camión que llega a 100 y un goteo que llega
-  a 80 dejarían las tres vías con territorio propio
+- ~~**La calibración de la regeneración pasiva**~~ **CERRADO el 2026-08-20: va 0,2 %/s con retardo de
+  45 s**, o sea el número del autor con la condición que lo hace funcionar. La alternativa —0,05 %/s
+  sin retardo— conservaba la simplicidad y perdía el punto de equilibrio: su empate cae en f = 1/3,
+  contra los f = 2/3 del 0,2 crudo. ⚠ Sigue vigente lo demás del bullet: **la fila que la juzgue mide
+  el NETO**, no la tasa — la pregunta no es «¿se regenera?» sino «¿la barra puede llegar al
+  `hunt.threshold` en una partida normal?». Es la fila **03** de la planilla, y ⚠ **hoy mide una
+  cota y no el neto final**, porque los ocho eventos todavía no drenan (B2): si ya cruza en menos de
+  10 min *sin* ellos, los números están mal seguro; si tarda más de 20, hay que volver a medirla
+  después de B2 antes de tocar nada.
+- ~~**El techo de la zona segura**~~ **CERRADO el 2026-08-20: no son el mismo número.** El goteo
+  pasivo llega a **80 %** y la zona segura a **100 %**, que es la salida que §19.8.8 sugería sin
+  decidir: el goteo te devuelve la partida, el camión te deja impecable, y la pastilla queda como lo
+  único que sube desde 80 al instante. Las tres vías con territorio propio.
+
+  > ⚠⚠⚠ **Y ESA DECISIÓN TIENE UNA CONSECUENCIA QUE NINGUNO DE LOS DOS CALCULÓ AL TOMARLA, y la
+  > destapó la corrida r1 el mismo día: LOS PRIMEROS 20 PUNTOS DE LA BARRA SON DE UNA SOLA
+  > DIRECCIÓN.** Arriba de 80 el goteo pasivo **no actúa ni un tick**. En la fila 03 de la r1 —16
+  > minutos de juego, la barra siempre entre 100 y 88,10— la fuente `regen` reportó
+  > **`inactiva 0/3198 muestras`**: cero de tres mil ciento noventa y ocho.
+  >
+  > **La aritmética de arriba —el punto de equilibrio en `f = 2/3`— sólo vale POR DEBAJO DE 80.**
+  > Encima del techo no hay equilibrio que calcular, porque una de las dos mitades de la resta no
+  > existe. Probablemente sea lo que se quiere (el arranque drena, la recuperación aparece cuando ya
+  > perdiste algo), pero *una consecuencia que no se escribe se re-descubre leyendo un `0/3198` dentro
+  > de tres meses*, y ahí se lee como un defecto.
+
+- ⚠⚠ **Y LA ZONA SEGURA NO TIENE SUJETO — medido, no supuesto.** Censo del 2026-08-20 sobre `lua/`:
+  **cero** apariciones de `terminator_blocktarget` y **ninguna entidad camión**, y §18.1 dice que la
+  zona **sale de esa entidad** (*«se spawnea el camión y su radio es la zona»*). O sea que una de las
+  cuatro vías de goteo está diseñada y no tiene de qué colgar. B1 la registra igual, como fuente
+  continua **INACTIVA que dice por qué lo está**, y con `PHANTASMAGORIA.InSafeZone( ply )` como
+  costura: el día que §18.1 se escriba cambia ese cuerpo y ningún llamador se entera. *Sin su
+  renglón, la fila de la recuperación no distingue «la zona no recupera» de «la zona no existe», y
+  las dos se imprimen como un cero.*
 - ~~**¿Cuánto vale cada tier en la economía de Cargo?**~~ **CERRADO el 2026-08-18**: el autor pasó los
   precios de los 22 equipos y la regla de tiers (T2 ×2, T3 ×3), así que las pastillas son **20 / 40 /
   60 USD** contra **+25 / +40 / +60 %** de efecto. La tabla completa —precio, peso y trivia de cada
@@ -2607,6 +2632,21 @@ Cargo tenga `uses`.
 
 #### 19.9.8 Sin Cargo **no hay camino todavía**, y el andamio lo dice con todas las letras
 
+> ⚠⚠ **ESTE BLOQUE QUEDÓ VIEJO EL 2026-08-20 Y SE CORRIGE ACÁ ARRIBA, no en una nota al pie:** es lo
+> primero que lee el que abre la sección, y una advertencia vencida arriba gana contra el código
+> correcto de abajo. El autor cerró la mitad de Cargo (*«esa parte de Cargo ya se arregló, las
+> pastillas son consumibles de un solo uso stackeable»*), así que **B1 registra los tres tiers como
+> ítems de Cargo** detrás de una detección en runtime. **El andamio de consola no se retira igual**,
+> y por dos motivos que siguen en pie: la planilla tiene que poder correr en un server **sin Corpus
+> montado**, y un rojo del ítem y un rojo de la restauración no se pueden distinguir si la única
+> puerta es el inventario.
+>
+> ⚠ Y el registro **no cuelga de `Corpus.OnReady`**: esa barrera **no dispara en el realm cliente**
+> (medido en Corpus: 4.413 defs y 3 barras del StatusPanel colgadas, sin un solo error de Lua), y una
+> def registrada sólo en el servidor **no existe para el grid** — el `onUse` no viaja por JSON. Cuelga
+> de **tres** señales con guarda de idempotencia, y la línea de log dice **cuál** disparó, **cuántas**
+> defs soltó y **en qué realm**.
+
 > *«Sin Cargo tendría que ir por SWEP, pero aún no hacemos SWEPs porque estoy investigando eso; yo voy
 > primero por Cargo.»*
 
@@ -2621,10 +2661,13 @@ ayuda de la convar y no sólo en este documento.
 
 #### 19.9.9 Lo que queda abierto después de esta ronda
 
-- **La calibración del goteo pasivo** (§19.8.5): 0,2 %/s con retardo de 45 s contra 0,05 %/s sin
-  retardo.
-- **El techo** de la zona segura y el del goteo pasivo, que no tienen por qué ser el mismo número.
-- **`def.uses` en Cargo**, que es lo que decidiría si el frasco de pastillas pasa a `unique`.
+- ~~**La calibración del goteo pasivo**~~ **CERRADO el 2026-08-20**: 0,2 %/s con retardo de 45 s.
+- ~~**El techo** de la zona segura y el del goteo pasivo~~ **CERRADO el 2026-08-20**: 100 y 80, y
+  **no** son el mismo número a propósito.
+- ~~**`def.uses` en Cargo**~~ **YA NO DECIDE NADA: el autor lo cerró del otro lado el 2026-08-20** —
+  *«las pastillas son consumibles de un solo uso stackeable»*. Queda `stackable`, que además es lo
+  único que habilita el **quick bind F1-F4** (`corpus_cargo_ui.lua:288`, condicionado a
+  `class == "stackable"`), y §19.9.7 ya decía que *lo que se usa en pánico va a una tecla*.
 - **El medidor de actividad** (§19.3), que sigue sin diseñar — aunque §19.9.4 le acaba de dar su
   primer insumo: si la cordura mueve el ritmo de los eventos, la actividad y la cordura dejan de ser
   dos variables independientes.

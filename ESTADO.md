@@ -13,28 +13,58 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
-> 🔜 **LO SIGUIENTE ES LA CORDURA — el prompt está escrito: `dev/PROMPT_phantasmagoria_cordura_B1.txt`.**
-> CHANGELOG **(60)**. Acotado a **B1** (la variable + la presencia + la recuperación + los
-> instrumentos; archivo nuevo, **no toca `server_events.lua`**). B2 y C quedan fuera a propósito.
+> ✅ **LA CORDURA EXISTE, Y LA r1 YA CORRIÓ: 4 pasa · 0 falla · 8 sin correr.** CHANGELOG **(62)**,
+> reporte íntegro en `dev/CORRIDA_cordura_b1_r1.md`.
 >
-> ✅ **§22 CIERRA.** El 0,5%/s del Phantom **SUMA** al drenaje base. Tres formas, cinco eventos, la
-> tabla sumando 1 en las seis filas, los drenajes con sus tres modificadores, las pisadas y el objetivo
-> de la Banshee. **Cero código de manifestaciones, y es lo correcto**: cuatro de los cinco necesitan la
-> cordura.
+> ⭐⭐⭐ **El desglose CIERRA contra la barra a cero exacto en las CUATRO lecturas** (99,49 · 100,00 ·
+> 54,10 · 88,10): no hay ningún escritor fuera de la puerta. El goteo dio **0,200 %/s clavado** y la
+> razón hunt/calma **3,84 contra 3,50** diseñado.
 >
-> ⚠⚠⚠ **LO ÚNICO DE B1 QUE, ESCRITO MAL, NO SE ARREGLA AGREGANDO CÓDIGO:** la API tiene que saber
-> expresar **dos formas** de drenaje desde el primer día — el **plano** (un número, una vez: las
-> manifestaciones y los ocho eventos) y el **continuo condicionado** (una tasa por segundo mientras
-> algo se cumple: la presencia, la oscuridad y el Phantom). *Escribir sólo la primera deja al rasgo del
-> Phantom sin poder entrar, y el instrumento no lo diría.*
+> 🔜 **LO SIGUIENTE, cuando estés descansado:** completar la **02** (dejar subir el goteo hasta 80 y
+> ver que ahí se detiene — el techo que decidiste esa noche **no se ejerció**), rehacer la **03** con
+> exposición real al fantasma y sin la linterna todo el rato, y correr **04 · 05 · 06 · 07 · 08 · 09 ·
+> 10**. ⚠ Las perillas que hacían falta ya están **metidas en el botón** de las filas 04, 07 y 09.
 >
-> ⚠ **Dos decisiones del autor siguen abiertas y hay que preguntarlas antes de escribir:** la
-> calibración de la regeneración pasiva (0,2%/s con retardo de 45 s **o** 0,05%/s sin retardo) y el
-> techo de la zona segura (100% u 80%) — que **no tienen por qué ser el mismo número**.
+> ⚠⚠⚠ **El hallazgo de diseño de la r1: el techo de 80 hace que los primeros 20 puntos de la barra
+> sean de UNA SOLA DIRECCIÓN.** `regen inactiva 0/3198 muestras` en 16 min, porque nunca bajó de 80.
+> La aritmética del equilibrio en `f = 2/3` **sólo vale por debajo de 80**. Escrito en §19.8.8.
 >
-> ⭐ **Tres cosas que §19 no sabía y el prompt incorpora:** las pastillas de Cargo **ya están** (§19.9.8
-> quedó viejo), el medidor de actividad **ya tiene números** (§22 le puso la escala), y el consumidor
-> **existe y está vacío** (el monitor del camión dibuja 61 enteros 0..10 que nadie llena).
+> **LO ANTERIOR — la tajada B1 escrita.** CHANGELOG **(61)**.
+> `lua/autorun/phantasmagoria_sanity.lua`, archivo nuevo. Planilla **`phantasmagoria-cordura-b1`**
+> (12 filas, todas sin correr). **No toca `server_events.lua`, `server_hunt.lua`, `server.lua` ni
+> `server_stuck.lua`.**
+>
+> 🔜 **LO SIGUIENTE ES CORRER LA PLANILLA**, y después **B2** (el tercer retorno `pos` en los ocho
+> eventos + `ghost_flags.lua`) y **C** (el gatillo contra el `hunt.threshold` del tipo, que jubila
+> `phantasmagoria_hunt`). Los ocho renglones de evento **ya existen en el desglose** y dicen
+> `( sin llamador todavía )`: B2 no toca el instrumento.
+>
+> ⚠⚠⚠ **LA DECISIÓN QUE ORDENA EL BLOQUE, Y QUEDÓ ESCRITA:** la API expresa **dos formas** de
+> drenaje. La **plana** (`PHANTASMAGORIA.DrainSanity( ply, pct, causa )`) y la **continua**
+> (`PHANTASMAGORIA.RegisterSanityRate( id, fn )`), que es **un registro que el tick interroga** y no
+> llamadas empujadas desde afuera: con llamadas empujadas, *una fuente que dejó de llamar y una fuente
+> que no existe se ven exactamente igual en el reporte*. La **fila 04** de la planilla es la única que
+> puede ver esto, y es la que prueba que el 0,5 %/s del Phantom va a poder entrar.
+>
+> ⭐ **EL CONTADOR VA ANTES DE LA PERILLA.** Toda causa acumula lo que **habría** hecho aunque su
+> perilla esté en 0: la perilla suprime el efecto, nunca la cuenta. Sin eso la fila del control no
+> distingue *«el control funcionó»* de *«el fantasma nunca estuvo cerca»*. El reporte imprime el
+> **potencial** y los **ticks en la esfera** al lado de cada cero.
+>
+> ✅ **Las tres decisiones que estaban abiertas, cerradas por el autor el 2026-08-20:** el goteo pasivo
+> va con **0,2 %/s y retardo de 45 s**; los techos **no son el mismo número** (goteo **80**, camión
+> **100**); y los tres tiers de medicación **se registran como ítems de Cargo** además del andamio.
+>
+> ⚠⚠ **UNA DE LAS CUATRO VÍAS DE RECUPERACIÓN NO TIENE SUJETO: la zona segura.** Censo sobre `lua/`:
+> cero `terminator_blocktarget` y ninguna entidad camión — y §18.1 dice que la zona **sale de esa
+> entidad**. Queda registrada como fuente continua **INACTIVA que dice por qué lo está**, con
+> `PHANTASMAGORIA.InSafeZone` como costura. *Sin su renglón, «la zona no recupera» y «la zona no
+> existe» se imprimen como el mismo cero.*
+>
+> ⚠ **Y un defecto DEL INSTRUMENTO compartido, arreglado:** `dev/verificar_citas_de_planilla.py` no
+> podia ver ningun comando que no fuera **el primero** de un bloque `cmd` multilinea (su `\b` contra
+> el `\n` escapado: no hay borde de palabra entre la `n` y la `p`). En una ronda **ya cerrada** eran
+> **4 de 18** invisibles.
 
 > ⭐⭐ **LO ÚLTIMO (2026-08-20, cuarta tanda): LA TABLA DE MANIFESTACIONES CERRADA — las seis filas
 > suman 1.** CHANGELOG **(59)**, diseño §22.12-§22.15. Sigue sin haber código de manifestaciones.

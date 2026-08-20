@@ -7,6 +7,186 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-20 (62) — **La r1 de la cordura CORRIÓ: 4 pasa · 0 falla · 8 sin correr. El desglose cierra contra la barra a cero exacto en las cuatro lecturas — y tres defectos del instrumento salieron de leer su propia salida.**
+
+Reporte íntegro y análisis en [`dev/CORRIDA_cordura_b1_r1.md`](dev/CORRIDA_cordura_b1_r1.md).
+
+### ⭐⭐⭐ Lo que ninguna fila sola mide: el desglose CIERRA en las cuatro lecturas
+
+| fila | inicial | desglose | predice | barra | brecha |
+|---|---:|---:|---:|---:|---:|
+| P0 | 100 | −0,51 | 99,49 | **99,49** | **0,00** |
+| 00 | 100 | 0,00 | 100,00 | **100,00** | **0,00** |
+| 02 | 100 | −45,90 | 54,10 | **54,10** | **0,00** |
+| 03 | 100 | −11,90 | 88,10 | **88,10** | **0,00** |
+
+Cuatro estados distintos —control, andamio, goteo, presencia con modulador— y la aritmética cierra en
+los cuatro. **No hay ningún escritor fuera de la puerta**, que es lo que el nº 89 pedía demostrar y lo
+que el auditor offline sólo puede afirmar del texto fuente.
+
+### Lo que cerró cada fila verde
+
+- **00, el control**: `100.00` clavada **con 103 ticks en la esfera** y
+  `[ potencial −2,73 %, CONTROL: phantasmagoria_sanity_presencia en 0 ]`. El potencial de
+  `oscuridad ( mod )` salió **−1,36 %, la mitad exacta** — el modulador se calculaba bien *con la causa
+  suprimida*, que era el arreglo puesto horas antes de correr.
+- **01, la presencia**: calma 0,070 %/s, hunt 0,268 %/s. Las dos absolutas por debajo del diseño porque
+  midió a 188-214 u (en la caída, no en la meseta), **pero la razón hunt/calma dio 3,84 contra 3,50
+  diseñado** — y *una razón entre dos ejes de la misma corrida cancela lo que la medida absoluta no
+  puede*. El discriminante del hunt funciona.
+- **02, el goteo**: **0,200 %/s clavado**, sin tolerancia.
+
+### ⚠⚠⚠ El hallazgo de diseño: el techo de 80 hace que los primeros 20 puntos sean de UNA SOLA DIRECCIÓN
+
+`regen inactiva **0/3198 muestras**` en 16 minutos, porque la barra nunca bajó de 80. Es correcto por
+construcción y es consecuencia directa de la decisión del techo tomada esa misma madrugada — **pero la
+aritmética del equilibrio en `f = 2/3` sólo vale por debajo de 80**. Escrito en §19.8.8 para que no se
+re-descubra leyendo un `0/3198` dentro de tres meses.
+
+### ⚠⚠ Tres defectos DEL INSTRUMENTO, encontrados leyendo su propia salida
+
+1. **`( sin llamador todavia )` mentía sobre 9 de los 20 renglones.** Tres estados con el mismo texto:
+   *nadie la llama* (los ocho eventos, cierto), *su fuente corrió y dijo que no* (el goteo, cuya fuente
+   se interrogó **3.198 veces**) y *su disparador existe y no ocurrió* (la muerte, una dosis). Decirle
+   «sin llamador» al goteo manda a buscar un enganche que existe y anda. Ahora cada causa lleva `prod` y
+   el renglón vacío dice cuál de los tres ceros es, con el conteo de interrogaciones y el último motivo.
+   *Es el mismo defecto que este módulo existe para no pagar, y lo tenía el instrumento adentro.*
+2. **El mensaje del techo tapaba el hallazgo de arriba**: decía *«en el techo del goteo ( 80 % )»* con
+   la barra en 88,10 — se lee como «ya terminó» cuando es «todavía no empezó». Ahora dice
+   `POR ENCIMA del techo ( 88.1 > 80 ): no actua hasta bajar de 80`.
+3. **El tick impreso era el PEDIDO, no el real.** Derivado de `segundos/ticks` en las cuatro lecturas,
+   el período real es **0,300 s** contra el `0.25` que imprimía (el timer late a 0,05 y sale en el
+   primer latido que pasa el umbral). Las tasas no se ven afectadas porque el `dt` se mide —el goteo dio
+   0,200 clavado—, pero *un instrumento que imprime lo que se pidió en el lugar de lo que pasa acredita
+   el pedido y no el efecto*. Ahora imprime los dos.
+
+### ⚠⚠⚠ Dos perillas `FCVAR_ARCHIVE` quedaron en 0, y el arreglo va EN EL BOTÓN
+
+El reporte de la fila 03 salió con **`destierro 0`** y **`eventos 0`**, apagadas por la fila 00 y nunca
+restituidas — el nº 91 otra vez, y siguen guardadas después de cerrar el juego. Todavía no mordió
+porque esas filas no se corrieron; corridas así, **la 09 y la 04 habrían salido rojas por la perilla y
+no por el mecanismo**. Las filas 04, 07 y 09 llevan ahora su perilla como **primera línea del comando**:
+*una salida que no se puede producir sin la precondición vale más que una precondición bien escrita*
+(nº 70a), y a las 6 de la mañana eso es la diferencia entre una ronda y dos.
+
+### Lo que queda de la planilla
+
+La **02 está marcada PASA con 2 de sus 4 criterios medidos**: falta la lectura a los 30 s dentro del
+retardo y —la que importa— **que la barra se detenga en 80,00**, o sea que el techo decidido esa noche
+no se ejerció. La **03 quedó SIN CORRER y está bien**: 22 % del tiempo dentro de la esfera y **75 % del
+drenaje ocurrido con la linterna prendida** (×0,5, derivado del `+4,07 %` de la oscuridad contra el
+`−15,97 %` de base) — *una medición sólo refuta lo que sabe leer*, y el instrumento alcanzó para decir
+por qué no refutaba nada.
+
+---
+
+## 2026-08-20 (61) — **La cordura EXISTE: tajada B1 escrita. Las dos formas de drenaje, la esfera de presencia, la recuperación, y un instrumento que dice QUÉ bajó la barra.**
+
+`lua/autorun/phantasmagoria_sanity.lua`, archivo nuevo. Planilla `phantasmagoria-cordura-b1` (12 filas,
+sin correr). **No toca `server_events.lua`, `server_hunt.lua`, `server.lua` ni `server_stuck.lua`.**
+
+### Las DOS formas, y es lo único que no se arreglaba después
+
+    PLANO      PHANTASMAGORIA.DrainSanity( ply, pct, causa )     un número, una vez
+    CONTINUO   PHANTASMAGORIA.RegisterSanityRate( id, fn )       una tasa condicionada, por tick
+
+⚠ La forma continua se escribió como un **registro que el tick interroga**, y no como llamadas
+empujadas desde afuera. La diferencia no es de estilo: con llamadas empujadas, **una fuente que dejó de
+llamar y una fuente que no existe se ven exactamente igual en el reporte** — cero las dos, que es el
+nº 89. Interrogadas, una fuente inactiva **dice que lo está y por qué**. La presencia se escribió *como
+fuente registrada* a propósito: si fuera un caso especial adentro del tick, la fila 04 estaría midiendo
+el tick y no el registro, y no probaría nada sobre el 0,5 %/s del Phantom.
+
+### ⭐ El contador va ANTES de la perilla, y ése es el bloque entero
+
+Toda causa acumula lo que **habría** hecho aunque su perilla esté en 0: **la perilla suprime el efecto,
+nunca la cuenta** (catálogo nº 100). Sin eso la fila del control no distingue *«el control funcionó»* de
+*«el fantasma nunca estuvo cerca»* — el mismo cero que da un mecanismo que jamás corrió. El reporte
+imprime, al lado de cada renglón en cero, el **potencial** y el nombre de la perilla que lo suprimió:
+
+    presencia calma    +0.00 %   en 180.0 s / 720 ticks   [ potencial -18.20 %, CONTROL: ... en 0 ]
+
+Y el estado por jugador lleva un contador de **ticks con el jugador en la esfera** que vive del otro
+lado de esa perilla, para que el cero de la corrida de control **pruebe que la corrida se hizo**.
+
+⚠ Un hueco de este tipo apareció releyendo lo ya escrito y se corrigió: con
+`phantasmagoria_sanity_dark 0` el renglón de la oscuridad quedaba en cero **sin** su potencial, porque
+el tick se salteaba el cálculo del multiplicador. Ahora se calcula siempre y la perilla vive en la
+puerta como todas. La oscuridad es **la única causa con dos perillas** — la suya y la de `presencia` —
+porque *un modulador no existe sin lo que modula*: con una sola, la corrida de control vería moverse la
+barra por el ×1,5 de una presencia apagada.
+
+### Las tres decisiones del autor que §19.8.8 dejaba abiertas
+
+- **El goteo pasivo va con 0,2 %/s y retardo de 45 s** — el número del autor con la condición que lo
+  hace funcionar. Sin el retardo el empate cae en f = 2/3 y el `hunt.threshold` no se alcanza nunca.
+- **Los techos NO son el mismo número: goteo 80, camión 100.** Así las tres vías tienen territorio
+  propio y la pastilla es lo único que sube desde 80 al instante.
+- **Los tres tiers se registran como ítems de Cargo** (soft-dep) además del andamio de consola.
+
+### ⚠⚠ Una de las cuatro vías de recuperación NO TIENE SUJETO, y se midió antes de escribir
+
+Censo sobre `lua/`: **cero** apariciones de `terminator_blocktarget` y **ninguna entidad camión** — y
+§18.1 dice que la zona segura **sale de esa entidad**. Se registra igual, como fuente continua
+**INACTIVA que dice por qué lo está**, con `PHANTASMAGORIA.InSafeZone` como costura. *Sin su renglón, la
+fila de la recuperación no distinguiría «la zona no recupera» de «la zona no existe», y las dos se
+imprimen como un cero.*
+
+### Los tres tiers no son la misma pastilla tres veces, y el nombre lo respeta
+
+`t1_drink` (bebida), `t2_pills` (pastillas), `t3_adrenaline` (adrenalina): **el clip sale del TIER y no
+de la acción**, o un único sonido para los tres suena mal justo cuando el jugador está gastando plata.
+Y la función se llama `UseSanityMed` y no `TakePills`: *el nombre de una función que atiende tres cosas
+tiene que nombrar lo que hacen, no a la primera de las tres.* El registro en Cargo **no cuelga de
+`Corpus.OnReady`** — esa barrera no dispara en el realm cliente —, sino de tres señales con guarda de
+idempotencia, y el log dice cuál disparó, cuántas defs soltó y en qué realm.
+
+### El control que cuenta a los que NO pasan — `dev/auditar_puerta_cordura.py`
+
+Un control que mide la puerta **no descubre que alguien no la llama** (nº 89). Este barre el texto
+fuente, **exige** que el único escritor del número sea el módulo y **prohíbe** el patrón viejo
+(`GetNWFloat` sobre el mismo nombre devuelve **0** con la barra al 72 %, sin error: son dos almacenes
+distintos del engine). Su `--control` inyecta **3** defectos sobre una **copia del árbol real** —no
+sobre una sandbox, que le sacaría justo lo que lee (nº 82)— y falla si detecta un número distinto, de
+más o de menos (nº 72). Verde: **0 escritores clandestinos**, 4 escrituras legítimas adentro de la
+puerta. La mitad en juego es la fila 10: el reporte **cierra el desglose contra la barra** y grita si
+la suma no da.
+
+### ⚠ Y un defecto DEL INSTRUMENTO compartido, que llevaba vivo por lo menos una ronda cerrada
+
+`dev/verificar_citas_de_planilla.py` **no podía ver ningún comando que no fuera el primero de un bloque
+`cmd` multilinea**. Su patron arranca con `\b`, y en `...1\nphantasmagoria_ghost_where` la `n` del
+escape y la `p` del comando son **las dos caracteres de palabra**: no hay borde, asi que la alternativa
+**no puede matchear jamas** y el instrumento imprimia *«los N citados resuelven»* sobre un universo
+recortado. Medido: en `phantasmagoria-hunt-directo-r1` —una ronda **ya cerrada**— eran **4 de 18**
+invisibles (los cuatro resuelven, asi que el defecto no llego a morder, pero el verde de esa ronda
+cubria menos de lo que decia). En la planilla nueva eran 2 de 19. Arreglado normalizando el `\n` antes
+de barrer; el `--control` sigue discriminando.
+
+*Es la familia del nº 90: el cero no dice «no hay», dice «este patrón no puede encontrar nada», y los
+dos se imprimen igual.* Lo agarró **contar** lo que el instrumento veía contra lo que el archivo tenía,
+no releer el regex.
+
+### Instrumentos offline, todos verdes el 2026-08-20
+
+    luacheck_gmod            39 archivos, 0 fallas
+    parsear_sintaxis_glua    39 archivos, 0 errores  ( control: discrimina )
+    auditar_returns_de_hooks 0 de 37 con return sospechoso
+    rutas_de_sonido          186 rutas citadas, 0 faltantes  ( eran 183: +3 de la medicación )
+    auditar_puerta_cordura   0 clandestinos             ( control: discrimina )
+    auditar_planilla         12 checks, planilla sana
+    verificar_citas          19 comandos y 6 rutas, todos resuelven
+
+### Lo que sigue
+
+**B2** (la esfera de los eventos: el tercer retorno `pos` en los ocho + `ghost_flags.lua`) y **C** (el
+gatillo contra el `hunt.threshold` del tipo, que jubila `phantasmagoria_hunt`). Los ocho renglones de
+evento **ya existen en el desglose** y dicen `( sin llamador todavía )`, así que B2 no toca el
+instrumento. ⚠ Y B2 tiene una tarea heredada: subir `LIGHT_CLASSES` de `server_events.lua` a
+`lua/phantasmagoria/` y borrar la copia acotada que B1 tuvo que hacer para medir su punto ciego.
+
+---
+
 ## 2026-08-20 (60) — **§22 cierra: el 0,5%/s del Phantom SUMA. Y el prompt de la cordura escrito, acotado a la tajada B1.**
 
 ### El Phantom suma, y eso decide una forma del código antes de escribirlo
