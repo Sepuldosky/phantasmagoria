@@ -373,6 +373,36 @@ local cvEventos = CreateConVar( "phantasmagoria_sanity_eventos", "1", FCVAR_ARCH
     "0 = los eventos no drenan ( CONTROL ) · 1 = drenan. ⚠ ANDAMIO HASTA B2: hoy los ocho eventos de server_events.lua NO llaman a la puerta, asi que su renglon del desglose vale 0 por falta de llamador y no por esta perilla.", 0, 1 )
 
 ---------------------------------------------------------------------------
+-- LAS 24 PERILLAS, JUNTAS, PARA PODER VOLVER A FABRICA DE UN COMANDO
+---------------------------------------------------------------------------
+-- ⚠⚠⚠ NACE DE LA r3, Y DE UN DEFECTO QUE YA TENIA DOS RONDAS DE VIDA. Todas
+-- son FCVAR_ARCHIVE, o sea que quedan guardadas en la maquina del que prueba.
+-- La r1 lo pago con dos perillas de ENCENDIDO que quedaron en 0 ( catalogo
+-- nº 91 ) y la respuesta fue una lista de ocho lineas para pegar a mano.
+--
+-- La r3 mostro que esa respuesta cubria la mitad chica del problema: llego con
+-- `phantasmagoria_sanity_regendelay` en 30 cuando el diseño dice 45, movida en
+-- un A/B de la r2 y nunca restituida. Una lista de perillas de ENCENDIDO no
+-- puede restituir un NUMERO -- y un numero movido no se nota, porque no hay
+-- ningun renglon que diga "esto no es lo de fabrica": el reporte imprime 30 con
+-- la misma cara con la que imprime 45.
+--
+-- ⭐ Por eso esto NO es una lista en la prosa de un handoff sino un COMANDO que
+-- ademas DICE QUE MOVIO ( nº 70a: una salida que no se puede producir sin la
+-- precondicion vale mas que una precondicion bien escrita ). Y el default no se
+-- reescribe aca: sale de `GetDefault()`, asi que cambiar un valor de diseño en
+-- su `CreateConVar` no deja una segunda copia envejeciendo al lado.
+local PERILLAS_TODAS = {
+    cvTick, cvInicial,
+    cvPresencia, cvCalma, cvHunt, cvRadio, cvMeseta, cvHuntRadio,
+    cvDark, cvDarkMul, cvLitMul, cvLitRadio,
+    cvRegen, cvRegenRate, cvRegenDelay, cvRegenCap,
+    cvSafe, cvSafeRate, cvSafeCap,
+    cvMeds, cvMedCD,
+    cvMuerte, cvDestierro, cvEventos,
+}
+
+---------------------------------------------------------------------------
 -- LAS CAUSAS DECLARADAS
 ---------------------------------------------------------------------------
 -- El desglose imprime ESTA lista, en este orden, incluyendo las que valen 0.
@@ -409,14 +439,31 @@ local CAUSAS = {
     -- `oscuridad` porque tiene que poder aislarse en su propio A/B.
     { id = "oscuridad", fam = "presencia", fam2 = "oscuridad", label = "oscuridad ( mod )", prod = "fuente:presencia" },
 
-    { id = "evento:sound",     fam = "eventos", label = "evento sound",     prod = "B2" },
-    { id = "evento:throw",     fam = "eventos", label = "evento throw",     prod = "B2" },
-    { id = "evento:light",     fam = "eventos", label = "evento light",     prod = "B2" },
-    { id = "evento:prop",      fam = "eventos", label = "evento prop",      prod = "B2" },
-    { id = "evento:knock",     fam = "eventos", label = "evento knock",     prod = "B2" },
-    { id = "evento:door",      fam = "eventos", label = "evento door",      prod = "B2" },
-    { id = "evento:furniture", fam = "eventos", label = "evento furniture", prod = "B2" },
-    { id = "evento:creak",     fam = "eventos", label = "evento creak",     prod = "B2" },
+    -- ⚠⚠⚠ LOS OCHO USABAN DOS PUNTOS -- `evento:sound` -- Y ESO LOS VOLVIA
+    -- INALCANZABLES DESDE LA CONSOLA. La r2 dejo la fila 04 en ROJO por esto y
+    -- el reporte lo dijo bien: entro una causa `evento` ⚠ NO DECLARADA.
+    --
+    -- El tokenizador de comandos de Source ( CCommand::Tokenize, tier1 ) parte
+    -- la linea con un break set que incluye `{ } ( ) ' :`, y esos caracteres
+    -- salen como TOKENS PROPIOS. Asi que `drenar 10 evento:sound` no llega como
+    -- dos argumentos sino como CUATRO -- "10", "evento", ":", "sound" -- y el
+    -- comando leia args[2], que es "evento". No hubo error de Lua ni de red: el
+    -- string se partio antes de que el addon lo viera.
+    --
+    -- Es el pariente de la truncada a 255 de la consola: el transporte le come
+    -- algo al texto sin avisar, y el sintoma aparece dos capas mas abajo,
+    -- disfrazado de defecto del receptor. LA REGLA QUE QUEDA: ningun id que un
+    -- andamio tenga que poder TIPEAR lleva un caracter del break set. El control
+    -- de arranque de mas abajo lo verifica sobre las 19 causas y no sobre estas
+    -- ocho, que es lo que lo hace un control y no un parche.
+    { id = "evento_sound",     fam = "eventos", label = "evento sound",     prod = "B2" },
+    { id = "evento_throw",     fam = "eventos", label = "evento throw",     prod = "B2" },
+    { id = "evento_light",     fam = "eventos", label = "evento light",     prod = "B2" },
+    { id = "evento_prop",      fam = "eventos", label = "evento prop",      prod = "B2" },
+    { id = "evento_knock",     fam = "eventos", label = "evento knock",     prod = "B2" },
+    { id = "evento_door",      fam = "eventos", label = "evento door",      prod = "B2" },
+    { id = "evento_furniture", fam = "eventos", label = "evento furniture", prod = "B2" },
+    { id = "evento_creak",     fam = "eventos", label = "evento creak",     prod = "B2" },
 
     { id = "regen",      fam = "regen",      label = "goteo pasivo",    prod = "fuente:regen"      },
     { id = "zonasegura", fam = "safe",       label = "zona segura",     prod = "fuente:zonasegura" },
@@ -430,6 +477,51 @@ local CAUSAS = {
 
 local CAUSA_POR_ID = {}
 for _, c in ipairs( CAUSAS ) do CAUSA_POR_ID[ c.id ] = c end
+
+---------------------------------------------------------------------------
+-- CONTROL DE ARRANQUE: que TODA causa se pueda TIPEAR
+---------------------------------------------------------------------------
+-- Nace de la r2, y no de una idea: los ocho ids de evento llevaban dos puntos y
+-- el tokenizador de la consola de Source los partia en pedazos, asi que el
+-- andamio de la fila 04 no podia nombrarlos ni una sola vez. El defecto vivio
+-- desde que se escribio el bloque y NINGUN instrumento lo veia -- ni el
+-- luacheck, ni el parser de sintaxis, ni el auditor de la puerta -- porque
+-- ninguno de los tres sabe nada de la consola.
+--
+-- ⚠ Lo que se verifica NO es que los ocho tengan guion bajo: eso seria repetir
+-- el arreglo en forma de check y saldria verde por construccion ( nº 42 ). Lo
+-- que se verifica es la PROPIEDAD -- que ningun id de las 19 lleve un caracter
+-- que el transporte rompa -- asi que una causa nueva de B2 escrita con dos
+-- puntos vuelve a encender esto.
+--
+-- El break set de `CCommand::Tokenize` es `{}()':` ; se agregan los que rompen
+-- la LINEA antes de llegar al tokenizador ( `;` separa comandos, `"` abre
+-- comilla, el espacio separa argumentos ) y el `/` de un `//` comentado.
+local ROMPEN_CONSOLA = { "{", "}", "(", ")", "'", ":", ";", '"', " ", "\t" }
+
+do
+    local rotos = {}
+
+    for _, c in ipairs( CAUSAS ) do
+        for _, ch in ipairs( ROMPEN_CONSOLA ) do
+            -- `true` al final: comparacion literal, sin patrones. Buscar un
+            -- caracter de puntuacion COMO patron es el error que convierte un
+            -- control en un adorno que siempre pasa.
+            if string.find( c.id, ch, 1, true ) then
+                rotos[ #rotos + 1 ] = c.id
+                break
+
+            end
+        end
+    end
+
+    if #rotos > 0 then
+        ErrorNoHalt( "[Phantasmagoria] CORDURA: " .. #rotos .. " causa( s ) con un id que la consola de Source " ..
+            "PARTE en pedazos, asi que ningun andamio las puede nombrar y su renglon del desglose es inalcanzable: " ..
+            table.concat( rotos, ", " ) .. " -- reescribirlas con guion bajo.\n" )
+
+    end
+end
 
 local PERILLAS = {
     presencia = cvPresencia,
@@ -533,7 +625,7 @@ end
 
 -- El bucket de una causa, declarada o no. Una causa desconocida NO se funde en
 -- un "otras": se le hace su propio renglon y se marca. Fundirla haria que un
--- llamador que escribe mal el string -- "evento_sound" en vez de "evento:sound" --
+-- llamador que escribe mal el string -- "evento_ruido" en vez de "evento_sound" --
 -- sume igual y el renglon correcto quede en 0, con las dos mitades del reporte
 -- de acuerdo entre si.
 local function bucket( st, causaId )
@@ -1402,10 +1494,20 @@ addCmd( "phantasmagoria_cordura", function( ply )
     -- un 20 % mas. Las TASAS no se ven afectadas porque el dt se mide ( el goteo
     -- dio 0,200 %/s clavado ), pero un instrumento que imprime lo que se pidio
     -- en el lugar de lo que pasa acredita el pedido y no el efecto.
-    local real = ticksReales > 0 and ( segsReales / ticksReales ) or 0
+    -- ⚠⚠ Y CON CERO TICKS NO HAY NADA QUE MEDIR, ASI QUE NO SE IMPRIME UN NUMERO.
+    -- La r3 leyo el reporte justo despues de un `reset` y salio
+    -- `REAL 0.000 s ( medido )`: un periodo de tick de cero segundos es
+    -- IMPOSIBLE, y estaba impreso al lado de la palabra `medido` y de una fila
+    -- verde. Un instrumento que imprime un imposible como si fuera una medicion
+    -- gasta la credibilidad de todo lo que imprime al lado -- y ademas manda a
+    -- buscar un timer muerto donde lo unico que pasa es que todavia no latio.
+    -- La division por cero no era el defecto: el defecto era CONTESTAR.
+    local real = ticksReales > 0 and ( segsReales / ticksReales ) or nil
 
-    say( "  tick        pedido " .. string.format( "%.2f", cvTick:GetFloat() ) ..
-        " s  ·  REAL " .. string.format( "%.3f", real ) .. " s ( medido )   ( " .. ticksTotal ..
+    say( "  tick        pedido " .. string.format( "%.2f", cvTick:GetFloat() ) .. " s  ·  REAL " ..
+        ( real and ( string.format( "%.3f", real ) .. " s ( medido )" )
+              or "-- sin medir: 0 ticks desde el ultimo reset --" ) ..
+        "   ( " .. ticksTotal ..
         " ticks, ultimo hace " .. string.format( "%.1f", CurTime() - ultimoTick ) .. " s )" )
     say( "  inicial     " .. math.Round( cvInicial:GetFloat() ) .. " %" )
     -- ⚠ El conteo va a un local ANTES de la concatenacion: `cadaFantasma` es lo
@@ -1611,12 +1713,118 @@ addCmd( "phantasmagoria_cordura_med", function( ply, _, args )
 
 end, "ANDAMIO. Toma una dosis de medicacion ( 1 = bebida, 2 = pastillas, 3 = adrenalina ) sin pasar por Cargo. Un RECHAZADO con la barra llena es el anti-desperdicio funcionando, no un defecto." )
 
+-- ⭐ VOLVER A FABRICA, Y DECIR QUE ESTABA MOVIDO.
+--
+-- Las 24 son FCVAR_ARCHIVE. Restituir a mano es una precondicion que hay que
+-- ACORDARSE de cumplir, y eso no sobrevive a las 6 de la mañana: la r1 perdio
+-- dos perillas de encendido y la r3 llego con `regendelay` en 30 contra los 45
+-- del diseño, movida en un A/B de la ronda anterior.
+--
+-- ⚠⚠ LO QUE HACE UTIL A ESTE COMANDO NO ES QUE RESTITUYA: ES QUE INFORME. Un
+-- restaurador mudo deja al que prueba sin saber si la corrida anterior midio
+-- con las perillas de esta -- y esa duda no se puede resolver despues, porque
+-- el valor viejo ya se perdio. Sin `--decir` restituye e imprime lo que movio;
+-- con `--decir` SOLO informa y no toca nada, para poder leer el estado antes de
+-- destruirlo.
+addCmd( "phantasmagoria_cordura_fabrica", function( ply, _, args )
+    local say   = hacerSay( ply )
+    local soloDecir = false
+
+    for _, a in ipairs( args or {} ) do
+        if string.lower( a ) == "--decir" then soloDecir = true end
+
+    end
+
+    local movidas = 0
+
+    for _, cv in ipairs( PERILLAS_TODAS ) do
+        local hay, def = cv:GetString(), cv:GetDefault()
+
+        -- La comparacion va por NUMERO cuando los dos lo son: "0.20" y "0.2"
+        -- son la misma perilla y compararlas como texto inventaria una movida
+        -- que no existe -- un falso positivo en el instrumento que existe para
+        -- que el que prueba confie en el estado.
+        local a, b = tonumber( hay ), tonumber( def )
+        local iguales = ( a and b ) and ( a == b ) or ( hay == def )
+
+        if not iguales then
+            movidas = movidas + 1
+            say( "  " .. ( soloDecir and "MOVIDA " or "restituida " ) .. cv:GetName() ..
+                "   " .. hay .. "  ->  " .. def )
+
+            if not soloDecir then cv:SetString( def ) end
+
+        end
+    end
+
+    if movidas == 0 then
+        say( "[Phantasmagoria] las 24 perillas de la cordura estan EN FABRICA. Nada que restituir." )
+
+    else
+        say( "[Phantasmagoria] " .. movidas .. " de 24 perillas " ..
+            ( soloDecir and "estan movidas ( no se toco nada: sacale el --decir para restituirlas )."
+                        or "estaban movidas y se restituyeron." ) )
+        say( "                 ⚠ Si esto sale DESPUES de una corrida, esa corrida midio con estos valores." )
+
+    end
+
+end, "Vuelve las 24 perillas de la cordura a su valor de fabrica y DICE cuales estaban movidas. Con --decir solo informa y no toca nada. Todas son FCVAR_ARCHIVE: una que quedo de un A/B viejo invalida una planilla entera sin decir nada." )
+
 -- ANDAMIO de drenaje: la fila 04 necesita poder disparar la forma PLANA sin
 -- esperar a que B2 exista, y la 05 necesita poder mover un renglon a la vez.
+--
+-- ⚠⚠⚠ ESTE COMANDO SALIO ROJO EN LA r2 Y LA CAUSA NO ESTABA ACA ADENTRO: los
+-- ids de las ocho causas de evento llevaban dos puntos y la consola de Source
+-- los parte. Ya estan reescritos con guion bajo, pero el comando queda con TRES
+-- defensas mas, porque el arreglo de arriba no protege al que TIPEA:
+--
+--   ( 1 ) rearma la causa juntando todos los argumentos desde el segundo. Si el
+--         tokenizador vuelve a partir algo, las piezas se pegan de nuevo.
+--   ( 2 ) NORMALIZA los caracteres que rompen -- dos puntos incluidos -- a guion
+--         bajo, asi que `evento:sound`, que es lo que dice la planilla vieja y
+--         lo que la mano ya aprendio, sigue llegando al renglon correcto.
+--   ( 3 ) ⭐ SI LA CAUSA NO ESTA DECLARADA, LO DICE EN EL ACTO. El reporte ya la
+--         marcaba `⚠ NO DECLARADA`, pero eso se lee dos pantallas despues y
+--         despues de haber gastado la corrida. Un andamio que acepta cualquier
+--         string en silencio le regala al tester un rojo que parece del
+--         mecanismo. Se aplica igual -- no se rechaza -- porque el renglon NO
+--         DECLARADA es una funcion del instrumento y B2 tiene que poder
+--         estrenarla a proposito.
+local CAUSA_DEFAULT = "evento_sound"
+
+local function normalizarCausa( args )
+    if not args or not args[ 2 ] then return CAUSA_DEFAULT, false end
+
+    -- Sin separador: el tokenizador ya se quedo con los espacios reales, asi que
+    -- lo unico que puede haber partido son los caracteres del break set, y esos
+    -- vuelven como tokens propios. `evento` + `:` + `sound` = `evento:sound`.
+    local crudo = table.concat( args, "", 2 )
+
+    local limpio, rotos = crudo, 0
+
+    for _, ch in ipairs( ROMPEN_CONSOLA ) do
+        -- El caracter se escapa antes de usarlo como patron: `(` y `)` crudos
+        -- abren una captura y el gsub no reemplazaria nada -- silenciosamente,
+        -- que es como este bloque se gano el rojo la primera vez.
+        local patron = string.gsub( ch, "(%W)", "%%%1" )
+        local n
+
+        limpio, n = string.gsub( limpio, patron, "_" )
+        rotos = rotos + n
+
+    end
+
+    -- El aviso se decide ANTES de bajar a minusculas: escribir `Evento_Sound` no
+    -- es que la consola te haya partido nada, y decirselo al tester manda a
+    -- buscar un defecto que no esta.
+    return string.lower( limpio ), rotos > 0
+
+end
+
 addCmd( "phantasmagoria_cordura_drenar", function( ply, _, args )
     local say   = hacerSay( ply )
     local n     = tonumber( args and args[ 1 ] ) or 10
-    local causa = args and args[ 2 ] or "evento:sound"
+    local causa, seNormalizo = normalizarCausa( args )
 
     if not IsValid( ply ) then
         say( "[Phantasmagoria] este andamio necesita un jugador." )
@@ -1624,12 +1832,44 @@ addCmd( "phantasmagoria_cordura_drenar", function( ply, _, args )
 
     end
 
+    if seNormalizo then
+        say( "[Phantasmagoria] ( la consola te partio la causa; se rearmo y se normalizo a '" .. causa .. "' )" )
+
+    end
+
+    if not CAUSA_POR_ID[ causa ] then
+        say( "" )
+        say( "[Phantasmagoria] ⚠⚠ '" .. causa .. "' NO ES UNA CAUSA DECLARADA." )
+        say( "                 Se aplica igual y va a salir como '⚠ NO DECLARADA' en el desglose --" )
+        say( "                 lo cual ENSUCIA la fila 10, que pide que no haya ninguna. Las declaradas:" )
+
+        local linea = "                   "
+
+        for i, c in ipairs( CAUSAS ) do
+            linea = linea .. c.id .. ( i < #CAUSAS and "  " or "" )
+
+            -- La consola de Source trunca la linea en 255 y no avisa, asi que
+            -- una lista de 19 ids no se manda de una: se corta a mano.
+            if #linea > 150 then
+                say( linea )
+                linea = "                   "
+
+            end
+        end
+
+        if #string.Trim( linea ) > 0 then say( linea ) end
+        say( "" )
+
+    end
+
     local real = PHANTASMAGORIA.DrainSanity( ply, n, causa )
 
-    say( "[Phantasmagoria] drenaje plano de " .. n .. " % contra '" .. causa .. "': entraron " ..
-        string.format( "%.2f", real ) .. " %   ->   " .. string.format( "%.2f", PHANTASMAGORIA.GetSanity( ply ) ) .. " %" )
+    say( "[Phantasmagoria] drenaje plano de " .. n .. " % contra '" .. causa .. "'" ..
+        ( CAUSA_POR_ID[ causa ] and " ( " .. CAUSA_POR_ID[ causa ].label .. " )" or " ( ⚠ NO DECLARADA )" ) ..
+        ": entraron " .. string.format( "%.2f", real ) .. " %   ->   " ..
+        string.format( "%.2f", PHANTASMAGORIA.GetSanity( ply ) ) .. " %" )
 
-end, "ANDAMIO. Dispara la forma PLANA de drenaje contra la causa que se le diga ( default evento:sound ), para poder medir la puerta antes de que B2 tenga llamadores." )
+end, "ANDAMIO. Dispara la forma PLANA de drenaje contra la causa que se le diga ( default evento_sound ), para poder medir la puerta antes de que B2 tenga llamadores. Los dos puntos se normalizan a guion bajo: la consola de Source los parte." )
 
 MsgC( Color( 190, 120, 255 ), "[Phantasmagoria] ", color_white,
     "cordura B1 lista: " .. #FUENTES .. " fuentes continuas, " .. #CAUSAS ..

@@ -1,11 +1,21 @@
 # HANDOFF — la cordura, tajada B1: la variable, las dos formas de drenaje y el desglose por causa
 
 **Fecha:** 2026-08-20 · **Repo:** `phantasmagoria` · **Autor:** chileno, escribirle de **tú** (sin voseo)
-**Planilla:** `dev/checks/phantasmagoria-cordura-b1.html` — **12 filas**, artefacto en
+**Planilla de la r3 — la que hay que correr:** `dev/checks/phantasmagoria-cordura-b1-r3.html`, **6 filas**,
+artefacto en <https://claude.ai/code/artifact/8c6dc8ac-b4bb-408b-9fbe-bd030efeea85>
+**Planilla completa (12 filas, r1 y r2):** `dev/checks/phantasmagoria-cordura-b1.html`, artefacto en
 <https://claude.ai/code/artifact/3c2a6008-39b8-47fa-9a1c-92f3538bce4a>
-**Corrida r1:** `dev/CORRIDA_cordura_b1_r1.md` (reporte íntegro + análisis)
-**CHANGELOG:** entradas **(61)** el bloque, **(62)** la corrida r1
+**Corridas:** `dev/CORRIDA_cordura_b1_r1.md`, `_r2.md` y **`_r3.md`** (reportes íntegros + análisis)
+**CHANGELOG:** **(61)** el bloque, **(62)** la r1, **(63)** la r2 y el tokenizador, **(65)** la r3 y la vuelta a fábrica
 **Diseño:** `docs/PHANTOM_Phasmophobia_Diseno.md` **§19** entero, sobre todo §19.8 y §19.9
+
+> ✅✅ **B1 ESTÁ CERRADA (r3 del 2026-08-20: 5 pasa · 0 falla · 1 sin correr).** Este documento queda
+> como el **registro del bloque**; para seguir, el handoff vivo es
+> **[`HANDOFF_cordura_b2_y_c.md`](HANDOFF_cordura_b2_y_c.md)**.
+>
+> ⚠⚠⚠ **Y lo primero de cualquier corrida futura es `phantasmagoria_cordura_fabrica --decir`.** La r3
+> corrió con `regendelay` en **30** contra los **45** del diseño: las ocho líneas de restitución que
+> este handoff lista más abajo son todas de **encendido**, y **no pueden restituir un número**.
 
 Pensado para retomar desde un chat limpio, sin contexto previo.
 
@@ -42,11 +52,11 @@ instrumento que dice **QUÉ lo bajó**.
 | | qué es | estado |
 |---|---|---|
 | **A** el tipo | asignarlo, networkearlo, forzarlo | **CERRADA en juego** (`server_type.lua`) |
-| **B1** la cordura | la variable + la presencia + la recuperación + los instrumentos | **ESCRITA. r1 corrida: 4 pasa · 0 falla · 8 sin correr** |
+| **B1** la cordura | la variable + la presencia + la recuperación + los instrumentos | **ESCRITA. r2 corrida: 10 pasa · 1 falla · 1 sin correr** — falta la **mitad B de la 04** y la **10** |
 | **B2** los eventos | el tercer retorno `pos` en los ocho + `ghost_flags.lua` | sin empezar |
 | **C** el gatillo | cordura bajo el `hunt.threshold` **del tipo**; jubila `phantasmagoria_hunt` | sin empezar |
 
-**Archivo único:** `lua/autorun/phantasmagoria_sanity.lua` (~1.640 líneas). **No toca**
+**Archivo único:** `lua/autorun/phantasmagoria_sanity.lua` (~1.770 líneas). **No toca**
 `server_events.lua` (es B2), ni `server_hunt.lua` / `server.lua` / `server_stuck.lua` (otra sesión
 reescribió ahí *cómo persigue* el fantasma; las dos cosas se encuentran en C, no antes).
 
@@ -126,36 +136,59 @@ ya descartado (*«drena más si lo estás mirando»* está descartado, y por dos
 
 ---
 
-## 5. La corrida r1: **4 pasa · 0 falla · 8 sin correr**
+## 5. La corrida r2: **10 pasa · 1 falla · 1 sin correr**
 
-### Lo que cerró, y no lo mide ninguna fila sola
+Detalle en `dev/CORRIDA_cordura_b1_r2.md`. La r1 (4 pasa · 0 falla · 8 sin correr) sigue en
+`dev/CORRIDA_cordura_b1_r1.md` y lo que cerró **no** se volvió a medir.
 
-**El desglose CIERRA contra la barra a cero exacto en las cuatro lecturas** (99,49 · 100,00 · 54,10 ·
-88,10, brecha 0,00 en las cuatro): **no hay ningún escritor fuera de la puerta**. La fila 10 está
-probada de hecho; falta marcarla.
+### ⚠⚠⚠ La roja fue la 04, y su causa NO estaba en la cordura
 
-Números medidos: goteo **0,200 %/s clavado**; razón hunt/calma **3,84** contra **3,50** diseñado (las
-absolutas quedaron bajas porque midió a 188-214 u, o sea en la caída y no en la meseta — *una razón
-entre dos ejes de la misma corrida cancela lo que la medida absoluta no puede*).
+`phantasmagoria_cordura_drenar 10 evento:sound` drenó contra una causa llamada `evento`.
+`CCommand::Tokenize` (tier1) parte la línea de consola con un break set que incluye **`{ } ( ) ' :`**,
+así que el argumento llegó como **tres tokens** y el comando leía `args[2]`. **Sin un solo error de
+Lua**, y con los cinco instrumentos offline en verde: ninguno sabe nada de la consola.
 
-### ⚠⚠⚠ El hallazgo de diseño: el techo de 80 hace los primeros 20 puntos de UNA SOLA DIRECCIÓN
+**Ya está arreglado** (los ocho ids pasan a `evento_sound`, control de arranque sobre las 19 causas,
+tres defensas en el comando, y `dev/auditar_ids_tipeables.py`). Lo que queda de esa fila es **la
+mitad B**: dos líneas.
 
-`regen inactiva **0/3198 muestras**` en 16 minutos, porque la barra nunca bajó de 80. **La aritmética
-del equilibrio en `f = 2/3` sólo vale por debajo de 80.** Está escrito en §19.8.8 — probablemente es
-lo que se quiere, pero no se calculó al decidir el techo.
+⚠ **Tres de sus cuatro criterios ya están medidos y no cambian**: la fuente dice `ACTIVA` con motivo
+adentro, `presencia hunt` **quedó congelado** al salir del radio (`−1,85 % / 9,0 s / 30 ticks` en las
+dos lecturas), y la plana se imprimió `1 veces` sin segundos ni ticks. *Las dos formas ya son
+distintas y el instrumento las distingue* — lo que falló fue contra **qué renglón** cayó la plana.
+
+### Lo que la r2 cerró y la r1 no había podido
+
+- **El techo de 80 se EJERCIÓ** (02): `200,7 s × 0,200 %/s = 40,14 %` de potencial, **40,09
+  aplicado**, barra en **80,00**. *Los 0,05 que sobraban los comió el techo.*
+- **El clamp en 0** (05B) cerró con brecha **0,00** — el otro extremo del rango.
+- **El modulador ×0,5 se midió por primera vez** (09, con linterna): delta **+0,47** sobre base
+  −0,94, positivo y mitad exacta.
+- **La 01 en la meseta** (63 u): `0,0968 %/s` contra `0,100` — confirma la explicación que la r1 dio
+  para su `0,070`.
+- **La 08 con Cargo montado**: los tres tiers como ítems, con modelo, precio, trivia, `Use` y stack.
 
 ### Lo que queda de la planilla
 
-- **02** está marcada PASA con **2 de sus 4 criterios**: falta la lectura a los 30 s dentro del retardo
-  y —la que importa— **que la barra se detenga en 80,00**. El techo decidido esa noche **no se
-  ejerció**. Son ~130 s más de goteo.
-- **03** quedó **SIN CORRER y está bien**: midió otro escenario (22 % del tiempo en la esfera, 75 % del
-  drenaje con la linterna prendida a ×0,5). *Una medición sólo refuta lo que sabe leer.*
-- **04 · 05 · 06 · 07 · 08 · 09 · 10** sin correr.
+- **04**, sólo la mitad B: `phantasmagoria_cordura_drenar 10 evento_sound` y leer. Tiene que salir
+  `evento sound  −10.00 %  1 veces` y **ningún** renglón `NO DECLARADA`.
+- **10**, sin correr: va última por diseño (pide la sesión entera sin resetear) y la 04 la interrumpió.
+  Sus dos mitades offline están verdes.
+  ⚠ La r2 **produjo** un renglón `NO DECLARADA`, que es lo que el `pass` de la 10 prohíbe — y **la 10
+  no puede distinguir** un escritor clandestino de un andamio mal tipeado. Mirar quién lo produjo
+  antes de leerlo como un rojo del bloque.
+- **03** quedó PASA **sin una lectura con número al lado**: es la única del run así. Si su balance
+  (cruzar el 50 % entre 10 y 20 min) va a decidir tasas antes de B2, conviene una lectura con número.
 
-⚠ **El artefacto abre limpio** (el auditor reprueba cualquier check premarcado). Las cuatro marcas de
-la r1 están en `dev/CORRIDA_cordura_b1_r1.md`: re-marcarlas cuesta veinte segundos, o se sigue de
-largo y el reporte de la r2 dirá honestamente qué midió la r2.
+### ⚠⚠ El punto ciego de la luz llegó a 25 luces sin getter
+
+`a oscuras` es el **default cuando no hay nada legible**, y el ×1,5 aporta **un tercio del drenaje**.
+*El modulador está decidiendo un tercio del número sobre una lectura que el propio instrumento declara
+que no puede hacer.* No es un rojo —avisa— pero es **lo primero que B2 tiene que cerrar** al subir
+`LIGHT_CLASSES` a `lua/phantasmagoria/`.
+
+⚠ **El artefacto abre limpio** (el auditor reprueba cualquier check premarcado). Las marcas de la r1 y
+la r2 están en sus dos `CORRIDA_*.md`.
 
 ---
 
@@ -163,6 +196,10 @@ largo y el reporte de la r2 dirá honestamente qué midió la r2.
 
 En la r1 la fila 00 dejó **`destierro 0`** y **`eventos 0`**, y nunca se restituyeron (catálogo nº 91).
 Corridas así, **la 09 y la 04 habrían salido rojas por la perilla y no por el mecanismo**.
+
+⚠ **Y volvió a pasar en la r2**: el último reporte del run salió con `eventos 0` y `meds 0`. No costó
+nada porque la 04 y la 07 ya llevan su perilla en el botón —o sea que la defensa funcionó, no que el
+problema se fuera—, pero **la próxima sesión arranca con esas dos apagadas**.
 
 **Ya está arreglado**: las filas 04, 07 y 09 llevan su perilla como **primera línea del comando** —
 *una salida que no se puede producir sin la precondición vale más que una precondición bien escrita*
@@ -189,9 +226,16 @@ phantasmagoria_sanity_dark 1
 | `phantasmagoria_cordura_reset` | valor al inicial, desglose y contadores en cero. **Antes de cada fila** |
 | `phantasmagoria_cordura_set <0..100> [nick]` | **ANDAMIO**. Se anota como causa `andamio consola` a propósito |
 | `phantasmagoria_cordura_med <1\|2\|3>` | **ANDAMIO**. Una dosis sin pasar por Cargo |
-| `phantasmagoria_cordura_drenar <n> [causa]` | **ANDAMIO**. Dispara la forma **plana** |
+| `phantasmagoria_cordura_drenar <n> [causa]` | **ANDAMIO**. Dispara la forma **plana**. Default `evento_sound` |
 
 ⚠ Un comando por línea: **la consola de Source corta en 255 bytes y no avisa**.
+
+⚠⚠⚠ **Y la consola tampoco te entrega el texto entero: `CCommand::Tokenize` parte en `{ } ( ) ' :`**,
+así que esos caracteres llegan como **tokens propios**. Le costó la fila 04 a la r2. Ningún id que un
+andamio tenga que poder **tipear** los lleva, y hay dos controles que lo verifican —uno al arrancar el
+módulo, otro offline (`dev/auditar_ids_tipeables.py`)—. El `drenar` además **rearma y normaliza**, así
+que `evento:sound` sigue llegando bien, avisando; y **si la causa no está declarada lo grita en el
+acto** en vez de dejártelo descubrir dos pantallas después.
 
 ---
 
@@ -203,6 +247,7 @@ python dev/parsear_sintaxis_glua.py lua
 python dev/auditar_returns_de_hooks.py lua
 python dev/rutas_de_sonido.py
 python dev/auditar_puerta_cordura.py --control     # y sin --control sobre lua/
+python dev/auditar_ids_tipeables.py lua            # y --control
 ```
 
 ⚠ `luacheck_gmod.py` **sin argumentos revisa cero archivos y sale 0** — verde sin medir. Va siempre
@@ -214,6 +259,12 @@ puerta **no descubre que alguien no la llama** (nº 89). Barre el **texto fuente
 **0** con la barra al 72 %: `NW2Float` y `NWFloat` son **dos almacenes distintos** del engine). Su
 `--control` inyecta 3 defectos sobre una **copia del árbol real** —no una sandbox, que le sacaría justo
 lo que lee (nº 82)— y falla si el número no coincide, de más o de menos (nº 72).
+
+**`dev/auditar_ids_tipeables.py` es el otro nuevo, y nace del rojo de la r2.** Barre la tabla `CAUSAS`
+del texto fuente y falla si algún id lleva un carácter del break set de la consola. ⚠ **No reemplaza a
+`auditar_puerta_cordura.py`**: ese mide **quién escribe** el número, éste mide **quién puede ser
+nombrado**. La r2 probó que un árbol puede estar verde en el primero y roto en el segundo. Su
+`--control` inyecta el defecto de la r2 tal cual sobre una copia del árbol real.
 
 Los tres de planilla viven en el `dev/` **del workspace**, que **no está en git**:
 
@@ -234,7 +285,8 @@ python dev/parsear_cmds_planilla.py dev/checks/phantasmagoria-cordura-b1.html
 
 ## 9. Lo que sigue
 
-1. **Cerrar la planilla**: completar la 02, rehacer la 03 con exposición real, correr 04-10.
+1. **Cerrar la planilla**: la **mitad B de la 04** (dos líneas) y la **10**. La 02 y la 03 ya
+   cerraron en la r2 — la 02 con el techo ejercido, la 03 por criterio del autor y sin número.
 2. **B2** — la esfera de los eventos: el tercer retorno `pos` en los ocho `EV.*` y **una sola pasada**
    sobre los jugadores en `phantom_FireEvent`. Los ocho renglones del desglose ya existen: **B2 no toca
    el instrumento**. Y de paso, subir `LIGHT_CLASSES` a `lua/phantasmagoria/`.

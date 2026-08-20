@@ -49,17 +49,63 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 > `EnemyIsLethalInMelee` no tienen guarda de estado **a propósito**, y el reporte lo muestra:
 > `alcance 24373 veces · miedo 21274 veces` sobre un fantasma en calma. Es de la fila 11.
 
-> ✅ **LA CORDURA EXISTE, Y LA r1 YA CORRIÓ: 4 pasa · 0 falla · 8 sin correr.** CHANGELOG **(62)**,
-> reporte íntegro en `dev/CORRIDA_cordura_b1_r1.md`.
+> ✅✅ **LA TAJADA B1 DE LA CORDURA ESTÁ CERRADA.** r3: **5 pasa · 0 falla · 1 sin correr**.
+> CHANGELOG **(65)**, reporte en `dev/CORRIDA_cordura_b1_r3.md`.
+> 🔜 **LO SIGUIENTE ES B2 Y C**, y tienen handoff propio: **`dev/HANDOFF_cordura_b2_y_c.md`**.
 >
-> ⭐⭐⭐ **El desglose CIERRA contra la barra a cero exacto en las CUATRO lecturas** (99,49 · 100,00 ·
-> 54,10 · 88,10): no hay ningún escritor fuera de la puerta. El goteo dio **0,200 %/s clavado** y la
-> razón hunt/calma **3,84 contra 3,50** diseñado.
+> ⭐⭐⭐ **La r3 midió el tokenizador de Source EN EL JUEGO**, que es la única evidencia del arco que no
+> es inferencia: tipear `evento:sound` saca
+> `( la consola te partio la causa; se rearmo y se normalizo a 'evento_sound' )`, y **ese aviso sólo
+> puede salir si el argumento llegó partido**. *Un arreglo que nadie probó contra el defecto original
+> es un cambio, no un arreglo.*
 >
-> 🔜 **LO SIGUIENTE, cuando estés descansado:** completar la **02** (dejar subir el goteo hasta 80 y
-> ver que ahí se detiene — el techo que decidiste esa noche **no se ejerció**), rehacer la **03** con
-> exposición real al fantasma y sin la linterna todo el rato, y correr **04 · 05 · 06 · 07 · 08 · 09 ·
-> 10**. ⚠ Las perillas que hacían falta ya están **metidas en el botón** de las filas 04, 07 y 09.
+> ⭐⭐ **El cierre aritmético más fuerte del arco lo dio la fila que quedó SIN CORRER:** seis causas,
+> dieciséis aplicaciones planas, un bucket `NO DECLARADA` adentro, y **brecha 0,00**.
+>
+> ⚠⚠⚠ **DOS DEFECTOS DEL INSTRUMENTO, Y EL SEGUNDO ESTABA EN LA PLANILLA QUE ESCRIBÍ PARA MEDIRLO.**
+> · `REAL 0.000 s ( medido )` con 0 ticks: la guarda contra la división por cero devolvía `0`, que es
+> un número — *la división por cero no era el problema; el problema era **contestar***.
+> · La r3 corrió con `phantasmagoria_sanity_regendelay` en **30** contra los **45** del diseño, y el P0
+> de la r3 se escribió **sin** el bloque de tasas que el de la r1 y la r2 sí tenía. *Un criterio que
+> se saca de una precondición no deja de existir: pasa a estar cubierto por nadie.*
+>
+> **YA ESTÁ ARREGLADO:** `phantasmagoria_cordura_fabrica [--decir]` restituye **las 24** convars y
+> **dice cuáles estaban movidas**. Las ocho líneas de la r1 eran todas de **encendido**, y de las 24,
+> **quince son valores**: *una perilla de encendido en 0 se ve en el reporte; un retardo movido no.*
+>
+> **CORRER ESTO ANTES DE CUALQUIER PLANILLA:** `phantasmagoria_cordura_fabrica --decir`
+>
+> **LO ANTERIOR — la r2: 10 pasa · 1 falla · 1 sin correr.** CHANGELOG **(63)**,
+> reporte íntegro en `dev/CORRIDA_cordura_b1_r2.md`.
+>
+> ⚠⚠⚠ **LA ROJA (fila 04) NO ERA DE LA CORDURA: era el TOKENIZADOR DE LA CONSOLA.** Los ocho ids de
+> evento se habían escrito `evento:sound`, y `CCommand::Tokenize` parte la línea con un break set que
+> incluye **`{ } ( ) ' :`**. El argumento llegaba como **tres** tokens y el comando drenaba contra una
+> causa llamada `evento`. **Sin un solo error de Lua**, y con los cinco instrumentos offline en verde:
+> ninguno sabe nada de la consola. *Es el pariente exacto de la truncada a 255.*
+>
+> **YA ESTÁ ARREGLADO** — ids con guion bajo, un **control de arranque** sobre las 19 causas (no sobre
+> las ocho: verificar el arreglo saldría verde por construcción), el comando con **tres defensas**
+> —rearma, normaliza y **grita en el acto** si la causa no está declarada— y
+> **`dev/auditar_ids_tipeables.py`** con su `--control`. ⚠ Ese auditor **no reemplaza** a
+> `auditar_puerta_cordura.py`: ese mide **quién escribe**, éste **quién puede ser nombrado**.
+>
+> ⭐⭐ **El techo de 80 se EJERCIÓ** (lo que la r1 no pudo): `200,7 s × 0,200 %/s = 40,14 %` de
+> potencial, **40,09 aplicado**, barra en **80,00** — *los 0,05 que sobraban los comió el techo*. Y el
+> **clamp en 0** cerró con brecha `0,00` en el otro extremo. Y el **modulador ×0,5 se midió por primera
+> vez** (fila 09, con linterna): delta **+0,47** sobre una base de −0,94, positivo y mitad exacta.
+>
+> 🔜 **LO SIGUIENTE:** la **mitad B de la 04** —dos líneas: `phantasmagoria_cordura_drenar 10
+> evento_sound` y leer— y la **10**, que quedó sin correr porque va última por diseño. Después, **B2**.
+>
+> ⚠⚠ **EL PUNTO CIEGO DE LA LUZ LLEGÓ A 25 LUCES SIN GETTER**, y `a oscuras` es el default cuando no
+> hay nada legible: *el modulador decide un tercio del drenaje sobre una lectura que el propio
+> instrumento declara que no puede hacer*. No es un rojo —avisa— pero es **lo primero que B2 tiene que
+> cerrar** al subir `LIGHT_CLASSES` a `lua/phantasmagoria/`.
+>
+> **LO ANTERIOR (r1): 4 pasa · 0 falla · 8 sin correr.** CHANGELOG **(62)**,
+> `dev/CORRIDA_cordura_b1_r1.md`. El desglose cerraba a cero exacto en las cuatro lecturas y el goteo
+> daba **0,200 %/s clavado**.
 >
 > ⚠⚠⚠ **El hallazgo de diseño de la r1: el techo de 80 hace que los primeros 20 puntos de la barra
 > sean de UNA SOLA DIRECCIÓN.** `regen inactiva 0/3198 muestras` en 16 min, porque nunca bajó de 80.

@@ -7,6 +7,82 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-20 (65) — **La r3: 5 pasa · 0 falla · 1 sin correr. El rojo del tokenizador CERRÓ, y la corrida destapó dos defectos del instrumento — uno de ellos en la planilla que yo había escrito para medirla.**
+
+Reporte íntegro y análisis en [`dev/CORRIDA_cordura_b1_r3.md`](dev/CORRIDA_cordura_b1_r3.md).
+**B1 queda cerrada.** Lo que sigue, en [`dev/HANDOFF_cordura_b2_y_c.md`](dev/HANDOFF_cordura_b2_y_c.md).
+
+> ⚠ **NACIÓ NUMERADA (64) Y SE CORRIÓ A (65) EL MISMO DÍA.** Una sesión paralela escribió un **(64)**
+> —la r1 del hunt directo, commit `9b19b5c`— que **ya estaba pusheado y ya citado en `ESTADO.md`**.
+> *Cuando dos escrituras chocan, la que se mueve es la que todavía no tiene lectores.* Es el tercer
+> choque de este arco: ver también el hueco deliberado en **(62)**.
+
+### ⭐⭐⭐ La 02 midió el tokenizador de Source EN EL JUEGO, y es la única evidencia que no es inferencia
+
+```
+] phantasmagoria_cordura_drenar 10 evento:sound
+[Phantasmagoria] ( la consola te partio la causa; se rearmo y se normalizo a 'evento_sound' )
+[Phantasmagoria] drenaje plano de 10 % contra 'evento_sound' ( evento sound ): entraron -10.00 %
+```
+
+Ese aviso **sólo puede salir si el argumento llegó partido** — el comando cuenta cuántos caracteres
+normalizó. O sea que la fila no dice *«el arreglo anda»* (eso lo dice la 01) sino **«el defecto sigue
+existiendo y la defensa lo cubre»**. *Un arreglo que nadie probó contra el defecto original es un
+cambio, no un arreglo.* Todo lo demás que sabíamos del break set salía de leer `CCommand::Tokenize`.
+
+La **01** cerró la fila 04 de la planilla vieja (`evento sound −10.00 % · 1 veces`, sin segundos ni
+ticks) y la **03** sacó el grito entero con las 19 causas en dos líneas, ninguna cerca de los 255.
+
+### ⭐⭐ La 05 quedó SIN CORRER y aun así dio el cierre aritmético más fuerte del arco
+
+`−0,84 − 0,42 − 5,00 − 55,00 − 20,00 − 10,00 = −91,26`, barra `8,74`. **Brecha 0,00 con seis causas y
+dieciséis aplicaciones planas**, y con un bucket `⚠ NO DECLARADA` adentro. *Una causa desconocida no
+rompe la contabilidad: se lleva su propio renglón y el neto sigue cerrando.* Está bien marcada SIN
+CORRER — hay un `NO DECLARADA` vivo, que es lo que su `pass` prohíbe, y **la fila no puede distinguir**
+un escritor clandestino de un andamio mal tipeado.
+
+### ⭐ (A) `REAL 0.000 s ( medido )` — un imposible impreso al lado de la palabra «medido»
+
+Leyendo el reporte justo después de un `reset`. La guarda contra la división por cero estaba puesta
+—`ticksReales > 0 and ... or 0`— y **ésa era el defecto**: devolvía `0`, que es un número, y el
+renglón lo imprime con la misma cara con la que imprime `0.300`. *La división por cero no era el
+problema: el problema era **contestar**.* Manda a buscar un timer muerto donde lo único que pasa es
+que todavía no latió, y **gasta la credibilidad de todo lo que está impreso al lado** — en un reporte
+cuyo único trabajo es que se le crea. Ahora dice `-- sin medir: 0 ticks desde el ultimo reset --`.
+
+> De paso, un **cuarto estado del cero** que la r1 no había ejercido salió impreso correcto sin que
+> nadie lo hubiera visto: `( ⚠ su fuente 'presencia' no se interrogo ni una vez )`.
+
+### ⚠⚠⚠ (B) La r3 corrió con `regendelay` en 30 contra los 45 del diseño, y la fila que existía para agarrarlo se escribió sin ese criterio
+
+El P0 de la r1 y la r2 tenía el bloque de tasas en su criterio; **el P0 de la r3 no** — se le sacó por
+brevedad, y el defecto exacto que esa comprobación existía para agarrar estaba vivo mientras la fila
+salía verde. *Un criterio que se saca de una precondición no deja de existir: pasa a estar cubierto
+por nadie.*
+
+**Y la segunda mitad es la que vale.** La respuesta de la r1 al nº 91 fue *«acá tenés las ocho líneas
+para restituir a fábrica»*, y esa respuesta **no puede restituir un número**: las ocho son perillas de
+**encendido**. De las 24 convars del bloque, **quince son valores** — tasas, radios, techos, retardos.
+Una perilla de encendido en 0 se ve en el reporte (`presencia 0`); un retardo movido **no**: el
+reporte imprime `30` con exactamente la misma cara con la que imprime `45`. *Cuando la defensa contra
+un modo de falla es una lista para pegar a mano, cubre los casos que estaban en la lista el día que se
+escribió.*
+
+**El arreglo: `phantasmagoria_cordura_fabrica`.** Restituye las 24 y ⭐ **dice cuáles estaban movidas**;
+con `--decir` sólo informa y no toca nada, para poder leer el estado **antes** de destruirlo — un
+restaurador mudo deja al que prueba sin saber si la corrida anterior midió con las perillas de ésta, y
+esa duda **no se puede resolver después**. El default sale de `GetDefault()`, así que cambiar un valor
+de diseño en su `CreateConVar` no deja una segunda copia envejeciendo al lado. Y la comparación va
+**por número cuando los dos lo son** (`"0.20"` y `"0.2"` son la misma perilla): compararlas como texto
+inventaría una movida que no existe, que es un falso positivo justo en el instrumento que existe para
+que se confíe en el estado. Verificado en un runtime Lua real sobre nueve pares, 0 fallas.
+
+⚠ **Qué números quedan tocados:** ninguno de la r3 (no midió el goteo), y ninguno de la r2 —su fila 02,
+donde el goteo dio `0,200 %/s` y el techo se ejerció, salió con `retardo 45 s` en su propio reporte—.
+Lo que sí queda contaminado es cualquier medición futura de la **fila 03** (el NETO de 10-20 min).
+
+---
+
 ## 2026-08-20 (64) — **La r1 del hunt directo CORRIÓ: 4 pasa · 0 falla · 10 sin correr, y en juego el bot hace lo que tiene que hacer. Los dos arreglos de la sesión salieron de LEER la corrida, no de correrla: el perro guardián acusaba a dos mecanismos APAGADOS, y un registro viejo se comía el corte del apagado.**
 
 Reporte íntegro y análisis en [`dev/CORRIDA_hunt_directo_r1.md`](dev/CORRIDA_hunt_directo_r1.md).
@@ -142,6 +218,84 @@ juego: los dos son de instrumento y de A/B, y no tocan la escalera, la compuerta
 `dev/CORRIDA_hunt_directo_r1.md` (nuevo). Controles sobre el archivo ya parcheado:
 `dev/parsear_sintaxis_glua.py` (0 errores, control roto detectado) y `dev/auditar_ent_a_runtime.py`
 (39 archivos, 0 lecturas de `ENT` a runtime, control roto detectado).
+
+---
+
+## 2026-08-20 (63) — **La r2 de la cordura: 10 pasa · 1 falla · 1 sin correr. La roja no era de la cordura: era el TOKENIZADOR DE LA CONSOLA partiendo el id de la causa en `evento:sound`.**
+
+Reporte íntegro y análisis en [`dev/CORRIDA_cordura_b1_r2.md`](dev/CORRIDA_cordura_b1_r2.md).
+
+### ⚠⚠⚠ El rojo, y por qué ningún instrumento offline lo veía
+
+La fila 04 pedía `phantasmagoria_cordura_drenar 10 evento:sound`. Salió `drenaje plano de 10 % contra
+'evento'` y el desglose puso `evento ⚠ NO DECLARADA −10.00 %` con `evento sound` en cero.
+
+`CCommand::Tokenize` (tier1) parte la línea de consola con un break set que incluye **`{ } ( ) ' :`**,
+y esos caracteres **salen como tokens propios**. El argumento no llegó como uno sino como tres —
+`"evento"`, `":"`, `"sound"`— y el comando leía `args[2]`. **Sin error de Lua, ni de red, ni de
+permisos: el string se partió antes de que el addon lo viera**, y el síntoma apareció dos capas más
+abajo disfrazado de defecto del receptor. *Es el pariente exacto de la truncada a 255 de la consola de
+Source.*
+
+**Los cinco instrumentos offline lo daban verde**, y con razón: el id era Lua válido, la puerta era la
+única escritora y el desglose cerraba. Ninguno de los cinco sabe nada de la consola. El resultado es
+que **el único renglón del reporte que llevaba `:` en el id no se podía ejercer nunca**, desde el día
+que se escribió el bloque.
+
+### ⭐ Tres decisiones viejas son las que hicieron legible el rojo
+
+1. **Una causa desconocida no se funde en un "otras"** — si se fundiera, `evento sound` habría quedado
+   en cero con las dos mitades del reporte de acuerdo entre sí.
+2. **El `neto` cerró igual** (`−7,63 − 10,00 = −17,63`, barra `82,37`): el control del nº 89 sigue
+   verde *mientras* la atribución está mal. Es lo que ese control promete, y hay que entenderlo antes
+   de leerlo como un cheque en blanco.
+3. **El `fail` de la propia fila 04 predecía el renglón palabra por palabra.** *Un criterio de rojo
+   que nombra la salida exacta convierte una lectura rara en un veredicto.*
+
+### El arreglo: el rename es lo de menos
+
+- Los ocho ids pasan a **`evento_sound`** y hermanos. Nadie más los usaba (B2 no existe, §19.9.5 no
+  fija el string).
+- ⭐ **Control de arranque** sobre las **19 causas declaradas**: ningún id puede llevar un carácter que
+  el transporte parta. *Verificar «los ocho llevan guion bajo» saldría verde por construcción y no
+  cubriría a la causa número 20* (nº 42). Va con `string.find( id, ch, 1, true )` —literal, sin
+  patrones—, porque buscar puntuación *como patrón* es lo que convierte un control en un adorno.
+- **El comando queda con tres defensas**, porque el rename no protege al que tipea: rearma los
+  argumentos, normaliza los caracteres rotos (así `evento:sound` sigue llegando bien, avisando), y
+  ⭐ **grita en el acto** si la causa no está declarada, listando las 19. Antes eso sólo se veía en el
+  reporte, dos pantallas después y con la corrida ya gastada. Verificado en un runtime Lua real sobre
+  la forma de tokens que la consola produce de verdad.
+- **`dev/auditar_ids_tipeables.py`** — el mismo control sin juego, con `--control` que inyecta el
+  defecto de la r2 tal cual. ⚠ No reemplaza a `auditar_puerta_cordura.py`: ese mide **quién escribe**,
+  éste mide **quién puede ser nombrado**, y la r2 probó que un árbol puede estar verde en el primero y
+  roto en el segundo.
+
+### ⭐⭐ Lo que la r2 cerró y la r1 no había podido
+
+- **El techo de 80 se EJERCIÓ** (fila 02): `669 ticks × 0,300 s = 200,7 s`, `× 0,200 %/s = 40,14 %` =
+  **el potencial clavado**; el **aplicado** fue `40,09` y la barra quedó en **80,00**. *Los 0,05 que
+  sobraban los comió el techo, y el desglose los deja afuera en vez de acreditárselos.* El par
+  potencial/aplicado se puso para las perillas de control y terminó siendo **el único lugar donde el
+  techo se ve como número**.
+- **El clamp en 0 se midió igual de fino** (fila 05B): `−20,01 − 9,99 − 70,00 = −100,00`, barra
+  `0,00`. **Brecha 0,00 en el otro extremo del rango**, que ninguna lectura de la r1 tocó.
+- ⭐ **El modulador ×0,5 se midió por primera vez** (fila 09, con linterna): `presencia calma −0,94` y
+  `oscuridad ( mod ) **+0,47**` — delta **positivo** y **mitad exacta**. La rama iluminada nunca se
+  había ejercido.
+- **La 01 en la meseta** (63 u) dio `0,0968 %/s` contra `0,100` diseñado, confirmando la explicación
+  que la r1 dio para su `0,070` (había medido en la caída, a 188-214 u).
+- **La 08 con Cargo montado**: los tres tiers como ítems, con modelo, precio, trivia, `Use` y stack.
+
+### ⚠⚠ Lo que queda abierto
+
+- **La 04**, sólo su mitad B: tres de sus cuatro criterios ya están medidos y no cambian.
+- **La 10**, sin correr: la 04 interrumpió la sesión. Sus dos mitades offline están verdes. ⚠ La r2
+  **produjo** un renglón `NO DECLARADA`, que es lo que el `pass` de la 10 prohíbe — y **la 10 no puede
+  distinguir** un escritor clandestino de un andamio mal tipeado.
+- ⚠⚠ **El punto ciego de la luz llegó a 25 luces sin getter**, y `a oscuras` es el default cuando no
+  hay nada legible: *el modulador está decidiendo un tercio del drenaje sobre una lectura que el propio
+  instrumento declara que no puede hacer*. No es un rojo —avisa— pero es **lo primero que B2 tiene que
+  cerrar** al subir `LIGHT_CLASSES` a `lua/phantasmagoria/`.
 
 ---
 
