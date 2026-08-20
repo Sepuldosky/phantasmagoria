@@ -57,6 +57,10 @@ que la precondición estaba escrita para proteger, entrando por la puerta de al 
 `phantasmagoria_ghost_type revenant`, después `phantasmagoria_ghost_speedmul 0.7`, y por último
 `phantasmagoria_ghost_speed` **solo**. Tiene que decir `x0.412` y `= tipo x0.588 × global x0.700`.
 
+> ✅ **CORRIDA EL MISMO DÍA Y CERRADA** — ver la sección *EL RE-CORRIDO DE LA 05* más abajo.
+> Salió `x0.412` con `= tipo x0.588 × global x0.700` y `COINCIDEN`. Este punto queda **saldado**;
+> los puntos 2 y 3 de arriba siguen valiendo tal como están escritos.
+
 ### 2. La P0 sí dio un veredicto, y es el que el prompt anticipó: **el multiplicador es inocente**
 
 Con `base 280` de Better Movement y `mul x0.700`, el fantasma corre a **196 u/s** contra los **280**
@@ -122,6 +126,60 @@ vano). Diez segundos. `tiradas` tiene que quedar en 1.
 - El `sondeo direccion por cuerpo` de la fila 02 con `player #1 targetname 'SEPULDOSKY' a 0 u`: el
   autor estaba parado delante del bot. El contador de SERES existe justo para que eso no se lea como
   un defecto.
+
+---
+
+## ⭐⭐⭐ EL RE-CORRIDO DE LA 05, MISMO DÍA — **cierra, y con el número que el álgebra predecía**
+
+El autor puso las cuatro líneas en orden (`typespeed 1` → `type revenant` → `speedmul 0.7` →
+`ghost_speed` solo) con **el Revenant corriendo hacia él**, y salió:
+
+    multiplic.  x0.412   [ foto de hace 0.16 s ]
+                = tipo x0.588 ( campo phantom_SpeedMul ( tipo ) )   ×   global x0.700 ( phantasmagoria_ghost_speedmul )
+    speed.base  campo x0.588   la tabla dice x0.588   COINCIDEN
+    objetivo    115 u/s   ( base x multiplicador )
+    factor      x0.210   ( objetivo / RunSpeed declarada 550 )
+    AHORA       deseada 115 u/s   real 115 u/s
+                deseada = la marcha 'run' de la linea de arriba: el factor YA llego al locomotion.
+    marcha      CAZANDO   la decidio: override propio ( cazando, corre )
+
+**0,588 × 0,700 = 0,412, y el reporte imprime los tres números por separado.** No es que dé «algo
+distinto de antes»: da **exactamente lo que la fórmula nueva predice**, y el renglón `COINCIDEN`
+prueba que el 0,588 salió de la tabla del tipo y no de otro lado. *Un número que cae donde el álgebra
+lo puso es una medición; uno que simplemente cambió es una impresión.*
+
+**La fila 05 pasa por el criterio que estaba escrito**, esta vez con el sujeto en el estado correcto.
+Lo que la corrida anterior no pudo distinguir —el `1.0 × convar` que es el `else` viejo escrito de
+otra forma— acá está separado en dos factores visibles.
+
+### Y de paso cierra la P0, ahora con el tipo aplicado
+
+`deseada 115 · real 115` con `marcha CAZANDO`, contra los **280 u/s** del jugador. **El Revenant lo
+está persiguiendo al 41 % de su velocidad.** Es el mismo veredicto de la P0 —el multiplicador es
+inocente— pero medido en el estado exacto en el que se reportó el síntoma: *cazando y viniendo hacia
+él*. Con el tipo enganchado y el global en 0,7, un Revenant **no puede alcanzarlo nunca**.
+
+### ⚠⚠ Dos consecuencias de haber prendido `typespeed 1`, que antes estaba en 0
+
+1. **Los once tipos con `speed.base` distinto de 1.000 recién ahora mueven la velocidad.** Hasta hoy
+   `typespeed 0` los anulaba a todos: cualquier fantasma corría al andamio. Los dos más lentos
+   —`deildegast` y `deogen`, 0.235— con el global en 0,7 quedan en `0.165 × 280 = 46 u/s`, que es
+   **caminar despacio**. No es un defecto: es la tabla haciéndose sentir por primera vez. Pero el
+   número del global ahora **multiplica a los 30 tipos**, así que elegirlo es una decisión distinta
+   de la que era cuando sólo tocaba a los sin-tipo.
+2. **`speed.top` pasa de tentación a candidato con motivo.** El Revenant trae `top x1.765 ( alterna )`
+   y el reporte lo imprime marcado como no usado. En Phasmophobia el Revenant es **lento mientras no
+   sabe dónde estás y muy rápido cuando te ve** — eso *es* la alternancia entre 0,588 y 1,765. La
+   sospecha razonable, y **no medida**, es que el «revenant rapidísimo» del autor sea el recuerdo del
+   juego original y no una lectura de este addon. Sigue siendo un bloque aparte, con su propia
+   planilla.
+
+### Lo que queda sin correr de este arco
+
+- **La fila 06** (el control del pedido 2: `speedmul 1` sobre el mismo sujeto tiene que dar
+  `x0.588`, `= tipo x0.588 × global x1.000`, `objetivo 165 u/s`). Con el campo escrito, ahora sí
+  puede fallar. *El álgebra lo predice, y este taller ya pagó por confundir predecir con medir.*
+- **La fila 03**, con la precondición arreglada (`phasedoors 1` y el cuerpo en el vano).
 
 ---
 

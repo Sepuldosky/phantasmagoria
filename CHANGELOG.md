@@ -7,6 +7,67 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-19 (54) — **La fila 05 re-corrida con el sujeto en el estado correcto: `x0.412` exacto, y el pedido 2 queda MEDIDO. De paso quedó medido que un Revenant cazando persigue al jugador al 41 % de su velocidad.**
+
+La entrada (53) dejó escrito que el núcleo del pedido 2 no se había medido porque
+`phantasmagoria_ghost_typespeed` estaba en 0. El autor puso las cuatro líneas en orden —`typespeed 1`
+→ `type revenant` → `speedmul 0.7` → `ghost_speed` solo— **con el Revenant corriendo hacia él**, y
+salió lo que el criterio pedía:
+
+    multiplic.  x0.412
+                = tipo x0.588 ( campo phantom_SpeedMul ( tipo ) )   ×   global x0.700
+    speed.base  campo x0.588   la tabla dice x0.588   COINCIDEN
+    objetivo    115 u/s      factor x0.210
+    AHORA       deseada 115 u/s   real 115 u/s      marcha CAZANDO
+
+### ⭐⭐⭐ Lo que lo vuelve una medición y no una impresión
+
+**0,588 × 0,700 = 0,412.** No es que el número «haya cambiado»: cae **exactamente donde el álgebra lo
+puso**, y el reporte imprime los tres por separado, así que no hay forma de que un factor esté
+tapando al otro. El renglón `COINCIDEN` prueba además que el 0,588 salió de la tabla del tipo y no de
+un campo escrito por otro. *Un número que cae donde el álgebra lo puso mide el mecanismo; uno que
+simplemente es distinto del anterior sólo mide que algo se movió.*
+
+Con esto **el pedido 2 queda cerrado en su mitad positiva**. Queda la fila 06 —el control,
+`speedmul 1` sobre el mismo sujeto— que ahora **sí puede fallar**, porque el campo está escrito.
+
+### ⭐ Y cierra la P0 en el estado exacto en el que se reportó el síntoma
+
+`deseada 115 · real 115` con `marcha CAZANDO`, contra los **280 u/s** del jugador: **el Revenant lo
+persigue al 41 % de su velocidad**, y no puede alcanzarlo nunca. Es el mismo veredicto que la P0 dio
+con el campo vacío —el multiplicador es inocente del «rapidísimo»— pero ahora medido **cazando y
+viniendo hacia él**, que es la escena que originó el reporte. *La P0 lo dijo con el tipo apagado y lo
+vuelve a decir con el tipo puesto: dos configuraciones distintas, el mismo veredicto.*
+
+### ⚠⚠ Dos consecuencias de haber prendido `typespeed 1`, que llevaba quién sabe cuánto en 0
+
+1. **Los once tipos con `speed.base` distinto de 1.000 recién ahora mueven la velocidad.** Hasta hoy
+   el 0 los anulaba a todos y cualquier fantasma corría al andamio — que es, dicho de otro modo, que
+   **la mitad de Diseño 5.1 estaba apagada en la máquina del autor sin que nada lo dijera**. Los dos
+   más lentos (`deildegast` y `deogen`, 0.235) con el global en 0,7 quedan en **46 u/s**, que es
+   caminar despacio. No es un defecto: es la tabla haciéndose sentir por primera vez. Pero el global
+   ahora **multiplica a los 30**, así que elegir su número es una decisión distinta de la que era
+   cuando sólo tocaba a los sin-tipo.
+2. **`speed.top` pasa de tentación a candidato con motivo.** El Revenant trae `top x1.765 ( alterna )`
+   y el reporte lo imprime marcado como no usado. En Phasmophobia el Revenant es **lento mientras no
+   sabe dónde estás y muy rápido cuando te ve** — eso *es* la alternancia entre 0,588 y 1,765. La
+   sospecha razonable, **y no medida**, es que el «revenant rapidísimo» sea el recuerdo del juego
+   original y no una lectura de este addon. Sigue siendo un bloque aparte: 13 de los 30 tipos traen
+   segunda velocidad, y son `onLOS`, `inverseDistance` y `rampDuringHunt` — §5.1 entero.
+
+### Lo que queda sin correr de este arco
+
+- **La fila 06**, el control del pedido 2: `speedmul 1` sobre el mismo sujeto tiene que dar `x0.588`,
+  `= tipo x0.588 × global x1.000` y `objetivo 165 u/s`. *El álgebra lo predice, y este taller ya pagó
+  por confundir predecir con medir.*
+- **La fila 03**, con la precondición arreglada (`phasedoors 1` y el cuerpo en el vano, nunca
+  `phasedoors 0`).
+
+Las dos precondiciones defectuosas quedaron corregidas en la planilla, y las dos lecciones en el
+catálogo de controles (**91** y **92**).
+
+---
+
 ## 2026-08-19 (53) — **La r1 corrida: 9 de 9 en juego, los dos defaults movidos por decisión del autor… y tres de esos nueve verdes no miden lo que dicen. El pedido 2 sigue sin medirse, y la fila que iba a atraparlo se desactivó con su propia precondición.**
 
 Corrida del autor sobre `dev/checks/phantasmagoria-puertas-chance-r1.html`, guardada en

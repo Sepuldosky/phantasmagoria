@@ -13,6 +13,32 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 ## 🔴 EMPEZAR ACÁ — traspaso del 2026-08-07 (el encaje contra el techo)
 
+> ⭐⭐⭐ **LO ÚLTIMO (2026-08-19, cierre del pedido 2): `x0.412` EXACTO, Y EL NÚMERO CAE DONDE EL
+> ÁLGEBRA LO PUSO.** Detalle en el CHANGELOG **(54)**. Con el sujeto en el estado correcto
+> (`typespeed 1`) el reporte dio `= tipo x0.588 ( campo phantom_SpeedMul ) × global x0.700`, con
+> `speed.base campo x0.588 · la tabla dice x0.588 · COINCIDEN`. **0,588 × 0,700 = 0,412**: no es que
+> el número «haya cambiado», es que cae exactamente donde la fórmula lo predice, con los tres
+> factores impresos por separado. *Un número que cae donde el álgebra lo puso mide el mecanismo; uno
+> que simplemente es distinto del anterior sólo mide que algo se movió.*
+>
+> ⭐⭐ **Y cierra la P0 en la escena que originó el reporte:** `deseada 115 · real 115` con
+> `marcha CAZANDO` contra los **280 u/s** del jugador — **el Revenant lo persigue al 41 % de su
+> velocidad y no puede alcanzarlo nunca**. Mismo veredicto que con el tipo apagado, ahora con el tipo
+> puesto: **el multiplicador es inocente del «rapidísimo»**.
+>
+> ⚠⚠ **Dos consecuencias de haber prendido `typespeed 1`, que llevaba quién sabe cuánto en 0:**
+> (1) los **once** tipos con `speed.base` ≠ 1.000 recién ahora mueven la velocidad — o sea que **la
+> mitad de Diseño 5.1 estaba apagada en la máquina del autor sin que nada lo dijera**; los dos más
+> lentos (`deildegast`/`deogen`, 0.235) con el global en 0,7 quedan en **46 u/s**, que es caminar
+> despacio, y el global ahora multiplica a los 30. (2) **`speed.top` pasa de tentación a candidato con
+> motivo**: el Revenant trae `top x1.765 ( alterna )`, y en Phasmophobia el Revenant es lento mientras
+> no sabe dónde estás y muy rápido cuando te ve — eso *es* la alternancia. **Sospecha no medida:** que
+> el «revenant rapidísimo» sea el recuerdo del juego original y no una lectura de este addon.
+>
+> ⚠ **Queda sin correr, de este arco:** la **fila 06** (el control del pedido 2 — `speedmul 1` sobre el
+> mismo sujeto tiene que dar `x0.588` y `objetivo 165 u/s`; ahora **sí puede fallar**, porque el campo
+> está escrito) y la **fila 03** con la precondición arreglada (`phasedoors 1`, el cuerpo en el vano).
+
 > ⭐⭐⭐ **LO ÚLTIMO (2026-08-19, r1 CORRIDA): 9 DE 9 EN JUEGO, LOS DOS DEFAULTS MOVIDOS… Y TRES DE
 > ESOS NUEVE VERDES NO MIDEN LO QUE DICEN.** Detalle en el CHANGELOG **(53)**; la corrida entera en
 > `dev/CORRIDA_puertas_chance_r1.md`.
