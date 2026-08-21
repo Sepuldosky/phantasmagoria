@@ -18,12 +18,12 @@ Pensado para retomar desde un chat limpio, sin contexto previo.
 
 ## 0.0 ⚠⚠⚠ El estado EXACTO al cerrar este chat — leer esto primero
 
-**Commit `0bf04ff` en `main`, LOCAL Y SIN PUSHEAR.** 11 archivos, 2.590 inserciones. Lo primero que
-conviene hacer es decidir si se pushea: *un commit sin pushear es invisible para la otra sesión, y el
-índice de git es compartido.*
+**`main` está en `4ad0021` y PUSHEADO** (`d3b6c95..4ad0021`). Dos commits: `0bf04ff` el código de B2
+(11 archivos, 2.590 inserciones) y `4ad0021` este handoff.
 
 ```
-git log --oneline -1          # tiene que decir 0bf04ff
+git log --oneline -2          # 4ad0021, 0bf04ff
+git log origin/main..HEAD     # tiene que salir VACÍO
 git status --short            # sólo `M lua/autorun/client/phantasmagoria_eq_check.lua`, que NO es nuestro
 ```
 
@@ -398,9 +398,15 @@ lo que limita qué entra.
 sin commitear: **no stagearlo** hasta saber de quién es. La receta de un paso lo dejó afuera sin que
 haya que acordarse — el pathspec del `commit` es lo que limita qué entra.
 
-⚠⚠ **`0bf04ff` ESTÁ SIN PUSHEAR.** La receta funcionó (11 archivos pedidos, 11 archivos adentro, el
-ajeno afuera), pero *un commit local es invisible para la otra sesión*, y el push es la única parte
-del trámite que este chat no hizo.
+✅ **PUSHEADO**: `d3b6c95..4ad0021`, y `git log origin/main..HEAD` sale vacío. La receta de un paso
+funcionó (11 archivos pedidos, 11 adentro, el ajeno afuera).
+
+⚠ Y esta línea decía **«ESTÁ SIN PUSHEAR»** hasta un minuto después de escribirla, que es el defecto
+que este documento existe para no cometer: *un handoff que afirma el estado de otra cosa envejece con
+esa cosa, y el próximo chat no tiene cómo detectarlo* — la línea se lee tan fresca el día que es
+cierta como tres semanas después. Por eso el bloque de arriba trae **el comando que lo verifica** y no
+sólo la afirmación: `git log origin/main..HEAD` contesta en un segundo y no depende de que esta frase
+sea verdad.
 
 ⚠⚠ **Y este arco chocó tres veces por numeración**, no por archivos: la entrada de CHANGELOG **(65)**
 nació (64) y las dos del catálogo de memoria nacieron 107 y quedaron 112. Hoy se agregaron la **(66)**
