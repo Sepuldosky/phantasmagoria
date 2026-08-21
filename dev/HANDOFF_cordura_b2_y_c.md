@@ -18,14 +18,21 @@ Pensado para retomar desde un chat limpio, sin contexto previo.
 
 ## 0.0 ⚠⚠⚠ El estado EXACTO al cerrar este chat — leer esto primero
 
-**`main` está en `4ad0021` y PUSHEADO** (`d3b6c95..4ad0021`). Dos commits: `0bf04ff` el código de B2
-(11 archivos, 2.590 inserciones) y `4ad0021` este handoff.
+**Todo pusheado.** El código de B2 es **`0bf04ff`** (11 archivos, 2.590 inserciones); encima hay uno o
+más commits de este mismo handoff.
 
 ```
-git log --oneline -2          # 4ad0021, 0bf04ff
-git log origin/main..HEAD     # tiene que salir VACÍO
+git log origin/main..HEAD     # tiene que salir VACÍO   <- ESTO es lo que hay que mirar
 git status --short            # sólo `M lua/autorun/client/phantasmagoria_eq_check.lua`, que NO es nuestro
 ```
+
+> ⚠⚠ **ACÁ DECÍA EL HASH DEL TIP, Y SE ROMPIÓ DOS VECES SEGUIDAS EN CINCO MINUTOS.** Primero decía
+> *«LOCAL Y SIN PUSHEAR»* y el push lo desmintió; después decía *«main está en `4ad0021`»* y el commit
+> que arreglaba lo anterior lo desmintió otra vez. *Un documento no puede nombrar el tip de la rama en
+> la que él mismo vive: cada commit propio invalida esa línea, y la mano que commitea es la misma que
+> la escribió.* Lo que sí se puede nombrar es un commit **de contenido** —`0bf04ff` es el código de B2
+> y eso no cambia nunca— y **el comando que contesta el resto**. Por eso arriba hay un comando y no una
+> afirmación: el lector no depende de que esta página siga siendo verdad.
 
 ### Lo que ESTÁ, y dónde
 
@@ -398,8 +405,8 @@ lo que limita qué entra.
 sin commitear: **no stagearlo** hasta saber de quién es. La receta de un paso lo dejó afuera sin que
 haya que acordarse — el pathspec del `commit` es lo que limita qué entra.
 
-✅ **PUSHEADO**: `d3b6c95..4ad0021`, y `git log origin/main..HEAD` sale vacío. La receta de un paso
-funcionó (11 archivos pedidos, 11 adentro, el ajeno afuera).
+✅ **PUSHEADO**, y lo que lo dice es `git log origin/main..HEAD` saliendo vacío, no esta línea. La
+receta de un paso funcionó (11 archivos pedidos, 11 adentro, el ajeno afuera).
 
 ⚠ Y esta línea decía **«ESTÁ SIN PUSHEAR»** hasta un minuto después de escribirla, que es el defecto
 que este documento existe para no cometer: *un handoff que afirma el estado de otra cosa envejece con
