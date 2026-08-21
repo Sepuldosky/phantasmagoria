@@ -7,6 +7,129 @@ que se **midió**, no lo que se planea.
 
 ---
 
+## 2026-08-20 (66) — **B2 escrita: los ocho eventos drenan y la esfera cuelga del SUJETO. Y de escribirla salieron dos defectos que no eran de B2 — un rasgo del diseño que era imposible de pagar, y un tercio del drenaje decidido sobre una lectura que el instrumento declaraba imposible.**
+
+Planilla `dev/checks/phantasmagoria-cordura-b2.html` (11 filas, fuera de git), **sin correr en juego**.
+Diseño: **§19.8.4** (con la enmienda de hoy) y **§5.5** (nueva).
+Lo anterior: **(65)** y [`dev/HANDOFF_cordura_b2_y_c.md`](dev/HANDOFF_cordura_b2_y_c.md).
+
+### Lo pedido, y está entero
+
+- **El tercer retorno en los ocho `EV.*`** — el epicentro. *El drenaje se mide desde dónde sonó, no
+  desde el fantasma*: hasta hoy un `knock` podía ocurrir a 450 u del fantasma con el jugador a diez
+  metros del golpe, y ninguna línea del addon sabía dónde había pasado.
+- **UNA sola pasada** sobre los jugadores, en `phantom_FireEvent` — el único sitio que ve el resultado
+  de los ocho, la categoría, si está cazando y los rasgos del tipo.
+- **La sub-tabla `sanity` de `ghost_flags.lua`** — el `mult = 2` del Oni, el `per.door = 15` del Yurei
+  y el `presence = 0.5` del Phantom.
+- **`LIGHT_CLASSES` subida** a `lua/phantasmagoria/luces.lua`, y borrada la copia que B1 dejó acotada.
+
+### ⭐⭐⭐ Lo que salió de escribirlo, y ninguna de las dos cosas era de B2
+
+**1. El tope de 6 % hacía IMPOSIBLE el 15 % del Yurei — y son dos números de la MISMA sección.**
+El tope se justifica *«porque `count` sortea hasta dos categorías a la vez»*: existe para acotar el
+**apilamiento**. Y la tabla de rasgos de al lado le da al Yurei `per.door = 15`, literal de la fuente.
+Con un 6 duro ese 15 se recorta a 6 **siempre**, en un disparo de **una sola** categoría, donde no hay
+nada apilado. El rasgo que **define** al tipo quedaba a un 40 % de lo escrito, sin error, y ninguna
+fila podría haberlo separado de *«la caída se lo comió»*.
+
+> *Un tope pensado contra la suma no puede decidir el costo de un solo sumando.*
+
+El techo pasa a ser `max( tope, el mayor costo individual )`. ⚠ **Es una lectura mía de dos números
+del diseño que se contradicen, no una decisión del autor**: se revierte sacando un `math.max`, y el
+reporte cuenta aparte las veces que el piso levantó el techo, así que la decisión se puede tomar sobre
+un número. Lo mide la fila **06**.
+
+**2. La lectura de la luz tenía DOS estados donde hay TRES.** `IsPlayerLit` devolvía un booleano, así
+que *«medí que hay lámparas legibles al lado y están todas apagadas»* y *«no hay una sola luz que se
+pueda preguntar»* salían por el mismo `false` — y el modulador le cobraba el ×1,5 a los dos por igual.
+Con las **25 luces sin getter** que midió la r3, eso es **un tercio del drenaje decidido sobre una
+lectura que el propio instrumento declara que no puede hacer**.
+
+Hoy `PHANTASMAGORIA.LuzEncendida` devuelve `true` / `false` / **`nil`**, e `IsPlayerLit` devuelve un
+cuarto valor (`iluminado` / `oscuro` / `sin_lectura`). La lectura ciega tiene **renglón propio** y
+**perilla propia**.
+
+> ⚠ **Y la perilla nace en 1,5 — el mismo número de antes — a propósito: B2 NO mueve el gameplay.**
+> Una tajada que además cambia el comportamiento deja un rojo con dos causas posibles. Lo que se gana
+> hoy es que ese tercio sea **aislable en un A/B**; bajarlo a 1,0 es una línea y una decisión del autor.
+
+⚠ Y **cero luces cerca tampoco es una medición de oscuridad**: un mapa de iluminación horneada no tiene
+ni una entidad de luz y está perfectamente iluminado. §19.9.2 lo aceptó por escrito; lo que cambia es
+que ahora tiene **denominador**.
+
+### ⭐⭐ La expectativa del handoff sobre el auditor contaba el universo equivocado
+
+El handoff decía: *«al cerrar B2, mirar ese renglón y comprobar que dice **ocho**»*, sobre el renglón
+«usan la API pública» de `auditar_puerta_cordura.py`. **Al cerrarla dice 1, y el 1 es lo correcto** —
+§19.8.4 exige una sola pasada, o sea un solo llamador con una sola llamada. La expectativa contaba
+**sitios de llamada** para contestar una pregunta que es sobre **renglones del desglose**; con la
+arquitectura correcta ese renglón iba a decir 1 **para siempre**, y quien lo leyera con la frase del
+handoff en la mano habría concluido que faltaban siete llamadores.
+
+> *Un criterio numérico heredado de un handoff no es un criterio: hay que preguntarle **qué cuenta**
+> antes de creerle el número.*
+
+Se le agregó al auditor la mitad que sí contesta: que cada uno de los ocho **ids de causa** aparezca,
+literal, fuera de la puerta. Hoy dice **`CAUSAS DE EVENTO SIN PRODUCTOR: 0 de 8`**. Y por eso los ids
+se escriben **literales** en `CATS` en vez de construirse con `"evento_" .. key`: *un identificador
+que sólo existe en runtime es invisible para todo instrumento que mida el código*.
+
+### ⭐ Un instrumento offline que corre el código REAL
+
+`dev/cordura_b2_offline.py` extrae del archivo el cuerpo de `factorSanidad` y `normalizarEpicentros`
+y los ejecuta en un intérprete de Lua, y corre `ghost_flags.lua` entero con stubs. **No re-implementa
+nada** — *un control que copia el cuerpo mide su copia*. Su `--control` **sabotea** el archivo de
+rasgos de **tres** maneras y exige que la guarda hable de las tres.
+
+Existe porque las tres piezas que cubre **fallan en silencio**: una meseta mal calculada drena «un poco
+distinto», y en juego eso es indistinguible de haberse parado medio metro más lejos.
+
+### Lo demás que quedó escrito
+
+- **`PERILLAS_TODAS` dejó de ser una lista pegada a mano.** B2 agrega perillas de cordura **en otro
+  archivo**, y con la lista local de B1 habrían quedado fuera de la vuelta a fábrica — el defecto de la
+  r3, pero peor, porque ni siquiera saldrían en el listado que lo delata. Hoy es un **registro
+  compartido** (`PHANTASMAGORIA.PerillasCordura`), creado con `or {}` en las dos puntas para que el
+  orden de carga que decide el engine no pueda romperlo. **Son 30, y el número es derivado.**
+- **`phantasmagoria_sanity_eventos` estrena su tercer estado.** El header de B1 declaraba que ninguna
+  de sus perillas era de tres estados *a propósito* —no había rasgo por tipo que respetar—. Con la
+  sub-tabla escrita, el `2` (drena **ignorando** los rasgos del tipo) permite aislar el ×2 del Oni
+  **sobre el mismo fantasma parado en el mismo lugar**, en vez de comparar dos sujetos.
+- **El rasgo del Phantom se registró INACTIVO y diciendo por qué.** Pide que el fantasma se esté
+  manifestando y §22 no está escrito; `PHANTASMAGORIA.EstaManifestado` es la costura. ⚠ No se colgó de
+  `phantom_Visible`: §19.8.2 ya lo prohibió porque §20.6 lo va a hacer titilar.
+- **`sin donde`**: un contador que dice cuántos eventos salieron OK y **no dijeron dónde**. Es el único
+  número capaz de delatar un `EV.*` al que se le agregue una rama de éxito sin epicentro — sale, suena,
+  no cobra, y desde el juego se ve igual que estar lejos. Se imprime **también en cero**.
+
+### ⚠⚠⚠ Un pendiente NUEVO del autor, y es más grande que un `if`
+
+> *«tengo por pendiente evitar que el fantasma muera o sea herido por armas de fuego, explosivos, melee
+> y al ser atacado con props phys como ragdolls (yo lo logro matar fácil tirándole un ragdoll)»*
+
+Queda escrito en **§5.5** con las cuatro preguntas que hay que contestar antes de tocar nada, y con las
+tres razones por las que no es un `if` en `OnTakeDamage`: **matar al fantasma es hoy el único desenlace
+del addon** (el destierro no existe) y la vía de cordura `fantasma muerto` cuelga de él; el daño llega
+por **cuatro** puertas distintas; y la sangre no es del daño sino del consumidor — apagar el daño
+primero la haría desaparecer **por accidente**, y nadie sabría cuál de los dos era el mecanismo.
+
+Por eso la fila **03** de `phantasmagoria-hunt-directo-r2.html` queda **PARCIAL por decisión del
+autor**: su precondición es herir al fantasma, o sea justo lo que el addon va a dejar de permitir.
+
+### Los instrumentos, todos verdes el 2026-08-20
+
+`parsear_sintaxis_glua.py` (40 archivos, 0 errores) · `luacheck_gmod.py` · `auditar_returns_de_hooks.py`
+(0 de 38) · `rutas_de_sonido.py` (186 rutas, 0 faltantes) · `auditar_ids_tipeables.py` (21 causas, 0
+rotas) y su `--control` · `auditar_puerta_cordura.py` (0 clandestinos, **0 de 8** sin productor) y su
+`--control` · `cordura_b2_offline.py` (FALLOS 0) y su `--control` (la guarda discrimina las tres) ·
+`auditar_planilla.py` y `verificar_citas_de_planilla.py` sobre las dos planillas.
+
+⚠ **Ninguno de ellos ve el juego.** B2 está **escrita y no corrida**: los ocho renglones del desglose
+todavía no se movieron ni una vez en pantalla.
+
+---
+
 ## 2026-08-20 (65) — **La r3: 5 pasa · 0 falla · 1 sin correr. El rojo del tokenizador CERRÓ, y la corrida destapó dos defectos del instrumento — uno de ellos en la planilla que yo había escrito para medirla.**
 
 Reporte íntegro y análisis en [`dev/CORRIDA_cordura_b1_r3.md`](dev/CORRIDA_cordura_b1_r3.md).

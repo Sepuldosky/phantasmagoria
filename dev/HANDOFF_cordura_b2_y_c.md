@@ -1,48 +1,44 @@
-# HANDOFF — **DOS FRENTES EN UN CHAT**: la cordura (**B2** los eventos · **C** el gatillo) y el **comportamiento del hunt directo**
+# HANDOFF — **DOS FRENTES EN UN CHAT**: la cordura (**B2 escrita, sin correr** · **C** el gatillo) y el **hunt directo** (12 filas listas)
 
 **Fecha:** 2026-08-20 · **Repo:** `phantasmagoria` · **Autor:** chileno, escribirle de **tú** (sin voseo)
 
-**Frente 1 — la cordura.** Lo anterior: [`HANDOFF_cordura_b1.md`](HANDOFF_cordura_b1.md). B1 **cerrada**.
-Corridas `dev/CORRIDA_cordura_b1_r1.md` · `_r2.md` · `_r3.md`. CHANGELOG **(61) (62) (63) (65)**.
-**Frente 2 — el hunt directo.** Handoff de origen: [`HANDOFF_phantasmagoria_hunt_directo.md`](HANDOFF_phantasmagoria_hunt_directo.md).
-Corrida `dev/CORRIDA_hunt_directo_r1.md` — **4 pasa · 0 falla · 10 sin correr**. CHANGELOG **(64)**.
-**Diseño:** `docs/PHANTOM_Phasmophobia_Diseno.md` **§19** (cordura), **§18** (el hunt) y **§21** (los eventos).
+**Frente 1 — la cordura.** B1 **cerrada** ([`HANDOFF_cordura_b1.md`](HANDOFF_cordura_b1.md), corridas
+`dev/CORRIDA_cordura_b1_r1.md` · `_r2.md` · `_r3.md`, CHANGELOG **(61)(62)(63)(65)**).
+**B2 ESCRITA el 2026-08-20 y SIN CORRER EN JUEGO** — CHANGELOG **(66)**, planilla
+`dev/checks/phantasmagoria-cordura-b2.html` (11 filas).
+**Frente 2 — el hunt directo.** r1: 4 pasa · 0 falla · 10 sin correr (`dev/CORRIDA_hunt_directo_r1.md`,
+CHANGELOG **(64)**). **La planilla r2 ya está escrita**: `dev/checks/phantasmagoria-hunt-directo-r2.html`,
+**12 filas para correr** (13 menos la 03, que el autor declaró parcial).
+**Diseño:** `docs/PHANTOM_Phasmophobia_Diseno.md` **§19** (cordura), **§18** (el hunt), **§21** (los
+eventos) y **§5.5** (nueva: cómo se mata a un fantasma).
 
 Pensado para retomar desde un chat limpio, sin contexto previo.
 
 ---
 
-## 0. ⚠⚠⚠ Por qué los dos frentes van juntos, y dónde chocan
+## 0. ⚠⚠⚠ Lo que hay que hacer, en orden, y por qué
 
-Hasta hoy fueron **dos sesiones paralelas** sobre el mismo repo: una escribió la cordura
-(`phantasmagoria_sanity.lua`) y la otra reescribió **cómo persigue** el fantasma (`server_hunt.lua`,
-`server.lua`, `server_stuck.lua`). Se evitaron a propósito. **A partir del próximo chat son una sola**,
-por decisión del autor.
+**Todo lo que sigue son CORRIDAS EN JUEGO, salvo C.** Las dos tajadas de código están escritas y los
+instrumentos offline están verdes — y ninguno de ellos ve el juego.
 
-Eso saca un problema y mete otro.
+| | qué | cuesta |
+|---|---|---|
+| **1** | **Correr la planilla de B2** (`phantasmagoria-cordura-b2.html`, 11 filas) | una sesión; la fila **02** pide armar una escena con un prop |
+| **2** | **Correr la r2 del hunt directo** (`phantasmagoria-hunt-directo-r2.html`, 12 filas) | no depende de nada de la cordura |
+| **3** | **Escribir C**, el gatillo — **va sola, con su propia planilla** | es la única que todavía es código |
 
-**Lo que se gana:** ya no hay dos sesiones compitiendo por el índice de git de este repo, que fue lo
-que en `4e0859b` se llevó 2.564 líneas ajenas adentro de un commit que no las nombraba.
+El orden entre 1 y 2 es indistinto: **no se tocan**. B2 tocó `server_events.lua`, `ghost_flags.lua`,
+`phantasmagoria_sanity.lua` y `phantasmagoria_data.lua`; el hunt directo vive en `server_hunt.lua`,
+`server.lua` y `server_stuck.lua`. **C es donde las dos cosas se encuentran de verdad.**
 
-### ⚠⚠⚠ Lo que hay que cuidar: **C no puede borrar `phantasmagoria_hunt`**
+### ⚠⚠⚠ La regla que sigue vigente: **C no puede borrar `phantasmagoria_hunt`**
 
-La tajada **C** hace que la cordura dispare el hunt, y en la tabla de tajadas eso figura como
-*«jubila `phantasmagoria_hunt`»*. **Tomado literal, rompe diez filas del otro frente**: las 01, 02,
-05, 06, 07, 08, 09, 11 y 12 de `phantasmagoria-hunt-directo-r1.html` prenden el hunt **con ese
-comando**, y sin él ninguna se puede correr.
+En la tabla de tajadas, C figura como *«jubila `phantasmagoria_hunt`»*. **Tomado literal rompe casi
+todas las filas de la r2 del hunt**, que prenden el hunt con ese comando. **C deja de DEPENDER de él
+como gatillo, pero el comando sigue existiendo como override manual declarado.** *Un andamio que
+además es el instrumento de otra planilla no se jubila: se degrada a instrumento.* Y si algún día se
+saca, se saca **después** de que esas filas hayan cerrado.
 
-**La regla, entonces:** C deja de **depender** de `phantasmagoria_hunt` como gatillo, pero el comando
-**sigue existiendo como override manual declarado**. *Un andamio que además es el instrumento de otra
-planilla no se jubila: se degrada a instrumento.* Y si algún día se saca, se saca **después** de que
-esas diez filas hayan cerrado, no antes.
-
-### El orden que se sugiere, y por qué
-
-1. **Las 10 filas del hunt directo primero.** No dependen de nada de la cordura, y **dos arreglos de
-   esa sesión nunca se corrieron en juego** (§5.3): están esperando una pasada.
-2. **B2 después.** Toca `server_events.lua`, que ninguno de los dos frentes tocó todavía.
-3. **C al final**, que es donde las dos cosas se encuentran de verdad — y para entonces las filas del
-   hunt ya cerraron y `phantasmagoria_hunt` puede degradarse sin dejar a nadie sin instrumento.
 
 ---
 
@@ -52,9 +48,9 @@ esas diez filas hayan cerrado, no antes.
 |---|---|---|
 | **A** el tipo | asignarlo, networkearlo, forzarlo | **CERRADA en juego** (`server_type.lua`) |
 | **B1** la cordura | la variable, la presencia, la recuperación, los instrumentos | **CERRADA.** r3: 5 pasa · 0 falla · 1 sin correr |
-| **B2** los eventos | el tercer retorno `pos` en los ocho `EV.*` + la sub-tabla `sanity` de `ghost_flags.lua` | **sin empezar** ← acá |
-| **C** el gatillo | cordura bajo el `hunt.threshold` **del tipo**; degrada `phantasmagoria_hunt` a instrumento | **sin empezar** ← y al final acá |
-| **hunt directo** | cómo persigue el fantasma (`server_hunt.lua`) | **4 pasa · 0 falla · 10 sin correr** + 2 arreglos sin pasada en juego ← **empezar por acá**, §4bis |
+| **B2** los eventos | el tercer retorno `pos` en los ocho `EV.*` + la sub-tabla `sanity` | **ESCRITA el 2026-08-20, SIN CORRER EN JUEGO.** Planilla de 11 filas lista ← **empezar por acá** |
+| **C** el gatillo | cordura bajo el `hunt.threshold` **del tipo**; degrada `phantasmagoria_hunt` a instrumento | **sin empezar** — es lo único que todavía es código |
+| **hunt directo** | cómo persigue el fantasma (`server_hunt.lua`) | r1: 4 pasa · 0 falla · 10 sin correr. **Planilla r2 escrita, 12 filas listas** |
 
 **Lo único que B1 dejó sin cerrar** son dos medias filas, y ninguna bloquea a B2:
 
@@ -73,9 +69,16 @@ esas diez filas hayan cerrado, no antes.
 phantasmagoria_cordura_fabrica --decir
 ```
 
-Las **24** convars del bloque son `FCVAR_ARCHIVE` y quedan guardadas en la máquina del que prueba.
+Las **30** convars del bloque son `FCVAR_ARCHIVE` y quedan guardadas en la máquina del que prueba.
 La r1 perdió dos perillas de **encendido** (catálogo nº 91) y la r3 llegó con
 `phantasmagoria_sanity_regendelay` en **30** contra los **45** del diseño, movida en un A/B de la r2.
+
+⚠⚠ **Eran 24 hasta B2, y el número ya no se escribe: se deriva.** B2 agregó cinco perillas de cordura
+**en otro archivo** (`server_events.lua`), y con la lista local que tenía B1 habrían quedado fuera de
+la vuelta a fábrica — el defecto de la r3, pero peor, porque ni siquiera saldrían en el listado que lo
+delata. Hoy el comando enumera un **registro compartido** (`PHANTASMAGORIA.PerillasCordura`), creado
+con `or {}` en las dos puntas para que el orden de carga que decide el engine no pueda romperlo.
+**Si el comando dice menos de 30, es que un archivo no cargó.**
 
 **Con `--decir` sólo informa; sin él, restituye y dice qué movió.** Leer *antes* de restituir es la
 mitad que importa: si la corrida anterior midió con esos valores, después ya no se puede saber.
@@ -87,50 +90,58 @@ mitad que importa: si la corrida anterior midió con esos valores, después ya n
 
 ---
 
-## 3. B2 — que los ocho eventos drenen
+## 3. B2 — **ESCRITA. Lo que falta es correrla.**
 
-### 3.1 Lo que YA está y no hay que escribir
+### 3.1 Qué entró, y en qué archivo
 
-- **Los ocho renglones del desglose existen** (`evento_sound` … `evento_creak`) y hoy dicen
-  `( sin llamador todavia: los ocho eventos son B2 )`. **B2 no toca el instrumento.**
-- **La puerta está probada en juego**: la forma plana cae en su renglón (r3, filas 01 y 02), y una
-  causa mal escrita se grita en el acto y se lleva su propio renglón sin romper el neto (r3, fila 03).
-- **La perilla `phantasmagoria_sanity_eventos` ya existe** y hoy es un andamio declarado como tal.
+| pieza | dónde |
+|---|---|
+| el tercer retorno `epi` en los **ocho** `EV.*` | `server_events.lua` |
+| la **pasada única** (`cobrarCordura`), el radio, la meseta, el tope y el tope de objetos | `server_events.lua` |
+| los ocho costos (`san`) y sus ids literales (`sanCausa`) en la tabla canónica `CATS` | `server_events.lua` |
+| la fuente continua `presencia_tipo` (el rasgo del Phantom), **registrada inactiva** | `server_events.lua` |
+| la sub-tabla `sanity` (Oni `mult=2`, Yurei `per.door=15`, Phantom `presence=0.5`) + su guarda | `ghost_flags.lua` |
+| la tabla canónica de las **seis clases de luz** y `LuzEncendida` (tri-estado) | `lua/phantasmagoria/luces.lua` **(nuevo)** |
+| la lectura de luz de **tres estados**, la causa `oscuridad_ciega`, `ciegamul`, el registro compartido de perillas | `phantasmagoria_sanity.lua` |
+| la columna de `luces.lua` en la guarda del cargador | `phantasmagoria_data.lua` |
 
-### 3.2 Lo que hay que escribir, y en este orden
+### 3.2 ⚠⚠ Lo que hay que leer ANTES de correr la planilla
 
-**(a) El tercer retorno `pos` en los ocho `EV.*`** de `server_events.lua`
-(`EV.throw` :3223 · `EV.knock` :3440 · `EV.creak` :3546 · `EV.door` :3675 · `EV.light` :4128 ·
-`EV.sound` :4388 · `EV.prop` :4503 · `EV.furniture` :5121).
+**Dos cosas salieron de escribir el bloque, no de correrlo, y las dos piden medición** — están en el
+CHANGELOG **(66)** y en §19.8.4 del diseño:
 
-⚠ **El drenaje se mide desde DONDE SONÓ, no desde el fantasma.** Un `knock` en una puerta al otro lado
-de la casa no puede cobrarle al que está parado al lado del fantasma. Cada `EV.*` ya sabe dónde
-ocurrió su efecto —el prop que tiró, la puerta que golpeó, la luz que parpadeó—; lo que falta es
-**devolverlo**.
+1. **El tope de 6 % hacía imposible el 15 % del Yurei.** El techo pasó a ser
+   `max( tope, el mayor costo individual )`. ⚠ **Es una lectura mía de dos números del diseño que se
+   contradicen, no una decisión tuya**: se revierte sacando un `math.max`, y el reporte cuenta aparte
+   las veces que el piso levantó el techo. Lo mide la fila **06**.
+2. **La lectura de la luz tenía dos estados donde hay tres.** ⚠ **La perilla nueva
+   `phantasmagoria_sanity_ciegamul` nace en 1,5 — el mismo número de antes — así que B2 NO mueve el
+   gameplay.** Lo mide la fila **08**.
 
-**(b) UNA sola pasada sobre los jugadores en `ENT:phantom_FireEvent`** (`server_events.lua:5142`), no
-una por evento. Es el único sitio que ve el resultado de los ocho.
+### 3.3 ⚠ Las perillas de la cordura ya no son 24: son **30**
 
-**(c) La sub-tabla `sanity` de `ghost_flags.lua`** — §19.8.4. Ahí viven el `mult = 2` del Oni, el
-`per.door = 15` del Yurei y el `presence = 0.5` del Phantom.
+B2 agregó cinco en `server_events.lua` (`sanrad`, `sanmeseta`, `santope`, `sanobjetos`, `sanpresrad`)
+y una en el módulo (`ciegamul`). `phantasmagoria_cordura_fabrica` las enumera de un **registro
+compartido** (`PHANTASMAGORIA.PerillasCordura`) y no de una lista pegada a mano: **si alguna vez dice
+menos de 30, es que un archivo no cargó**.
 
-> ⚠⚠ **Y ahí es donde la arquitectura de B1 cobra.** El `presence` del Phantom es una **tasa**
-> (0,5 %/s mientras lo mires dentro de 525 u) y **SUMA** al drenaje plano de la manifestación: mirar
-> un `singing` entero cuesta `10 % + 7,5 % = 17,5 %`. Entra por `RegisterSanityRate`, no por
-> `DrainSanity`. **Las dos formas ya están medidas y son distintas** (r2 y r3, fila 04): si el rasgo
-> no entra, no va a ser por la puerta.
+### 3.4 ⚠⚠ La fila 02 es el bloque entero, y pide armar una escena
 
-**(d) Subir `LIGHT_CLASSES` de `server_events.lua` a `lua/phantasmagoria/` y borrar la copia** que B1
-dejó acotada en el módulo de la cordura. Ver §5.
+Las demás filas se cumplen igual con la hipótesis vieja — el epicentro de `sound` **es** el fantasma,
+así que su verde no discrimina nada. La 02 es la única que separa *«la esfera cuelga del evento»* de
+*«la esfera cuelga del fantasma»*: un `prop_physics` **solo** a ~300 u del fantasma, y vos parado
+**en cada uno de los dos**. La planilla lo explica con la banda declarada.
 
-### 3.3 ⚠ Un `2` de tres estados recién ahora significa algo
+### 3.5 Lo que B2 **no** hizo, y está declarado
 
-El header de las convars de B1 dice que ninguna es de tres estados (`0 = nadie · 1 = respeta el flag ·
-2 = todos`) **a propósito**: en B1 no había ningún flag por tipo que respetar, y una perilla cuyo
-valor intermedio no significa nada se lee como que el flag ya existe. **Con la sub-tabla `sanity`
-escrita, ese `2` pasa a tener sujeto.**
+- **La oscuridad no modula los eventos.** Aplicárselo movería el tope de 6 % a 9 % sin que nadie lo
+  haya decidido. Frontera declarada: es una línea y una decisión tuya, no un descubrimiento.
+- **`door` cobra por INTENTADA**, y el efecto se confirma 0,25 s después. Esperar el veredicto
+  significaría cobrar dentro de un timer, o sea fuera de la pasada única. La bitácora imprime
+  `door SIN EFECTO` cuando pasa, así que el caso es **contable**.
+- **El rasgo del Phantom no tiene sujeto**: pide manifestación y §22 no está escrito.
+  `PHANTASMAGORIA.EstaManifestado` es la costura, y la fila **07** mide que la fuente lo **diga**.
 
----
 
 ## 4. C — el gatillo, y lo que DEGRADA ( no jubila )
 
@@ -161,86 +172,78 @@ por eso. C va sola, con su planilla.
 
 ---
 
-## 4bis. FRENTE 2 — el hunt directo: **10 filas sin correr**, y dos arreglos sin pasada en juego
+## 4bis. FRENTE 2 — el hunt directo: **la planilla r2 está escrita, 12 filas para correr**
 
 Bloque: `lua/entities/terminator_nextbot_phantom/server_hunt.lua` + tres enganches. Commits `f78a0ae`,
-`d60dc5a` y `9b19b5c`. Planilla `dev/checks/phantasmagoria-hunt-directo-r1.html` (14 filas, fuera de
-git). Detalle completo en **`dev/CORRIDA_hunt_directo_r1.md`**.
+`d60dc5a` y `9b19b5c`. Detalle de la r1 en **`dev/CORRIDA_hunt_directo_r1.md`**.
+**Planilla: `dev/checks/phantasmagoria-hunt-directo-r2.html`** (13 filas, fuera de git).
 
 **El veredicto de gameplay ya está dado**, y no lo mide ninguna fila — textual del autor: *«el hunt
-directo probándolo ingame está bien como gameplay, el bot hace lo que se supone que debe hacer»*. La
-corrida quedó a medias porque se fue a almorzar, no porque algo se cayera.
+directo probándolo ingame está bien como gameplay, el bot hace lo que se supone que debe hacer»*.
 
-### 4bis.1 Las 10 que faltan, y qué le falta a cada una
+La r2 ya trae lo que a la r1 le faltaba: la **banda de distancia** declarada en las filas 01 y 02, el
+criterio de **conteo con N declarado** (10 spawns por rama) para el `chanceNeeded`, y **dos filas
+nuevas** para los dos arreglos que salieron de *leer* la r1 y nunca se corrieron en juego — el perro
+guardián que acusaba a dos mecanismos apagados (fila **08**) y el `phantom_huntCutFor` que se perdía
+después de un A/B (fila **07**).
 
-| fila | qué mide | qué falta, exactamente |
-|---|---|---|
-| **01** | control positivo, 30-40 m | **declarar la banda de distancia**. Es lo único |
-| **02** | el pedido (perseguir → perder → buscar → volver) | ídem: el `cerebro` se corrió a 33 u, no en la banda |
-| **05** | el error de Lua se apaga | ⚠ **NO es binaria**: `truerange 1` baja un `chanceNeeded` de 85 a 15 en el tercer sitio. Hace falta un criterio de **CONTEO con N declarado** |
-| **06** | una mesa no aborta el duelo | armar el escenario: mesa en el medio, y que **no** salga `my enemy wasnt engagable!` |
-| **07** | el crouch-jump | *«no lo medí, pero sí el bot salta»* — **la observación no es la medición**: falta ver el `approachlastseen` que no aparece |
-| **08** | el corte al prender el hunt | correrla **con `phantasmagoria_ghost_huntdirect 1` puesto ANTES** |
-| **09** | el desenlace | **sacarse el `god` y morirse**, y mirar a quién se le atribuye la muerte |
-| **10** | la órbita no existe en hunt | frontera abierta declarada: **no hay código de este bloque que la cierre** |
-| **11** | no romper lo que ya cerró | pasarlas una por una, más el IDLE |
-| **12** | el cadáver conserva las armas | la mitad dinámica: morirse y contar las armas en el piso, más el A/B con `pickup 1` |
+### 4bis.1 ⚠⚠ Las DOS preguntas del autor, **CONTESTADAS el 2026-08-20**
 
-⚠ La **04** está en **pasa parcial**, no verde: le falta la otra mitad del A/B, y se cierra con una
-corrida de un minuto con el fantasma **HERIDO** a más de 1400 u.
+1. **¿El rescate del perro guardián tiene que existir en calma?** → **SÍ, se queda en calma**, con el
+   mensaje arreglado. La fila **08** de la r2 es la que lo mide, y queda tal cual.
+2. **La fila 04 de la r1 (el A/B con el fantasma HERIDO a más de 1400 u)** → **NO se corre.** Queda
+   apoyada en el mecanismo determinista y anotada como **PARCIAL**. Es la fila **03** de la r2, y ya
+   está marcada así. El motivo es del autor y abre un pendiente propio — ver §5.1.
 
-### 4bis.2 ⚠⚠ Dos arreglos de esa sesión que NUNCA se corrieron en juego
+⚠ **Entonces son 12 filas para correr, no 13.**
 
-Los dos salieron de **leer** la corrida, no de correrla, y los dos son de instrumento y de A/B — no
-tocan la escalera, la compuerta ni el contacto, que es lo que el autor ya aprobó:
+### 4bis.2 Fronteras que la r1 no movió, y ninguna fila se acreditó
 
-1. **El perro guardián atribuía el episodio a dos mecanismos APAGADOS.** Su `ErrorNoHalt` nombraba
-   causas que están bajo una guarda de estado que el disparo no tiene, así que gritó dos veces con el
-   fantasma en calma acusando a mecanismos que no podían ser. Contador partido por estado y mensaje
-   que dice de quién es la culpa. *Un falso diagnóstico no es un falso rojo ni un falso verde: es un
-   rojo verdadero con la etiqueta cambiada, y por eso no lo agarra ninguna planilla.*
-2. **`phantom_huntCutFor` se invalida cuando `huntdirect` está en 0**, para que el corte del apagado
-   no se pierda después de un A/B.
-
-**Empezar por acá**: una pasada que confirme que ninguno de los dos rompió nada es más barata que
-descubrirlo con diez filas encima.
-
-### 4bis.3 ⚠⚠⚠ Las DOS preguntas que quedaron para el autor, y siguen sin respuesta
-
-Van al principio del próximo chat, porque las dos son **decisiones de diseño y no defectos**:
-
-1. **¿El rescate del perro guardián tiene que existir en calma?** Hoy sí, y el mensaje ya dice que el
-   agujero es de la base. La alternativa es dejarlo sólo en hunt y que el IDLE lo siga cerrando
-   `reallystuck_handler`, como antes del bloque.
-2. **La fila 04:** ¿la corre él con el fantasma herido a más de 1400 u, o queda apoyada en el
-   mecanismo determinista y anotada como parcial?
-
-### 4bis.4 Fronteras que la r1 no movió, y ninguna fila se acreditó
-
-La cordura como disparador (**es la tajada C de este mismo handoff**), el evento de mirar fijo del
-Diseño §10, el tope de la órbita contra `sightdist`, `interceptIfWeCan`, el flanqueo por distancia
-(**ninguna fila lo ejercita**: `flank de cerca 0` en las tres lecturas), y los 30 tipos sin poblar
-(`ability.onCatch` enganchado, no poblado).
+La cordura como disparador (**es la tajada C**), el evento de mirar fijo del Diseño §10, el tope de la
+órbita contra `sightdist`, `interceptIfWeCan`, el flanqueo por distancia (**ninguna fila lo
+ejercita**: `flank de cerca 0` en las tres lecturas), y los 30 tipos sin poblar (`ability.onCatch`
+enganchado, no poblado).
 
 Y dos que siguen sin explicar: el `render se dibuja / la politica pide INVISIBLE / !! NO COINCIDEN` de
 `server_cloak.lua`, y `movement_perch` + `movement_biginertia` activas a la vez.
-
----
 
 ## 5. Lo que sigue sin sujeto, y hay que saberlo antes de leer un cero
 
 - **La zona segura de §18.1 NO EXISTE en código.** Cero `terminator_blocktarget`, ninguna entidad
   camión. Está registrada como fuente continua **INACTIVA que dice por qué lo está**, con
   `PHANTASMAGORIA.InSafeZone` como costura.
+- **Las MANIFESTACIONES de §22 no existen**, y por eso el rasgo continuo del Phantom
+  (`presencia_tipo`) se registró **inactivo diciendo por qué**. `PHANTASMAGORIA.EstaManifestado` es su
+  costura. La fila **07** de la planilla de B2 mide que la fuente lo **diga**, no que drene.
 - **El destierro de §5.4 no existe**; el único desenlace es **matar** al fantasma.
-- ⚠⚠ **El punto ciego de la luz llegó a 25 luces sin getter.** `a oscuras` es el **default cuando no
-  hay nada legible**, y el ×1,5 aporta **un tercio del drenaje** en toda lectura a oscuras.
-  *El modulador está decidiendo un tercio del número sobre una lectura que el propio instrumento
-  declara que no puede hacer.* No es un rojo —avisa— pero **es lo primero que B2 tiene que cerrar**:
-  de las seis clases de luz, hoy sólo `gmod_light` y `gmod_lamp` tienen getter.
+- ✅ **El punto ciego de la luz: CERRADO por B2 en el sentido que importaba.** No se le dio getter a
+  las cuatro clases que no lo tienen —no se puede sin asumir APIs del engine— sino que se dejó de
+  **fingir** que la ausencia de lectura era una lectura: `sin_lectura` es un tercer estado con renglón
+  y perilla propios. **El ×1,5 sigue saliendo igual (`ciegamul` nace en 1,5), pero ahora es
+  atribuible.** ⚠ Sigue siendo cierto que un mapa de iluminación horneada se lee como no-legible:
+  §19.9.2 lo aceptó por escrito, y ahora tiene denominador.
 - **El medidor de actividad (§19.3)** sigue sin diseñar.
 
----
+### 5.1 ⚠⚠⚠ PENDIENTE NUEVO DEL AUTOR: **cómo se MATA a un fantasma**
+
+> *«tengo por pendiente evitar que el fantasma muera o sea herido por armas de fuego, explosivos, melee
+> (crush o cut) y al ser atacado con props phys como ragdolls (yo lo logro matar directamente y fácil
+> tirándole un ragdoll), la forma de "matar" a un ghost tiene que ser distinto a eso. (Falta que
+> atacarlo en melee no le haga daño ni le haga salir sangre... visceral blood puede tener la culpa)»*
+
+**Está escrito en el diseño, §5.5**, con las cuatro preguntas que hay que contestar antes de tocar una
+línea. Las tres razones por las que **no** es un `if` en `OnTakeDamage`:
+
+1. **Matar al fantasma es hoy el único desenlace del addon** (el destierro no existe) y la vía de
+   cordura `fantasma muerto` cuelga de `OnNPCKilled`. Cerrarle el daño sin poner otra puerta deja una
+   partida sin final y una vía de cordura sin gatillo.
+2. **El daño llega por cuatro caminos**: `OnTakeDamage` de la base, `DMG_CRUSH` del motor (el ragdoll),
+   `DMG_CLUB` del melee de HL2, y la cadena propia de ARC9. *Una inmunidad escrita en una de las cuatro
+   puertas se lee como una inmunidad.*
+3. **La sangre no es del daño, es del consumidor.** Si se cierra el daño primero, la sangre deja de
+   salir **por accidente** y nadie sabrá cuál de los dos era el mecanismo.
+
+⚠ **Y no entra en la misma tanda que C**: con el gatillo adentro, un rojo tendría dos causas posibles.
 
 ## 6. Los comandos de la cordura
 
@@ -248,18 +251,28 @@ Y dos que siguen sin explicar: el `render se dibuja / la politica pide INVISIBLE
 |---|---|
 | `phantasmagoria_cordura` | **el reporte**: valor, desglose por causa, fuentes, perillas y tasas |
 | `phantasmagoria_cordura_reset` | valor al inicial, desglose y contadores en cero. **Antes de cada fila** |
-| `phantasmagoria_cordura_fabrica [--decir]` | las 24 perillas a fábrica, **diciendo cuáles estaban movidas** |
+| `phantasmagoria_cordura_fabrica [--decir]` | **las 30** perillas a fábrica, **diciendo cuáles estaban movidas**. El total es derivado del registro |
 | `phantasmagoria_cordura_set <0..100> [nick]` | **ANDAMIO**. Se anota como causa `andamio consola` a propósito |
 | `phantasmagoria_cordura_med <1\|2\|3>` | **ANDAMIO**. Una dosis sin pasar por Cargo |
 | `phantasmagoria_cordura_drenar <n> [causa]` | **ANDAMIO**. Dispara la forma **plana**. Default `evento_sound` |
+
+Y los del motor de eventos, que B2 volvió parte del instrumental de la cordura:
+
+| comando | qué hace |
+|---|---|
+| `phantasmagoria_ghost_event <categoria>` | **fuerza** una de las ocho, **sin mover el reloj**. Es lo que hace correr la planilla sin depender del sorteo |
+| `phantasmagoria_ghost_events [reset]` | el reporte del motor. Al final trae el bloque **`CORDURA de los eventos`**: pasadas, cobros, pedido, recorte, piso, y **`sin donde`** |
+| `phantasmagoria_ghost_type <key>` | **ANDAMIO**. Fuerza el tipo. ⚠ **Sobrevive al respawn a propósito**: si no lo sacás, la ronda siguiente mide un Oni creyendo que mide un sorteo |
 
 ⚠ Un comando por línea: **la consola de Source corta en 255 bytes y no avisa**.
 
 ⚠⚠⚠ **Y tampoco te entrega el texto entero: `CCommand::Tokenize` parte en `{ } ( ) ' :`**, así que
 esos caracteres llegan como **tokens propios**. Le costó la fila 04 a la r2, y el id `evento:sound`
 era **inalcanzable desde la consola desde el día que se escribió**. **Ningún id que B2 agregue puede
-llevar un carácter del break set** — va guion bajo. Hay dos controles y hacen falta los dos:
-`python dev/auditar_ids_tipeables.py lua` (texto fuente, sin juego) y uno al arrancar el módulo.
+llevar un carácter del break set** — va guion bajo. Hoy hay **tres** controles:
+`python dev/auditar_ids_tipeables.py lua` (21 causas, 0 rotas), el del arranque del módulo, y la
+guarda ( 3c ) de `server_events.lua`, que verifica los ocho `sanCausa`. Los tres miden la
+**propiedad**, no el arreglo.
 
 ---
 
@@ -277,11 +290,32 @@ python dev/auditar_ids_tipeables.py lua       # y --control
 ⚠ `luacheck_gmod.py` **sin argumentos revisa cero archivos y sale 0** — verde sin medir. Va siempre
 con el `find ... | xargs`.
 
-⚠⚠ **`auditar_puerta_cordura.py` va a cambiar de significado con B2.** Hoy dice
-*«Usan la API publica: NINGUNO todavia»* y eso es **lo esperado**. Cuando B2 escriba sus llamadores,
-ese cero pasa a ser un **defecto**: el auditor exige que el único escritor del número sea el módulo,
-pero **no puede exigir que alguien lo llame** (es el nº 89 por el otro lado). Al cerrar B2, mirar ese
-renglón y comprobar que dice **ocho**.
+⚠ Y el nuevo de B2, que es el que más cubre:
+
+```
+python dev/cordura_b2_offline.py            # y --control
+```
+
+Corre el **código real** en un intérprete de Lua: extrae del archivo el cuerpo de `factorSanidad` y
+`normalizarEpicentros` y ejecuta `ghost_flags.lua` entero con stubs. **No re-implementa nada** — *un
+control que copia el cuerpo mide su copia*. Su `--control` **sabotea** el archivo de rasgos de tres
+maneras y exige que la guarda hable de las tres. Existe porque las tres piezas que cubre fallan **en
+silencio**: en juego las tres se ven como «drena poco».
+
+⚠⚠⚠ **LA EXPECTATIVA QUE ESTE HANDOFF TENÍA SOBRE `auditar_puerta_cordura.py` ESTABA MAL ESCRITA, Y LA
+CORRECCIÓN VALE SOLA.** Decía: *«al cerrar B2, mirar ese renglón y comprobar que dice ocho»*, sobre el
+renglón «usan la API pública». **Al cerrarla dice 1, y el 1 es lo correcto**: §19.8.4 exige **una sola
+pasada**, o sea un solo llamador con una sola llamada. La expectativa contaba **sitios de llamada**
+para contestar una pregunta que es sobre **renglones del desglose** — y con la arquitectura correcta
+ese renglón iba a decir 1 **para siempre**.
+
+> *Un criterio numérico heredado de un handoff no es un criterio: hay que preguntarle **qué cuenta**
+> antes de creerle el número.*
+
+Se le agregó al auditor la mitad que sí contesta: que cada uno de los ocho **ids de causa** aparezca,
+literal, fuera de la puerta. **Hoy dice `CAUSAS DE EVENTO SIN PRODUCTOR: 0 de 8`.** Y por eso los ids
+se escriben **literales** en `CATS` en vez de construirse con `"evento_" .. key`: *un identificador que
+sólo existe en runtime es invisible para todo instrumento que mida el código*.
 
 Los tres de planilla viven en el `dev/` **del workspace**, que **no está en git**:
 

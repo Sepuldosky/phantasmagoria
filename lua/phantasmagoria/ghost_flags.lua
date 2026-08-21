@@ -237,6 +237,48 @@ PHANTASMAGORIA.EventDefaults = {
     -- ghost model and ghost name will reflect this" ( banshee :57, dayan :82 ).
     voice    = 0,
 
+    -- LO QUE ESTE TIPO LE HACE A LA CORDURA  ( Diseno 19.8.4, tajada B2 ).
+    --
+    -- ⚠⚠ VA EN SUB-TABLA Y NO EN LA RAIZ, Y ES LA REGLA 1 DEL CORTE, NO ESTILO.
+    -- The Mimic imita "all behaviors, tells, and abilities ... EXCLUDING
+    -- EVIDENCE": con los rasgos adentro de `events`, imitar es devolver el
+    -- `events` del imitado y listo. Sueltos al lado de `name` haria falta una
+    -- lista de exclusiones campo por campo -- un `if` diferido.
+    --
+    -- Los tres que hay salen de la fuente sin inventar nada. Los dos que NO se
+    -- escriben tambien salen de ella, y por eso quedan anotados: Jinn/Hantu 25 %
+    -- pide el breaker ( GMod no tiene cuadro de luces ) y Banshee 15 % pide el
+    -- concepto de "jugador objetivo", que no existe ni en el codigo ni en el
+    -- diseño. *No se escribe un mecanismo sin destino* -- §21.6.
+    sanity = {
+        -- MULTIPLICADOR de lo que drena cada evento de este tipo.
+        -- Oni: "Drains 20 % sanity during events ( instead of the standard 10 % )".
+        mult = 1.0,
+
+        -- OVERRIDE del costo de UNA categoria, en % en el epicentro. PISA el
+        -- `san` de la categoria, y despues `mult` multiplica lo que quede.
+        -- Yurei: "Can shut a door and drop sanity of nearby players by 15 %".
+        --
+        -- ⚠ Es una tabla y se REEMPLAZA ENTERA al fusionar, igual que `radius`.
+        -- Un merge por clave dejaria que un tipo heredara el override de otro si
+        -- alguien anidara mal, y aca cada fila tiene que poder leerse sola.
+        per = {},
+
+        -- TASA en %/s, y es de OTRA ESPECIE que las dos de arriba.
+        -- Phantom: "Player will lose 0.5 % sanity /s while in heartbeat range".
+        --
+        -- ⚠⚠⚠ NO ES UN MULTIPLICADOR SOBRE LA TABLA DE EVENTOS: es un goteo que
+        -- depende de tres cosas que cambian tick a tick -- que lo estes mirando,
+        -- que este dentro del rango, y cuanto tiempo pasa. Entra por
+        -- `PHANTASMAGORIA.RegisterSanityRate` y NO por `DrainSanity`. Si se
+        -- implementara como los otros dos, *el rasgo del Phantom simplemente no
+        -- existe* y el instrumento no lo diria ( Diseno 22.10 ).
+        --
+        -- ⚠ Y SUMA al drenaje plano de la manifestacion, no lo reemplaza: mirar
+        -- un `singing` de 15 s entero cuesta 10 % + 7,5 % = 17,5 %.
+        presence = 0,
+    },
+
     -- Los mismos ejes, pero DURANTE EL HUNT. Multiplican a los de arriba.
     --
     -- Este es el rasgo MEJOR SOSTENIDO de la tabla entera -- nueve tipos --, y
@@ -379,6 +421,16 @@ F[ "oni" ] = {
     rate    = 1.6,
     -- (:372) parpadea mas en la caza.
     hunt    = { rate = 1.4 },
+    -- (:373) "Drains 20% sanity during events ( instead of the standard 10% )".
+    -- Es el tipo duro contra la cordura, y el x2 es literal de la fuente.
+    --
+    -- ⚠ CON DOS CATEGORIAS A LA VEZ EL TOPE DEL DISPARO SE LO COME EN PARTE:
+    -- `sound` + `prop` con x2 pide 10 % y el tope son 6. O sea que el rasgo
+    -- puede estar puesto y no verse entero. NO se sube el tope para tapar eso
+    -- -- el tope existe por otra razon -- pero el motor CUENTA lo que recorto,
+    -- porque si no una fila que mida el x2 saldria "el rasgo no hace nada" y
+    -- mandaria a mirar este archivo, donde no esta el problema.
+    sanity  = { mult = 2.0 },
 }
 
 F[ "onryo" ] = {
@@ -395,6 +447,19 @@ F[ "phantom" ] = {
     -- lo que tiene destino es que es un tipo retraido y hace menos ruido.
     rate    = 0.8,
     hunt    = { rate = 0.7 },
+    -- (Diseno 22.10) "Player will lose 0.5% sanity /s while in heartbeat range".
+    -- Los 10 m de la fuente son 525 u con la constante del addon ( 52,5 u/m ).
+    --
+    -- ⚠⚠ EL DATO SE ESCRIBE HOY Y SU SUJETO NO EXISTE TODAVIA: la fuente
+    -- continua que lo lee esta registrada en server_events.lua como INACTIVA,
+    -- porque pide que el fantasma este MANIFESTANDOSE y las manifestaciones de
+    -- §22 no estan escritas. Se escribe igual, y no contradice el "no se escribe
+    -- un mecanismo sin destino": lo que no tiene destino es el MECANISMO, y el
+    -- mecanismo no se escribio -- se escribio el DATO y una fuente que dice por
+    -- que no aplica. Es el precedente de la zona segura de B1, y el motivo es el
+    -- mismo: sin su renglon, "el rasgo no drena" y "el rasgo no tiene sujeto" se
+    -- imprimen los dos como un cero.
+    sanity  = { presence = 0.5 },
 }
 
 F[ "poltergeist" ] = {
@@ -523,6 +588,14 @@ F[ "yurei" ] = {
     -- El motor no lo nombra en ninguna parte. Un `if` seria que el motor
     -- preguntara "sos Yurei".
     weights = { door = 6 },
+    -- (:631) el 15 % es literal de la fuente, y PISA el 1,5 % de la categoria
+    -- `door`: no lo multiplica. Diez veces el costo normal de una puerta es lo
+    -- que hace que este tipo se juegue entero en un solo eje.
+    --
+    -- ⚠ Un `mult` no podia expresarlo: multiplicaria las OCHO categorias, y la
+    -- fuente habla de la puerta y de nada mas. Por eso `per` existe y es una
+    -- tabla por categoria y no un segundo escalar.
+    sanity  = { per = { door = 15 } },
 }
 
 PHANTASMAGORIA.GhostFlags = F
@@ -555,7 +628,11 @@ end
 -- da resultados que nadie espera -- fusionar { 1.0, 4.0 } sobre { 1.0 } deja
 -- { 1.0, 4.0 }, que aca es lo correcto por casualidad, pero fusionar { 1.0 }
 -- sobre { 1.0, 4.0 } dejaria el 4.0 del vecino. Los arrays se REEMPLAZAN.
-local SUBTABLAS = { "weights", "soundBanks", "dir", "hunt" }
+-- ⚠ `sanity` ENTRA ACA Y NO EN `ESCALARES` AUNQUE DOS DE SUS TRES CAMPOS SEAN
+-- NUMEROS: lo que decide la lista es el tipo del campo EN LA RAIZ del neutro, y
+-- en la raiz `sanity` es una tabla. Sus escalares internos los cubre el merge de
+-- un nivel de `fusionar`, igual que los de `hunt`.
+local SUBTABLAS = { "weights", "soundBanks", "dir", "hunt", "sanity" }
 
 -- ⚠ ESTA LISTA TIENE QUE CONTENER TODO ESCALAR DE EventDefaults. Un escalar
 -- nuevo en el neutro que no se agregue aca se puede escribir en una fila de tipo
@@ -709,6 +786,34 @@ local function auditarNeutro()
                         faltan[ #faltan + 1 ] = tipo .. "." .. key .. "." .. sub .. " es " ..
                             nombreTipo( subval ) .. " y el neutro es " .. nombreTipo( D[ key ][ sub ] )
 
+                    -- ⚠⚠ EL TERCER NIVEL, Y HASTA B2 NO EXISTIA PORQUE NADA LO
+                    -- NECESITABA. `sanity.per` es un diccionario POR CATEGORIA, y
+                    -- el neutro lo tiene VACIO a proposito -- o sea que la rama de
+                    -- arriba no puede comprobar sus claves contra nada: `D.sanity
+                    -- .per.door` es nil para toda categoria, siempre.
+                    --
+                    -- Sin esto, `per = { doors = 15 }` -- la `s` de mas, que es el
+                    -- error de tipeo natural porque la categoria es `door` y la
+                    -- palabra en castellano es plural -- pasa las tres ramas, se
+                    -- fusiona, y el Yurei queda cobrando 1,5 % por puerta como los
+                    -- otros veintinueve. Cero ruido, y el sintoma es un tipo que
+                    -- se comporta como neutro justo en el unico eje que lo define.
+                    --
+                    -- El universo de claves validas es `EventDefaults.weights`,
+                    -- que es la copia declarada de las ocho categorias del motor
+                    -- ( la guarda ( 2 ) de server_events.lua compara las dos ).
+                    elseif key == "sanity" and sub == "per" then
+                        for cat, pctv in pairs( subval ) do
+                            if D.weights[ cat ] == nil then
+                                faltan[ #faltan + 1 ] = tipo .. ".sanity.per." .. tostring( cat ) ..
+                                    " ( no es una categoria de evento: el override no lo cobra nadie )"
+
+                            elseif not isnumber( pctv ) then
+                                faltan[ #faltan + 1 ] = tipo .. ".sanity.per." .. tostring( cat ) ..
+                                    " no es un numero"
+
+                            end
+                        end
                     end
                 end
             end

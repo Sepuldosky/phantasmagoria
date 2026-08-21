@@ -323,7 +323,21 @@ local cvDark = CreateConVar( "phantasmagoria_sanity_dark", "1", FCVAR_ARCHIVE,
     "0 = la luz no modula nada, x1 siempre ( CONTROL ) · 1 = la presencia drena x0,5 con luz y x1,5 a oscuras. NO es una causa: si drenara sola, la barra bajaria en cualquier mapa oscuro sin fantasma y contradiria la regla del autor.", 0, 1 )
 
 local cvDarkMul = CreateConVar( "phantasmagoria_sanity_darkmul", "1.5", FCVAR_ARCHIVE,
-    "Multiplicador de la presencia con el jugador A OSCURAS ( §19.8.5 ).", 0, 5 )
+    "Multiplicador de la presencia con el jugador A OSCURAS **MEDIDO** ( §19.8.5 ): habia luces legibles cerca y todas estaban apagadas.", 0, 5 )
+
+-- ⚠⚠⚠ LA TERCERA LECTURA, Y NACE EN EL MISMO 1.5 A PROPOSITO ( B2 ).
+-- Hasta B1 habia DOS estados donde hay TRES: "medi que esta a oscuras" y "no
+-- pude medir nada" salian las dos por el mismo `false` de `IsPlayerLit` y las
+-- dos cobraban `darkmul`. Con 25 luces sin getter, eso es un tercio del drenaje
+-- decidido sobre una lectura que el instrumento declara imposible.
+--
+-- Nace en 1.5 -- el numero de antes -- porque B2 tiene que poder medirse contra
+-- B1 sin que el gameplay se mueva por abajo: una tajada que ademas cambia el
+-- comportamiento deja un rojo con dos causas. Lo que gana el bloque hoy es que
+-- ese tercio tenga renglon propio ( `oscuridad ciega` ) y perilla propia. En 1.0
+-- la adivinanza deja de cobrar y se ve exactamente cuanto era.
+local cvCiegaMul = CreateConVar( "phantasmagoria_sanity_ciegamul", "1.5", FCVAR_ARCHIVE,
+    "Multiplicador de la presencia cuando NO SE PUDO LEER la luz ( ninguna luz legible cerca: sin getter, o mapa de iluminacion horneada ). Nace igual que darkmul para no mover el gameplay; en 1.0 la lectura que no se pudo hacer deja de cobrar.", 0, 5 )
 
 local cvLitMul = CreateConVar( "phantasmagoria_sanity_litmul", "0.5", FCVAR_ARCHIVE,
     "Multiplicador de la presencia con el jugador ILUMINADO ( §19.8.5: la luz no restaura, FRENA ).", 0, 5 )
@@ -368,12 +382,34 @@ local cvMuerte = CreateConVar( "phantasmagoria_sanity_muerte", "1", FCVAR_ARCHIV
 local cvDestierro = CreateConVar( "phantasmagoria_sanity_destierro", "1", FCVAR_ARCHIVE,
     "0 = matar al fantasma no restaura ( CONTROL ) · 1 = restaura la cordura de todos. Es el equivalente al fin del contrato: lo que en Phasmophobia hace el reloj, aca lo hace el desenlace.", 0, 1 )
 
--- EVENTOS ( B2 ) -- la perilla existe hoy para que la puerta sea uniforme
+-- EVENTOS ( B2 ) -- ⚠⚠ YA NO ES UN ANDAMIO, Y AHORA TIENE TRES ESTADOS
+--
+-- El header de B1 decia que ninguna de sus perillas era de tres estados A
+-- PROPOSITO: no habia ningun rasgo POR TIPO que respetar, y *una perilla cuyo
+-- valor intermedio no significa nada se lee como que el flag ya existe*. Con la
+-- sub-tabla `sanity` de ghost_flags.lua escrita ( el x2 del Oni, el 15 % de
+-- puerta del Yurei, el 0,5 %/s del Phantom ), ese 2 pasa a tener sujeto.
+--
+-- ⚠ Y LOS TRES ESTADOS TIENEN TRES CUENTAS DISTINTAS, que es la unica forma de
+-- que no sea el defecto "tres estados con dos cuentas" del catalogo -- el mismo
+-- que ya tuvo `phantasmagoria_ghost_evhunt`, cuyo 2 producia exactamente el
+-- mismo resultado que el 1 con el reporte imprimiendo "( forzado )" al lado:
+--
+--   0   nadie drena por eventos                       ( CONTROL )
+--   1   drena, y los rasgos del TIPO modulan          ( el juego )
+--   2   drena, y los rasgos del tipo SE IGNORAN       ( A/B del rasgo )
+--
+-- El 2 sirve para una fila concreta y no es decorativo: con un Oni delante, 1 y
+-- 2 dan 26 % y 13 % por manifestacion. Sin el, aislar el x2 del Oni pediria
+-- cambiar el TIPO del fantasma -- o sea cambiar el sujeto para medir el rasgo.
+-- ( Con un Spirit, 1 y 2 dan lo mismo: es el tipo baseline y no tiene rasgos.
+--   Eso NO los vuelve indistinguibles -- el estado se distingue sobre el sujeto
+--   que lo ejercita, no sobre cualquiera. )
 local cvEventos = CreateConVar( "phantasmagoria_sanity_eventos", "1", FCVAR_ARCHIVE,
-    "0 = los eventos no drenan ( CONTROL ) · 1 = drenan. ⚠ ANDAMIO HASTA B2: hoy los ocho eventos de server_events.lua NO llaman a la puerta, asi que su renglon del desglose vale 0 por falta de llamador y no por esta perilla.", 0, 1 )
+    "0 = los eventos no drenan ( CONTROL ) · 1 = drenan con los rasgos del tipo ( el juego ) · 2 = drenan IGNORANDO los rasgos del tipo, para poder aislar en un A/B el x2 del Oni, el 15 % de puerta del Yurei y el 0,5 %/s del Phantom.", 0, 2 )
 
 ---------------------------------------------------------------------------
--- LAS 24 PERILLAS, JUNTAS, PARA PODER VOLVER A FABRICA DE UN COMANDO
+-- LAS PERILLAS, JUNTAS, PARA PODER VOLVER A FABRICA DE UN COMANDO
 ---------------------------------------------------------------------------
 -- ⚠⚠⚠ NACE DE LA r3, Y DE UN DEFECTO QUE YA TENIA DOS RONDAS DE VIDA. Todas
 -- son FCVAR_ARCHIVE, o sea que quedan guardadas en la maquina del que prueba.
@@ -392,15 +428,63 @@ local cvEventos = CreateConVar( "phantasmagoria_sanity_eventos", "1", FCVAR_ARCH
 -- precondicion vale mas que una precondicion bien escrita ). Y el default no se
 -- reescribe aca: sale de `GetDefault()`, asi que cambiar un valor de diseño en
 -- su `CreateConVar` no deja una segunda copia envejeciendo al lado.
-local PERILLAS_TODAS = {
+-- ⚠⚠⚠ B2 LO CONVIRTIO EN UN REGISTRO COMPARTIDO, Y LA RAZON ES EL CATALOGO
+-- Nº 112: *toda defensa que consista en "acordate de restituir X" tiene que ser
+-- un comando que ENUMERE EL UNIVERSO de X.* La version de B1 enumeraba un
+-- universo escrito a mano en este archivo -- o sea que cubria exactamente las
+-- perillas que estaban el dia que se escribio.
+--
+-- Y B2 rompe ese supuesto de la unica forma que importa: agrega perillas de
+-- cordura EN OTRO ARCHIVO ( server_events.lua, el radio y el tope del drenaje
+-- por evento ). Con una lista local no hay forma de que entren, y una perilla de
+-- cordura fuera de la vuelta a fabrica es exactamente el defecto de la r3 --
+-- salvo que ahora ni siquiera saldria en el listado que lo delata.
+--
+-- LA FORMA ES UNA TABLA Y NO UNA FUNCION, Y ESO ES DELIBERADO: el orden de carga
+-- entre `lua/autorun/` y `lua/entities/` LO DECIDE EL ENGINE. Con una funcion de
+-- registro, el que cargue primero encuentra nil y sus perillas no entran nunca,
+-- en silencio. Con `X = X or {}` en las dos puntas, el que llegue primero crea la
+-- tabla y el segundo la encuentra -- y no hay orden que lo rompa.
+--
+-- GMod no tiene API para enumerar convars por prefijo, asi que un registro es
+-- inevitable; lo que se puede evitar es que el registro tenga UN solo dueño.
+PHANTASMAGORIA.PerillasCordura = PHANTASMAGORIA.PerillasCordura or {}
+
+for _, cv in ipairs( {
     cvTick, cvInicial,
     cvPresencia, cvCalma, cvHunt, cvRadio, cvMeseta, cvHuntRadio,
-    cvDark, cvDarkMul, cvLitMul, cvLitRadio,
+    cvDark, cvDarkMul, cvCiegaMul, cvLitMul, cvLitRadio,
     cvRegen, cvRegenRate, cvRegenDelay, cvRegenCap,
     cvSafe, cvSafeRate, cvSafeCap,
     cvMeds, cvMedCD,
     cvMuerte, cvDestierro, cvEventos,
-}
+} ) do
+    PHANTASMAGORIA.PerillasCordura[ #PHANTASMAGORIA.PerillasCordura + 1 ] =
+        { cv = cv, dueno = "phantasmagoria_sanity.lua" }
+
+end
+
+-- ⚠ SE DEDUPLICA AL LEER Y NO AL ESCRIBIR. Un `lua_reloadents` o un autorefresh
+-- vuelve a correr el bloque de arriba, y una lista con la misma perilla dos veces
+-- imprimiria "2 de 50 movidas" sobre una sola perilla movida. Deduplicar al
+-- escribir obligaria a un barrido por cada registro; al leer cuesta una tabla en
+-- un comando que corre a mano.
+local function perillasTodas()
+    local vistas, out = {}, {}
+
+    for _, r in ipairs( PHANTASMAGORIA.PerillasCordura ) do
+        local cv = r.cv
+
+        if cv and not vistas[ cv:GetName() ] then
+            vistas[ cv:GetName() ] = true
+            out[ #out + 1 ] = r
+
+        end
+    end
+
+    return out
+
+end
 
 ---------------------------------------------------------------------------
 -- LAS CAUSAS DECLARADAS
@@ -439,6 +523,20 @@ local CAUSAS = {
     -- `oscuridad` porque tiene que poder aislarse en su propio A/B.
     { id = "oscuridad", fam = "presencia", fam2 = "oscuridad", label = "oscuridad ( mod )", prod = "fuente:presencia" },
 
+    -- ⚠⚠⚠ EL RENGLON QUE B2 PARTIO EN DOS, Y ES LA MITAD QUE NADIE PODIA VER.
+    -- Hasta B1 este drenaje se sumaba al de arriba, porque `IsPlayerLit`
+    -- devolvia un BOOLEANO: "medi que esta a oscuras" y "no pude leer NINGUNA
+    -- luz" salian las dos por el mismo `false`. En el mapa de la r3 eso son 25
+    -- luces sin getter, o sea que casi todo lo que el renglon `oscuridad`
+    -- acreditaba como medicion era una adivinanza -- y el x1,5 aporta un tercio
+    -- del drenaje en toda lectura a oscuras.
+    --
+    -- Partido, el A/B se puede hacer: `ciegamul` en 1.0 apaga SOLO la
+    -- adivinanza y deja viva la lectura buena, y la diferencia entre los dos
+    -- renglones dice exactamente cuanto de la barra lo decidio algo que no se
+    -- pudo medir. Junto, no habia ninguna corrida capaz de separarlos.
+    { id = "oscuridad_ciega", fam = "presencia", fam2 = "oscuridad", label = "oscuridad CIEGA", prod = "fuente:presencia" },
+
     -- ⚠⚠⚠ LOS OCHO USABAN DOS PUNTOS -- `evento:sound` -- Y ESO LOS VOLVIA
     -- INALCANZABLES DESDE LA CONSOLA. La r2 dejo la fila 04 en ROJO por esto y
     -- el reporte lo dijo bien: entro una causa `evento` ⚠ NO DECLARADA.
@@ -464,6 +562,19 @@ local CAUSAS = {
     { id = "evento_door",      fam = "eventos", label = "evento door",      prod = "B2" },
     { id = "evento_furniture", fam = "eventos", label = "evento furniture", prod = "B2" },
     { id = "evento_creak",     fam = "eventos", label = "evento creak",     prod = "B2" },
+
+    -- ⚠⚠ EL RASGO CONTINUO POR TIPO ( B2 ), Y SU PERILLA ES LA DE **EVENTOS**
+    -- AUNQUE NO SEA UN EVENTO. El sujeto es el mismo -- los rasgos de la
+    -- sub-tabla `sanity` de un tipo -- y una fila que ponga `eventos 0` para
+    -- correr un control tiene que apagar los rasgos ENTEROS: si este renglon
+    -- quedara vivo, el control diria "con los rasgos apagados sigue drenando" y
+    -- mandaria a buscar un segundo mecanismo que no existe.
+    --
+    -- Hoy es el 0,5 %/s del Phantom y NO TIENE SUJETO: pide que el fantasma
+    -- este manifestandose, y las manifestaciones de §22 no estan escritas. Su
+    -- fuente esta registrada y contesta POR QUE no aplica, que es lo unico que
+    -- distingue esto de no haberlo escrito ( el precedente es la zona segura ).
+    { id = "presencia_tipo", fam = "eventos", label = "rasgo continuo",  prod = "fuente:presencia_tipo" },
 
     { id = "regen",      fam = "regen",      label = "goteo pasivo",    prod = "fuente:regen"      },
     { id = "zonasegura", fam = "safe",       label = "zona segura",     prod = "fuente:zonasegura" },
@@ -946,59 +1057,124 @@ end
 -- vez de en un silencio -- que es la unica forma de que un dia alguien decida si
 -- vale la pena la opcion C.
 --
--- ⚠⚠ La lista de clases ILEGIBLES es una COPIA de LIGHT_CLASSES, que vive
--- `local` en server_events.lua y B1 no puede tocar ese archivo. Es la familia del
--- nº 87 ( un instrumento que declara ser una copia ) y por eso se acota a lo
--- unico que no puede producir un falso verde: la copia SOLO alimenta el contador
--- del punto ciego. Si envejece, el punto ciego se reporta MAS CHICO de lo que
--- es; nunca decide si un jugador esta iluminado. B2 -- que si toca ese archivo --
--- tiene que subir LIGHT_CLASSES a `lua/phantasmagoria/` y borrar esta copia.
-local LUCES_LEGIBLES  = { "gmod_light", "gmod_lamp" }
-local LUCES_ILEGIBLES = { "light", "light_spot", "point_spotlight", "light_dynamic", "env_projectedtexture" }
+-- ⚠⚠ LA COPIA SE FUE, Y ESO ES B2. B1 tenia aca una lista de nombres de clase
+-- COPIADA de server_events.lua, declarada como copia y acotada a lo unico que no
+-- podia producir un falso verde: alimentaba el contador del punto ciego y nunca
+-- decidia si un jugador estaba iluminado. La lista canonica vive hoy en
+-- `lua/phantasmagoria/luces.lua` y este archivo la consulta.
+--
+-- ⚠⚠⚠ Y CON ELLA SE FUE UN DEFECTO MAS GRANDE QUE LA COPIA: LA FUNCION DEVOLVIA
+-- DOS ESTADOS DONDE HAY TRES.
+--
+-- El `false` de "las lamparas de al lado estan APAGADAS" y el `false` de "no hay
+-- una sola luz que se pueda preguntar" se imprimian igual, viajaban igual, y el
+-- modulador de §19.9.2 le cobraba el x1,5 de la oscuridad a los dos por igual.
+-- Con las 25 luces sin getter que midio la r3, eso es *un tercio del drenaje
+-- decidido sobre una lectura que el propio instrumento declara que no puede
+-- hacer* -- y el handoff de B2 lo puso como lo primero que habia que cerrar.
+--
+-- ⚠ LO QUE **NO** CAMBIA ES EL COMPORTAMIENTO, Y ESO ES DELIBERADO. La perilla
+-- nueva `phantasmagoria_sanity_ciegamul` nace en 1.5, o sea EXACTAMENTE el mismo
+-- numero que antes: una tajada que ademas mueve el gameplay deja un rojo con dos
+-- causas posibles, que es lo que este bloque viene evitando desde B1. Lo que
+-- cambia es que ese tercio del drenaje ahora tiene NOMBRE, RENGLON PROPIO en el
+-- desglose y PERILLA PROPIA -- o sea que se puede aislar en un A/B y el autor
+-- puede bajarla a 1.0 con una linea el dia que decida que una adivinanza no vale
+-- un tercio de la barra. *Medir primero y recien despues mover el numero.*
+--
+-- ⚠ §19.9.2 acepto POR ESCRITO que un mapa de iluminacion horneada se lea como
+-- oscuro. Esto no lo contradice: lo cuenta. La aceptacion sigue vigente y ahora
+-- tiene denominador.
 
+-- Las tres lecturas posibles. Son ids TIPEABLES ( sin ningun caracter del break
+-- set de la consola ) porque dos de ellas son tambien ids de causa.
+local LEIDO_ILUMINADO = "iluminado"
+local LEIDO_OSCURO    = "oscuro"
+local LEIDO_CIEGO     = "sin_lectura"
+
+-- ⚠ DEVUELVE CUATRO COSAS Y LA PRIMERA SIGUE SIENDO EL BOOLEANO DE B1: cualquier
+-- consumidor futuro que solo pregunte "¿esta iluminado?" sigue leyendo lo mismo.
+-- El tercer y el cuarto valor son los que hacen la diferencia entre las dos
+-- formas del `false`.
+--
+--   lit       true solo si se MIDIO que hay luz
+--   motivo    texto
+--   ciegas    cuantas luces se vieron y no se pudieron interrogar
+--   lectura   LEIDO_ILUMINADO | LEIDO_OSCURO | LEIDO_CIEGO
 function PHANTASMAGORIA.IsPlayerLit( ply )
-    if not IsValid( ply ) or not ply:IsPlayer() then return false, "no es un jugador", 0 end
+    if not IsValid( ply ) or not ply:IsPlayer() then return false, "no es un jugador", 0, LEIDO_CIEGO end
 
     -- ⚠ `FlashlightIsOn` es SERVER-ONLY EN LAS DOS DIRECCIONES: leerlo en el
     -- cliente devuelve false con el haz pintando una pared ( medido por Cargo,
     -- corpus_cargo_lights.lua ). Acá estamos en el servidor, que es donde
     -- funciona -- y es la razon de fondo por la que §19.9.2 eligio la opcion B
     -- sobre la C: la mitad de C que corre en CLIENT no podria leer esto.
-    if ply:FlashlightIsOn() then return true, "linterna", 0 end
+    if ply:FlashlightIsOn() then return true, "linterna", 0, LEIDO_ILUMINADO end
 
     local radio  = cvLitRadio:GetFloat()
     local radio2 = radio * radio
     local pos    = ply:GetPos()
-    local ciegas = 0
+    local ciegas, apagadas = 0, 0
 
-    for _, clase in ipairs( LUCES_LEGIBLES ) do
-        for _, e in ipairs( ents.FindByClass( clase ) ) do
+    local clases = istable( PHANTASMAGORIA.LightClasses ) and PHANTASMAGORIA.LightClasses or nil
+
+    if not clases then
+        -- ⚠ SIN LA TABLA CANONICA LA RESPUESTA ES "NO SE PUEDE LEER", NO "A
+        -- OSCURAS". Contestar oscuro seria fabricar una medicion sobre un
+        -- archivo que no cargo, y el x1,5 saldria del mismo lugar del que sale
+        -- una lectura buena. Es el nº 112b aplicado al caso peor: el instrumento
+        -- sin sujeto no contesta.
+        return false, "⚠ phantasmagoria/luces.lua NO CARGO: no hay lista de clases que preguntar", 0, LEIDO_CIEGO
+
+    end
+
+    for _, fam in ipairs( clases ) do
+        for _, e in ipairs( ents.FindByClass( fam.clase ) ) do
             if not IsValid( e ) then continue end
-            if not isfunction( e.GetOn ) then continue end
             if e:GetPos():DistToSqr( pos ) > radio2 then continue end
-            if not e:GetOn() then continue end
 
-            return true, clase .. " #" .. e:EntIndex() .. " a " .. math.Round( e:GetPos():Distance( pos ) ) .. " u", ciegas
+            local encendida = PHANTASMAGORIA.LuzEncendida( fam, e )
 
+            if encendida == nil then
+                ciegas = ciegas + 1
+
+            elseif encendida then
+                return true, fam.clase .. " #" .. e:EntIndex() .. " a " ..
+                    math.Round( e:GetPos():Distance( pos ) ) .. " u", ciegas, LEIDO_ILUMINADO
+
+            else
+                apagadas = apagadas + 1
+
+            end
         end
     end
 
-    for _, clase in ipairs( LUCES_ILEGIBLES ) do
-        for _, e in ipairs( ents.FindByClass( clase ) ) do
-            if not IsValid( e ) then continue end
-            if e:GetPos():DistToSqr( pos ) > radio2 then continue end
+    -- ⚠⚠ EL ORDEN DE ESTOS DOS RETORNOS ES LA DECISION ENTERA. Una luz LEGIBLE y
+    -- apagada al lado es una medicion: se sabe que ahi no hay luz. Una luz
+    -- ilegible al lado no dice nada -- puede estar prendida iluminando el
+    -- cuarto. Si el `ciegas > 0` fuera primero, un cuarto con una lampara de
+    -- sandbox apagada Y un light_spot cerca se leeria como "no se pudo medir",
+    -- y perderiamos la unica lectura buena que habia.
+    if apagadas > 0 then
+        return false, apagadas .. " luz(ces) legible(s) cerca y todas APAGADAS" ..
+            ( ciegas > 0 and ( " ( y " .. ciegas .. " ilegible(s), que no cambian el veredicto )" ) or "" ),
+            ciegas, LEIDO_OSCURO
 
-            ciegas = ciegas + 1
-
-        end
     end
 
     if ciegas > 0 then
-        return false, "nada legible cerca ( " .. ciegas .. " luces del mapa sin getter: no se pueden interrogar )", ciegas
+        return false, "NO SE PUEDE LEER: " .. ciegas .. " luz(ces) del mapa sin getter a " ..
+            math.Round( radio ) .. " u y ninguna legible", ciegas, LEIDO_CIEGO
 
     end
 
-    return false, "nada cerca", 0
+    -- ⚠ CERO LUCES CERCA TAMPOCO ES UNA MEDICION DE OSCURIDAD, y este renglon es
+    -- el que mas se paga. Un mapa con la iluminacion HORNEADA en el lightmap no
+    -- tiene ni una entidad de luz y esta perfectamente iluminado: §19.9.2 lo
+    -- acepto por escrito como el costo de la opcion B. Contarlo como `oscuro`
+    -- seria acreditar una medicion que nadie hizo.
+    return false, "no hay ninguna luz que preguntar a " .. math.Round( radio ) ..
+        " u ( puede ser un mapa de iluminacion horneada: la opcion B no lo ve )", 0, LEIDO_CIEGO
 
 end
 
@@ -1170,18 +1346,36 @@ local function tick()
             -- "el control funciono" de "el jugador nunca estuvo ni iluminado ni
             -- a oscuras", que es el mismo cero del catalogo nº 100 y es
             -- justamente lo que esta arquitectura existe para no volver a pagar.
-            local mul = 1
+            --
+            -- ⚠⚠⚠ Y LA LECTURA TIENE **TRES** ESTADOS DESDE B2, ASI QUE EL
+            -- DELTA VA A DOS RENGLONES DISTINTOS. Con dos, "medi que esta a
+            -- oscuras" y "no pude leer nada" se anotaban contra el mismo
+            -- renglon y ninguna corrida podia separarlos -- que es la mitad del
+            -- drenaje que el punto ciego de las 25 luces sin getter se estaba
+            -- llevando con cara de medicion. El multiplicador NACE IGUAL en los
+            -- dos ( 1.5 ) para que B2 no mueva el gameplay por abajo; lo que
+            -- cambia hoy es que se pueden aislar.
+            local mul, causaMod = 1, nil
 
             if modulable then
-                local lit = PHANTASMAGORIA.IsPlayerLit( ply )
-                mul = lit and cvLitMul:GetFloat() or cvDarkMul:GetFloat()
+                local _, _, _, lectura = PHANTASMAGORIA.IsPlayerLit( ply )
 
+                if lectura == LEIDO_ILUMINADO then
+                    mul, causaMod = cvLitMul:GetFloat(), "oscuridad"
+
+                elseif lectura == LEIDO_OSCURO then
+                    mul, causaMod = cvDarkMul:GetFloat(), "oscuridad"
+
+                else
+                    mul, causaMod = cvCiegaMul:GetFloat(), "oscuridad_ciega"
+
+                end
             end
 
             aplicar( ply, base, causaId, dt, techo )
 
             if mul ~= 1 then
-                aplicar( ply, base * mul - base, "oscuridad", dt, techo )
+                aplicar( ply, base * mul - base, causaMod, dt, techo )
 
             end
         end
@@ -1578,10 +1772,47 @@ addCmd( "phantasmagoria_cordura", function( ply )
         say( "  " .. p:Nick() .. "   cordura " .. string.format( "%.2f", st.val ) .. " %" ..
             ( p:Alive() and "" or "   ( MUERTO )" ) )
 
-        local lit, motivoLuz, ciegas = PHANTASMAGORIA.IsPlayerLit( p )
+        -- ⚠⚠ EL RENGLON DECIA "a oscuras" SOBRE DOS ESTADOS DISTINTOS, Y UNO DE
+        -- LOS DOS NO ERA UNA MEDICION. Con el booleano, un cuarto con las
+        -- lamparas apagadas y un mapa entero sin una sola luz legible escribian
+        -- la misma palabra -- y el x1,5 salia igual en los dos. Ahora el rotulo
+        -- ES la lectura, y el multiplicador que se aplico va en la misma linea:
+        -- un reporte que dice el estado pero no lo que ese estado COBRA obliga a
+        -- ir a buscar la convar para saber si el numero de arriba tiene sentido.
+        local _, motivoLuz, ciegas, lectura = PHANTASMAGORIA.IsPlayerLit( p )
 
-        say( "    luz         " .. ( lit and "ILUMINADO" or "a oscuras" ) .. "   ( " .. motivoLuz .. " )" ..
-            ( ciegas > 0 and ( "   ⚠ punto ciego: " .. ciegas .. " luces del mapa sin getter" ) or "" ) )
+        local rotulo = ( lectura == LEIDO_ILUMINADO and "ILUMINADO   ( medido )" )
+            or ( lectura == LEIDO_OSCURO and "a oscuras   ( medido )" )
+            or "SIN LECTURA ⚠ no se pudo medir"
+
+        local mulLuz = ( lectura == LEIDO_ILUMINADO and cvLitMul:GetFloat() )
+            or ( lectura == LEIDO_OSCURO and cvDarkMul:GetFloat() )
+            or cvCiegaMul:GetFloat()
+
+        say( "    luz         " .. rotulo .. "   x" .. string.format( "%.2f", mulLuz ) ..
+            ( cvDark:GetBool() and "" or "  ( SUPRIMIDO: phantasmagoria_sanity_dark en 0 )" ) ..
+            "   ( " .. motivoLuz .. " )" )
+
+        if ciegas > 0 then
+            -- ⚠ LOS NOMBRES SALEN DE LA TABLA Y NO DE UNA FRASE ESCRITA ACA. Un
+            -- "solo gmod_light y gmod_lamp" pegado a mano seria cierto hoy y
+            -- envejeceria en silencio el dia que una clase gane getter -- y el
+            -- renglon que existe para medir el punto ciego pasaria a describir
+            -- un universo que ya no es el suyo.
+            local legibles, total = {}, 0
+
+            for _, fam in ipairs( PHANTASMAGORIA.LightClasses or {} ) do
+                total = total + 1
+                if fam.leer then legibles[ #legibles + 1 ] = fam.clase end
+
+            end
+
+            say( "                ⚠ punto ciego: " .. ciegas .. " luz(ces) del mapa sin getter a " ..
+                math.Round( cvLitRadio:GetFloat() ) .. " u. De las " .. total ..
+                " clases declaradas, las que se pueden preguntar son: " ..
+                ( #legibles > 0 and table.concat( legibles, ", " ) or "NINGUNA ⚠" ) .. "." )
+
+        end
 
         say( "    esfera      " .. st.esferaTicks .. " ticks con el fantasma cerca  ( " ..
             string.format( "%.1f", st.esferaSegs ) .. " s )" )
@@ -1735,9 +1966,11 @@ addCmd( "phantasmagoria_cordura_fabrica", function( ply, _, args )
 
     end
 
+    local todas   = perillasTodas()
     local movidas = 0
 
-    for _, cv in ipairs( PERILLAS_TODAS ) do
+    for _, reg in ipairs( todas ) do
+        local cv       = reg.cv
         local hay, def = cv:GetString(), cv:GetDefault()
 
         -- La comparacion va por NUMERO cuando los dos lo son: "0.20" y "0.2"
@@ -1749,8 +1982,10 @@ addCmd( "phantasmagoria_cordura_fabrica", function( ply, _, args )
 
         if not iguales then
             movidas = movidas + 1
+            -- ⚠ SE NOMBRA AL DUEÑO. Con las perillas repartidas en dos archivos,
+            -- "movida" sin dueño manda a buscarla en el que uno tiene abierto.
             say( "  " .. ( soloDecir and "MOVIDA " or "restituida " ) .. cv:GetName() ..
-                "   " .. hay .. "  ->  " .. def )
+                "   " .. hay .. "  ->  " .. def .. "   [ " .. tostring( reg.dueno ) .. " ]" )
 
             if not soloDecir then cv:SetString( def ) end
 
@@ -1758,17 +1993,17 @@ addCmd( "phantasmagoria_cordura_fabrica", function( ply, _, args )
     end
 
     if movidas == 0 then
-        say( "[Phantasmagoria] las 24 perillas de la cordura estan EN FABRICA. Nada que restituir." )
+        say( "[Phantasmagoria] las " .. #todas .. " perillas de la cordura estan EN FABRICA. Nada que restituir." )
 
     else
-        say( "[Phantasmagoria] " .. movidas .. " de 24 perillas " ..
+        say( "[Phantasmagoria] " .. movidas .. " de " .. #todas .. " perillas " ..
             ( soloDecir and "estan movidas ( no se toco nada: sacale el --decir para restituirlas )."
                         or "estaban movidas y se restituyeron." ) )
         say( "                 ⚠ Si esto sale DESPUES de una corrida, esa corrida midio con estos valores." )
 
     end
 
-end, "Vuelve las 24 perillas de la cordura a su valor de fabrica y DICE cuales estaban movidas. Con --decir solo informa y no toca nada. Todas son FCVAR_ARCHIVE: una que quedo de un A/B viejo invalida una planilla entera sin decir nada." )
+end, "Vuelve TODAS las perillas de la cordura a su valor de fabrica y DICE cuales estaban movidas. El total sale del registro PHANTASMAGORIA.PerillasCordura -- que es compartido, asi que las que B2 agrego en server_events.lua tambien entran -- y no de un numero escrito al lado. Con --decir solo informa y no toca nada. Todas son FCVAR_ARCHIVE: una que quedo de un A/B viejo invalida una planilla entera sin decir nada." )
 
 -- ANDAMIO de drenaje: la fila 04 necesita poder disparar la forma PLANA sin
 -- esperar a que B2 exista, y la 05 necesita poder mover un renglon a la vez.

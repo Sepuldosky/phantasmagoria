@@ -455,15 +455,38 @@ end
 -- `campo` es el nombre del flag por NPC, para PHANTASMAGORIA.ResolveFlag.
 -- `cv` se llena abajo, despues de crear las convars, porque el orden importa:
 -- una convar leida antes de crearse devuelve nil y `nil:GetInt()` revienta.
+-- ⚠⚠ `san` Y `sanCausa` SON DE B2 ( Diseno 19.8.4 ), Y VIVEN ACA POR LA MISMA
+-- RAZON QUE `campo`: esta es la lista canonica y una segunda tabla con los ocho
+-- costos seria un universo paralelo que se lee como el mismo.
+--
+--   san        % de cordura EN EL EPICENTRO. Los ocho numeros son de §19.8.4.
+--   sanBurst   el costo alternativo cuando el evento tuvo su forma cara. Hoy
+--              solo `light` lo usa ( 3,0 si es ESTALLIDO contra 2,0 el parpadeo ).
+--   sanCausa   contra que renglon del desglose de la cordura se anota.
+--
+-- ⚠⚠⚠ `sanCausa` ES UN STRING LITERAL Y **NO** SE CONSTRUYE CON
+-- `"evento_" .. key`, QUE ERA LO OBVIO Y ES PEOR. Un id construido no aparece en
+-- ningun grep: `auditar_puerta_cordura.py` -- que barre TEXTO FUENTE porque un
+-- escritor clandestino no produce ningun sintoma -- no encontraria ni uno de los
+-- ocho, y el renglon que dice quien llama a la puerta seguiria diciendo cero con
+-- los ocho llamadores escritos y funcionando. *Un identificador que solo existe
+-- en runtime es invisible para todo instrumento que mida el codigo.*
+-- La guarda ( 7 ) del final del archivo comprueba que el literal y la clave no
+-- se separen, que es el unico riesgo que trae escribirlo dos veces.
+--
+-- ⚠ EL 10 % DE LA FUENTE NO ESTA ACA A PROPOSITO: se reserva para la
+-- MANIFESTACION ( §22, sin escribir ). Si una interaccion costara 10, un
+-- Poltergeist con `throw` cada 25 s vacia la barra en cuatro minutos y la
+-- manifestacion se queda sin lugar donde caer.
 local CATS = {
-    throw     = { orden = 1, que = "tira objetos fisicos cercanos",        campo = "phantom_EvThrow"     },
-    knock     = { orden = 2, que = "golpea una puerta o pared",            campo = "phantom_EvKnock"     },
-    creak     = { orden = 3, que = "hace crujir el piso",                  campo = "phantom_EvCreak"     },
-    door      = { orden = 4, que = "abre o cierra una puerta",             campo = "phantom_EvDoor"      },
-    light     = { orden = 5, que = "hace parpadear las luces",             campo = "phantom_EvLight"     },
-    sound     = { orden = 6, que = "susurra, respira o tararea",           campo = "phantom_EvSound"     },
-    prop      = { orden = 7, que = "hace sonar un trasto de la casa",      campo = "phantom_EvProp"      },
-    furniture = { orden = 8, que = "abre un armario o un cajon",           campo = "phantom_EvFurniture" },
+    throw     = { orden = 1, que = "tira objetos fisicos cercanos",        campo = "phantom_EvThrow",     san = 2.0, sanCausa = "evento_throw"     },
+    knock     = { orden = 2, que = "golpea una puerta o pared",            campo = "phantom_EvKnock",     san = 1.5, sanCausa = "evento_knock"     },
+    creak     = { orden = 3, que = "hace crujir el piso",                  campo = "phantom_EvCreak",     san = 1.0, sanCausa = "evento_creak"     },
+    door      = { orden = 4, que = "abre o cierra una puerta",             campo = "phantom_EvDoor",      san = 1.5, sanCausa = "evento_door"      },
+    light     = { orden = 5, que = "hace parpadear las luces",             campo = "phantom_EvLight",     san = 2.0, sanBurst = 3.0, sanCausa = "evento_light" },
+    sound     = { orden = 6, que = "susurra, respira o tararea",           campo = "phantom_EvSound",     san = 3.0, sanCausa = "evento_sound"     },
+    prop      = { orden = 7, que = "hace sonar un trasto de la casa",      campo = "phantom_EvProp",      san = 2.0, sanCausa = "evento_prop"      },
+    furniture = { orden = 8, que = "abre un armario o un cajon",           campo = "phantom_EvFurniture", san = 1.5, sanCausa = "evento_furniture" },
 }
 
 local CAT_ORDER = { "throw", "knock", "creak", "door", "light", "sound", "prop", "furniture" }
@@ -491,6 +514,13 @@ local NEUTRO = {
     soundBanks = { voice = 1, breath = 1, humming = 1 },
     dir = { light = 0 },
     hunt = { rate = 1.0, count = 1, burst = 1, strength = 1.0, radius = 1.0 },
+    -- ⚠ B2. Sin este renglon, un fantasma que corra con el neutro de emergencia
+    -- llega a `cobrarCordura` con `flags.sanity` en nil. Hoy eso no revienta --
+    -- la funcion pregunta `istable` antes de leer -- pero el neutro existe para
+    -- que la falla degrade a "los 30 tipos se comportan igual", y un campo que
+    -- falta en el neutro y existe en el de datos no es lo mismo: es un neutro
+    -- que miente sobre su propia forma.
+    sanity = { mult = 1.0, per = {}, presence = 0 },
 }
 
 for _, key in ipairs( CAT_ORDER ) do
@@ -3319,6 +3349,14 @@ EV.throw = function( ghost, radio, fuerza, cuantos )
     local total   = #candidatos
     local ultimo               -- el ultimo prop tirado, para el detalle
 
+    -- ⚠ EL EPICENTRO DE ESTA CATEGORIA ES UNA **LISTA**, y es la unica de las
+    -- ocho que lo es. §19.8.4 cobra el `throw` POR OBJETO ( 2 % cada uno, con
+    -- tope 4 ), asi que devolver un solo punto -- el ultimo, o el promedio --
+    -- convertiria cuatro objetos en uno y el rasgo del Poltergeist dejaria de
+    -- existir para la cordura. El TOPE no se aplica aca: lo aplica el que cobra,
+    -- porque este evento tira lo que el tipo pide y el tope es de la cordura.
+    local epicentros = {}
+
     for i = 1, math.min( cuantos, total ) do
         -- Se saca de la lista para no tirar el mismo prop dos veces en el mismo
         -- evento: con `count = 4` y dos props en el cuarto, sortear con
@@ -3354,6 +3392,7 @@ EV.throw = function( ghost, radio, fuerza, cuantos )
 
         movidos = movidos + 1
         ultimo  = prop
+        epicentros[ #epicentros + 1 ] = prop:WorldSpaceCenter()
 
     end
 
@@ -3383,7 +3422,8 @@ EV.throw = function( ghost, radio, fuerza, cuantos )
     end
 
     return true, movidos .. " prop(s) tirado(s) con fuerza x" ..
-        string.format( "%.2f", fuerza ) .. donde .. detalleVetos
+        string.format( "%.2f", fuerza ) .. donde .. detalleVetos,
+        epicentros
 
 end
 
@@ -3536,7 +3576,11 @@ EV.knock = function( ghost, radio )
     return true, golpes .. " golpe(s) a " .. math.Round( ghost:GetPos():Distance( pos ) ) .. " u" ..
         "  [ " .. ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) .. " ]" ..
         "  ( contra " .. contra .. ", banco " .. sup.carpeta .. "; lo decidio " .. porque ..
-        ( claseGolpeada and ( "; la entidad es " .. claseGolpeada ) or "; pego en el MUNDO" ) .. " )"
+        ( claseGolpeada and ( "; la entidad es " .. claseGolpeada ) or "; pego en el MUNDO" ) .. " )",
+        -- El epicentro es DONDE SONO y no donde esta el fantasma: `pos` es el
+        -- punto de la pared que devolvio el trace, o el punto al aire cuando los
+        -- ocho traces fallaron.
+        pos
 
 end
 
@@ -3552,7 +3596,8 @@ EV.creak = function( ghost, radio )
 
     sound.Play( snd, pos, 72, math.random( 90, 105 ) )
 
-    return true, "crujido a " .. math.Round( ghost:GetPos():Distance( pos ) ) .. " u  ( " .. comoSalio .. " )"
+    return true, "crujido a " .. math.Round( ghost:GetPos():Distance( pos ) ) .. " u  ( " .. comoSalio .. " )",
+        pos
 
 end
 
@@ -3806,7 +3851,13 @@ EV.door = function( ghost, radio )
             return true, "puerta " .. door:GetClass() .. " #" .. door:EntIndex() .. " a " ..
                 math.Round( ghost:GetPos():Distance( door:WorldSpaceCenter() ) ) ..
                 " u -- PESTILLO INTENTADO con llaves ( " .. ( puestos + 1 ) .. "/" .. PESTILLO_MAX ..
-                " trabadas; el efecto se confirma en la bitacora a los 0,25 s )"
+                " trabadas; el efecto se confirma en la bitacora a los 0,25 s )",
+                -- ⚠ EL EPICENTRO ES LA PUERTA Y NO EL FANTASMA. Es el ejemplo
+                -- textual del handoff de B2: un golpe en una puerta al otro lado
+                -- de la casa no puede cobrarle al que esta parado al lado del
+                -- fantasma. El centro y no GetPos(): una puerta es una hoja
+                -- larga y su origen suele estar en el marco.
+                door:WorldSpaceCenter()
 
         end
 
@@ -3956,10 +4007,19 @@ EV.door = function( ghost, radio )
         end
     end )
 
+    -- ⚠⚠ SE COBRA POR "INTENTADA" Y EL EFECTO SE CONFIRMA A LOS 0,25 s, ASI QUE
+    -- ESTE DRENAJE PUEDE CAER SOBRE UNA PUERTA QUE NO SE MOVIO. Es una frontera
+    -- declarada y no un descuido: `Use2` tiene cuatro salidas silenciosas de la
+    -- base, y esperar el veredicto significaria cobrar la cordura en un timer --
+    -- o sea fuera de la pasada unica, que es justo lo que §19.8.4 prohibe
+    -- ( "ocho llamadas dispersas serian ocho lugares donde olvidarse" ). La
+    -- bitacora ya imprime `door SIN EFECTO` cuando pasa, asi que el caso es
+    -- CONTABLE: si aparece seguido, se mueve el cobro y no se descubre.
     return true, "puerta " .. door:GetClass() .. " #" .. door:EntIndex() .. " a " .. dist ..
         " u -- INTENTADA ( estado " .. tostring( estadoAntes ) ..
         "; el efecto se confirma en la bitacora a los 0,25 s )" ..
-        ( pestilloNo and ( "  [ sin pestillo: " .. pestilloNo .. " ]" ) or "" )
+        ( pestilloNo and ( "  [ sin pestillo: " .. pestilloNo .. " ]" ) or "" ),
+        door:WorldSpaceCenter()
 
 end
 
@@ -4017,39 +4077,63 @@ end
 -- horror hecho a mano. Son SIETE clases en CUATRO familias de trato ( `seton`,
 -- `toggle`, `lighttoggle`, `onoff` ) -- decia "cinco familias" y nunca fueron
 -- cinco.
-local LIGHT_CLASSES = {
-    -- ( 1 ) Las lamparas de sandbox. Son SENTs de Lua con getter y setter
-    -- propios, y son las mas probables en un servidor de GMod porque las pone
-    -- el jugador. HIM las trata igual ( server.lua:494-495 ).
-    { clase = "gmod_light",           como = "seton" },
-    { clase = "gmod_lamp",            como = "seton" },
-
-    -- ( 2 ) Las del mapa que sobrevivieron al compilado por tener targetname.
-    { clase = "light",                como = "toggle" },
-    { clase = "light_spot",           como = "toggle" },
-
-    -- ( 3 ) ⚠ Esta NO responde a `Toggle`: su input se llama `LightToggle`.
-    -- Es una asimetria del engine y HIM la trata aparte ( server.lua:500 ).
-    --
-    -- ⚠⚠ EL NOMBRE DEL INPUT NO ESTA MEDIDO, Y SU UNICA FUENTE ES HIM. Grep de
-    -- `LightToggle` sobre todo el workspace: cuatro apariciones, tres de HIM y
-    -- esta. Cero apariciones de `LightOn` / `LightOff`, que es como se llaman
-    -- los inputs de CPointSpotlight en Source. O sea que este renglon es un
-    -- comentario de un tercero COPIADO, que es el pecado que este mismo archivo
-    -- documenta en el encabezado de `EV.door` ( "lo que no envejece es medir la
-    -- hoja" ).
-    --
-    -- No se cambia sobre memoria -- eso seria el mismo pecado del otro lado --
-    -- pero el reporte deja de afirmar que conmuto: `Entity:Fire` con un input
-    -- que la clase no acepta **no tira error**, `AcceptInput` devuelve false en
-    -- silencio. Se mide con una linea en juego, y esta anotado en la planilla.
-    { clase = "point_spotlight",      como = "lighttoggle" },
-
-    -- ( 4 ) Las dinamicas y los proyectores, que si o si existen en runtime
-    -- porque no se pueden hornear.
-    { clase = "light_dynamic",        como = "onoff" },
-    { clase = "env_projectedtexture", como = "onoff" },
+-- ⚠⚠ LA LISTA YA NO VIVE ACA: SUBIO A `lua/phantasmagoria/luces.lua` ( B2 ).
+-- Estaba `local` en este archivo y la cordura tenia una COPIA de los nombres,
+-- declarada como copia y acotada al contador del punto ciego para que no
+-- pudiera producir un falso verde. Dos listas sobre el mismo universo se leen
+-- como una hasta el dia en que una envejece -- y la que envejecia era la que
+-- mide LO QUE NO SE PUEDE MEDIR, o sea que se degradaba subdeclarando su propio
+-- punto ciego. El comentario de B1 dejo escrito que B2 tenia que subirla.
+--
+-- ⚠ EL FALLBACK NO ES PROLIJIDAD: `lua/phantasmagoria/` lo carga
+-- `lua/autorun/phantasmagoria_data.lua` y el orden entre `lua/autorun/` y
+-- `lua/entities/` LO DECIDE EL ENGINE, que es un tercero. Sin fallback, un
+-- orden desfavorable deja `LIGHT_CLASSES` en nil y el evento `light` revienta
+-- en el primer sorteo -- o sea en juego. Con fallback degrada a "el evento
+-- funciona con las dos clases de sandbox", que es visible y no es un error.
+--
+-- ⚠⚠ Y SE RESUELVE **PEREZOSAMENTE**, no al incluir: al incluir este archivo la
+-- tabla compartida puede todavia no existir, y una copia tomada en ese momento
+-- se congelaria como el fallback PARA SIEMPRE aunque el archivo bueno cargue un
+-- milisegundo despues. Ese es el modo de falla caro -- funciona, no avisa, y
+-- mide cuatro clases de menos.
+local LIGHT_FALLBACK = {
+    { clase = "gmod_light", como = "seton", leer = "GetOn" },
+    { clase = "gmod_lamp",  como = "seton", leer = "GetOn" },
 }
+
+local avisoLuces = false
+
+local function lightClasses()
+    local t = PHANTASMAGORIA.LightClasses
+
+    if istable( t ) and #t > 0 then return t end
+
+    if not avisoLuces then
+        avisoLuces = true
+
+        ErrorNoHalt( "[Phantasmagoria] server_events.lua: `PHANTASMAGORIA.LightClasses` no existe " ..
+            "( phantasmagoria/luces.lua no cargo, o no esta en la lista DATOS de " ..
+            "lua/autorun/phantasmagoria_data.lua ). El evento `light` sigue corriendo con las dos " ..
+            "clases de sandbox y CUATRO clases del mapa quedan invisibles para el, y para el punto " ..
+            "ciego de la cordura.\n" )
+
+    end
+
+    return LIGHT_FALLBACK
+
+end
+
+-- El filtro de sujeto tambien vive alla, por el mismo motivo: compartir la lista
+-- sin compartir el CRITERIO ya dio un mensaje de vacio que contaba otro universo.
+local function lucesUtilizable( fam, ent )
+    if isfunction( PHANTASMAGORIA.LuzUtilizable ) then return PHANTASMAGORIA.LuzUtilizable( fam, ent ) end
+
+    if fam.como ~= "seton" then return true end
+
+    return isfunction( ent.SetOn ) and isfunction( ent.GetOn )
+
+end
 
 -- El censo GLOBAL, con el MISMO recorrido de clases que la busqueda de al lado.
 -- Que compartan la tabla no es prolijidad: si el mensaje de vacio contara sobre
@@ -4065,18 +4149,11 @@ local LIGHT_CLASSES = {
 --
 -- *Compartir la lista no es compartir el criterio: el filtro tambien es parte de
 -- lo que hace que dos censos hablen del mismo universo.*
-local function lucesUtilizable( fam, ent )
-    if fam.como ~= "seton" then return true end
-
-    return isfunction( ent.SetOn ) and isfunction( ent.GetOn )
-
-end
-
 local function lucesEnElMapa( ghost )
     local n, mejor = 0, nil
     local pos = ghost:GetPos()
 
-    for _, fam in ipairs( LIGHT_CLASSES ) do
+    for _, fam in ipairs( lightClasses() ) do
         for _, ent in ipairs( ents.FindByClass( fam.clase ) ) do
             if not IsValid( ent ) then continue end
             if not lucesUtilizable( fam, ent ) then continue end
@@ -4104,7 +4181,7 @@ local function lucesCerca( ghost, radio )
 
     end
 
-    for _, fam in ipairs( LIGHT_CLASSES ) do
+    for _, fam in ipairs( lightClasses() ) do
         for _, ent in ipairs( ents.FindByClass( fam.clase ) ) do
             if not IsValid( ent ) then continue end
             if ent:GetPos():DistToSqr( origen ) > radio2 then continue end
@@ -4283,11 +4360,18 @@ EV.light = function( ghost, radio, _fuerza, _cuantos, dir )
 
         end )
 
+        -- ⚠⚠ EL ESTALLIDO CUESTA MAS QUE EL PARPADEO ( §19.8.4: 3,0 contra 2,0 ),
+        -- Y ESO VIAJA COMO **DATO** Y NO SE DEDUCE DEL TEXTO. El detalle de esta
+        -- rama ya dice la palabra ESTALLIDO, y leerla del string para decidir el
+        -- precio seria un parser sobre prosa: la frase cambia el dia que alguien
+        -- la mejore y el numero cambia con ella, sin error. El costo sale de
+        -- `CATS.light.sanBurst`, que es donde vive el resto de la tabla.
         return true, "ESTALLIDO sobre " .. L.clase .. " #" .. L.ent:EntIndex() ..
             ( L.como == "lighttoggle"
               and " ( se mando LightToggle SIN COMPROBAR: no esta medido que la clase acepte ese input )"
               or " ( queda apagada, NO destruida )" ) ..
-            ( soloApaga and "  ( el tipo SOLO apaga: 30% de estallido )" or "  ( 10% de estallido )" )
+            ( soloApaga and "  ( el tipo SOLO apaga: 30% de estallido )" or "  ( 10% de estallido )" ),
+            { pos = L.ent:GetPos(), pct = CATS.light.sanBurst }
 
     end
 
@@ -4366,7 +4450,8 @@ EV.light = function( ghost, radio, _fuerza, _cuantos, dir )
         -- pueden leer -- que es el mismo verde-sin-comportamiento que el
         -- encabezado de esta categoria dice estar cazando.
         ( L.como == "lighttoggle" and "  ( LightToggle: nombre de input SIN MEDIR sobre esta clase )" or "" ) ..
-        ( soloApaga and "  ( el tipo SOLO apaga )" or soloEnciende and "  ( el tipo SOLO enciende )" or "" )
+        ( soloApaga and "  ( el tipo SOLO apaga )" or soloEnciende and "  ( el tipo SOLO enciende )" or "" ),
+        L.ent:GetPos()
 
 end
 
@@ -4493,7 +4578,14 @@ EV.sound = function( ghost, _radio, _fuerza, _cuantos, _dir, flags )
         "  ( voz " .. voz .. " / banco " .. comoSeLlama ..
         ( banco ~= key and ( ", del peso '" .. key .. "'" ) or "" ) ..
         ", en el fantasma" .. ( reserva and "; RESERVA puesta" or "; reserva APAGADA ( control )" ) ..
-        " )" .. degradado
+        " )" .. degradado,
+        -- ⚠ LA UNICA DE LAS OCHO CUYO EPICENTRO **SI** ES EL FANTASMA, y no es
+        -- una excepcion al criterio sino su aplicacion: el criterio es "donde
+        -- sono", y esta categoria emite con `ghost:EmitSound`, o sea que el canal
+        -- cuelga de la entidad y el sonido sale literalmente de ahi. Es tambien
+        -- la mas cara de las ocho ( 3,0 ): la voz es lo mas parecido a una
+        -- manifestacion.
+        ghost:WorldSpaceCenter()
 
 end
 
@@ -4919,11 +5011,16 @@ EV.prop = function( ghost, radio )
 
         end
 
+        -- El epicentro es el objeto que sono -- el prop fisico, o el emisor que
+        -- se creo en la posicion del prop HORNEADO. Medido en juego ( P2 ): el
+        -- jugador ubica el sonido por direccion Y por plausibilidad del objeto,
+        -- asi que el punto de cobro tiene que ser el mismo que el de la escucha.
         return true, ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) ..
             " DESDE " .. fam.que .. " ( " .. quien .. " ) a " ..
             math.Round( ghost:GetPos():Distance( ent:GetPos() ) ) .. " u" .. corte ..
             ( fam.apagable and "  [ se apaga con +USE a " .. cvUseRad:GetInt() .. " u ]" or "" ) ..
-            "  ( " .. conSujeto .. " familia(s) con sujeto en el radio )"
+            "  ( " .. conSujeto .. " familia(s) con sujeto en el radio )",
+            ent:GetPos()
 
     end
 
@@ -4946,7 +5043,8 @@ EV.prop = function( ghost, radio )
     return true, ( string.match( snd, "([^/]+)%.ogg$" ) or snd ) .. " a " ..
         math.Round( ghost:GetPos():Distance( pos ) ) .. " u" ..
         "  ( ambiente; " .. conSujeto .. " familia(s) con sujeto en el radio" ..
-        ( cvLlaves:GetBool() and "" or "; llaves EN CONTROL -- phantasmagoria_ghost_evllaves 0" ) .. " )"
+        ( cvLlaves:GetBool() and "" or "; llaves EN CONTROL -- phantasmagoria_ghost_evllaves 0" ) .. " )",
+        pos
 
 end
 
@@ -5127,8 +5225,559 @@ EV.furniture = function( ghost, radio )
 
     sound.Play( snd, pos, 72, math.random( 95, 105 ) )
 
-    return true, "mueble a " .. math.Round( ghost:GetPos():Distance( pos ) ) .. " u  ( " .. comoSalio .. " )"
+    return true, "mueble a " .. math.Round( ghost:GetPos():Distance( pos ) ) .. " u  ( " .. comoSalio .. " )",
+        pos
 
+end
+
+---------------------------------------------------------------------------
+-- LA CORDURA DE LOS EVENTOS -- tajada B2 ( Diseno 19.8.4 )
+---------------------------------------------------------------------------
+-- ⚠⚠⚠ LA ESFERA CUELGA DEL **SUJETO**, NO DEL FANTASMA, Y ESE ES EL BLOQUE
+-- ENTERO. Hasta aca los ocho eventos pasaban a <= `evradius` DEL FANTASMA y
+-- devolvian `( ok, detalle )`, con el detalle diciendo la distancia AL FANTASMA.
+-- O sea que un `knock` podia ocurrir a 450 u del fantasma con el jugador a diez
+-- metros del golpe, y no habia forma de saberlo: el evento no decia donde habia
+-- pasado. El tercer retorno `pos` de los ocho es lo que cierra ese hueco.
+--
+-- ⚠⚠ Y SE COBRA EN **UNA SOLA PASADA**, ACA. Ocho llamadas dispersas -- una por
+-- categoria, adentro de cada EV.* -- serian ocho lugares donde olvidarse de la
+-- perilla, del tope, del rasgo del tipo y de los muertos. Este archivo ya pago
+-- esa leccion con `count`, que se leia en dos lugares y terminaba componiendose
+-- consigo mismo. Este es el unico sitio que ve el resultado de los ocho, la
+-- categoria, si esta cazando y los rasgos del tipo.
+
+-- ⚠ RADIO PROPIO, SEPARADO DE `evradius` A PROPOSITO ( §19.8.4 ). Uno decide
+-- DONDE PUEDE PASAR el evento y el otro A QUIEN LE LLEGA. Atados, subir el
+-- alcance del fantasma subiria tambien el drenaje y ninguna medicion podria
+-- separarlos despues.
+local cvSanRad = CreateConVar( "phantasmagoria_ghost_sanrad", "450", FCVAR_ARCHIVE,
+    "Radio en unidades dentro del cual un evento paranormal drena cordura, medido DESDE DONDE OCURRIO EL EVENTO y no desde el fantasma. Separado de phantasmagoria_ghost_evradius a proposito: uno decide donde puede pasar el evento y el otro a quien le llega.", 0, 4096 )
+
+-- La meseta va como FRACCION y no en unidades, y esa es la unica forma de que
+-- §19.8.4 -- *"meseta al 30 % del radio"* -- siga siendo cierta cuando alguien
+-- mueva el radio. En unidades, subir `sanrad` a 900 dejaria la meseta en el 15 %
+-- sin que nadie lo pidiera, y la caida seria otra curva con el mismo nombre.
+local cvSanMeseta = CreateConVar( "phantasmagoria_ghost_sanmeseta", "0.30", FCVAR_ARCHIVE,
+    "Meseta de la caida del drenaje por evento, como FRACCION del radio ( §19.8.4: 30 % ). Dentro de la meseta se cobra el 100 %; de ahi al borde cae lineal a 0.", 0, 1 )
+
+-- Tope POR DISPARO, porque `count` sortea hasta dos categorias a la vez ( The
+-- Twins ) y `burst` puede tirar varios objetos en una.
+local cvSanTope = CreateConVar( "phantasmagoria_ghost_santope", "6", FCVAR_ARCHIVE,
+    "Tope de cordura ( % ) que un solo disparo de eventos le puede sacar a un jugador, sumando todas las categorias que salieron ( §19.8.4 ).", 0, 100 )
+
+-- ⚠ EL TOPE DE OBJETOS DEL `throw` ES OTRO EJE Y NO SE MEZCLA CON EL DE ARRIBA.
+-- Este acota cuantos objetos de UNA tirada cobran; aquel acota el disparo
+-- entero. Con `burst = 8` del Poltergeist, sin este, una sola tirada pediria
+-- 16 % y el tope de arriba lo recortaria a 6 -- que da el mismo numero pero por
+-- el motivo equivocado, y una fila que mida el tope no podria decir cual de los
+-- dos actuo.
+local cvSanObjetos = CreateConVar( "phantasmagoria_ghost_sanobjetos", "4", FCVAR_ARCHIVE,
+    "Cuantos objetos de un mismo evento `throw` cobran cordura ( §19.8.4: por objeto, con tope 4 ). Los que sobran se tiran igual: lo que se acota es el cobro.", 0, 64 )
+
+-- ⚠⚠ SE REGISTRAN EN EL MISMO SITIO QUE LAS DE `phantasmagoria_sanity.lua`, Y
+-- ESA TABLA ES LA RAZON POR LA QUE ESTE BLOQUE PUEDE TENER PERILLAS PROPIAS.
+-- `phantasmagoria_cordura_fabrica` restituye lo que ESTE registro enumere; con
+-- la lista local que tenia B1, estas cuatro habrian quedado afuera de la vuelta
+-- a fabrica -- que es el defecto de la r3 ( una perilla FCVAR_ARCHIVE movida en
+-- un A/B viejo invalida una planilla entera sin decir nada ) pero peor, porque
+-- ni siquiera saldrian en el listado que lo delata.
+--
+-- La tabla se crea con `or {}` en las dos puntas porque el orden de carga entre
+-- `lua/autorun/` y `lua/entities/` lo decide el engine: el que llegue primero la
+-- crea y el segundo la encuentra.
+PHANTASMAGORIA.PerillasCordura = PHANTASMAGORIA.PerillasCordura or {}
+
+for _, cv in ipairs( { cvSanRad, cvSanMeseta, cvSanTope, cvSanObjetos } ) do
+    PHANTASMAGORIA.PerillasCordura[ #PHANTASMAGORIA.PerillasCordura + 1 ] =
+        { cv = cv, dueno = "server_events.lua ( B2 )" }
+
+end
+
+-- Los contadores. ⚠ SON GLOBALES DEL MODULO Y NO POR FANTASMA, y eso se declara
+-- porque cambia como se leen: con dos fantasmas vivos los numeros estan
+-- sumados. Es deliberado -- lo que estas lineas contestan es "¿el cobro corrio y
+-- cuanto se perdio en el camino?", que es una pregunta del MECANISMO. El desglose
+-- por causa, que si es del sujeto, lo imprime `phantasmagoria_cordura`.
+local SAN = {
+    pasadas     = 0,   -- veces que la pasada unica corrio ( disparos con al menos un evento )
+    jugadores   = 0,   -- ( pasada x jugador ) evaluados
+    fuera       = 0,   -- de esos, los que quedaron fuera de toda esfera
+    cobros      = 0,   -- ( jugador x categoria ) drenajes aplicados
+    pedido      = 0,   -- % total que la formula pidio
+    recortado   = 0,   -- % que se perdio contra el tope
+    topeVeces   = 0,   -- cuantas veces el tope mordio
+    sinEpicentro = {}, -- por categoria: eventos OK que NO dijeron donde pasaron
+    sinPuerta   = 0,   -- veces que PHANTASMAGORIA.DrainSanity no existia
+    porRasgo    = 0,   -- % que agregaron o sacaron los rasgos del tipo
+    pisoVeces   = 0,   -- veces que un costo individual levanto el techo por encima del tope
+    modo2       = 0,   -- pasadas corridas con la perilla en 2 ( rasgos ignorados )
+}
+
+-- Caida identica a la de la presencia ( §19.8.2 ): meseta plana y despues lineal
+-- a cero en el borde. La formula vive DOS VECES en el addon -- aca y en
+-- `phantasmagoria_sanity.lua` -- y eso es a proposito y esta acotado: son dos
+-- radios distintos, dos mesetas distintas y dos duenos distintos, y la que
+-- importa que no se muevan juntas es la FORMA, que son cuatro lineas. Compartirla
+-- pondria a `server_events.lua` a depender del orden de carga del autorun para
+-- algo que se puede calcular solo.
+local function factorSanidad( d, radio, meseta )
+    if radio <= 0 then return 0 end
+    if d >= radio then return 0 end
+
+    meseta = math.min( meseta, radio )
+    if d <= meseta then return 1 end
+    if radio <= meseta then return 1 end
+
+    return 1 - ( d - meseta ) / ( radio - meseta )
+
+end
+
+-- ⚠ EL TERCER RETORNO TIENE TRES FORMAS Y UNA SOLA PUERTA QUE LAS ENTIENDE.
+--
+--   Vector                    un epicentro, al costo base de la categoria
+--   { Vector, Vector, ... }   varios epicentros ( solo `throw` )
+--   { pos = v, pct = n }      un epicentro con costo propio ( el ESTALLIDO )
+--   nil                       el evento no sabe donde paso
+--
+-- Que sean tres y no una es la misma decision que `flags.radius`, que ya es
+-- array o escalar segun el tipo: forzar la forma cara en las siete categorias
+-- que tienen UN punto costaria una tabla por evento para no expresar nada.
+--
+-- ⚠⚠ EL `nil` NO ES UN CASO DE BORDE QUE SE TRAGA EN SILENCIO. Un evento que
+-- salio OK y no dijo donde es un evento que NO VA A COBRAR NUNCA, y desde afuera
+-- eso se lee igual que "el jugador estaba lejos". Se cuenta por categoria y el
+-- reporte lo imprime: es el unico numero capaz de delatar a un EV.* al que se le
+-- agrego una rama de exito y se le olvido el epicentro.
+local function normalizarEpicentros( cat, epi, out )
+    if epi == nil then
+        SAN.sinEpicentro[ cat ] = ( SAN.sinEpicentro[ cat ] or 0 ) + 1
+        return
+
+    end
+
+    if isvector( epi ) then
+        out[ #out + 1 ] = { cat = cat, pos = epi }
+        return
+
+    end
+
+    if not istable( epi ) then
+        SAN.sinEpicentro[ cat ] = ( SAN.sinEpicentro[ cat ] or 0 ) + 1
+        return
+
+    end
+
+    -- La forma con costo propio. Se pregunta por `pos` y no por `pct`: un
+    -- `{ pos = v }` sin pct es legitimo ( cae al costo base ), y un `{ pct = 3 }`
+    -- sin pos no tiene donde cobrarse.
+    if isvector( epi.pos ) then
+        out[ #out + 1 ] = { cat = cat, pos = epi.pos, pct = epi.pct }
+        return
+
+    end
+
+    local puestos = 0
+
+    for _, v in ipairs( epi ) do
+        if isvector( v ) then
+            out[ #out + 1 ] = { cat = cat, pos = v }
+            puestos = puestos + 1
+
+        elseif istable( v ) and isvector( v.pos ) then
+            out[ #out + 1 ] = { cat = cat, pos = v.pos, pct = v.pct }
+            puestos = puestos + 1
+
+        end
+    end
+
+    -- Una tabla vacia o con basura adentro es lo mismo que no haber dicho nada,
+    -- y se cuenta igual: si no, un `EV.*` que devuelve `{}` se veria como uno que
+    -- si contesto.
+    if puestos <= 0 then SAN.sinEpicentro[ cat ] = ( SAN.sinEpicentro[ cat ] or 0 ) + 1 end
+
+end
+
+-- La perilla de la cordura vive en el OTRO archivo, y se busca por nombre en
+-- runtime porque el orden de carga lo decide el engine. Se cachea despues de
+-- encontrarla: `GetConVar` por disparo es barato, pero un nil cacheado seria el
+-- defecto de siempre.
+local cvSanEventos
+
+local function modoEventos()
+    cvSanEventos = cvSanEventos or GetConVar( "phantasmagoria_sanity_eventos" )
+
+    -- ⚠ SIN LA CONVAR SE ASUME **1** Y NO 0. El 0 es el CONTROL, y arrancar en
+    -- control por un archivo que no cargo dejaria el mecanismo apagado con el
+    -- reporte diciendo que la perilla lo apago -- o sea acusando a una decision
+    -- donde hubo un accidente. Igual, sin ese archivo tampoco existe la puerta,
+    -- asi que el drenaje no ocurre y el contador `sinPuerta` lo dice.
+    return cvSanEventos and cvSanEventos:GetInt() or 1
+
+end
+
+local avisoPuerta = false
+
+---------------------------------------------------------------------------
+-- LA PASADA UNICA
+---------------------------------------------------------------------------
+-- `cobros` es la lista que armo el bucle de categorias: cada entrada es
+-- { cat = "knock", pos = Vector, pct = <opcional> }.
+-- ⚠ NO RECIBE EL FANTASMA, Y ES A PROPOSITO: no lo usa. Un parametro
+-- que se pasa y no se lee es una dependencia que el lector cree que existe.
+local function cobrarCordura( cobros, flags )
+    if #cobros <= 0 then return end
+
+    SAN.pasadas = SAN.pasadas + 1
+
+    if not isfunction( PHANTASMAGORIA.DrainSanity ) then
+        SAN.sinPuerta = SAN.sinPuerta + 1
+
+        if not avisoPuerta then
+            avisoPuerta = true
+
+            ErrorNoHalt( "[Phantasmagoria] los eventos no pueden drenar cordura: " ..
+                "`PHANTASMAGORIA.DrainSanity` no existe ( lua/autorun/phantasmagoria_sanity.lua no cargo ). " ..
+                "El motor de eventos sigue corriendo entero; lo unico que falta es el cobro.\n" )
+
+        end
+
+        return
+
+    end
+
+    local modo = modoEventos()
+    if modo == 2 then SAN.modo2 = SAN.modo2 + 1 end
+
+    -- Los rasgos del tipo ( §19.8.4 ). Con la perilla en 2 se ignoran, y ese es
+    -- el A/B que aisla el x2 del Oni y el 15 % de puerta del Yurei sin tener que
+    -- cambiar el TIPO del fantasma -- o sea sin cambiar el sujeto para medir el
+    -- rasgo.
+    local rasgos = ( modo ~= 2 ) and istable( flags.sanity ) and flags.sanity or nil
+    local mult   = ( rasgos and isnumber( rasgos.mult ) ) and rasgos.mult or 1
+    local per    = ( rasgos and istable( rasgos.per ) ) and rasgos.per or nil
+
+    local radio  = cvSanRad:GetFloat()
+    local meseta = radio * math.Clamp( cvSanMeseta:GetFloat(), 0, 1 )
+    local tope   = cvSanTope:GetFloat()
+    local objTope = math.floor( cvSanObjetos:GetFloat() )
+
+    for _, ply in ipairs( player.GetAll() ) do
+        if not IsValid( ply ) or not ply:IsPlayer() then continue end
+
+        -- ⚠ UN MUERTO NO PIERDE CORDURA. §19.8.5 decidio ademas que la muerte
+        -- RESTAURA, asi que drenarle al cadaver seria pelearse con la via de
+        -- recuperacion de al lado sobre el mismo numero.
+        if not ply:Alive() then continue end
+
+        SAN.jugadores = SAN.jugadores + 1
+
+        -- `GetPos()` y no `GetShootPos()`, POR CONSISTENCIA CON LA PRESENCIA:
+        -- la esfera de §19.8.2 mide desde los pies, y dos esferas del mismo
+        -- bloque midiendo desde alturas distintas hacen que un mismo metro
+        -- signifique cosas distintas segun quien pregunte. La diferencia son
+        -- ~64 u sobre 450.
+        local pos = ply:GetPos()
+
+        -- Se acumula POR CATEGORIA y no en un solo total: cada una tiene su
+        -- renglon en el desglose de la cordura, y un unico DrainSanity con la
+        -- suma dejaria las ocho filas en cero con la barra bajando.
+        local porCat, total, contados = {}, 0, {}
+
+        -- ⚠⚠⚠ EL MAYOR COSTO INDIVIDUAL DEL DISPARO, Y ES EL PISO DEL TOPE.
+        -- Ver el bloque del recorte, mas abajo: sin esto el 15 % del Yurei es
+        -- INALCANZABLE contra un tope de 6.
+        local mayor = 0
+
+        for _, c in ipairs( cobros ) do
+            -- El tope de objetos del `throw`. Se cuenta lo que COBRA, no lo que
+            -- se tiro: los props de mas se tiran igual.
+            contados[ c.cat ] = ( contados[ c.cat ] or 0 ) + 1
+            if c.cat == "throw" and contados[ c.cat ] > objTope then continue end
+
+            local f = factorSanidad( c.pos:Distance( pos ), radio, meseta )
+            if f <= 0 then continue end
+
+            local info = CATS[ c.cat ]
+
+            -- El orden es: costo propio del evento ( el ESTALLIDO ) > override
+            -- del tipo ( el 15 % del Yurei ) > costo base de la categoria. Y el
+            -- `mult` del tipo multiplica DESPUES, sobre lo que haya ganado.
+            local base = c.pct or ( per and per[ c.cat ] ) or ( info and info.san ) or 0
+            if base <= 0 then continue end
+
+            local val = base * f * mult
+
+            porCat[ c.cat ] = ( porCat[ c.cat ] or 0 ) + val
+            total = total + val
+
+            -- Se mide DESPUES de la caida y del `mult`, o sea sobre lo que este
+            -- cobro vale de verdad para ESTE jugador: un Yurei a 400 u no tiene
+            -- derecho al piso de 15, tiene derecho al piso de lo que su caida
+            -- dejo.
+            if val > mayor then mayor = val end
+
+            if mult ~= 1 then SAN.porRasgo = SAN.porRasgo + ( base * f * mult - base * f ) end
+
+        end
+
+        if total <= 0 then
+            SAN.fuera = SAN.fuera + 1
+            continue
+
+        end
+
+        SAN.pedido = SAN.pedido + total
+
+        -- ⚠⚠ EL TOPE ESCALA TODAS LAS CATEGORIAS EN PROPORCION, NO RECORTA LA
+        -- ULTIMA. Recortar la ultima haria que el orden del sorteo decidiera cual
+        -- categoria paga el recorte, y entonces dos corridas de la misma escena
+        -- escribirian desgloses distintos sin que nada haya cambiado.
+        --
+        -- ⚠ Y EL RECORTE SE CUENTA. Con el Oni ( x2 ) y dos categorias a la vez,
+        -- el tope de 6 % se come parte del rasgo -- o sea que el x2 puede estar
+        -- puesto y no verse. Sin este contador, esa fila saldria "el rasgo no
+        -- hace nada" y mandaria a mirar ghost_flags.lua, donde no esta el problema.
+        -- ⚠⚠⚠ EL TOPE TIENE UN PISO, Y SIN EL HAY UN RASGO DEL DISEÑO QUE NO SE
+        -- PUEDE PAGAR NUNCA. §19.8.4 fija el tope en 6 % *"porque `count` sortea
+        -- hasta dos categorias a la vez"*: existe para acotar el APILAMIENTO. Y
+        -- la tabla de rasgos de la misma seccion le da al Yurei `per.door = 15`,
+        -- literal de la fuente. Con un 6 duro, ese 15 se recorta a 6 **siempre**,
+        -- en el disparo de UNA sola categoria, donde no hay nada apilado: el
+        -- rasgo que define al tipo queda a un 40 % de lo escrito, sin error y sin
+        -- que ninguna fila lo pueda separar de "la caida se lo comio".
+        --
+        -- *Un tope pensado contra la suma no puede decidir el costo de un solo
+        -- sumando.* El piso es el mayor costo individual del disparo, asi que:
+        --   · Yurei, una puerta ( 15 )            -> piso 15, paga 15
+        --   · Oni, sound + prop ( 6 + 4 = 10 )    -> piso 6, recorta a 6
+        --   · normal, sound + prop ( 3 + 2 = 5 )  -> por debajo del tope
+        -- El tope sigue acotando lo que vino a acotar y deja de pisar lo que no
+        -- era suyo.
+        --
+        -- ⚠ Es una lectura MIA de dos numeros del diseño que se contradicen, no
+        -- una decision del autor: si el prefiere el 6 duro, se saca el `math.max`
+        -- de la linea de abajo y el Yurei pasa a cobrar 6. Queda escrito para que
+        -- sea una linea y no un arqueologia.
+        local techo = math.max( tope, mayor )
+
+        if total > techo and techo > 0 then
+            local escala = techo / total
+
+            SAN.recortado = SAN.recortado + ( total - techo )
+            SAN.topeVeces = SAN.topeVeces + 1
+
+            for cat, v in pairs( porCat ) do porCat[ cat ] = v * escala end
+
+        end
+
+        if mayor > tope then SAN.pisoVeces = SAN.pisoVeces + 1 end
+
+        -- ⚠ SE RECORRE `CAT_ORDER` Y NO `pairs( porCat )`: el orden de `pairs`
+        -- no esta definido, y dos corridas de la misma escena imprimirian las
+        -- causas en distinto orden en la bitacora de la cordura. Un instrumento
+        -- que no es reproducible no se puede comparar contra si mismo.
+        for _, cat in ipairs( CAT_ORDER ) do
+            local v = porCat[ cat ]
+            if not v or v <= 0 then continue end
+
+            -- ⚠ LA CAUSA SALE DE `CATS[ cat ].sanCausa` Y NO SE CONSTRUYE: ver el
+            -- aviso de la tabla. Un id armado en runtime es invisible para
+            -- `auditar_puerta_cordura.py`, que barre texto fuente.
+            PHANTASMAGORIA.DrainSanity( ply, v, CATS[ cat ].sanCausa )
+            SAN.cobros = SAN.cobros + 1
+
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- EL RASGO DEL PHANTOM: una TASA, y hoy sin sujeto  ( Diseno 22.10 / 19.8.4 )
+---------------------------------------------------------------------------
+-- ⚠⚠⚠ ES DE OTRA ESPECIE QUE LOS OTROS DOS RASGOS, Y ESO DECIDE DONDE VA EL
+-- CODIGO. El x2 del Oni y el 15 % del Yurei son un numero que se aplica UNA VEZ,
+-- cuando el evento ocurre: viven en `cobrarCordura`, arriba. El del Phantom es un
+-- goteo que depende de tres cosas que cambian tick a tick -- que lo estes
+-- mirando, que este dentro de 525 u, y cuanto tiempo pasa. *Si se implementara
+-- como los otros dos, el rasgo del Phantom simplemente no existe, y el
+-- instrumento no lo diria.*
+--
+-- Por eso entra por `RegisterSanityRate` y no por `DrainSanity`. Las dos formas
+-- estan medidas y son distintas ( r2 y r3 de B1, fila 04 ): si el rasgo no
+-- entra, no va a ser por la puerta.
+--
+-- ⚠⚠ Y SE REGISTRA **INACTIVA**, PORQUE SU SUJETO NO EXISTE. §22.10 pide que el
+-- jugador lo vea MANIFESTARSE, y las manifestaciones de §22 no estan escritas:
+-- censo del 2026-08-20 sobre `lua/`, cero apariciones de una manifestacion como
+-- estado. Colgarla de `phantom_Visible` seria peor que no escribirla -- §19.8.2
+-- ya lo prohibio con todas las letras, porque §20.6 va a hacer titilar ese
+-- estado entre 2 y 10 veces por segundo y una tasa colgada de eso repartiria el
+-- mismo drenaje entre dos renglones segun el frame en que cayo el tick.
+--
+-- Se registra igual, y es el precedente exacto de la zona segura de B1: sin su
+-- renglon, "el rasgo del Phantom no drena" y "el rasgo del Phantom no tiene
+-- sujeto" se imprimen los dos como un cero. `PHANTASMAGORIA.EstaManifestado` es
+-- la costura por donde entra el dia que §22 se escriba, y ningun llamador se
+-- entera.
+local cvPresRad = CreateConVar( "phantasmagoria_ghost_sanpresrad", "525", FCVAR_ARCHIVE,
+    "Radio en unidades del rasgo de presencia continua ( hoy solo el Phantom: 0,5 %/s mirandolo manifestarse ). 525 u son los 10 m de la fuente con la constante del addon, 52,5 u/m.", 0, 4096 )
+
+PHANTASMAGORIA.PerillasCordura = PHANTASMAGORIA.PerillasCordura or {}
+PHANTASMAGORIA.PerillasCordura[ #PHANTASMAGORIA.PerillasCordura + 1 ] =
+    { cv = cvPresRad, dueno = "server_events.lua ( B2 )" }
+
+-- ⚠ ¿ESTA MIRANDO AL FANTASMA? Se resuelve con el coseno del angulo entre la
+-- vista del jugador y el vector hacia el fantasma, y NO con `IsLineOfSightClear`
+-- ni con un trace: la pregunta de §22.10 es *"mientras lo VEAS"*, o sea la
+-- direccion de la camara, y una traza contestaria otra cosa ( si hay pared en el
+-- medio ). Las dos preguntas son legitimas; mezclarlas es lo que no se puede.
+--
+-- 0,45 es ~63 grados de semiangulo, o sea un cono generoso: la fuente habla de
+-- verlo, no de tenerlo en la mira. El numero es MIO y se declara como tal.
+local COS_MIRADA = 0.45
+
+local function loMira( ply, ghost )
+    local hacia = ghost:WorldSpaceCenter() - ply:EyePos()
+
+    if hacia:LengthSqr() < 1 then return true end
+
+    hacia:Normalize()
+
+    return ply:EyeAngles():Forward():Dot( hacia ) >= COS_MIRADA
+
+end
+
+-- El registro se intenta ya, y si la puerta todavia no cargo se reintenta en
+-- `Initialize`. El orden entre `lua/autorun/` y `lua/entities/` lo decide el
+-- engine; `Initialize` corre despues de los dos, asi que el reintento no puede
+-- fallar por orden. ⚠ Y si falla igual, GRITA: una fuente que no se registro
+-- deja su renglon diciendo "⚠ su fuente no esta registrada", que es cierto pero
+-- llega tarde -- el aviso barato es ahora.
+local function registrarPresencia()
+    return PHANTASMAGORIA.RegisterSanityRate( "presencia_tipo", function( ply, dt )
+        if not ply:Alive() then return nil, nil, nil, "muerto" end
+
+        -- ⚠⚠ LA COSTURA. Mientras no exista, la fuente contesta que no aplica y
+        -- DICE POR QUE -- que es la unica diferencia entre esto y no haberlo
+        -- escrito. El dia que §22 defina `EstaManifestado`, esta rama deja de
+        -- tomarse sola y ningun llamador cambia.
+        local hayManifestacion = isfunction( PHANTASMAGORIA.EstaManifestado )
+
+        local radio  = cvPresRad:GetFloat()
+        local radio2 = radio * radio
+        local pos    = ply:GetPos()
+
+        local cerca, mirando, conRasgo = 0, 0, 0
+        local mejor, mejorG = 0, nil
+
+        local each = PHANTASMAGORIA.EachGhost
+
+        if not isfunction( each ) then
+            return nil, nil, nil, "PHANTASMAGORIA.EachGhost no existe todavia"
+
+        end
+
+        each( function( g )
+            if not IsValid( g ) then return end
+            if g:GetPos():DistToSqr( pos ) > radio2 then return end
+
+            cerca = cerca + 1
+
+            -- El rasgo sale del getter y no del campo: regla 2 de
+            -- ghost_flags.lua, que es lo que va a salvar al Mimic.
+            local flags = isfunction( g.phantom_EventFlags ) and g:phantom_EventFlags() or nil
+            local tasa  = ( flags and istable( flags.sanity ) and isnumber( flags.sanity.presence ) )
+                and flags.sanity.presence or 0
+
+            if tasa <= 0 then return end
+
+            conRasgo = conRasgo + 1
+
+            if not loMira( ply, g ) then return end
+
+            mirando = mirando + 1
+
+            if not hayManifestacion then return end
+            if not PHANTASMAGORIA.EstaManifestado( g ) then return end
+
+            -- Igual que la presencia de B1: con dos fantasmas se toma EL MAS
+            -- FUERTE y no la suma, o la tasa crece sin techo con la cantidad de
+            -- fantasmas y la escala de §19.2 deja de significar nada.
+            if tasa > mejor then mejor, mejorG = tasa, g end
+
+        end )
+
+        -- ⚠⚠⚠ LOS CUATRO CEROS DE ESTA FUENTE SON CUATRO COSAS DISTINTAS, Y CADA
+        -- UNO TIENE SU FRASE. Compartir texto haria que "no hay ningun Phantom
+        -- cerca" y "las manifestaciones no existen" se leyeran igual -- y son un
+        -- dato de la partida y un hueco del addon, que llevan a acciones
+        -- opuestas.
+        if cerca <= 0 then
+            return nil, nil, nil, "ningun fantasma a " .. math.Round( radio ) .. " u"
+
+        end
+
+        if conRasgo <= 0 then
+            return nil, nil, nil, cerca .. " fantasma(s) cerca y NINGUNO tiene el rasgo " ..
+                "( `sanity.presence` en 0: hoy solo lo trae el Phantom )"
+
+        end
+
+        if mirando <= 0 then
+            return nil, nil, nil, conRasgo .. " con el rasgo a " .. math.Round( radio ) ..
+                " u y el jugador NO lo esta mirando"
+
+        end
+
+        if not hayManifestacion then
+            return nil, nil, nil, "⚠ SIN SUJETO: " .. mirando .. " con el rasgo y mirado(s), pero " ..
+                "`PHANTASMAGORIA.EstaManifestado` NO EXISTE -- las manifestaciones de §22 no estan " ..
+                "escritas. El rasgo esta en los datos y no tiene de que colgarse"
+
+        end
+
+        if mejor <= 0 then
+            return nil, nil, nil, mirando .. " con el rasgo y mirado(s), ninguno MANIFESTANDOSE"
+
+        end
+
+        return -mejor, "presencia_tipo", nil,
+            "#" .. ( IsValid( mejorG ) and mejorG:EntIndex() or 0 ) .. " manifestandose y mirado a menos de " ..
+            math.Round( radio ) .. " u  ( " .. string.format( "%.2f", mejor ) .. " %/s )",
+            -- ⚠ NO ES MODULABLE POR LA OSCURIDAD, y la razon no es tecnica: este
+            -- goteo pide que lo estes MIRANDO, o sea que ya hay una condicion de
+            -- vision adentro. Multiplicarlo ademas por "esta a oscuras" cobraria
+            -- dos veces por lo mismo -- que es exactamente lo que §22.8 llama el
+            -- drenaje que se contaria dos veces.
+            false
+
+    end, "presencia continua por rasgo de tipo ( Phantom )" )
+
+end
+
+-- ⚠ SE PREGUNTA POR LA **API** Y NO POR EL RESULTADO DEL REGISTRO, y la
+-- diferencia importa: `RegisterSanityRate` devuelve false tambien cuando el id
+-- YA estaba registrado -- que es lo que pasa en cada autorefresh de este
+-- archivo. Reintentando sobre ese false, un autorefresh terminaria gritando que
+-- no se pudo registrar algo que esta registrado desde hace media hora. *Un
+-- reintento tiene que mirar la condicion que lo motiva, no cualquier fracaso.*
+if isfunction( PHANTASMAGORIA.RegisterSanityRate ) then
+    registrarPresencia()
+
+else
+    hook.Add( "Initialize", "phantasmagoria_b2_presencia_tipo", function()
+        if isfunction( PHANTASMAGORIA.RegisterSanityRate ) then
+            registrarPresencia()
+            return
+
+        end
+
+        ErrorNoHalt( "[Phantasmagoria] B2: no se pudo registrar la fuente continua `presencia_tipo` " ..
+            "( `PHANTASMAGORIA.RegisterSanityRate` no existe ni en Initialize ). El rasgo del Phantom " ..
+            "queda sin puerta y su renglon del desglose no va a distinguir eso de que el rasgo no " ..
+            "dispare.\n" )
+
+    end )
 end
 
 ---------------------------------------------------------------------------
@@ -5213,6 +5862,14 @@ function ENT:phantom_FireEvent( forzada )
 
     local salieron, ultimoDetalle = 0, nil
 
+    -- ⚠⚠ SE JUNTA Y SE COBRA AL FINAL, EN UNA SOLA PASADA ( §19.8.4 ). Cobrar
+    -- adentro del bucle seria cobrar por categoria, y entonces el tope del
+    -- disparo -- que existe porque `count` puede sortear DOS categorias a la vez
+    -- -- no tendria donde aplicarse: cada vuelta veria su propia mitad y las dos
+    -- pasarian. Ademas convertiria una pasada sobre los jugadores en `count`
+    -- pasadas.
+    local cobros = {}
+
     -- ⚠⚠ EL SORTEO VA SIN REEMPLAZO, Y ANTES NO LO IBA. Lo destapo la bitacora
     -- del autor en la r3: `throw` salio REPETIDO en 3 de las 4 despertadas.
     -- No era mala suerte -- `sortearPeso` se llamaba fresco en cada vuelta sobre
@@ -5290,12 +5947,18 @@ function ENT:phantom_FireEvent( forzada )
         local fn = EV[ cat ]
         if not fn then st.motivos[ cat ] = "la categoria no tiene implementacion" continue end
 
-        local ok, detalle = fn( self, radio, fuerza, porTiro,
+        -- ⚠ EL TERCER RETORNO ES `epi`: DONDE OCURRIO. Los ocho lo devuelven
+        -- desde B2, y sin el la cordura mediria desde el fantasma -- que es
+        -- exactamente el hueco que el autor señalo: un evento puede pasar a
+        -- 450 u del fantasma con el jugador a diez metros del golpe.
+        local ok, detalle, epi = fn( self, radio, fuerza, porTiro,
             ( istable( flags.dir ) and flags.dir[ cat ] ) or 0, flags )
 
         st.motivos[ cat ] = ( ok and "OK -- " or "sin sujeto -- " ) .. tostring( detalle )
 
         if ok then
+            normalizarEpicentros( cat, epi, cobros )
+
             salieron       = salieron + 1
             ultimoDetalle  = cat .. ": " .. tostring( detalle )
             st.porCat[ cat ] = ( st.porCat[ cat ] or 0 ) + 1
@@ -5332,6 +5995,21 @@ function ENT:phantom_FireEvent( forzada )
 
         end
     end
+
+    -- ⚠⚠⚠ EL COBRO VA **DESPUES** DEL BUCLE Y **ANTES** DEL RETORNO, Y VA
+    -- IGUAL CUANDO EL DISPARO FUE FORZADO. Un disparo manual que no cobrara
+    -- dejaria a la planilla sin forma de medir el drenaje de una categoria
+    -- elegida: habria que esperar a que el sorteo la favorezca, y *un check que
+    -- depende de un sorteo no es un check*. Los contadores del motor SI separan
+    -- forzado de espontaneo ( `st.forzados` contra `st.disparos` ), asi que la
+    -- pregunta "¿corrio solo?" sigue teniendo su propio numero.
+    --
+    -- ⚠ Y NO SE MODULA POR OSCURIDAD. §19.9.2 diseño el modulador contra la TASA
+    -- de la presencia, y los ocho numeros de §19.8.4 son porcentajes literales
+    -- "en el epicentro". Aplicarselo moveria el tope de 6 % a 9 % sin que nadie
+    -- lo haya decidido. Queda como frontera declarada: el dia que se quiera, es
+    -- una linea aca y una decision del autor, no un descubrimiento.
+    cobrarCordura( cobros, flags )
 
     return salieron, ultimoDetalle
 
@@ -5747,6 +6425,18 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
         PHANTASMAGORIA.EventLog = {}
         PHANTASMAGORIA.EventLogPerdidas = 0
 
+        -- ⚠ LOS CONTADORES DE B2 TAMBIEN, Y NO ES OBVIO: la planilla manda
+        -- correr `reset` justo antes de cada fila, y si estos quedaran vivos la
+        -- fila leeria el recorte y los cobros de la fila anterior -- o sea que
+        -- el instrumento le regalaria a la medicion un dato de otra escena.
+        -- Se reescriben campo por campo y NO se nilea la tabla: `SAN` es un
+        -- upvalue de `cobrarCordura`, y reemplazarla dejaria a esa funcion
+        -- escribiendo en la tabla vieja para siempre, sin un solo error.
+        SAN.pasadas, SAN.jugadores, SAN.fuera = 0, 0, 0
+        SAN.cobros, SAN.pedido, SAN.recortado, SAN.topeVeces = 0, 0, 0, 0
+        SAN.sinPuerta, SAN.porRasgo, SAN.modo2, SAN.pisoVeces = 0, 0, 0, 0
+        SAN.sinEpicentro = {}
+
         -- ⚠⚠ EL RESET NO PUEDE NILEAR LA TABLA ENTERA, y lo hacia. `phantom_ev`
         -- guarda contadores PERO TAMBIEN estado de comportamiento: `doorHasta`
         -- ( la cuarentena por puerta ) y `next` ( el reloj ). Nilearla:
@@ -6095,6 +6785,107 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
 
     end
 
+    ---------------------------------------------------------------------------
+    -- LA CORDURA DE LOS EVENTOS  ( B2 )
+    ---------------------------------------------------------------------------
+    -- ⚠ ESTE BLOQUE NO IMPRIME LA BARRA NI EL DESGLOSE: eso es
+    -- `phantasmagoria_cordura`, y duplicarlo aca dejaria dos instrumentos
+    -- contando el mismo numero, que es como dos corridas se vuelven
+    -- incomparables. Lo que se imprime aca es lo que SOLO este archivo sabe:
+    -- cuanto se pidio, cuanto se perdio en el camino, y por que.
+    say( "" )
+    say( "  CORDURA de los eventos ( Diseno 19.8.4 )" )
+
+    local modoSan = modoEventos()
+
+    say( "    perilla     phantasmagoria_sanity_eventos = " .. modoSan .. "   ( " ..
+        ( modoSan == 0 and "CONTROL: nadie drena -- el contador de la cordura sigue sumando el potencial"
+          or modoSan == 2 and "los rasgos del tipo SE IGNORAN ( A/B del x2 del Oni y del 15 % del Yurei )"
+          or "los rasgos del tipo modulan ( el juego )" ) .. " )" )
+
+    say( "    esfera      radio " .. math.Round( cvSanRad:GetFloat() ) .. " u  ·  meseta " ..
+        string.format( "%.0f", cvSanMeseta:GetFloat() * 100 ) .. " % ( " ..
+        math.Round( cvSanRad:GetFloat() * cvSanMeseta:GetFloat() ) .. " u )  ·  tope " ..
+        string.format( "%.1f", cvSanTope:GetFloat() ) .. " % por disparo  ·  " ..
+        math.floor( cvSanObjetos:GetFloat() ) .. " objeto(s) cobran por throw" )
+
+    -- ⚠⚠ LOS TRES DENOMINADORES, PORQUE UNO SOLO NO DICE NADA. "0 cobros" lo
+    -- cumplen tres estados que llevan a arreglos distintos: la pasada no corrio,
+    -- corrio y no habia nadie vivo, o habia gente y estaba lejos. Sin los tres
+    -- numeros, el reporte manda a revisar el enganche cuando el jugador estaba
+    -- en la otra punta del mapa.
+    say( "    pasadas     " .. SAN.pasadas .. " disparo(s) con al menos un evento  ·  " ..
+        SAN.jugadores .. " ( pasada x jugador vivo ) evaluado(s)  ·  " ..
+        SAN.fuera .. " quedaron fuera de toda esfera" )
+
+    say( "    cobros      " .. SAN.cobros .. " drenaje(s) aplicado(s)  ·  " ..
+        string.format( "%.2f", SAN.pedido ) .. " % pedido" ..
+        ( SAN.porRasgo ~= 0 and ( "  ( " .. string.format( "%+.2f", SAN.porRasgo ) ..
+            " % lo pusieron los rasgos del tipo )" ) or "" ) )
+
+    -- ⚠⚠⚠ EL RECORTE ES EL NUMERO QUE SALVA LA FILA DEL ONI. Con el x2 y dos
+    -- categorias a la vez, el tope de 6 % se come parte del rasgo -- o sea que el
+    -- x2 puede estar puesto y no verse en la barra. Sin este renglon, esa fila
+    -- saldria "el rasgo no hace nada" y mandaria a mirar ghost_flags.lua, donde
+    -- no esta el problema.
+    if SAN.topeVeces > 0 then
+        say( "    ⚠ tope      mordio " .. SAN.topeVeces .. " vez/veces y se perdieron " ..
+            string.format( "%.2f", SAN.recortado ) .. " % ( " ..
+            string.format( "%.0f", SAN.pedido > 0 and ( SAN.recortado / SAN.pedido * 100 ) or 0 ) ..
+            " % de lo pedido ). Si esto pasa seguido con un tipo que tiene `sanity.mult`, " ..
+            "el rasgo esta puesto y el tope se lo esta comiendo." )
+
+    else
+        say( "    tope        no mordio nunca" )
+
+    end
+
+    if SAN.pisoVeces > 0 then
+        say( "    piso        " .. SAN.pisoVeces .. " vez/veces un costo INDIVIDUAL supero el tope y lo " ..
+            "levanto ( hoy solo puede ser el 15 % de puerta del Yurei ). El tope acota el apilamiento, " ..
+            "no el costo de un solo sumando -- ver el comentario de `cobrarCordura`." )
+
+    end
+
+    -- ⚠⚠ EL CONTADOR DE LO QUE NO SE PUDO COBRAR. Un `EV.*` al que se le agrega
+    -- una rama de exito y se le olvida el tercer retorno sale OK, suena, y no
+    -- cobra nada -- y desde afuera eso se ve igual que "el jugador estaba lejos".
+    -- Este es el unico numero capaz de delatarlo, y por eso se imprime SIEMPRE,
+    -- tambien cuando vale cero: *un contador que solo habla cuando falla no
+    -- puede acreditar que corrio.*
+    local sinEpi, nSinEpi = {}, 0
+
+    for cat, n in pairs( SAN.sinEpicentro ) do
+        sinEpi[ #sinEpi + 1 ] = cat .. " x" .. n
+        nSinEpi = nSinEpi + n
+
+    end
+
+    table.sort( sinEpi )
+
+    if nSinEpi > 0 then
+        say( "    ⚠ sin donde " .. nSinEpi .. " evento(s) salieron OK y NO dijeron donde ocurrieron, " ..
+            "asi que no cobraron: " .. table.concat( sinEpi, ", " ) .. ". Es un EV.* con una rama de " ..
+            "exito sin tercer retorno, no un jugador lejos." )
+
+    else
+        say( "    sin donde   0   ( los ocho EV.* devolvieron su epicentro en todas sus salidas OK )" )
+
+    end
+
+    if SAN.sinPuerta > 0 then
+        say( "    ⚠ SIN PUERTA  " .. SAN.sinPuerta .. " pasada(s) no encontraron " ..
+            "`PHANTASMAGORIA.DrainSanity`: lua/autorun/phantasmagoria_sanity.lua no cargo. " ..
+            "El motor de eventos corre entero y lo unico que falta es el cobro." )
+
+    end
+
+    if SAN.modo2 > 0 then
+        say( "    A/B         " .. SAN.modo2 .. " pasada(s) corrieron con los rasgos del tipo IGNORADOS " ..
+            "( perilla en 2 ). Una corrida con este numero distinto de cero NO mide el juego." )
+
+    end
+
     local log = PHANTASMAGORIA.EventLog
 
     -- ⚠ LA BITACORA ES GLOBAL, y el que la lee la lee como si fuera de UN
@@ -6341,6 +7132,73 @@ do
     if #sin > 0 then
         ErrorNoHalt( "[Phantasmagoria] categoria(s) declarada(s) en CATS y SIN implementacion en EV: " ..
             table.concat( sin, ", " ) .. ". Tienen convar, flag y linea de reporte, y no hacen nada.\n" )
+
+    end
+end
+
+-- ( 3c ) LOS OCHO COSTOS DE CORDURA, Y EL ID QUE LOS NOMBRA. ( B2 )
+--
+-- Dos modos de falla distintos y ninguno de los dos tira error:
+--
+--   · una categoria SIN `san` no drena nada. El evento sale, suena, el reporte
+--     dice OK, y el renglon del desglose de la cordura queda en cero -- que es
+--     indistinguible de "el jugador estaba lejos". Es el mismo cero de siempre.
+--
+--   · un `sanCausa` que NO coincida con la clave manda el drenaje a un renglon
+--     que no le corresponde, o a uno que la cordura no declaro. Este segundo
+--     caso el modulo lo marca `⚠ NO DECLARADA` en su desglose, pero eso se lee
+--     dos pantallas despues y con la corrida ya gastada.
+--
+-- ⚠ El literal se escribe A PROPOSITO en vez de construirse con
+-- `"evento_" .. key` -- un id construido es invisible para
+-- `auditar_puerta_cordura.py`, que barre TEXTO FUENTE -- y esta guarda es lo
+-- que paga el costo de escribirlo dos veces. *Cuando una redundancia se elige,
+-- la guarda que la ata es parte de la eleccion y no un extra.*
+do
+    local mal = {}
+
+    for _, key in ipairs( CAT_ORDER ) do
+        local c = CATS[ key ]
+
+        if not c then continue end
+
+        if not isnumber( c.san ) or c.san <= 0 then
+            mal[ #mal + 1 ] = key .. " ( sin `san`: el evento sale y no drena nada )"
+
+        end
+
+        if c.sanCausa ~= "evento_" .. key then
+            mal[ #mal + 1 ] = key .. " ( sanCausa '" .. tostring( c.sanCausa ) ..
+                "' no es 'evento_" .. key .. "': el drenaje va a otro renglon )"
+
+        end
+
+        -- ⚠ Y NINGUNO PUEDE LLEVAR UN CARACTER QUE LA CONSOLA PARTA. El
+        -- tokenizador de Source ( CCommand::Tokenize ) corta en `{}()':` y esos
+        -- caracteres salen como TOKENS PROPIOS, asi que un id con dos puntos es
+        -- INALCANZABLE desde el andamio `phantasmagoria_cordura_drenar` -- que es
+        -- justo el instrumento con el que se mide una categoria a mano. Le costo
+        -- la fila 04 a la r2 de B1 y el defecto habia vivido desde el dia en que
+        -- se escribio el bloque, con tres instrumentos offline en verde.
+        --
+        -- Se comprueba la PROPIEDAD y no "que tengan guion bajo": eso ultimo
+        -- seria repetir el arreglo en forma de check y saldria verde por
+        -- construccion ( catalogo nº 42 ).
+        for _, ch in ipairs( { "{", "}", "(", ")", "'", ":", ";", '"', " ", "\t" } ) do
+            if c.sanCausa and string.find( c.sanCausa, ch, 1, true ) then
+                mal[ #mal + 1 ] = key .. " ( sanCausa '" .. c.sanCausa ..
+                    "' lleva un caracter que la consola de Source PARTE: el andamio no la puede nombrar )"
+                break
+
+            end
+        end
+    end
+
+    if #mal > 0 then
+        ErrorNoHalt( "[Phantasmagoria] la tabla de costos de cordura de los eventos ( B2 ) esta mal " ..
+            "formada en " .. #mal .. " punto(s): " .. table.concat( mal, " | " ) ..
+            ". Ninguno de estos casos tira error solo: el evento sale, el reporte dice OK, y el " ..
+            "renglon del desglose queda en cero o en el renglon de otro.\n" )
 
     end
 end

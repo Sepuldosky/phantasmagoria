@@ -77,6 +77,17 @@ local DATOS = {
     -- error y sin rastro.
     "phantasmagoria/ghost_flags.lua",
 
+    -- Diseno 19.8 / B2: las SEIS clases de luz. El orden es indistinto -- no
+    -- lee ni escribe ninguna de las otras tablas -- pero va aca porque esta
+    -- lista es el unico lugar donde se declara que el archivo existe.
+    --
+    -- ⚠ EN LOS DOS REALMS, y no es "por las dudas": los dos consumidores de hoy
+    -- son de servidor ( el evento `light` y la cordura ), pero el archivo define
+    -- la lista canonica y cualquier HUD que manana quiera pintar "estas
+    -- iluminado" la va a necesitar del otro lado. Cuesta la tabla y nada mas: el
+    -- unico hook que registra ya se guarda con `if SERVER`.
+    "phantasmagoria/luces.lua",
+
     "phantasmagoria/prop_data.lua",
 
     -- Los 66 modelos NUESTROS de equipamiento. Aparte de prop_data.lua a
@@ -242,6 +253,25 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
     -- funciones. Una de cada familia -- la del parseo y la de la regla de
     -- identidad -- porque un archivo cortado a la mitad definiria las primeras
     -- y no las ultimas.
+    -- ⚠ LA COLUMNA DE luces.lua, Y CUENTA LAS **LEGIBLES**, NO LAS CLASES. Un
+    -- `#LightClasses > 0` daria verde sobre una tabla en la que alguien puso
+    -- `leer = false` en las seis -- que es la forma exacta en que este archivo
+    -- se rompe sin error: la cordura seguiria corriendo, todas las lecturas
+    -- caerian en "sin lectura", y el unico sintoma seria un modulador que dejo
+    -- de discriminar. Se cuentan las dos que tienen getter declarado, que es lo
+    -- que hace legible al instrumento del punto ciego.
+    local clasesLuz, lucesLegibles = contar( PHANTASMAGORIA.LightClasses ), 0
+
+    if istable( PHANTASMAGORIA.LightClasses ) then
+        for _, fam in ipairs( PHANTASMAGORIA.LightClasses ) do
+            if fam.leer then lucesLegibles = lucesLegibles + 1 end
+
+        end
+    end
+
+    local lucesFnOk = isfunction( PHANTASMAGORIA.LuzUtilizable )
+        and isfunction( PHANTASMAGORIA.LuzEncendida )
+
     local bspOk = isfunction( PHANTASMAGORIA.Estaticos )
         and isfunction( PHANTASMAGORIA.EstaticosEnEsfera )
         and isfunction( PHANTASMAGORIA.BasenameDeRuta )
@@ -250,13 +280,15 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
     if tipos and tipos > 0 and props and props > 0 and acts and acts > 0 and pushOk
         and propios and propios > 0 and propiosVivos == propios
         and conEventos == tipos and bspOk
-        and ghosts and ghosts > 0 and ghostFnOk then
+        and ghosts and ghosts > 0 and ghostFnOk
+        and clasesLuz and clasesLuz > 0 and lucesLegibles > 0 and lucesFnOk then
 
         MsgC( Color( 190, 120, 255 ), "[Phantasmagoria] ", color_white,
             "datos cargados en ", realm, ": ", tipos, " tipos ( ", conEventos,
             " con rasgos de evento ) · ", props, " modelos ( ",
             propios, " propios ) · ", acts, " actividades vigiladas · ",
-            ghosts, " modelos de fantasma · lector de props horneados OK.\n" )
+            ghosts, " modelos de fantasma · ", clasesLuz, " clases de luz ( ",
+            lucesLegibles, " legibles ) · lector de props horneados OK.\n" )
 
         return
 
@@ -271,12 +303,16 @@ hook.Add( "Initialize", "phantasmagoria_datos_cargados", function()
         " · PushActLog " .. ( pushOk and "OK" or "NO EXISTE" ) ..
         " · GhostModels " .. ( ghosts and ( ghosts .. " modelos" ) or "NO EXISTE" ) ..
         " · EsGhostModel/ParesUtiles " .. ( ghostFnOk and "OK" or "NO EXISTE" ) ..
+        " · LightClasses " .. ( clasesLuz and ( clasesLuz .. " clases, " .. lucesLegibles .. " legibles" ) or "NO EXISTE" ) ..
+        " · LuzUtilizable/LuzEncendida " .. ( lucesFnOk and "OK" or "NO EXISTE" ) ..
         " · lector de props horneados " .. ( bspOk and "OK" or "NO EXISTE" ) ..
         ".  Los tipos los necesita la cordura ( threshold por tipo ), PropData corrige la masa " ..
         "de los props, y el actlog es el instrumento de la pose T." ..
         ( ( propios and propiosVivos < propios ) and
             "  ⚠ 'propios' por debajo del total significa que prop_data.lua corrio DESPUES y piso la tabla: mirar el orden de DATOS." or "" ) ..
         ( ( tipos and conEventos < tipos ) and
-            "  ⚠ 'rasgos de evento' por debajo del total significa que ghost_flags.lua no fusiono ( o corrio ANTES que ghost_types.lua ): los tipos se comportan como neutros y ninguno se diferencia." or "" ) .. "\n" )
+            "  ⚠ 'rasgos de evento' por debajo del total significa que ghost_flags.lua no fusiono ( o corrio ANTES que ghost_types.lua ): los tipos se comportan como neutros y ninguno se diferencia." or "" ) ..
+        ( ( clasesLuz and lucesLegibles == 0 ) and
+            "  ⚠ 'legibles' en cero significa que NINGUNA clase de luz declara getter: la cordura no puede discriminar iluminado de a oscuras y todas sus lecturas caen en 'sin lectura', sin un solo error." or "" ) .. "\n" )
 
 end )

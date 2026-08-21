@@ -42,12 +42,45 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 > con `huntdirect 1` puesto **ANTES** de `phantasmagoria_hunt 1` (si no, `phantom_HuntSwitched` sale
 > por su guarda y `cortes` queda en 0); la **09** y la **12** piden **sacarse el `god` y morirse**.
 >
-> ⚠ **Dos preguntas abiertas para el autor**, las dos en el §5 de la CORRIDA: si el rescate del perro
-> guardián tiene que existir **en calma**, y si la 04 se corre o se deja parcial.
+> ✅ **Las dos preguntas abiertas quedaron CONTESTADAS el 2026-08-20:** el rescate del perro guardián
+> **se queda en calma** (con el mensaje arreglado), y la **04 NO se corre** — queda apoyada en el
+> mecanismo determinista y anotada como **parcial**, porque su precondición es herir al fantasma y eso
+> es justo lo que el addon va a dejar de permitir (diseño §5.5).
 >
 > ⚠⚠ **EL IDLE TAMBIÉN CAMBIÓ Y NINGUNA FILA LO MIDE.** `GetWeaponRange`, `IsMeleeWeapon` y
 > `EnemyIsLethalInMelee` no tienen guarda de estado **a propósito**, y el reporte lo muestra:
 > `alcance 24373 veces · miedo 21274 veces` sobre un fantasma en calma. Es de la fila 11.
+
+> ✅✅✅ **LA TAJADA B2 DE LA CORDURA ESTÁ ESCRITA — Y SIN CORRER EN JUEGO.** CHANGELOG **(66)**.
+> Los ocho `EV.*` devuelven su **epicentro**, `phantom_FireEvent` cobra en **una sola pasada**, y la
+> sub-tabla `sanity` de `ghost_flags.lua` trae el ×2 del Oni, el 15 % de puerta del Yurei y el
+> 0,5 %/s del Phantom. Planilla lista: **`dev/checks/phantasmagoria-cordura-b2.html`** (11 filas).
+>
+> ⭐⭐⭐ **DE ESCRIBIRLA SALIERON DOS DEFECTOS QUE NO ERAN DE B2, Y LOS DOS ERAN INVISIBLES.**
+> · **El tope de 6 % hacía IMPOSIBLE el 15 % del Yurei** — dos números de la *misma* sección del
+> diseño. *Un tope pensado contra la suma no puede decidir el costo de un solo sumando.* El techo pasa
+> a ser `max( tope, el mayor costo individual )`. ⚠ **Es una lectura mía, no una decisión del autor:**
+> se revierte sacando un `math.max`, y el reporte cuenta aparte las veces que el piso actuó.
+> · **La lectura de la luz tenía DOS estados donde hay TRES:** *«medí que está a oscuras»* y *«no pude
+> leer nada»* salían por el mismo `false` y cobraban el mismo ×1,5. Con las 25 luces sin getter, eso
+> es **un tercio del drenaje decidido sobre una lectura que el instrumento declara imposible**.
+> ⚠ **La perilla nueva nace en 1,5 — el mismo número de antes — así que B2 NO mueve el gameplay.**
+>
+> ⭐⭐ **Y la expectativa del handoff sobre el auditor contaba el universo equivocado:** pedía que
+> *«usan la API pública»* dijera **ocho**, y dice **1** — que es lo correcto, porque §19.8.4 exige
+> **una sola pasada**. *Un criterio numérico heredado de un handoff no es un criterio: hay que
+> preguntarle **qué cuenta** antes de creerle el número.* El auditor ganó la mitad que sí contesta:
+> **`CAUSAS DE EVENTO SIN PRODUCTOR: 0 de 8`**.
+>
+> ⚠⚠⚠ **PENDIENTE NUEVO DEL AUTOR, escrito en el diseño §5.5:** *cómo se MATA a un fantasma.* Hoy se
+> lo mata fácil tirándole un ragdoll, y no hay ni una línea de diseño. **No es un `if` en
+> `OnTakeDamage`:** matar al fantasma es hoy el **único desenlace del addon** y la vía de cordura
+> `fantasma muerto` cuelga de él; el daño llega por **cuatro** puertas; y la sangre es de otro
+> consumidor — cerrar el daño primero la haría desaparecer **por accidente**.
+>
+> 🔜 **LO SIGUIENTE SON DOS CORRIDAS Y UN BLOQUE DE CÓDIGO:** correr la planilla de **B2** (11 filas),
+> correr la **r2 del hunt directo** (`phantasmagoria-hunt-directo-r2.html`, **12** filas — la 03 quedó
+> parcial por decisión del autor), y escribir **C**, el gatillo, **solo y con su propia planilla**.
 
 > ✅✅ **LA TAJADA B1 DE LA CORDURA ESTÁ CERRADA.** r3: **5 pasa · 0 falla · 1 sin correr**.
 > CHANGELOG **(65)**, reporte en `dev/CORRIDA_cordura_b1_r3.md`.
@@ -77,7 +110,8 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 > de la r3 se escribió **sin** el bloque de tasas que el de la r1 y la r2 sí tenía. *Un criterio que
 > se saca de una precondición no deja de existir: pasa a estar cubierto por nadie.*
 >
-> **YA ESTÁ ARREGLADO:** `phantasmagoria_cordura_fabrica [--decir]` restituye **las 24** convars y
+> **YA ESTÁ ARREGLADO:** `phantasmagoria_cordura_fabrica [--decir]` restituye **las 30** convars (eran
+> 24 hasta B2, y el número ya no se escribe: se deriva de un registro compartido) y
 > **dice cuáles estaban movidas**. Las ocho líneas de la r1 eran todas de **encendido**, y de las 24,
 > **quince son valores**: *una perilla de encendido en 0 se ve en el reporte; un retardo movido no.*
 >

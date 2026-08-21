@@ -364,6 +364,56 @@ el Mimic es `self.type = table.Copy(PHANTOM_TYPES[otroAlAzar])` cada N segundos,
 entidades compartiendo un `phantom_TwinID`. Si alguno de los dos necesita un `if` especial en el
 cerebro, hay que rediseñar antes de seguir.
 
+### 5.5 ⚠⚠⚠ Cómo se MATA a un fantasma — **no está diseñado, y hoy se lo mata con un ragdoll** [pendiente del autor, 2026-08-20]
+
+§5.4 decide qué te hace el fantasma a vos. **Esto es la pregunta inversa y no tiene ni una línea de
+diseño**, y el autor la abrió al cerrar la fila 04 del hunt directo:
+
+> *«tengo por pendiente evitar que el fantasma muera o sea herido por armas de fuego, explosivos,
+> melee (crush o cut) y al ser atacado con props phys como ragdolls (Yo lo logro matar directamente y
+> fácil tirándole un ragdoll), la forma de "matar" a un ghost tiene que ser distinto a eso. (Falta
+> que atacarlo en melee no le haga daño ni le haga salir sangre que es raro ver cómo sangra un
+> fantasma, visceral blood puede tener la culpa de eso)»*
+
+**Por qué esto es más grande que un `if` en `OnTakeDamage`, y por qué se escribe acá antes de tocar
+nada:**
+
+1. **Es la única salida que existe.** El destierro de §5.4 no está escrito (censo del 2026-08-20:
+   cero `terminator_blocktarget`, ninguna entidad camión, ninguna dimensión), así que **matar al
+   fantasma es hoy el único desenlace del addon** — y `phantasmagoria_sanity_destierro` cuelga de él:
+   la vía de recuperación «fantasma muerto» de §19.8.5 se dispara desde `OnNPCKilled`. Cerrarle el
+   daño sin poner otra puerta deja **una partida sin final y una vía de cordura sin gatillo**.
+
+2. **El daño llega por cuatro caminos y no por uno.** Balas y explosivos entran por `OnTakeDamage`
+   de la base Terminator; el aplastamiento de un prop físico entra por el motor (`DMG_CRUSH`, con la
+   velocidad del prop, y sin que nadie dispare nada); el melee de HL2 entra por `DMG_CLUB`; y ARC9
+   tiene su propia cadena. *Una inmunidad escrita en una de las cuatro puertas se lee como una
+   inmunidad.* La única forma de que esto sea medible es un censo de las cuatro puertas **antes** de
+   escribir la primera línea.
+
+3. **La sangre no es del daño, es del CONSUMIDOR.** El autor apunta bien a Visceral Blood, y hay
+   una medición previa de este taller que aplica: *un cadáver hecho desde Lua no dispara
+   `CreateEntityRagdoll`, y ésa es la única puerta de Visceral*. O sea que la sangre del fantasma
+   sale por **otro** camino que el charco del cadáver, y apagarla es un tercer sujeto — no cae solo
+   al cerrar el daño. ⚠ Y si se cierra el daño primero, la sangre deja de salir **por accidente**, y
+   nadie sabrá nunca cuál de los dos era el mecanismo.
+
+**Lo que hace falta decidir (del autor, no mío):**
+
+| pregunta | por qué no la decido solo |
+|---|---|
+| ¿El fantasma es **inmune** o **resistente**? | Inmune es una regla; resistente es un número que hay que balancear contra cada arma del servidor |
+| ¿Qué **sí** lo mata? | Phasmophobia no tiene la mecánica: allá el contrato termina por reloj. Acá hace falta inventarla, y es diseño de juego |
+| ¿La **evidencia** o el **ritual** son el camino? | Es la respuesta natural (la ouija y el tarot ya existen en el addon), y también la más cara |
+| Mientras tanto, ¿queda un **atajo de admin**? | Sin él, una planilla no puede cerrar una partida — y la fila 09 del hunt directo pide justamente morirse y mirar a quién se le atribuye la muerte |
+
+⚠ **Y una advertencia de orden que sale del propio arco de la cordura:** esto **no** entra en la
+misma tanda que la tajada C. C hace que la cordura dispare el hunt; si además cambia cómo termina la
+partida, un rojo tendría dos causas posibles y este taller ya pagó por eso.
+
+**Estado: pendiente declarado, sin sujeto y sin fecha.** No se escribe ningún mecanismo hasta que
+las cuatro preguntas de arriba tengan respuesta — §21.6: *no se escribe un mecanismo sin destino*.
+
 ---
 
 ## 6. Los 30 tipos — estado del conocimiento **[importante]**
@@ -2276,6 +2326,139 @@ inventar nada:
 Y dos que piden mecanismos que no existen, **anotados y sin escribir** (§21.6: *no se escribe un
 mecanismo sin destino*): **Jinn/Hantu 25 %** (pide el breaker, que GMod no tiene) y **Banshee 15 %**
 (pide tocar al fantasma durante un evento cantado).
+
+##### ⭐ Lo que B2 decidió al escribirlo, y §19.8.4 dejaba abierto [2026-08-20]
+
+**1. El tercer retorno tiene TRES formas, no una.** El diseño decía «los ocho devuelven un tercer
+valor `pos`», y dos de los ocho no entran en eso:
+
+| forma | quién | por qué |
+|---|---|---|
+| `Vector` | seis de las ocho | un evento, un punto |
+| lista de `Vector` | `throw` | el diseño lo cobra **por objeto**; un solo punto convertiría cuatro objetos en uno y el rasgo del Poltergeist dejaría de existir para la cordura |
+| `{ pos, pct }` | `light` cuando es **ESTALLIDO** | el estallido cuesta 3,0 y el parpadeo 2,0, y esa diferencia **viaja como dato**. Leerla del texto del detalle —que ya dice la palabra ESTALLIDO— sería un parser sobre prosa: la frase cambia el día que alguien la mejore y el número cambia con ella, sin error |
+
+Y una cuarta que **no es un caso de borde**: `nil` — el evento salió OK y no dijo dónde. Se **cuenta
+por categoría** y el reporte lo imprime siempre, también en cero. Es el único número capaz de
+delatar un `EV.*` al que se le agregó una rama de éxito y se le olvidó el epicentro: sin él, ese
+evento sale, suena, no cobra, y desde afuera se ve igual que «el jugador estaba lejos».
+
+**2. `sanity.per` es una tabla por categoría, y no un segundo escalar.** El 15 % del Yurei **pisa**
+el 1,5 % de `door`, no lo multiplica. Un `mult` no podía expresarlo porque multiplicaría las ocho
+categorías, y la fuente habla de la puerta y de nada más.
+
+**3. El tope de 6 % escala todas las categorías en proporción; no recorta la última.** Recortar la
+última haría que el **orden del sorteo** decidiera qué categoría paga el recorte, y dos corridas de
+la misma escena escribirían desgloses distintos sin que nada haya cambiado.
+
+> ⚠⚠ **Y el tope se come parte del ×2 del Oni, así que el rasgo puede estar puesto y no verse.**
+> `sound` + `prop` con ×2 pide 10 % y el tope son 6. **No se sube el tope para tapar eso** —el tope
+> existe por otra razón— pero el motor **cuenta lo que recortó** y el reporte lo imprime. Sin ese
+> contador, la fila que mida el ×2 saldría *«el rasgo no hace nada»* y mandaría a mirar
+> `ghost_flags.lua`, donde no está el problema.
+
+**3bis. ⚠⚠⚠ El tope de 6 % hacia IMPOSIBLE el 15 % del Yurei, y son dos numeros de esta misma
+seccion.** El tope se justifica *"porque `count` sortea hasta dos categorias a la vez"*: existe para
+acotar el **apilamiento**. Y la tabla de rasgos de al lado le da al Yurei `per.door = 15`, literal de
+la fuente. Con un 6 duro, ese 15 se recorta a 6 **siempre** — en un disparo de UNA sola categoria,
+donde no hay nada apilado. El rasgo que **define** al tipo quedaba a un 40 % de lo escrito, sin
+error, y ninguna fila podria haberlo separado de *"la caida se lo comio"*.
+
+> *Un tope pensado contra la suma no puede decidir el costo de un solo sumando.*
+
+**Lo escrito:** el techo del disparo es `max( tope, el mayor costo individual ya escalado por la
+caida y por el mult )`. Asi:
+
+| escena | pide | techo | paga |
+|---|---:|---:|---:|
+| Yurei, una puerta | 15 | 15 | **15** |
+| Oni, `sound` + `prop` (×2) | 10 | 6 | 6 |
+| normal, `sound` + `prop` | 5 | 6 | 5 |
+
+El tope sigue acotando lo que vino a acotar y deja de pisar lo que no era suyo. ⚠ **Es una lectura
+mia de dos numeros del diseño que se contradicen, no una decision del autor:** si prefiere el 6 duro,
+se saca el `math.max` de una linea y el Yurei pasa a cobrar 6. El reporte cuenta aparte las veces que
+el piso levanto el techo, asi que la decision se puede tomar sobre un numero.
+
+**4. Se cobra también en el disparo FORZADO.** Un disparo manual que no cobrara dejaría a la planilla
+sin forma de medir una categoría elegida: habría que esperar a que el sorteo la favorezca, y *un
+check que depende de un sorteo no es un check*. Los contadores del motor siguen separando forzado de
+espontáneo, así que «¿corrió solo?» conserva su propio número.
+
+**5. `door` cobra por INTENTADA, y el efecto se confirma 0,25 s después.** O sea que el drenaje puede
+caer sobre una puerta que no se movió (`Use2` tiene cuatro salidas silenciosas de la base). Es una
+**frontera declarada**: esperar el veredicto significaría cobrar dentro de un timer, o sea fuera de
+la pasada única. La bitácora ya imprime `door SIN EFECTO` cuando pasa, así que el caso es **contable**
+— si aparece seguido, se mueve el cobro y no se descubre.
+
+**6. La oscuridad NO modula los eventos.** §19.9.2 diseñó el modulador contra la **tasa** de la
+presencia; los ocho números de §19.8.4 son porcentajes literales «en el epicentro». Aplicárselo
+movería el tope de 6 % a 9 % sin que nadie lo haya decidido. Queda como frontera declarada: el día
+que se quiera es una línea y una decisión del autor, no un descubrimiento.
+
+**7. La distancia se mide desde `GetPos()` del jugador, no desde los ojos** — por consistencia con la
+esfera de presencia de §19.8.2. Dos esferas del mismo bloque midiendo desde alturas distintas hacen
+que un mismo metro signifique cosas distintas según quién pregunte.
+
+**8. El rasgo del Phantom se registró INACTIVO y dice por qué.** Pide que el fantasma se esté
+**manifestando**, y las manifestaciones de §22 no están escritas.
+`PHANTASMAGORIA.EstaManifestado` es la costura. ⚠ Y **no** se colgó de `phantom_Visible`: §19.8.2 ya
+lo prohibió, porque §20.6 va a hacer titilar ese estado entre 2 y 10 veces por segundo y una tasa
+colgada de eso repartiría el mismo drenaje entre dos renglones según el frame en que cayó el tick.
+La condición de mirada se resuelve con el **coseno del ángulo de la cámara** (≈63° de semiángulo,
+número mío) y **no** con una traza: la fuente dice *«mientras lo veas»*, y una traza contestaría otra
+pregunta —si hay pared en el medio—.
+
+##### ⚠⚠⚠ La expectativa del handoff sobre el auditor estaba mal escrita, y la corrección vale sola
+
+El handoff de B2 decía: *«al cerrar B2, mirar ese renglón y comprobar que dice **ocho**»*, hablando
+del renglón *«usan la API pública»* de `auditar_puerta_cordura.py`. **Al cerrarla dice 1, y el 1 es lo
+correcto**: §19.8.4 exige que los ocho se cobren en **una sola pasada**, así que hay un solo llamador
+con una sola llamada.
+
+O sea que la expectativa contaba **sitios de llamada** para contestar una pregunta que es sobre
+**renglones del desglose**. Son dos universos y el número de uno no dice nada del otro — y con la
+arquitectura correcta ese renglón iba a decir 1 **para siempre**, así que quien lo leyera con la frase
+del handoff en la mano habría concluido que faltaban siete llamadores.
+
+> *Un criterio numérico heredado de un handoff no es un criterio: hay que preguntarle **qué cuenta**
+> antes de creerle el número.*
+
+Lo que sí contesta la pregunta se le agregó al auditor: que cada uno de los ocho **ids de causa**
+aparezca, literal, en algún archivo que no sea la puerta. Hoy dice **`CAUSAS DE EVENTO SIN PRODUCTOR:
+0 de 8`**. Y por eso los ids se escriben **literales** en `CATS` en vez de construirse con
+`"evento_" .. key`: *un identificador que sólo existe en runtime es invisible para todo instrumento
+que mida el código* — y este barrido es de texto fuente porque un escritor clandestino no produce
+ningún síntoma. La redundancia se paga con una guarda que ata el literal a la clave.
+
+##### ⭐⭐ El punto ciego de la luz: la lectura tenía DOS estados donde hay TRES
+
+§5 del handoff lo puso como lo primero que B2 tenía que cerrar, y el defecto resultó ser más grande
+que la copia de la lista. `IsPlayerLit` devolvía un **booleano**, así que:
+
+- *«medí que hay lámparas legibles al lado y están todas apagadas»* → `false`
+- *«no hay una sola luz que se pueda preguntar»* → **el mismo `false`**
+
+y el modulador le cobraba el ×1,5 a los dos por igual. Con las 25 luces sin getter que midió la r3,
+eso es **un tercio del drenaje decidido sobre una lectura que el propio instrumento declara que no
+puede hacer**.
+
+**Lo que cambió, y lo que a propósito NO cambió:**
+
+- `PHANTASMAGORIA.LuzEncendida` devuelve `true` / `false` / **`nil`**, y el `nil` no se reemplaza por
+  un valor ni del lado seguro: es el nº 112b del catálogo —*el fallback de una guarda no puede ser un
+  valor del mismo tipo que el resultado válido, porque se imprime con la misma cara*—.
+- `IsPlayerLit` devuelve un cuarto valor: `iluminado` / `oscuro` / `sin_lectura`. El primer retorno
+  sigue siendo el booleano de B1, así que ningún consumidor futuro se rompe.
+- La lectura ciega tiene **renglón propio** en el desglose (`oscuridad CIEGA`) y **perilla propia**
+  (`phantasmagoria_sanity_ciegamul`).
+- ⚠ **La perilla nace en 1,5 — el mismo número de antes — así que el gameplay no se mueve.** Una
+  tajada que además cambia el comportamiento deja un rojo con dos causas posibles. Lo que se gana hoy
+  es que ese tercio sea **aislable en un A/B**; bajarlo a 1,0 es una línea y una decisión del autor.
+- ⚠ **Cero luces cerca tampoco es una medición de oscuridad.** Un mapa con iluminación horneada no
+  tiene ni una entidad de luz y está perfectamente iluminado — §19.9.2 lo aceptó por escrito como el
+  costo de la opción B. Esa aceptación **sigue vigente y ahora tiene denominador**.
+
 
 #### 19.8.5 La recuperación — cuatro vías de goteo y dos por desenlace
 

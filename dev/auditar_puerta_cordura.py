@@ -51,6 +51,39 @@ RE_ESTADO_TOCA    = re.compile(r'\.' + ESTADO + r'\b')
 RE_PUERTA_USO = re.compile(
     r'PHANTASMAGORIA\.(DrainSanity|RestoreSanity|RegisterSanityRate|UseSanityMed|SetSanity|GetSanity)\s*\(')
 
+# ---------------------------------------------------------------------------
+# LA SEGUNDA MITAD, Y NACE DE UNA EXPECTATIVA QUE ESTABA MAL ESCRITA ( B2 )
+# ---------------------------------------------------------------------------
+# El handoff de B2 decia: *"al cerrar B2, mirar ese renglon y comprobar que dice
+# OCHO"*, hablando del renglon "usan la API publica". Al cerrarla dice **1**, y
+# el 1 es lo CORRECTO: §19.8.4 exige que los ocho eventos se cobren en UNA sola
+# pasada -- *"ocho llamadas dispersas serian ocho lugares donde olvidarse"* --
+# asi que hay un solo llamador con una sola llamada.
+#
+# O sea que la expectativa contaba SITIOS DE LLAMADA para contestar una pregunta
+# que es sobre RENGLONES DEL DESGLOSE. Son dos universos distintos y el numero
+# de uno no dice nada del otro: con la arquitectura correcta, ese renglon iba a
+# decir 1 para siempre y quien lo leyera con la frase del handoff en la mano
+# habria concluido que faltaban siete llamadores.
+#
+# *Un criterio numerico heredado de un handoff no es un criterio: hay que
+# preguntarle QUE cuenta antes de creerle el numero.*
+#
+# Lo que si contesta la pregunta es esto: que cada uno de los ocho ids de causa
+# APAREZCA, literal, en algun archivo que no sea la puerta. Y por eso los ids se
+# escriben literales en `CATS` en vez de construirse con `"evento_" .. key`: un
+# id armado en runtime es invisible para un barrido de texto fuente, y este
+# barrido es de texto fuente porque un escritor clandestino no produce ningun
+# sintoma.
+#
+# ⚠ EL UNIVERSO NO SE ESCRIBE ACA. Se lee de la tabla CAUSAS de la puerta, que es
+# donde estan declaradas: una lista de ocho pegada en este archivo cubriria los
+# ocho que existian el dia que se escribio, que es el nº 112 del catalogo. Si
+# manana hay nueve causas de evento, este control mide nueve sin que nadie lo
+# toque -- y si la puerta les cambia el prefijo, mide cero y lo dice.
+RE_CAUSA_DECL = re.compile(r'\{\s*id\s*=\s*["\']([A-Za-z0-9_]+)["\']')
+PREFIJO_EVENTO = "evento_"
+
 # Clases de hallazgo. El --control declara CUANTOS de cada una inyecta, porque un
 # arnes que solo pide "al menos una falla" se acredita el trabajo que no hizo
 # ( catalogo nº 72 ).
@@ -71,6 +104,8 @@ def escanear(raiz):
     usuarios  = {}          # ruta -> cantidad de llamadas a la puerta
     puerta_vista = False
     escrituras_en_puerta = 0
+    causas_evento = []      # los ids declarados en la puerta, en su orden
+    productores = {}        # id -> { ruta: veces }  fuera de la puerta
 
     for f in archivos:
         rel = f.relative_to(raiz).as_posix()
@@ -115,10 +150,39 @@ def escanear(raiz):
                 # envejece con ella. Se reporta y NO tiñe el veredicto.
                 hallazgos.append(("lectura del estado interno ( aviso )", rel, n, cruda.strip()))
 
+            if es_puerta:
+                for m in RE_CAUSA_DECL.finditer(l):
+                    cid = m.group(1)
+                    if cid.startswith(PREFIJO_EVENTO) and cid not in causas_evento:
+                        causas_evento.append(cid)
+
             for m in RE_PUERTA_USO.finditer(l):
                 if es_puerta:
                     continue
                 usuarios[rel] = usuarios.get(rel, 0) + 1
+
+    # ⚠ SEGUNDA PASADA, Y NO SE PUEDE FUNDIR CON LA PRIMERA: el universo de ids
+    # sale de la PUERTA, y la puerta puede aparecer despues de sus consumidores
+    # en el orden alfabetico de `rglob`. Buscar productores mientras todavia no
+    # se sabe que ids existen daria cero sobre los archivos leidos antes de ella
+    # -- un cero por orden de lectura, que es el peor de todos porque cambia
+    # segun el nombre de los archivos.
+    for f in archivos:
+        rel = f.relative_to(raiz).as_posix()
+        if rel.endswith(PUERTA):
+            continue
+
+        try:
+            texto = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        for n, cruda in enumerate(texto.splitlines(), 1):
+            l = sin_comentarios(cruda)
+            for cid in causas_evento:
+                if '"' + cid + '"' in l or "'" + cid + "'" in l:
+                    productores.setdefault(cid, {})
+                    productores[cid][rel] = productores[cid].get(rel, 0) + 1
 
     return {
         "archivos": len(archivos),
@@ -126,6 +190,8 @@ def escanear(raiz):
         "usuarios": usuarios,
         "puerta_vista": puerta_vista,
         "escrituras_en_puerta": escrituras_en_puerta,
+        "causas_evento": causas_evento,
+        "productores": productores,
     }
 
 
@@ -154,8 +220,43 @@ def informar(r, raiz):
             print(f"  {n:>3} llamadas   {ruta}")
     else:
         print("Usan la API publica: NINGUNO todavia.")
-        print("  Es lo esperado hasta B2: los ocho eventos de server_events.lua")
-        print("  y las cinco manifestaciones de §22 son los llamadores declarados.")
+        print("  Los llamadores declarados son los ocho eventos de server_events.lua")
+        print("  y las cinco manifestaciones de S22.")
+    print()
+    print("  !! ESTE NUMERO CUENTA SITIOS DE LLAMADA, NO RENGLONES DEL DESGLOSE.")
+    print("     Con los ocho eventos cerrados sigue diciendo 1, y eso es lo correcto:")
+    print("     S19.8.4 exige UNA sola pasada sobre los jugadores. Lo que contesta")
+    print("     'estan los ocho' es el bloque de abajo.")
+    print()
+
+    # ---------------------------------------------------------------------
+    # LAS CAUSAS DE EVENTO: declaradas en la puerta, producidas afuera
+    # ---------------------------------------------------------------------
+    causas = r["causas_evento"]
+
+    if not causas:
+        # ⚠ Cero causas declaradas NO es un verde. Es que la puerta cambio de
+        # forma y este barrido dejo de ver su universo -- y sin universo, "todas
+        # tienen productor" es cierto por vacio.
+        print("!! LA PUERTA NO DECLARA NINGUNA CAUSA CON PREFIJO "
+              f"'{PREFIJO_EVENTO}'.")
+        print("   Sin universo, este control no puede discriminar: un cero de")
+        print("   huerfanas sobre cero causas es un falso verde.")
+        print()
+        return 1
+
+    huerfanas = [c for c in causas if c not in r["productores"]]
+
+    print(f"CAUSAS DE EVENTO declaradas en la puerta: {len(causas)}")
+    for cid in causas:
+        prods = r["productores"].get(cid)
+        if prods:
+            donde = ", ".join(f"{ruta} x{n}" for ruta, n in sorted(prods.items()))
+            print(f"  ok  {cid:<20} {donde}")
+        else:
+            print(f"  !!  {cid:<20} SIN PRODUCTOR: ningun archivo fuera de la puerta la nombra")
+    print()
+    print(f"CAUSAS DE EVENTO SIN PRODUCTOR: {len(huerfanas)} de {len(causas)}")
     print()
 
     g = graves(r["hallazgos"])
@@ -170,6 +271,13 @@ def informar(r, raiz):
 
     print()
     print(f"ESCRITORES QUE NO PASAN POR LA PUERTA: {len(g)}")
+
+    # ⚠ LAS HUERFANAS **NO** TIÑEN EL VEREDICTO, Y ES DELIBERADO. Este script
+    # sale 1 cuando alguien escribe el numero por afuera, que es un defecto. Una
+    # causa sin productor puede ser eso -- o puede ser una causa que todavia no
+    # se escribio, que es el estado normal de media tajada. Rojo por eso
+    # convertiria al auditor en un bloqueante durante todo el desarrollo y se
+    # aprenderia a ignorar; el numero se imprime y lo lee quien corre la planilla.
     return 1 if g else 0
 
 
