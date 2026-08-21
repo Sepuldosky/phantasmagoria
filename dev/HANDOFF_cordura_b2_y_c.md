@@ -1,12 +1,48 @@
-# HANDOFF — la cordura, tajadas **B2** (los eventos drenan) y **C** (el gatillo calma → hunt)
+# HANDOFF — **DOS FRENTES EN UN CHAT**: la cordura (**B2** los eventos · **C** el gatillo) y el **comportamiento del hunt directo**
 
 **Fecha:** 2026-08-20 · **Repo:** `phantasmagoria` · **Autor:** chileno, escribirle de **tú** (sin voseo)
-**Lo anterior:** [`HANDOFF_cordura_b1.md`](HANDOFF_cordura_b1.md) — B1 **cerrada**, r1/r2/r3 corridas
-**Corridas:** `dev/CORRIDA_cordura_b1_r1.md` · `_r2.md` · `_r3.md`
-**CHANGELOG:** **(61)** el bloque · **(62)** r1 · **(63)** r2 y el tokenizador · **(65)** r3 y la vuelta a fábrica
-**Diseño:** `docs/PHANTOM_Phasmophobia_Diseno.md` **§19** entero, más **§18** (el hunt) y **§21** (los eventos)
+
+**Frente 1 — la cordura.** Lo anterior: [`HANDOFF_cordura_b1.md`](HANDOFF_cordura_b1.md). B1 **cerrada**.
+Corridas `dev/CORRIDA_cordura_b1_r1.md` · `_r2.md` · `_r3.md`. CHANGELOG **(61) (62) (63) (65)**.
+**Frente 2 — el hunt directo.** Handoff de origen: [`HANDOFF_phantasmagoria_hunt_directo.md`](HANDOFF_phantasmagoria_hunt_directo.md).
+Corrida `dev/CORRIDA_hunt_directo_r1.md` — **4 pasa · 0 falla · 10 sin correr**. CHANGELOG **(64)**.
+**Diseño:** `docs/PHANTOM_Phasmophobia_Diseno.md` **§19** (cordura), **§18** (el hunt) y **§21** (los eventos).
 
 Pensado para retomar desde un chat limpio, sin contexto previo.
+
+---
+
+## 0. ⚠⚠⚠ Por qué los dos frentes van juntos, y dónde chocan
+
+Hasta hoy fueron **dos sesiones paralelas** sobre el mismo repo: una escribió la cordura
+(`phantasmagoria_sanity.lua`) y la otra reescribió **cómo persigue** el fantasma (`server_hunt.lua`,
+`server.lua`, `server_stuck.lua`). Se evitaron a propósito. **A partir del próximo chat son una sola**,
+por decisión del autor.
+
+Eso saca un problema y mete otro.
+
+**Lo que se gana:** ya no hay dos sesiones compitiendo por el índice de git de este repo, que fue lo
+que en `4e0859b` se llevó 2.564 líneas ajenas adentro de un commit que no las nombraba.
+
+### ⚠⚠⚠ Lo que hay que cuidar: **C no puede borrar `phantasmagoria_hunt`**
+
+La tajada **C** hace que la cordura dispare el hunt, y en la tabla de tajadas eso figura como
+*«jubila `phantasmagoria_hunt`»*. **Tomado literal, rompe diez filas del otro frente**: las 01, 02,
+05, 06, 07, 08, 09, 11 y 12 de `phantasmagoria-hunt-directo-r1.html` prenden el hunt **con ese
+comando**, y sin él ninguna se puede correr.
+
+**La regla, entonces:** C deja de **depender** de `phantasmagoria_hunt` como gatillo, pero el comando
+**sigue existiendo como override manual declarado**. *Un andamio que además es el instrumento de otra
+planilla no se jubila: se degrada a instrumento.* Y si algún día se saca, se saca **después** de que
+esas diez filas hayan cerrado, no antes.
+
+### El orden que se sugiere, y por qué
+
+1. **Las 10 filas del hunt directo primero.** No dependen de nada de la cordura, y **dos arreglos de
+   esa sesión nunca se corrieron en juego** (§5.3): están esperando una pasada.
+2. **B2 después.** Toca `server_events.lua`, que ninguno de los dos frentes tocó todavía.
+3. **C al final**, que es donde las dos cosas se encuentran de verdad — y para entonces las filas del
+   hunt ya cerraron y `phantasmagoria_hunt` puede degradarse sin dejar a nadie sin instrumento.
 
 ---
 
@@ -17,7 +53,8 @@ Pensado para retomar desde un chat limpio, sin contexto previo.
 | **A** el tipo | asignarlo, networkearlo, forzarlo | **CERRADA en juego** (`server_type.lua`) |
 | **B1** la cordura | la variable, la presencia, la recuperación, los instrumentos | **CERRADA.** r3: 5 pasa · 0 falla · 1 sin correr |
 | **B2** los eventos | el tercer retorno `pos` en los ocho `EV.*` + la sub-tabla `sanity` de `ghost_flags.lua` | **sin empezar** ← acá |
-| **C** el gatillo | cordura bajo el `hunt.threshold` **del tipo**; jubila `phantasmagoria_hunt` | **sin empezar** ← y después acá |
+| **C** el gatillo | cordura bajo el `hunt.threshold` **del tipo**; degrada `phantasmagoria_hunt` a instrumento | **sin empezar** ← y al final acá |
+| **hunt directo** | cómo persigue el fantasma (`server_hunt.lua`) | **4 pasa · 0 falla · 10 sin correr** + 2 arreglos sin pasada en juego ← **empezar por acá**, §4bis |
 
 **Lo único que B1 dejó sin cerrar** son dos medias filas, y ninguna bloquea a B2:
 
@@ -95,12 +132,16 @@ escrita, ese `2` pasa a tener sujeto.**
 
 ---
 
-## 4. C — el gatillo, y lo que jubila
+## 4. C — el gatillo, y lo que DEGRADA ( no jubila )
 
 Cordura por debajo del `hunt.threshold` **del tipo** (`lua/phantasmagoria/ghost_types.lua`: el Spirit
 en 50, el Demon en 70, y los que traen `thresholdLow`/`thresholdHigh` sortean en ese rango). Cuando
 entre, **`phantasmagoria_hunt` deja de ser el gatillo** y pasa a ser lo que siempre dijo su ayuda: un
 andamio.
+
+⚠⚠⚠ **PERO NO SE BORRA — ver §0.** Nueve de las diez filas pendientes del frente 2 prenden el hunt
+**con ese comando**. *Un andamio que además es el instrumento de otra planilla no se jubila: se
+degrada a instrumento.*
 
 ### ⚠⚠⚠ La regla de §19.9.1, que no es un detalle de implementación
 
@@ -117,6 +158,72 @@ por eso. C va sola, con su planilla.
 ⚠ Otra sesión reescribió **cómo persigue** el fantasma en `server_hunt.lua`, `server.lua` y
 `server_stuck.lua`. B1 no los tocó a propósito; **C es donde las dos cosas se encuentran**. Leer el
 `CHANGELOG` de esa sesión antes de escribir el gatillo.
+
+---
+
+## 4bis. FRENTE 2 — el hunt directo: **10 filas sin correr**, y dos arreglos sin pasada en juego
+
+Bloque: `lua/entities/terminator_nextbot_phantom/server_hunt.lua` + tres enganches. Commits `f78a0ae`,
+`d60dc5a` y `9b19b5c`. Planilla `dev/checks/phantasmagoria-hunt-directo-r1.html` (14 filas, fuera de
+git). Detalle completo en **`dev/CORRIDA_hunt_directo_r1.md`**.
+
+**El veredicto de gameplay ya está dado**, y no lo mide ninguna fila — textual del autor: *«el hunt
+directo probándolo ingame está bien como gameplay, el bot hace lo que se supone que debe hacer»*. La
+corrida quedó a medias porque se fue a almorzar, no porque algo se cayera.
+
+### 4bis.1 Las 10 que faltan, y qué le falta a cada una
+
+| fila | qué mide | qué falta, exactamente |
+|---|---|---|
+| **01** | control positivo, 30-40 m | **declarar la banda de distancia**. Es lo único |
+| **02** | el pedido (perseguir → perder → buscar → volver) | ídem: el `cerebro` se corrió a 33 u, no en la banda |
+| **05** | el error de Lua se apaga | ⚠ **NO es binaria**: `truerange 1` baja un `chanceNeeded` de 85 a 15 en el tercer sitio. Hace falta un criterio de **CONTEO con N declarado** |
+| **06** | una mesa no aborta el duelo | armar el escenario: mesa en el medio, y que **no** salga `my enemy wasnt engagable!` |
+| **07** | el crouch-jump | *«no lo medí, pero sí el bot salta»* — **la observación no es la medición**: falta ver el `approachlastseen` que no aparece |
+| **08** | el corte al prender el hunt | correrla **con `phantasmagoria_ghost_huntdirect 1` puesto ANTES** |
+| **09** | el desenlace | **sacarse el `god` y morirse**, y mirar a quién se le atribuye la muerte |
+| **10** | la órbita no existe en hunt | frontera abierta declarada: **no hay código de este bloque que la cierre** |
+| **11** | no romper lo que ya cerró | pasarlas una por una, más el IDLE |
+| **12** | el cadáver conserva las armas | la mitad dinámica: morirse y contar las armas en el piso, más el A/B con `pickup 1` |
+
+⚠ La **04** está en **pasa parcial**, no verde: le falta la otra mitad del A/B, y se cierra con una
+corrida de un minuto con el fantasma **HERIDO** a más de 1400 u.
+
+### 4bis.2 ⚠⚠ Dos arreglos de esa sesión que NUNCA se corrieron en juego
+
+Los dos salieron de **leer** la corrida, no de correrla, y los dos son de instrumento y de A/B — no
+tocan la escalera, la compuerta ni el contacto, que es lo que el autor ya aprobó:
+
+1. **El perro guardián atribuía el episodio a dos mecanismos APAGADOS.** Su `ErrorNoHalt` nombraba
+   causas que están bajo una guarda de estado que el disparo no tiene, así que gritó dos veces con el
+   fantasma en calma acusando a mecanismos que no podían ser. Contador partido por estado y mensaje
+   que dice de quién es la culpa. *Un falso diagnóstico no es un falso rojo ni un falso verde: es un
+   rojo verdadero con la etiqueta cambiada, y por eso no lo agarra ninguna planilla.*
+2. **`phantom_huntCutFor` se invalida cuando `huntdirect` está en 0**, para que el corte del apagado
+   no se pierda después de un A/B.
+
+**Empezar por acá**: una pasada que confirme que ninguno de los dos rompió nada es más barata que
+descubrirlo con diez filas encima.
+
+### 4bis.3 ⚠⚠⚠ Las DOS preguntas que quedaron para el autor, y siguen sin respuesta
+
+Van al principio del próximo chat, porque las dos son **decisiones de diseño y no defectos**:
+
+1. **¿El rescate del perro guardián tiene que existir en calma?** Hoy sí, y el mensaje ya dice que el
+   agujero es de la base. La alternativa es dejarlo sólo en hunt y que el IDLE lo siga cerrando
+   `reallystuck_handler`, como antes del bloque.
+2. **La fila 04:** ¿la corre él con el fantasma herido a más de 1400 u, o queda apoyada en el
+   mecanismo determinista y anotada como parcial?
+
+### 4bis.4 Fronteras que la r1 no movió, y ninguna fila se acreditó
+
+La cordura como disparador (**es la tajada C de este mismo handoff**), el evento de mirar fijo del
+Diseño §10, el tope de la órbita contra `sightdist`, `interceptIfWeCan`, el flanqueo por distancia
+(**ninguna fila lo ejercita**: `flank de cerca 0` en las tres lecturas), y los 30 tipos sin poblar
+(`ability.onCatch` enganchado, no poblado).
+
+Y dos que siguen sin explicar: el `render se dibuja / la politica pide INVISIBLE / !! NO COINCIDEN` de
+`server_cloak.lua`, y `movement_perch` + `movement_biginertia` activas a la vez.
 
 ---
 
@@ -189,11 +296,29 @@ python dev/parsear_cmds_planilla.py <planilla>
 
 ---
 
-## 8. ⚠⚠⚠ Git: hay varias sesiones sobre este repo al mismo tiempo
+## 8. ⚠⚠⚠ Git, y quién trabaja qué
 
-El índice de git es **compartido**. Stagear rutas explícitas **no alcanza**: entre el `git add` y el
-`git commit` hay una ventana, y si otra sesión commitea ahí, se lleva lo tuyo. Lo que protege es
-**`git commit -F- -- <rutas>`**, que no deja ventana. El tell de que ya pasó es que **los archivos que
-editaste dejan de aparecer en `git status`**.
+**El índice de git es compartido entre sesiones.** Stagear rutas explícitas **no alcanza**: entre el
+`git add` y el `git commit` hay una ventana, y si otra sesión commitea ahí, se lleva lo tuyo. Lo que
+protege es **`git commit -F- -- <rutas>`**, que no deja ventana. El tell de que ya pasó es que **los
+archivos que editaste dejan de aparecer en `git status`**.
 
-⚠ `lua/autorun/client/phantasmagoria_eq_check.lua` está modificado por otra sesión: **no stagearlo.**
+⚠ **Un archivo NUEVO no lo agarra ese comando** (`pathspec did not match any file(s) known to git`).
+Para ésos va `git add -N <nuevos> && git commit -F- -- <todas las rutas>` **encadenado en una sola
+invocación**: el `-N` es intent-to-add y no stagea contenido, y el pathspec del `commit` sigue siendo
+lo que limita qué entra.
+
+### El reparto, al 2026-08-20
+
+| repo | de quién es |
+|---|---|
+| **`phantasmagoria`** | **de este chat** — la cordura y el hunt directo, los dos frentes juntos |
+| `corpus` · `corpus-cargo` | **de otra sesión**: la UI de Cargo (#74 / #72). ⚠ **No commitear ni pushear ahí** |
+
+⚠ `lua/autorun/client/phantasmagoria_eq_check.lua` quedó modificado por una sesión anterior y sigue
+sin commitear: **no stagearlo** hasta saber de quién es.
+
+⚠⚠ **Y este arco chocó tres veces por numeración**, no por archivos: la entrada de CHANGELOG **(65)**
+nació (64) y las dos del catálogo de memoria nacieron 107 y quedaron 112. *Cuando dos escrituras
+chocan, la que se mueve es la que todavía no tiene lectores.* Con los dos frentes en un solo chat,
+ese choque debería desaparecer dentro de `phantasmagoria`.

@@ -51,7 +51,15 @@ Documento de traspaso: pensado para retomar el trabajo sin contexto previo.
 
 > ✅✅ **LA TAJADA B1 DE LA CORDURA ESTÁ CERRADA.** r3: **5 pasa · 0 falla · 1 sin correr**.
 > CHANGELOG **(65)**, reporte en `dev/CORRIDA_cordura_b1_r3.md`.
-> 🔜 **LO SIGUIENTE ES B2 Y C**, y tienen handoff propio: **`dev/HANDOFF_cordura_b2_y_c.md`**.
+> 🔜 **EL PRÓXIMO CHAT LLEVA LOS DOS FRENTES JUNTOS** —la cordura (**B2** los eventos · **C** el
+> gatillo) **y el comportamiento del hunt directo** (10 filas sin correr + 2 arreglos sin pasada en
+> juego)—, por decisión del autor. Handoff único: **`dev/HANDOFF_cordura_b2_y_c.md`**.
+>
+> ⚠⚠⚠ **Y ahí hay un choque que conviene leer antes de escribir nada: C "jubila"
+> `phantasmagoria_hunt`, pero NUEVE de esas diez filas prenden el hunt con ese comando.** C deja de
+> *depender* de él; el comando **no se borra**. *Un andamio que además es el instrumento de otra
+> planilla no se jubila: se degrada a instrumento.* El orden sugerido: las 10 filas del hunt →
+> B2 → C.
 >
 > ⭐⭐⭐ **La r3 midió el tokenizador de Source EN EL JUEGO**, que es la única evidencia del arco que no
 > es inferencia: tipear `evento:sound` saca
