@@ -16,6 +16,51 @@ Pensado para retomar desde un chat limpio, sin contexto previo.
 
 ---
 
+## 0.0 ⚠⚠⚠ El estado EXACTO al cerrar este chat — leer esto primero
+
+**Commit `0bf04ff` en `main`, LOCAL Y SIN PUSHEAR.** 11 archivos, 2.590 inserciones. Lo primero que
+conviene hacer es decidir si se pushea: *un commit sin pushear es invisible para la otra sesión, y el
+índice de git es compartido.*
+
+```
+git log --oneline -1          # tiene que decir 0bf04ff
+git status --short            # sólo `M lua/autorun/client/phantasmagoria_eq_check.lua`, que NO es nuestro
+```
+
+### Lo que ESTÁ, y dónde
+
+| | qué | estado |
+|---|---|---|
+| código de B2 | los ocho `EV.*`, `cobrarCordura`, `luces.lua`, la sub-tabla `sanity`, la lectura tri-estado | **commiteado en `0bf04ff`** |
+| instrumento nuevo | `dev/cordura_b2_offline.py` (+ `--control`) | **commiteado** |
+| auditor ampliado | `dev/auditar_puerta_cordura.py` — ahora cuenta las causas de evento sin productor | **commiteado** |
+| diseño | §19.8.4 enmendado, **§5.5 nueva** | **commiteado** |
+| planilla de B2 | `dev/checks/phantasmagoria-cordura-b2.html`, **11 filas** | **fuera de git** (dev del workspace) |
+| planilla del hunt | `dev/checks/phantasmagoria-hunt-directo-r2.html`, **12 filas para correr** | **fuera de git** |
+
+### Lo que NO está, y es lo que sigue
+
+1. **B2 no corrió en juego ni una vez.** Los ocho renglones del desglose no se movieron nunca en
+   pantalla. Todos los instrumentos que están verdes son **offline**, y ninguno ve el juego.
+2. **La r2 del hunt directo tampoco corrió.**
+3. **C no está escrita.**
+
+> ⚠ **Cuando corras cualquiera de las dos planillas, el reporte pegado va a un archivo propio** —
+> `dev/CORRIDA_cordura_b2_r1.md` y `dev/CORRIDA_hunt_directo_r2.md` — y **de ahí sale la entrada de
+> CHANGELOG**, no al revés. Las tres corridas de B1 están así y es lo que hace que se puedan releer.
+
+### ⚠⚠ Las DOS cosas de B2 que salieron de escribirla y esperan tu veredicto
+
+Ninguna de las dos es un defecto que arreglé: son **decisiones que tomé leyendo dos números del diseño
+que se contradecían**, y las dos están escritas para que revertirlas cueste una línea.
+
+| | qué decidí | cómo se revierte | qué fila lo mide |
+|---|---|---|---|
+| **el piso del tope** | el techo del disparo es `max( tope, el mayor costo individual )`, porque con el 6 duro el **15 % de puerta del Yurei era imposible de pagar** | sacar el `math.max` de `cobrarCordura` | **06** |
+| **la lectura ciega** | `sin_lectura` es un **tercer estado** con renglón y perilla propios; `ciegamul` nace en **1,5**, o sea que **el gameplay no se movió** | `phantasmagoria_sanity_ciegamul 1.0` deja de cobrar la adivinanza | **08** |
+
+---
+
 ## 0. ⚠⚠⚠ Lo que hay que hacer, en orden, y por qué
 
 **Todo lo que sigue son CORRIDAS EN JUEGO, salvo C.** Las dos tajadas de código están escritas y los
@@ -350,9 +395,16 @@ lo que limita qué entra.
 | `corpus` · `corpus-cargo` | **de otra sesión**: la UI de Cargo (#74 / #72). ⚠ **No commitear ni pushear ahí** |
 
 ⚠ `lua/autorun/client/phantasmagoria_eq_check.lua` quedó modificado por una sesión anterior y sigue
-sin commitear: **no stagearlo** hasta saber de quién es.
+sin commitear: **no stagearlo** hasta saber de quién es. La receta de un paso lo dejó afuera sin que
+haya que acordarse — el pathspec del `commit` es lo que limita qué entra.
+
+⚠⚠ **`0bf04ff` ESTÁ SIN PUSHEAR.** La receta funcionó (11 archivos pedidos, 11 archivos adentro, el
+ajeno afuera), pero *un commit local es invisible para la otra sesión*, y el push es la única parte
+del trámite que este chat no hizo.
 
 ⚠⚠ **Y este arco chocó tres veces por numeración**, no por archivos: la entrada de CHANGELOG **(65)**
-nació (64) y las dos del catálogo de memoria nacieron 107 y quedaron 112. *Cuando dos escrituras
+nació (64) y las dos del catálogo de memoria nacieron 107 y quedaron 112. Hoy se agregaron la **(66)**
+del CHANGELOG y las entradas **113** y **113b** del catálogo — **verificar que sigan siendo esos
+números** antes de citarlos, que es el trámite de treinta segundos que este arco ya pagó tres veces. *Cuando dos escrituras
 chocan, la que se mueve es la que todavía no tiene lectores.* Con los dos frentes en un solo chat,
 ese choque debería desaparecer dentro de `phantasmagoria`.
