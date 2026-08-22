@@ -1,149 +1,245 @@
-PROMPT — Phantasmagoria · la cordura, tajada C: EL GATILLO
-=========================================================
+PROMPT — Phantasmagoria · la cordura, tajada C: LA CACERIA COMO EVENTO ACOTADO
+==============================================================================
 Repo: phantasmagoria (fuera de Corpus, git propio, rama main).
 Anteriores: dev/CORRIDA_cordura_b1_r1..r3.md · dev/CORRIDA_cordura_b2_r1.md · _r2.md
-Handoff:    dev/HANDOFF_cordura_b2_y_c.md  (§0 y §4 son los que mandan)
+Handoff:    dev/HANDOFF_cordura_b2_y_c.md  (§0 y §4)
 Pendientes: dev/PENDIENTES_phantasmagoria.md
 
-QUE HAY QUE HACER
------------------
-Que la CORDURA dispare el hunt. Hoy el hunt lo prende un comando de consola
-(`phantasmagoria_hunt`), que siempre dijo en su propia ayuda que era un andamio.
-C es la tajada que le pone el disparador de verdad:
+⚠ ESTE PROMPT SE REESCRIBIO EL 2026-08-22 y la primera version estaba MAL ENCUADRADA.
+Decia que C era "el gatillo" y proponia resolver la realimentacion con histeresis.
+El autor trajo la wiki de Phasmophobia y la fuente contesta TRES de las cuatro
+decisiones que yo habia dejado abiertas — y una la contesta al reves de lo que yo
+recomendaba. Lo que sigue esta corregido. *Una decision de diseño que ya tiene
+fuente no se vota: se lee.*
 
-    cordura por debajo del `hunt.threshold` DEL TIPO  ->  el fantasma caza
+QUE HAY QUE HACER, DE VERDAD
+----------------------------
+C no es "un if que prende un flag". Hoy `phantom_Hunting` es un BOOLEANO con UN
+SOLO ESCRITOR ( server.lua:1218 ) que prende y NO SE APAGA SOLO: no hay duracion,
+no hay enfriamiento y no hay periodo de gracia en ningun archivo. O sea que la
+cacería, como EVENTO, no existe todavia — existe un interruptor.
 
-El umbral vive en `lua/phantasmagoria/ghost_types.lua` y es POR TIPO: el Spirit
-en 50, el Demon en 70, y los que traen `thresholdLow`/`thresholdHigh` sortean en
-ese rango al spawnear. Ya se networkea y ya lo imprime `phantasmagoria_ghost_type`
-en la ficha de cada fantasma, asi que el dato esta: lo que falta es que alguien lo
-lea contra la barra.
+C tiene que construir la forma entera, que en la fuente son CUATRO fases:
 
-⚠⚠⚠ `phantasmagoria_hunt` NO SE BORRA. Se DEGRADA a instrumento, y esa distincion
-no es cortesia: NUEVE de las diez filas pendientes de la planilla del hunt directo
-(dev/checks/phantasmagoria-hunt-directo-r2.html) prenden el hunt con ese comando.
-*Un andamio que ademas es el instrumento de otra planilla no se jubila.* Tiene que
-seguir funcionando como override manual, y tiene que DECIR que ahora es un
-override — o sea que si la cordura dice una cosa y el comando otra, el reporte
-tiene que decir cual gano y por que.
+    (1) la cordura cae bajo el umbral del tipo
+    (2) GRACIA  -- parpadean las luces, hay interferencia y ruidos,
+                   pero el fantasma NO VE, NO DETECTA Y NO MATA
+    (3) CACERIA -- duracion FIJA
+    (4) ENFRIAMIENTO -- no puede volver a empezar
 
-LAS TRES REGLAS DEL DISEÑO QUE NO SE NEGOCIAN
----------------------------------------------
+El gatillo es solo el borde (1). Lo que hace jugable a esto son (2), (3) y (4).
+
+LA FUENTE ( wiki de Phasmophobia, traida por el autor el 2026-08-22 )
+---------------------------------------------------------------------
+DURACION DE LA CACERIA, en segundos, por dificultad y tamaño de mapa:
+
+    dificultad ( Hunt Duration )   mapa      normal   maldita
+    Amateur      ( Low )           Small       15        35
+                                   Medium      30        50
+                                   Large       40        60
+    Intermediate ( Medium )        Small       20        40
+                                   Medium      40        60
+                                   Large       50        70
+    Professional / Nightmare /     Small       40        60
+    Insanity     ( High )          Medium      50        70
+                                   Large       60        80
+
+PERIODO DE GRACIA, en segundos:
+
+    Amateur 5 · Intermediate 4 · Professional 3 · Nightmare 2 · Insanity 2
+    Cacería maldita 1 ( sin importar la dificultad ) · Custom 0-5
+
+⭐ VERIFICADO, Y VALE LA PENA: las NUEVE duraciones malditas son exactamente la
+normal + 20 s. O sea que la tabla de la derecha NO es dato independiente — es la
+regla "+20 s" de la prosa, tabulada. Se implementa la regla, no las nueve celdas.
+*Cuando dos mitades de una fuente coinciden en las nueve, una de las dos es
+derivada: copiar las dos es duplicar un numero que ya tiene dueño.*
+
+⭐ Y LA GRACIA SE ACHICA MIENTRAS LA DURACION CRECE. Los dos ejes empujan para el
+mismo lado, asi que la dificultad no es un numero: es un PAR. Y en Amateur/Small
+la cacería dura 15 s con 5 s de gracia — o sea 10 s de peligro real, y la wiki
+dice que el fantasma "puede ni siquiera llegar a la posicion del jugador". La
+duracion es un dial de JUSTICIA antes que de dificultad.
+
+LO QUE LA FUENTE CONTESTA ( y como cambia lo que yo habia escrito )
+--------------------------------------------------------------------
+(A) EL LAZO DE REALIMENTACION: mi planteo estaba mal. Yo decia que la presencia
+    drena 3,5x en hunt ( 0,350 %/s contra 0,100 — medido en B1 ) y que por eso el
+    fantasma no saldria mas del hunt. **Falso, porque la cacería no sigue a la
+    cordura: dura lo que dura y termina por RELOJ.** El drenaje acelerado no la
+    perpetua, hace otra cosa — acerca la SIGUIENTE. Que es justo la espiral que
+    Phasmophobia quiere. No hay defecto que arreglar: hay un reloj que escribir.
+    ⚠ Pero ojo con el numero: 0,350 %/s por 40 s son **14 puntos de cordura por
+    cacería**. Con el umbral del Spirit en 50, eso son ~3 cacerías desde 100 hasta
+    el piso. Si se siente demasiado rapido, la perilla a mover es la TASA DE HUNT
+    de B1, no la duracion — y hay que decir cual se movio.
+
+(B) LA HISTERESIS: **no hace falta**, y proponerla era resolver con un parche un
+    problema que la fuente resuelve con estructura. Duracion fija + enfriamiento
+    hacen imposible el parpadeo: una vez que empezo, la cordura ya no decide nada
+    hasta que el ciclo termina. *Una banda muerta hubiera tapado el sintoma y
+    dejado la cacería sin forma.*
+
+(C) LA MUERTE: yo pregunte si morirse cancelando la cacería era un exploit. **La
+    fuente dice que es canonico**: matar a un jugador TERMINA la cacería en las
+    dificultades bajas, y solo en la maxima el fantasma puede matar a varios en
+    una misma. Asi que la muerte cortando el hunt es EL DISEÑO.
+    ⚠⚠ PERO LOS DOS CAMINOS NO SON EL MISMO, Y EN JUEGO SE VEN IGUAL:
+      · la cacería termina PORQUE HUBO UNA MUERTE   ( lo canonico )
+      · la cacería termina porque la muerte restauro cordura por encima del
+        umbral ( +5,27 % medido en la r2 de B2 ) y el gate se apago
+    El primero es una regla; el segundo es un efecto colateral de §19.8.5. **Hay
+    que escribir el primero explicitamente**, porque si el hunt termina "solo" por
+    el segundo, el dia que alguien toque el numero de §19.8.5 la regla se rompe
+    sin que nada avise. *Dos mecanismos que producen el mismo resultado observable
+    no son redundancia: son un defecto esperando el cambio que los desincronice.*
+    Y con la duracion fija ( porque el reloj tambien la termina ) son TRES. La
+    fila que lo mida tiene que poder decir CUAL de los tres cerro la cacería, y el
+    reporte tiene que imprimirlo.
+
+LO QUE LA FUENTE **NO** CONTESTA — y hay que decidirlo o preguntarlo
+--------------------------------------------------------------------
+(D) ⚠ EL ENFRIAMIENTO NO TIENE NUMERO. El autor dijo que existe; la imagen que
+    trajo no lo trae. **Preguntarlo antes de escribir**, o buscarlo en la wiki y
+    citar la linea. NO INVENTARLO: un numero de gameplay sin fuente y sin voto es
+    exactamente lo que este taller intenta no producir. Mientras tanto va como
+    perilla con un default declarado como PROVISORIO en el propio comentario.
+
+(E) GMOD NO TIENE NI DIFICULTAD NI TAMAÑO DE MAPA, asi que la tabla de nueve
+    celdas **no se puede portar tal cual**: sus dos ejes no existen acá. Es el
+    mismo problema que el "must fully open / shut a door" del Yurei
+    ( dev/PENDIENTES_phantasmagoria.md §1 ). La traduccion que recomiendo, y que
+    encaja con lo que el addon YA tiene:
+      · `phantasmagoria_hunt_dur`     duracion en segundos    ( perilla )
+      · `phantasmagoria_hunt_gracia`  gracia en segundos      ( perilla )
+      · `phantasmagoria_hunt_enfria`  enfriamiento            ( perilla, ver D )
+      · y el TIPO modula la duracion con un multiplicador en su sub-tabla `hunt`
+        de ghost_flags.lua, que YA EXISTE y ya lleva `rate`, `count`, `burst`,
+        `strength` y `radius`. Un `hunt.dur` ahi es idiomatico, no un mecanismo
+        nuevo — y es donde el tipo tiene que expresarse.
+    Default recomendado: la fila **Intermediate / Medium**, o sea **40 s de
+    duracion y 4 s de gracia**. Es el centro de la tabla y no el extremo. **Lo
+    vota el autor**, y el numero elegido va escrito con su fila de origen al lado,
+    para que dentro de tres rondas se sepa de donde salio.
+
+(F) EL SORTEO DEL UMBRAL. Los tipos con `thresholdLow`/`thresholdHigh` sortean al
+    spawnear, asi que **ninguna fila de planilla puede predecir el numero**: tiene
+    que leer el umbral EFECTIVO del reporte. `phantasmagoria_ghost_type` ya lo
+    imprime en la ficha. Usarlo, no asumirlo.
+
+(G) LA GRACIA ES ALCANCE NUEVO, y es la parte que vuelve JUSTA a la cacería:
+    parpadean las luces, hay interferencia en los aparatos y se oyen ruidos, pero
+    el fantasma **no ve, no detecta y no mata**. Phantasmagoria ya tiene las dos
+    mitades sensoriales — los eventos `light` y `sound` de Diseño 21 —, asi que la
+    gracia se puede montar sobre lo que existe. Lo que NO existe es el estado
+    "visible y ruidoso pero inofensivo", y eso hay que escribirlo.
+    ⚠ Si la gracia entra a medias — el aviso sin la inofensividad — el resultado
+    es PEOR que no tenerla: el jugador aprende a confiar en un aviso que no lo
+    protege.
+
+(H) FUERA DE ALCANCE, DECLARADO: las CACERIAS MALDITAS. Requieren Cursed
+    Possessions, que no existen en Phantasmagoria, y la wiki es explicita: sin
+    haber usado una, **todas las cacerías son normales**. Anotado por si algun dia
+    entran: 1 s de gracia fija, +20 s permanentes a TODAS las cacerías siguientes
+    ( normales incluidas ), y solo un crucifijo T-III con sus dos cargas la puede
+    negar. No escribir nada de esto ahora; dejarlo nombrado.
+
+LAS DOS REGLAS DEL DISEÑO PROPIO QUE NO SE NEGOCIAN
+----------------------------------------------------
 1. §19.9.1 — PROMEDIO en gamemode; CICLADO entre los vivos en sandbox.
 2. §19.9.1 — LOS MUERTOS QUEDAN FUERA del promedio. Si cuentan, el primer muerto
    SUBE el promedio y PROTEGE a los vivos, que es lo contrario de lo que la
-   partida quiere hacer. Esta es la regla que mas facil se rompe sin que se note:
-   un promedio sobre `player.GetAll()` la rompe en la primera muerte.
-3. C VA SOLA, con su propia planilla. B1 evito a proposito meter el gatillo
-   adentro: con el gatillo en el mismo bloque, un rojo tendria DOS causas
-   posibles (la cordura o el gate) y este taller ya pago por eso.
+   partida quiere. Es la regla que mas facil se rompe sin que se note: un promedio
+   sobre `player.GetAll()` la rompe en la primera muerte.
+   ⚠ Y ahora se cruza con (C): si matar termina la cacería, el muerto sale del
+   promedio EN EL MISMO INSTANTE en que la cacería se corta. Dos efectos, un
+   evento — y el reporte tiene que poder separarlos.
 
-CUATRO DECISIONES QUE HAY QUE TOMAR ANTES DE ESCRIBIR, NO DESPUES
------------------------------------------------------------------
-Ninguna es de implementacion. Las cuatro cambian el gameplay y las cuatro tienen
-que quedar escritas con su porque — y con una perilla, si corresponde.
+3. ⚠⚠⚠ `phantasmagoria_hunt` NO SE BORRA: se DEGRADA a instrumento. NUEVE de las
+   diez filas pendientes de dev/checks/phantasmagoria-hunt-directo-r2.html prenden
+   el hunt con ese comando. *Un andamio que ademas es el instrumento de otra
+   planilla no se jubila.* Tiene que seguir sirviendo como override manual, y
+   tiene que DECIR que es un override: si la cordura dice una cosa y el comando
+   otra, el reporte dice cual gano y por que.
 
-(A) ⚠⚠⚠ EL LAZO DE REALIMENTACION, y es el riesgo real de esta tajada.
-    La presencia drena 0,100 %/s en calma y 0,350 %/s EN HUNT (medido, B1). O sea
-    que el gatillo se realimenta: cae bajo el umbral -> caza -> drena 3,5x mas
-    rapido -> sigue bajo el umbral -> caza para siempre. Sin una respuesta
-    declarada, la primera caceria de la partida es la ultima.
-    Hay que decidir COMO SALE del hunt: por tiempo, por histeresis (sale al
-    subir por encima de umbral + N), por distancia, o por una combinacion. Y el
-    numero tiene que ser una perilla, no una constante enterrada.
+4. C VA SOLA, con su propia planilla. B1 evito a proposito meter el gatillo
+   adentro: con el gatillo en el mismo bloque, un rojo tendria DOS causas posibles.
 
-(B) LA HISTERESIS. Con un solo umbral, una cordura que oscila alrededor del valor
-    hace parpadear el hunt: prende y apaga varias veces por segundo. Un umbral
-    con banda muerta (`prende en 50, apaga en 60`) lo resuelve, pero es un numero
-    de diseño y lo tiene que votar el autor.
-
-(C) ⚠⚠ LA MUERTE RESTAURA CORDURA, Y ESO PUEDE APAGAR UN HUNT.
-    §19.8.5 decidio que morir restaura, y en la r2 de B2 se midio en juego:
-    `muerte +5.27 % 1 veces`. Entonces, con el gatillo puesto, MORIRSE puede
-    subir la barra por encima del umbral y cancelar la caceria — o sea que la
-    muerte se vuelve una forma de apagar al fantasma. Puede ser lo que quieras
-    (es un respiro despues de morir) o puede ser un exploit. HAY QUE ELEGIR.
-
-(D) EL SORTEO DEL UMBRAL. Los tipos con `thresholdLow`/`thresholdHigh` sortean al
-    spawnear. Eso significa que dos partidas con el mismo tipo cazan a distinta
-    altura, y que UNA FILA DE PLANILLA NO PUEDE PREDECIR EL NUMERO salvo que lea
-    el umbral efectivo del reporte. El comando ya lo imprime: usarlo, no
-    asumirlo.
-
-LO QUE B2 DEJO Y HAY QUE REUSAR (no reinventar)
------------------------------------------------
-· `phantasmagoria_cordura_fabrica --decir` — SON 30 PERILLAS. Va en el P0 de la
-  planilla de C, igual que en B1 y B2. Un valor movido no se nota: el reporte
-  imprime 30 con la misma cara con la que imprime 45.
-· La FOTO del ultimo disparo (`phantasmagoria_ghost_events`) — el patron que
-  arreglo cuatro filas de B2: imprimir EL NUMERO QUE DECIDE, no solo el
-  resultado. C necesita su equivalente: un renglon que diga, para cada fantasma,
-  CUAL cordura leyo (promedio o el jugador del ciclo), CONTRA que umbral, y QUE
-  decidio. Sin eso, "no cazo" y "cazo cuando no debia" se ven iguales.
+LO QUE B2 DEJO Y HAY QUE REUSAR ( no reinventar )
+--------------------------------------------------
+· `phantasmagoria_cordura_fabrica --decir` — SON 30 PERILLAS, y C va a agregar
+  varias mas al mismo registro compartido ( PHANTASMAGORIA.PerillasCordura ). Va
+  en el P0 de la planilla, igual que en B1 y B2.
+· LA FOTO DEL ULTIMO DISPARO ( `phantasmagoria_ghost_events` ) — el patron que
+  arreglo cuatro filas de B2: imprimir EL NUMERO QUE DECIDE y no solo el
+  resultado. C necesita su equivalente y es la pieza mas importante del bloque:
+  un renglon por fantasma que diga QUE cordura leyo ( promedio o el jugador del
+  ciclo ), CONTRA que umbral efectivo, EN QUE FASE esta ( gracia / cacería /
+  enfriamiento ), CUANTO le queda, y — cuando termine — CUAL DE LOS TRES CAMINOS
+  la cerro ( reloj, muerte, override ). Sin eso, "no cazo" y "cazo cuando no
+  debia" se ven iguales, y la r1 de B2 ya mostro lo que eso cuesta.
 · `decidirTecho( total, mayor, tope )` — el precedente: la aritmetica de una
-  decision vive en una funcion propia de nivel superior, para que
-  `dev/cordura_b2_offline.py` (o el offline de C) la pueda EXTRAER POR NOMBRE y
-  correrla en un interprete de Lua sin el juego. *Una propiedad que se puede
-  decidir con algebra no deberia esperar a una planilla en juego.*
-  La funcion de C se llama, por ejemplo, `decidirCaceria( cordura, umbral, ... )`
-  y su offline tiene que barrer la histeresis y el caso de cero jugadores vivos.
+  decision vive en una funcion propia de nivel superior, para que el offline la
+  EXTRAIGA POR NOMBRE y la corra en un interprete de Lua sin el juego. C tiene
+  que hacer lo mismo con su maquina de fases. *Una propiedad que se puede decidir
+  con algebra no deberia esperar a una planilla en juego.* Casos obligatorios del
+  offline: cero jugadores vivos, todos muertos, el borde exacto del umbral, y que
+  el enfriamiento haga IMPOSIBLE reentrar.
 
 LAS CUATRO LECCIONES DE B2 QUE LA PLANILLA DE C TIENE QUE RESPETAR
 ------------------------------------------------------------------
 Estan pagadas con dos rondas. Leer dev/CORRIDA_cordura_b2_r1.md §1-§3 y §5.
 
-1. NINGUN CRITERIO SE ESCRIBE COMO UN NUMERO QUE EL INSTRUMENTO NO IMPRIME.
-   En la r1, cuatro de once filas citaban porcentajes exactos y el reporte no
-   sacaba la distancia que los decidia. *A ojo, un criterio se juzga por la
-   direccion.*
-2. LAS FILAS DE UNA PLANILLA SE CRUZAN ENTRE SI ANTES DE PUBLICARLA. En B2 la 04
-   y la 06 afirmaban lo CONTRARIO sobre la misma linea de codigo, salieron en la
-   misma ronda y ninguna herramienta lo dijo. Para C: si una fila dice "caza" y
-   otra dice "no caza" en escenas parecidas, escribir explicitamente que las
-   separa.
+1. NINGUN CRITERIO SE ESCRIBE COMO UN NUMERO QUE EL INSTRUMENTO NO IMPRIME. En la
+   r1, cuatro de once filas citaban porcentajes exactos y el reporte no sacaba la
+   distancia que los decidia. *A ojo, un criterio se juzga por la direccion.*
+2. LAS FILAS SE CRUZAN ENTRE SI ANTES DE PUBLICAR LA PLANILLA. En B2 la 04 y la 06
+   afirmaban lo CONTRARIO sobre la misma linea de codigo, salieron en la misma
+   ronda, y ninguna herramienta lo dijo.
 3. UNA PRECONDICION TIENE QUE SER VERIFICABLE EN EL REPORTE. La 06 pedia estar a
    menos de 135 u de la puerta y no habia forma de comprobarlo: salio verde
-   cobrando a 408 u. Para C: la fila que mida el gatillo tiene que poder leer del
-   reporte la cordura Y el umbral efectivo, no confiar en la memoria del que
-   corre.
-4. EL CONTROL DEL CONTROL SE ARMA SU PROPIO SUJETO. La fila 10 pedia "no
-   resetear" y la 08 tenia dos resets adentro de su boton. *Una precondicion que
-   otra fila de la misma planilla destruye no es una precondicion: es un deseo.*
+   cobrando a 408 u.
+4. EL CONTROL DEL CONTROL SE ARMA SU PROPIO SUJETO. La fila 10 pedia "no resetear"
+   y la 08 tenia dos resets adentro de su boton. *Una precondicion que otra fila
+   de la misma planilla destruye no es una precondicion: es un deseo.*
 
 ANTES DE TOCAR CODIGO
 ---------------------
 ⚠ Otra sesion reescribio COMO PERSIGUE el fantasma, en `server_hunt.lua`,
 `server.lua` y `server_stuck.lua`. B1 y B2 no los tocaron a proposito, y C es
 donde las dos cosas se encuentran. LEER EL CHANGELOG de esa sesion y
-`dev/CORRIDA_hunt_directo_r1.md` antes de escribir una linea. Ahi tambien esta el
-veredicto de gameplay que ya dio el autor: *«el hunt directo probandolo ingame
-esta bien como gameplay, el bot hace lo que se supone que debe hacer»* — o sea
-que C NO tiene que cambiar como persigue: solo QUIEN aprieta el boton.
+dev/CORRIDA_hunt_directo_r1.md antes de escribir una linea. Ahi esta ademas el
+veredicto de gameplay que ya dio el autor: «el hunt directo probandolo ingame
+esta bien como gameplay, el bot hace lo que se supone que debe hacer» — o sea que
+C NO cambia COMO persigue. Cambia CUANDO empieza, CUANTO dura y COMO termina.
 
-LO QUE QUEDO SUELTO DE B2 (no bloquea C, pero conviene barrerlo de paso)
-------------------------------------------------------------------------
+⚠ Y `phantom_Hunting` tiene UN SOLO ESCRITOR hoy ( server.lua:1218 ). Que siga
+teniendo uno solo. La maquina de fases decide; el escritor sigue siendo ese.
+
+LO QUE QUEDO SUELTO DE B2 ( no bloquea C, conviene barrerlo de paso )
+----------------------------------------------------------------------
 · Fila 09: falta la mitad del respawn — matarse con `kill` y confirmar a ojo que
   vuelves con armas y tu playermodel. Es el control del `return` en un hook que
-  aborta `GM:PlayerSpawn`. C toca hooks, asi que este control pasa a ser MAS
-  importante, no menos.
+  aborta `GM:PlayerSpawn`. C toca hooks Y toca la muerte, asi que este control
+  pasa a ser MAS importante, no menos.
 · Fila 07 (c): girarse y volver a leer, para que el motivo de `presencia_tipo`
   CAMBIE. Un motivo que no cambia con la escena no esta midiendo la escena.
-· LA DECISION DEL AUTOR: `piso` o 6 duro en `decidirTecho`. Ya hay numero en
-  juego (los 15 % del Yurei enteros) y control offline. Si elige el 6 duro, se
-  cambia el `math.max( tope, mayor )` por `tope` y el offline grita hasta que se
+· LA DECISION DEL AUTOR: `piso` o 6 duro en `decidirTecho`. Ya hay numero en juego
+  ( los 15 % del Yurei enteros ) y control offline. Si elige el 6 duro se cambia
+  el `math.max( tope, mayor )` por `tope`, y el offline grita hasta que se
   actualicen sus casos — a proposito.
 
 ENTREGABLES
 -----------
-1. El codigo de C, con las cuatro decisiones (A)-(D) escritas en el archivo con
-   su porque y sus perillas.
-2. Su mitad offline, extrayendo la funcion de decision por nombre y con
-   `--control` que sabotee y DEMUESTRE que discrimina.
-3. La planilla `dev/checks/phantasmagoria-cordura-c.html` (fuera de git), con P0
-   de instrumentos + las filas del gatillo. Pasa por `dev/auditar_planilla.py` y
-   `dev/verificar_citas_de_planilla.py` (y su `--control`) antes de entregarse.
+1. El codigo de C, con (D) preguntado y (E) votado, y con las cuatro fases y sus
+   tres formas de terminar escritas en el archivo con su porque y sus perillas.
+2. Su mitad offline, extrayendo la maquina de fases por nombre, con `--control`
+   que sabotee y DEMUESTRE que discrimina.
+3. La planilla dev/checks/phantasmagoria-cordura-c.html ( fuera de git ): P0 de
+   instrumentos + las filas del ciclo. Tiene que pasar dev/auditar_planilla.py y
+   dev/verificar_citas_de_planilla.py ( y su --control ) antes de entregarse.
 4. Publicarla como artefacto de Claude y pasar el link.
 
-⚠ EL REPORTE PEGADO SE CORTA A 50.000 CARACTERES y el corte es invisible para el
-autor. Si la planilla pasa de ~5 filas con volcados largos, pedirlo POR TANDAS, y
+⚠ EL REPORTE PEGADO SE CORTA A 50.000 CARACTERES y el corte es INVISIBLE para el
+autor. Si la planilla pasa de ~5 filas con volcados largos, pedirlo POR TANDAS y
 contar las filas contra la linea `Pasa N · Falla M · Sin correr K` del encabezado.
