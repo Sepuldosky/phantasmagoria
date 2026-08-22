@@ -1,0 +1,149 @@
+PROMPT — Phantasmagoria · la cordura, tajada C: EL GATILLO
+=========================================================
+Repo: phantasmagoria (fuera de Corpus, git propio, rama main).
+Anteriores: dev/CORRIDA_cordura_b1_r1..r3.md · dev/CORRIDA_cordura_b2_r1.md · _r2.md
+Handoff:    dev/HANDOFF_cordura_b2_y_c.md  (§0 y §4 son los que mandan)
+Pendientes: dev/PENDIENTES_phantasmagoria.md
+
+QUE HAY QUE HACER
+-----------------
+Que la CORDURA dispare el hunt. Hoy el hunt lo prende un comando de consola
+(`phantasmagoria_hunt`), que siempre dijo en su propia ayuda que era un andamio.
+C es la tajada que le pone el disparador de verdad:
+
+    cordura por debajo del `hunt.threshold` DEL TIPO  ->  el fantasma caza
+
+El umbral vive en `lua/phantasmagoria/ghost_types.lua` y es POR TIPO: el Spirit
+en 50, el Demon en 70, y los que traen `thresholdLow`/`thresholdHigh` sortean en
+ese rango al spawnear. Ya se networkea y ya lo imprime `phantasmagoria_ghost_type`
+en la ficha de cada fantasma, asi que el dato esta: lo que falta es que alguien lo
+lea contra la barra.
+
+⚠⚠⚠ `phantasmagoria_hunt` NO SE BORRA. Se DEGRADA a instrumento, y esa distincion
+no es cortesia: NUEVE de las diez filas pendientes de la planilla del hunt directo
+(dev/checks/phantasmagoria-hunt-directo-r2.html) prenden el hunt con ese comando.
+*Un andamio que ademas es el instrumento de otra planilla no se jubila.* Tiene que
+seguir funcionando como override manual, y tiene que DECIR que ahora es un
+override — o sea que si la cordura dice una cosa y el comando otra, el reporte
+tiene que decir cual gano y por que.
+
+LAS TRES REGLAS DEL DISEÑO QUE NO SE NEGOCIAN
+---------------------------------------------
+1. §19.9.1 — PROMEDIO en gamemode; CICLADO entre los vivos en sandbox.
+2. §19.9.1 — LOS MUERTOS QUEDAN FUERA del promedio. Si cuentan, el primer muerto
+   SUBE el promedio y PROTEGE a los vivos, que es lo contrario de lo que la
+   partida quiere hacer. Esta es la regla que mas facil se rompe sin que se note:
+   un promedio sobre `player.GetAll()` la rompe en la primera muerte.
+3. C VA SOLA, con su propia planilla. B1 evito a proposito meter el gatillo
+   adentro: con el gatillo en el mismo bloque, un rojo tendria DOS causas
+   posibles (la cordura o el gate) y este taller ya pago por eso.
+
+CUATRO DECISIONES QUE HAY QUE TOMAR ANTES DE ESCRIBIR, NO DESPUES
+-----------------------------------------------------------------
+Ninguna es de implementacion. Las cuatro cambian el gameplay y las cuatro tienen
+que quedar escritas con su porque — y con una perilla, si corresponde.
+
+(A) ⚠⚠⚠ EL LAZO DE REALIMENTACION, y es el riesgo real de esta tajada.
+    La presencia drena 0,100 %/s en calma y 0,350 %/s EN HUNT (medido, B1). O sea
+    que el gatillo se realimenta: cae bajo el umbral -> caza -> drena 3,5x mas
+    rapido -> sigue bajo el umbral -> caza para siempre. Sin una respuesta
+    declarada, la primera caceria de la partida es la ultima.
+    Hay que decidir COMO SALE del hunt: por tiempo, por histeresis (sale al
+    subir por encima de umbral + N), por distancia, o por una combinacion. Y el
+    numero tiene que ser una perilla, no una constante enterrada.
+
+(B) LA HISTERESIS. Con un solo umbral, una cordura que oscila alrededor del valor
+    hace parpadear el hunt: prende y apaga varias veces por segundo. Un umbral
+    con banda muerta (`prende en 50, apaga en 60`) lo resuelve, pero es un numero
+    de diseño y lo tiene que votar el autor.
+
+(C) ⚠⚠ LA MUERTE RESTAURA CORDURA, Y ESO PUEDE APAGAR UN HUNT.
+    §19.8.5 decidio que morir restaura, y en la r2 de B2 se midio en juego:
+    `muerte +5.27 % 1 veces`. Entonces, con el gatillo puesto, MORIRSE puede
+    subir la barra por encima del umbral y cancelar la caceria — o sea que la
+    muerte se vuelve una forma de apagar al fantasma. Puede ser lo que quieras
+    (es un respiro despues de morir) o puede ser un exploit. HAY QUE ELEGIR.
+
+(D) EL SORTEO DEL UMBRAL. Los tipos con `thresholdLow`/`thresholdHigh` sortean al
+    spawnear. Eso significa que dos partidas con el mismo tipo cazan a distinta
+    altura, y que UNA FILA DE PLANILLA NO PUEDE PREDECIR EL NUMERO salvo que lea
+    el umbral efectivo del reporte. El comando ya lo imprime: usarlo, no
+    asumirlo.
+
+LO QUE B2 DEJO Y HAY QUE REUSAR (no reinventar)
+-----------------------------------------------
+· `phantasmagoria_cordura_fabrica --decir` — SON 30 PERILLAS. Va en el P0 de la
+  planilla de C, igual que en B1 y B2. Un valor movido no se nota: el reporte
+  imprime 30 con la misma cara con la que imprime 45.
+· La FOTO del ultimo disparo (`phantasmagoria_ghost_events`) — el patron que
+  arreglo cuatro filas de B2: imprimir EL NUMERO QUE DECIDE, no solo el
+  resultado. C necesita su equivalente: un renglon que diga, para cada fantasma,
+  CUAL cordura leyo (promedio o el jugador del ciclo), CONTRA que umbral, y QUE
+  decidio. Sin eso, "no cazo" y "cazo cuando no debia" se ven iguales.
+· `decidirTecho( total, mayor, tope )` — el precedente: la aritmetica de una
+  decision vive en una funcion propia de nivel superior, para que
+  `dev/cordura_b2_offline.py` (o el offline de C) la pueda EXTRAER POR NOMBRE y
+  correrla en un interprete de Lua sin el juego. *Una propiedad que se puede
+  decidir con algebra no deberia esperar a una planilla en juego.*
+  La funcion de C se llama, por ejemplo, `decidirCaceria( cordura, umbral, ... )`
+  y su offline tiene que barrer la histeresis y el caso de cero jugadores vivos.
+
+LAS CUATRO LECCIONES DE B2 QUE LA PLANILLA DE C TIENE QUE RESPETAR
+------------------------------------------------------------------
+Estan pagadas con dos rondas. Leer dev/CORRIDA_cordura_b2_r1.md §1-§3 y §5.
+
+1. NINGUN CRITERIO SE ESCRIBE COMO UN NUMERO QUE EL INSTRUMENTO NO IMPRIME.
+   En la r1, cuatro de once filas citaban porcentajes exactos y el reporte no
+   sacaba la distancia que los decidia. *A ojo, un criterio se juzga por la
+   direccion.*
+2. LAS FILAS DE UNA PLANILLA SE CRUZAN ENTRE SI ANTES DE PUBLICARLA. En B2 la 04
+   y la 06 afirmaban lo CONTRARIO sobre la misma linea de codigo, salieron en la
+   misma ronda y ninguna herramienta lo dijo. Para C: si una fila dice "caza" y
+   otra dice "no caza" en escenas parecidas, escribir explicitamente que las
+   separa.
+3. UNA PRECONDICION TIENE QUE SER VERIFICABLE EN EL REPORTE. La 06 pedia estar a
+   menos de 135 u de la puerta y no habia forma de comprobarlo: salio verde
+   cobrando a 408 u. Para C: la fila que mida el gatillo tiene que poder leer del
+   reporte la cordura Y el umbral efectivo, no confiar en la memoria del que
+   corre.
+4. EL CONTROL DEL CONTROL SE ARMA SU PROPIO SUJETO. La fila 10 pedia "no
+   resetear" y la 08 tenia dos resets adentro de su boton. *Una precondicion que
+   otra fila de la misma planilla destruye no es una precondicion: es un deseo.*
+
+ANTES DE TOCAR CODIGO
+---------------------
+⚠ Otra sesion reescribio COMO PERSIGUE el fantasma, en `server_hunt.lua`,
+`server.lua` y `server_stuck.lua`. B1 y B2 no los tocaron a proposito, y C es
+donde las dos cosas se encuentran. LEER EL CHANGELOG de esa sesion y
+`dev/CORRIDA_hunt_directo_r1.md` antes de escribir una linea. Ahi tambien esta el
+veredicto de gameplay que ya dio el autor: *«el hunt directo probandolo ingame
+esta bien como gameplay, el bot hace lo que se supone que debe hacer»* — o sea
+que C NO tiene que cambiar como persigue: solo QUIEN aprieta el boton.
+
+LO QUE QUEDO SUELTO DE B2 (no bloquea C, pero conviene barrerlo de paso)
+------------------------------------------------------------------------
+· Fila 09: falta la mitad del respawn — matarse con `kill` y confirmar a ojo que
+  vuelves con armas y tu playermodel. Es el control del `return` en un hook que
+  aborta `GM:PlayerSpawn`. C toca hooks, asi que este control pasa a ser MAS
+  importante, no menos.
+· Fila 07 (c): girarse y volver a leer, para que el motivo de `presencia_tipo`
+  CAMBIE. Un motivo que no cambia con la escena no esta midiendo la escena.
+· LA DECISION DEL AUTOR: `piso` o 6 duro en `decidirTecho`. Ya hay numero en
+  juego (los 15 % del Yurei enteros) y control offline. Si elige el 6 duro, se
+  cambia el `math.max( tope, mayor )` por `tope` y el offline grita hasta que se
+  actualicen sus casos — a proposito.
+
+ENTREGABLES
+-----------
+1. El codigo de C, con las cuatro decisiones (A)-(D) escritas en el archivo con
+   su porque y sus perillas.
+2. Su mitad offline, extrayendo la funcion de decision por nombre y con
+   `--control` que sabotee y DEMUESTRE que discrimina.
+3. La planilla `dev/checks/phantasmagoria-cordura-c.html` (fuera de git), con P0
+   de instrumentos + las filas del gatillo. Pasa por `dev/auditar_planilla.py` y
+   `dev/verificar_citas_de_planilla.py` (y su `--control`) antes de entregarse.
+4. Publicarla como artefacto de Claude y pasar el link.
+
+⚠ EL REPORTE PEGADO SE CORTA A 50.000 CARACTERES y el corte es invisible para el
+autor. Si la planilla pasa de ~5 filas con volcados largos, pedirlo POR TANDAS, y
+contar las filas contra la linea `Pasa N · Falla M · Sin correr K` del encabezado.
