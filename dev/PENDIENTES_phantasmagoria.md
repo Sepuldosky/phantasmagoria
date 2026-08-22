@@ -165,3 +165,67 @@ nueva aparece en el menú sin que nadie toque el menú, y una que se borra desap
 sea después un lector y no una transcripción. Hacerlo al revés significa construir el panel alrededor
 de convars que C está por agregar, o sea hacerlo dos veces.
 
+### ⭐ Y una segunda funcion del menú: que el fantasma **aparezca solo**
+
+**Pedido por el autor el 2026-08-22**:
+
+> *«Falta una opción para spawnear automáticamente un ghost aleatorio (hasta 3 con chance) en el mapa
+> con los periodos de gracia que tiene Phasmophobia (Amateur: 5 minutos, Intermediate: 2 minutos, o
+> Professional y el resto: inmediatamente en el mapa), tipo para que alguien que entra al juego
+> sandbox no deba spawnearlo desde el menú, lo que lo hace más "sorpresivo" y adecuado a GMod.»*
+
+Es una buena idea por una razón que va más allá de la comodidad: **hoy el jugador sabe que hay un
+fantasma porque lo puso él.** Eso mata el primer acto entero — la parte en la que no sabes si hay algo
+y estás buscando evidencia. Un spawn automático y demorado devuelve esa incertidumbre, y es lo único
+del bloque que **no se puede conseguir con perillas**.
+
+| dificultad | cuándo aparece |
+|---|---|
+| Amateur | a los **5 minutos** |
+| Intermediate | a los **2 minutos** |
+| Professional y arriba | **inmediatamente** |
+
+Y la cantidad: **1 fantasma, hasta 3 por sorteo**. (En Phasmophobia el multi-fantasma no es estándar,
+así que esto es nuestro: hay que declarar los pesos del sorteo y no dejarlos implícitos.)
+
+#### ⚠⚠⚠ COLISIÓN DE NOMBRES, Y HAY QUE ATAJARLA AHORA
+
+**Ya hay dos cosas distintas llamadas «periodo de gracia», y una tercera en camino:**
+
+| | qué es | orden de magnitud |
+|---|---|---|
+| **fase de preparación** (*setup phase*) | desde que empieza la partida hasta que el fantasma puede actuar | **minutos** (5 / 2 / 0) |
+| **gracia de la cacería** (*hunt grace period*) | la cacería empezó, parpadean las luces, pero el fantasma **no ve, no detecta y no mata** | **segundos** (5 / 4 / 3 / 2 / 2 / 1) |
+| lo que pide este pedido | cuándo **aparece** el fantasma en el mapa | minutos |
+
+El autor usó «periodo de gracia» para las dos primeras, y es entendible porque la wiki también las
+mezcla en el habla. **Pero en el código no pueden compartir nombre**, ni en las convars, ni en el
+reporte, ni en los criterios de la planilla: son de escalas distintas (minutos contra segundos), de
+bloques distintos (arranque contra cacería), y **un rojo que diga «la gracia no anduvo» tendría dos
+sujetos posibles**. Este taller ya pagó por eso con `count`, que se leía en dos lugares y terminaba
+componiéndose consigo mismo.
+
+Nombres propuestos, y hay que fijarlos antes de escribir la primera línea:
+
+- `phantasmagoria_ghost_preparacion` — los minutos antes de que aparezca / pueda actuar.
+- `phantasmagoria_hunt_gracia` — los segundos de aviso inofensivo al empezar la cacería.
+
+*Dos mecanismos con el mismo nombre no son un problema de estilo: son un rojo que no se puede
+diagnosticar.*
+
+#### Lo que hay que decidir
+
+1. **¿Aparece a los N minutos, o aparece ya y no puede actuar hasta los N minutos?** No es lo mismo:
+   en la primera no hay orbes ni huellas ni eventos hasta que llegue; en la segunda la evidencia
+   existe desde el principio y lo que falta es el peligro. Phasmophobia hace **la segunda** (el
+   fantasma está desde el minuto cero; lo que la fase de preparación bloquea es la cacería). El pedido
+   del autor dice *«spawnear»*, o sea la primera. **Hay que elegir a propósito.**
+2. **Qué cuenta como «empezó la partida» en sandbox**, que no tiene rondas. ¿La carga del mapa? ¿El
+   primer jugador que entra? ¿Un comando? Sin una respuesta, el reloj no tiene desde dónde contar.
+3. **Qué pasa si ya hay un fantasma spawneado a mano.** El auto-spawn no puede sumar uno encima sin
+   avisar: o respeta el que existe, o lo dice.
+4. **Que se pueda apagar**, obviamente — y que el reporte diga si el fantasma que estás viendo lo puso
+   el auto-spawn o una persona. Es el mismo principio que separó `despertadas ESPONTANEAS` de
+   `despertadas FORZADAS` en el motor de eventos: *cuando un contador tiene dos escritores y uno es el
+   operador, no acredita al otro.*
+

@@ -93,12 +93,22 @@ Esto **cambia el diseño de C y lo mejora**, y hay que entenderlo antes de escri
     cacería sea *probable* y no *puntual*, que es lo que la vuelve terror en vez
     de aritmetica. *Un gatillo determinista se aprende una vez; uno probabilistico
     se teme siempre.*
-  · ⚠ **Los dos numeros de la banda ( 25 y 50 ) son de Phasmophobia, no nuestros.**
-    Phantasmagoria ya tiene su propio numero por tipo — `hunt.threshold` en
-    ghost_types.lua, con el Spirit en 50 y el Demon en 70 —, asi que la banda hay
-    que expresarla EN TERMINOS DE ESE UMBRAL y no pegando el 25 y el 50. Lo
-    natural: `umbral` y `umbral / 2` como los dos escalones, o un segundo campo.
-    **Lo vota el autor**, y va escrito con la linea de la fuente al lado.
+  · ⭐ **LOS DOS ESCALONES SE EXPRESAN CON NUESTRO `hunt.threshold`, Y ESO YA ESTA
+    DECIDIDO** ( el autor, 2026-08-22 ): *«tenemos que usar nuestros threshold,
+    que en realidad son los threshold del cheat sheet mas moderno que existe de
+    Phasmophobia»*. O sea que el 50 del 2021 **no es un numero ajeno**: es el
+    umbral por defecto de esa epoca, y el nuestro por tipo es su version
+    actualizada ( Spirit 50, Demon 70, y los que sortean entre
+    `thresholdLow`/`thresholdHigh` ).
+    Entonces la banda se generaliza sola y **no se pega ningun numero**:
+
+        umbral / 2  <  cordura  <=  umbral   ->  dado flojo   ( 1 en 6 )
+                       cordura  <=  umbral / 2  ->  dado fuerte ( 1 en 4 )
+
+    Con el umbral en 50 eso reproduce EXACTAMENTE el 25 y el 50 de la fuente, y
+    con el Demon en 70 da 35 y 70 — que es lo que tiene que pasar: *un tipo que
+    caza antes tambien tiene que desesperarse antes.* El divisor ( el 2 ) y las
+    dos probabilidades van como perillas.
   · Las dos probabilidades ( 1/6 y 1/4 ) y el rango del reloj ( 2-6 s ) van como
     perillas, no como constantes.
 
@@ -166,15 +176,43 @@ LO QUE LA PRIMERA FUENTE CONTESTA ( y como cambia lo que yo habia escrito )
 
 LO QUE LA FUENTE **NO** CONTESTA — y hay que decidirlo o preguntarlo
 --------------------------------------------------------------------
-(D) EL ENFRIAMIENTO: **25 SEGUNDOS**, y ya tiene fuente ( ver el bloque de abajo ).
-    ⚠⚠ PERO LEER LA LINEA COMPLETA ANTES DE IMPLEMENTARLA: *«After KILLING A
-    PLAYER, the ghost will teleport back to their favourite room, and reset to
-    idle phase. They cannot initiate hunting phase for the next 25 seconds.»* O
-    sea que en la fuente los 25 s cuelgan de **la muerte**, no del final de
-    cualquier cacería. Que una cacería que se agoto por reloj tenga o no
-    enfriamiento **no lo dice esa linea**, y hay que decidirlo con el nombre
-    puesto — no deducirlo. *Un numero citado fuera de su condicion es un numero
-    inventado con cita.*
+(D) EL ENFRIAMIENTO: hay DOS, y son de especies distintas. No mezclarlos.
+
+    · **El de la muerte, 25 s**, con fuente: *«After KILLING A PLAYER, the ghost
+      will teleport back to their favourite room, and reset to idle phase. They
+      cannot initiate hunting phase for the next 25 seconds.»* Cuelga de **matar**,
+      no del final de cualquier cacería — y en sandbox puede que nadie muera en
+      toda la sesion, asi que **no puede ser el unico freno**.
+    · **El del RELOJ DE OCIO**, que es el general y el que de verdad marca el
+      ritmo: al terminar la cacería el fantasma vuelve a ocioso, y de ahi en mas
+      cada vencimiento del reloj vuelve a tirar el dado. *El ritmo de la partida
+      lo pone el reloj de ocio; los 25 s son un caso especial encima.*
+
+    ⚠ EL AUTOR APORTO UN DATO SIN FUENTE Y LA ARITMETICA LO ACOTA. Recordaba
+    haber leido «8 s de ocio y despues 1 en 2 para volver a tirar el dado del
+    hunt», y lo apoyaba en una observacion propia: **a cordura 0 las cacerías se
+    sienten a unos 10 s una de otra**. Simulado ( 200.000 corridas ) contra el
+    escalon de 1-en-4 del 2021:
+
+        2021 tal cual         ocio 2-6 s  ·  dado 1/4          media 16,0 s  ·  P(<=10 s)  44 %
+        APILADO               ocio 8 s · puerta 1/2 · dado 1/4  media 64,2 s  ·  P(<=10 s)  13 %
+        el 1/2 ES el dado     ocio 8 s  ·  dado 1/2             media 16,0 s  ·  P(<=10 s)  50 %
+
+    ⭐ Conclusion, y sirve: **la lectura APILADA queda descartada por la propia
+    observacion del autor** — da cuatro veces mas lento y casi nunca cazaria
+    dentro de los 10 s. Las otras dos dan **exactamente lo mismo** ( 16,0 s ), y
+    no es casualidad: el tiempo esperado es `E[ocio] / p`, o sea que el par
+    ( reloj, probabilidad ) tiene **un grado de libertad que ninguna observacion
+    de ritmo puede ver**. 4/0,25 y 8/0,50 son el mismo ritmo.
+    *Dos modelos que predicen lo mismo no se eligen midiendo: se eligen por lo
+    que NO comparten.*
+
+    Y lo que no comparten es el PISO: el de 2-6 s puede disparar a los **2 s**
+    ( entrecortado, sin respiro ), y el de 8 s garantiza **ocho segundos** entre
+    cacerías pase lo que pase. Ese piso es un dial de justicia, igual que la
+    gracia. **Recomiendo el de 8 s por eso**, no por precision — y que quede
+    escrito que la eleccion fue por el piso y no por la fuente. Las dos van como
+    perillas igual.
 
 (E) GMOD NO TIENE NI DIFICULTAD NI TAMAÑO DE MAPA, asi que la tabla de nueve
     celdas **no se puede portar tal cual**: sus dos ejes no existen acá. Es el
@@ -302,11 +340,18 @@ LO QUE QUEDO SUELTO DE B2 ( no bloquea C, conviene barrerlo de paso )
   **SI EXISTE** — es autoritativo, lo escribe `phantom_SetVisible` en
   server_cloak.lua y tiene un solo escritor. O sea que la condicion de la fuente
   es implementable AHORA, con lo que hay.
-  ⚠ Es una DECISION del autor y no un arreglo: «visible» y «manifestandose» no son
-  lo mismo, y §22.10 eligio la segunda. Cambiar la condicion le da vida al rasgo
-  tres tajadas antes de tiempo, pero lo aleja de lo que el diseño propio escribio.
-  Lo que NO se puede hacer es cambiarla en silencio: si entra, entra con el motivo
-  diciendo cual de las dos condiciones esta usando.
+  ⭐⭐⭐ Y EL AUTOR RESOLVIO LA DUDA ( 2026-08-22 ): *«if visible seria literalmente
+  la manifestacion O EL HUNT, que son los momentos donde puedes ver al fantasma»*.
+  O sea que las dos condiciones **no compiten**: `visible` es la union de dos
+  estados, y §22.10 nombro uno solo porque el otro no existia todavia.
+  **Entonces C le da sujeto al rasgo del Phantom sin cambiarle la condicion**: en
+  cuanto la cacería exista, uno de los dos estados visibles existe, y el rasgo
+  arranca a drenar solo. La fila 07 deja de ser «una fuente que dice por que no
+  aplica» y pasa a ser una fuente que aplica — **durante la cacería**.
+  ⚠ Eso hay que MEDIRLO en la planilla de C y no darlo por hecho, porque toca dos
+  bloques a la vez: si el rasgo empieza a drenar durante el hunt, el desglose de
+  la cordura gana un renglon vivo que hasta hoy siempre valio cero, y la fila 10
+  ( el control del control ) tiene que seguir cerrando con ese renglon adentro.
 · LA DECISION DEL AUTOR: `piso` o 6 duro en `decidirTecho`. Ya hay numero en juego
   ( los 15 % del Yurei enteros ) y control offline. Si elige el 6 duro se cambia
   el `math.max( tope, mayor )` por `tope`, y el offline grita hasta que se
