@@ -5312,7 +5312,28 @@ local SAN = {
     porRasgo    = 0,   -- % que agregaron o sacaron los rasgos del tipo
     pisoVeces   = 0,   -- veces que un costo individual levanto el techo por encima del tope
     modo2       = 0,   -- pasadas corridas con la perilla en 2 ( rasgos ignorados )
+
+    -- ⚠⚠⚠ LA FOTO DEL ULTIMO DISPARO, Y EXISTE POR UNA CORRIDA ENTERA QUE NO SE
+    -- PUDO JUZGAR SIN ELLA ( B2 r1, filas 01/02/04/06 ). Los criterios de la
+    -- planilla se escriben como porcentajes exactos -- "el Yurei drena 15 %" --,
+    -- y lo que sale es "2,02 %". Con eso solo, **no se puede decidir** si el
+    -- `per` del tipo se aplico o si el jugador estaba lejos: los dos se ven
+    -- igual, y los dos mandan a arreglar cosas distintas. La r1 lo resolvio
+    -- despejando la ecuacion a mano dos dias despues.
+    --
+    -- ⚠ Y LA DISTANCIA QUE HACE FALTA ES **JUGADOR -> EPICENTRO**, que es la
+    -- que B2 vino a inventar. El reporte de la cordura imprime la otra
+    -- ( jugador -> fantasma, del motivo de `presencia` ), y ademas la imprime
+    -- del ULTIMO tick y no del instante del cobro. En la r1 se vio en crudo: la
+    -- puerta a 325 u del fantasma, el fantasma a 283 u del jugador, y el cobro
+    -- decidido por 408 u que no aparecian en ninguna parte.
+    ultima      = nil, -- { t, jug = { { nombre, filas, total, mayor, tope, techo, escala, dMin, fuera } } }
 }
+
+-- Cuantas filas y cuantos jugadores entran en la foto. Acotado a proposito: con
+-- el `burst = 4` del Poltergeist y varios jugadores esto es una lista, no un
+-- numero, y un instrumento que crece sin techo termina siendo el problema.
+local FOTO_FILAS, FOTO_JUG = 8, 4
 
 -- Caida identica a la de la presencia ( §19.8.2 ): meseta plana y despues lineal
 -- a cero en el borde. La formula vive DOS VECES en el addon -- aca y en
@@ -5330,6 +5351,45 @@ local function factorSanidad( d, radio, meseta )
     if radio <= meseta then return 1 end
 
     return 1 - ( d - meseta ) / ( radio - meseta )
+
+end
+
+-- ⚠⚠⚠ EL TECHO DEL DISPARO, Y ESTA AFUERA DE `cobrarCordura` A PROPOSITO.
+-- Vivia adentro, en dos lineas, y por eso `cordura_b2_offline.py` NO PODIA
+-- MEDIRLO: la pasada pide `player.GetAll`, convars y la puerta de la cordura,
+-- asi que toda la aritmetica del tope quedaba cubierta unicamente por la
+-- planilla en juego. B2 r1 pago esa factura entera -- gasto DOS filas ( una
+-- roja y una verde ) sin llegar a ninguna de las dos ramas, y el defecto era
+-- decidible con algebra de tres lineas. Sacada aca, se extrae por nombre y se
+-- corre en un interprete de Lua como las otras dos.
+--
+-- Lo que decide, y las dos ramas:
+--   · `tope` acota el APILAMIENTO ( `count` sortea hasta dos categorias, `burst`
+--     tira varios objetos ).
+--   · `mayor` es el PISO: el mayor costo individual del disparo, medido DESPUES
+--     de la caida y del `mult`. Sin el, §19.8.4 se contradice consigo misma --
+--     fija el tope en 6 "porque `count` sortea hasta dos categorias" y en la
+--     misma seccion le da al Yurei `per.door = 15`, que contra un 6 duro se
+--     recorta SIEMPRE, en el disparo de UNA sola categoria, donde no hay nada
+--     apilado.
+--
+-- ⚠⚠ CONSECUENCIA QUE HAY QUE TENER ESCRITA, PORQUE COSTO UNA FILA ENTERA:
+-- **con un solo cobro cargado `mayor == total`**, asi que `techo >= total` y el
+-- recorte NO PUEDE OCURRIR, con ningun valor de `tope`. El tope es, por
+-- construccion, un tope de apilamiento: para ejercerlo hacen falta >= 2 cobros
+-- y ningun individual por encima de el. La fila 04 de la r1 pedia lo contrario
+-- y era imposible de pasar; ahora eso es un control offline y no una sorpresa.
+--
+-- ⚠ Es una lectura MIA de dos numeros del diseño que se contradicen, no una
+-- decision del autor: si el prefiere el 6 duro, se cambia el `math.max` de abajo
+-- por `tope` y el Yurei pasa a cobrar 6. Queda en una linea y no en una
+-- arqueologia.
+local function decidirTecho( total, mayor, tope )
+    local techo = math.max( tope, mayor )
+
+    if total > techo and techo > 0 then return techo, techo / total end
+
+    return techo, 1
 
 end
 
@@ -5462,6 +5522,11 @@ local function cobrarCordura( cobros, flags )
     local tope   = cvSanTope:GetFloat()
     local objTope = math.floor( cvSanObjetos:GetFloat() )
 
+    -- La foto se rearma en CADA pasada: lo que contesta es "¿que decidio el
+    -- ultimo disparo?", no "¿que paso en la sesion?" -- para eso estan los
+    -- contadores de arriba, que no se pisan.
+    SAN.ultima = { t = CurTime(), jug = {}, mas = 0 }
+
     for _, ply in ipairs( player.GetAll() ) do
         if not IsValid( ply ) or not ply:IsPlayer() then continue end
 
@@ -5489,13 +5554,26 @@ local function cobrarCordura( cobros, flags )
         -- INALCANZABLE contra un tope de 6.
         local mayor = 0
 
+        -- Las filas de la foto, y la distancia al epicentro MAS CERCANO -- que
+        -- se guarda aunque no cobre nada: ver abajo.
+        local filas, dMin, mas = {}, nil, 0
+
         for _, c in ipairs( cobros ) do
             -- El tope de objetos del `throw`. Se cuenta lo que COBRA, no lo que
             -- se tiro: los props de mas se tiran igual.
             contados[ c.cat ] = ( contados[ c.cat ] or 0 ) + 1
             if c.cat == "throw" and contados[ c.cat ] > objTope then continue end
 
-            local f = factorSanidad( c.pos:Distance( pos ), radio, meseta )
+            -- ⚠⚠ LA DISTANCIA SE MIDE Y SE GUARDA **ANTES** DEL `f <= 0`, o sea
+            -- tambien cuando el cobro no ocurre. Sin esto, un jugador fuera de
+            -- toda esfera deja el mismo rastro que un evento que no supo decir
+            -- donde paso: nada. Con esto, la fila del BORDE deja de tener que
+            -- creerle al operador cuando dice "estaba lejos" -- el reporte dice
+            -- cuanto.
+            local d = c.pos:Distance( pos )
+            if not dMin or d < dMin then dMin = d end
+
+            local f = factorSanidad( d, radio, meseta )
             if f <= 0 then continue end
 
             local info = CATS[ c.cat ]
@@ -5503,10 +5581,35 @@ local function cobrarCordura( cobros, flags )
             -- El orden es: costo propio del evento ( el ESTALLIDO ) > override
             -- del tipo ( el 15 % del Yurei ) > costo base de la categoria. Y el
             -- `mult` del tipo multiplica DESPUES, sobre lo que haya ganado.
-            local base = c.pct or ( per and per[ c.cat ] ) or ( info and info.san ) or 0
+            --
+            -- ⚠ Se parte en un `if` en vez del `or` encadenado de antes -- que
+            -- era equivalente -- SOLO para poder decir de cual de los tres
+            -- salio. *Que un numero se aplique y que se sepa de donde vino son
+            -- dos preguntas, y la planilla necesita la segunda.*
+            local base, deQuien
+            if c.pct then
+                base, deQuien = c.pct, "pct propio del evento"
+
+            elseif per and per[ c.cat ] then
+                base, deQuien = per[ c.cat ], "`per` del tipo"
+
+            else
+                base, deQuien = ( info and info.san ) or 0, "base de la categoria"
+
+            end
+
             if base <= 0 then continue end
 
             local val = base * f * mult
+
+            if #filas < FOTO_FILAS then
+                filas[ #filas + 1 ] = { cat = c.cat, base = base, quien = deQuien,
+                                        f = f, d = d, val = val }
+
+            else
+                mas = mas + 1
+
+            end
 
             porCat[ c.cat ] = ( porCat[ c.cat ] or 0 ) + val
             total = total + val
@@ -5521,8 +5624,21 @@ local function cobrarCordura( cobros, flags )
 
         end
 
+        -- Se anota tambien al que NO cobro, y con su `dMin`: ese renglon es el
+        -- que vuelve medible a la fila del borde.
+        local function anotarFoto( techo, escala, fuera )
+            if #SAN.ultima.jug >= FOTO_JUG then SAN.ultima.mas = SAN.ultima.mas + 1 return end
+
+            SAN.ultima.jug[ #SAN.ultima.jug + 1 ] = {
+                nombre = ply:Nick(), filas = filas, mas = mas, total = total, mayor = mayor,
+                tope = tope, techo = techo, escala = escala, dMin = dMin, fuera = fuera,
+            }
+
+        end
+
         if total <= 0 then
             SAN.fuera = SAN.fuera + 1
+            anotarFoto( 0, 1, true )
             continue
 
         end
@@ -5559,11 +5675,11 @@ local function cobrarCordura( cobros, flags )
         -- una decision del autor: si el prefiere el 6 duro, se saca el `math.max`
         -- de la linea de abajo y el Yurei pasa a cobrar 6. Queda escrito para que
         -- sea una linea y no un arqueologia.
-        local techo = math.max( tope, mayor )
+        -- La aritmetica vive en `decidirTecho`, arriba, para que la pueda medir
+        -- `cordura_b2_offline.py` sin el juego. Lo que queda aca es el EFECTO.
+        local techo, escala = decidirTecho( total, mayor, tope )
 
-        if total > techo and techo > 0 then
-            local escala = techo / total
-
+        if escala < 1 then
             SAN.recortado = SAN.recortado + ( total - techo )
             SAN.topeVeces = SAN.topeVeces + 1
 
@@ -5572,6 +5688,8 @@ local function cobrarCordura( cobros, flags )
         end
 
         if mayor > tope then SAN.pisoVeces = SAN.pisoVeces + 1 end
+
+        anotarFoto( techo, escala, false )
 
         -- ⚠ SE RECORRE `CAT_ORDER` Y NO `pairs( porCat )`: el orden de `pairs`
         -- no esta definido, y dos corridas de la misma escena imprimirian las
@@ -6841,9 +6959,93 @@ PHANTASMAGORIA.AddCommand( "phantasmagoria_ghost_events", function( ply, _, args
     end
 
     if SAN.pisoVeces > 0 then
-        say( "    piso        " .. SAN.pisoVeces .. " vez/veces un costo INDIVIDUAL supero el tope y lo " ..
-            "levanto ( hoy solo puede ser el 15 % de puerta del Yurei ). El tope acota el apilamiento, " ..
-            "no el costo de un solo sumando -- ver el comentario de `cobrarCordura`." )
+        -- ⚠ EL PARENTESIS DE ANTES DECIA "hoy solo puede ser el 15 % de puerta
+        -- del Yurei", Y ERA FALSO. La fila 04 de B2 r1 lo disparo con un
+        -- `gallu`, un `sound` y ningun `per`: pasa cada vez que `santope` se
+        -- baja por debajo del costo base de una categoria -- que es justo lo que
+        -- esa fila le manda hacer al operador. *Un mensaje que nombra la causa
+        -- equivocada manda a arreglar el archivo equivocado*: mandaba a mirar
+        -- `ghost_flags.lua`, donde no estaba el problema.
+        say( "    piso        " .. SAN.pisoVeces .. " vez/veces un costo INDIVIDUAL supero el tope ( " ..
+            string.format( "%.2f", cvSanTope:GetFloat() ) .. " % ) y lo levanto. Dos caminos llevan aca: " ..
+            "un rasgo caro del tipo ( hoy el 15 % de puerta del Yurei ), o un " ..
+            "`phantasmagoria_ghost_santope` bajado por debajo del costo base de la categoria. " ..
+            "La foto de abajo dice cual de los dos fue. El tope acota el apilamiento, no el costo de " ..
+            "un solo sumando -- ver el comentario de `cobrarCordura`." )
+
+    end
+
+    ---------------------------------------------------------------------------
+    -- LA FOTO DEL ULTIMO DISPARO  ( B2 r2 )
+    ---------------------------------------------------------------------------
+    -- ⚠⚠⚠ ESTE BLOQUE EXISTE PORQUE UNA CORRIDA ENTERA NO SE PUDO JUZGAR SIN EL.
+    -- En B2 r1 la fila del Yurei pidio `-15.00 %` y salio `-2.02 %`, y ese par
+    -- de numeros NO ALCANZA para decidir entre "el `per` del tipo no se aplico"
+    -- y "estabas a 408 u": los dos se ven igual y mandan a arreglar cosas
+    -- distintas. Cuatro de once filas quedaron sin poder decidirse.
+    --
+    -- *Un criterio expresado en un numero que el instrumento no imprime se juzga
+    -- a ojo, y a ojo se juzga por la direccion.*
+    if istable( SAN.ultima ) and #SAN.ultima.jug > 0 then
+        say( "    ultimo disparo  ( hace " .. string.format( "%.1f", CurTime() - SAN.ultima.t ) ..
+            " s )  -- la distancia es JUGADOR -> EPICENTRO, que es la que decide el cobro" )
+
+        for _, j in ipairs( SAN.ultima.jug ) do
+            say( "      " .. j.nombre )
+
+            for _, f in ipairs( j.filas ) do
+                say( string.format(
+                    "        %-10s base %6.2f %% ( %-22s )  x f %.3f ( %4.0f u de %.0f, meseta %.0f )  =  %6.2f %%",
+                    f.cat, f.base, f.quien, f.f, f.d, cvSanRad:GetFloat(),
+                    cvSanRad:GetFloat() * cvSanMeseta:GetFloat(), f.val ) )
+
+            end
+
+            if j.mas > 0 then
+                say( "        ( y " .. j.mas .. " cobro(s) mas, no listados )" )
+
+            end
+
+            -- ⚠ EL RENGLON DEL BORDE. Sin el, "no cobro nada" y "el evento no
+            -- supo decir donde paso" dejan el mismo rastro: ninguno.
+            if j.fuera then
+                say( "        -- SIN COBRO: " .. ( j.dMin
+                    and ( "el epicentro mas cercano quedo a " .. math.Round( j.dMin ) ..
+                          " u, y el radio es " .. math.Round( cvSanRad:GetFloat() ) .. " u" )
+                    or "ningun epicentro llego a medirse ( ver `sin donde` )" ) )
+
+                continue
+
+            end
+
+            -- ⚠⚠ LAS DOS RAMAS DEL TECHO, DICHAS POR SU NOMBRE. La r1 gasto dos
+            -- filas -- una roja y una verde -- sin tocar ninguna de las dos, y
+            -- desde afuera los dos casos se leen igual: "el numero no bajo".
+            local quienTecho = ( j.mayor > j.tope )
+                and ( "lo puso el PISO: el cobro individual mas caro ( " ..
+                      string.format( "%.2f", j.mayor ) .. " % ) supera al tope" )
+                or  "lo puso el TOPE"
+
+            say( string.format( "        --  total %.2f %%  ·  mayor %.2f %%  ·  tope %.2f %%  ->  techo %.2f %% ( %s )",
+                j.total, j.mayor, j.tope, j.techo, quienTecho ) )
+
+            if j.escala < 1 then
+                say( string.format( "        --  RECORTADO x%.3f: se perdieron %.2f %% ( %.0f %% de lo pedido ), en proporcion por categoria",
+                    j.escala, j.total - j.techo, ( j.total - j.techo ) / j.total * 100 ) )
+
+            else
+                say( "        --  sin recorte ( el total no llego al techo )" )
+
+            end
+        end
+
+        if SAN.ultima.mas > 0 then
+            say( "      ( y " .. SAN.ultima.mas .. " jugador(es) mas, no listados )" )
+
+        end
+
+    else
+        say( "    ultimo disparo  -- todavia no hubo ninguno con al menos un evento --" )
 
     end
 

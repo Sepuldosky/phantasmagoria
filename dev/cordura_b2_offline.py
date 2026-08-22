@@ -8,6 +8,7 @@ B2 tiene tres piezas y solo una se ve en pantalla:
 
   1. la CAIDA del drenaje con la distancia   ( `factorSanidad` )
   2. la normalizacion del tercer retorno     ( `normalizarEpicentros` )
+  2b. el TECHO del disparo: tope y piso      ( `decidirTecho` -- agregado en B2 r2 )
   3. la FUSION de la sub-tabla `sanity`      ( ghost_flags.lua )
 
 Las tres fallan en silencio. Una meseta mal calculada no tira error: drena "un
@@ -28,8 +29,13 @@ nueva -- que es el punto: un control que copia el cuerpo mide su copia.
 
 ⚠ LO QUE **NO** MIDE, Y SE DECLARA: la pasada sobre los jugadores
 ( `cobrarCordura` ) no se puede correr aca -- pide `player.GetAll`, convars y la
-puerta de la cordura. Lo que este script cubre son sus dos insumos. El tope, el
-`mult` y el reparto por categoria se miden EN JUEGO, con la planilla.
+puerta de la cordura. Lo que este script cubre son sus insumos y su aritmetica.
+
+⚠ El TOPE ya NO esta en esa lista, y el cambio tiene fecha: hasta B2 r1 vivia
+adentro de la pasada y quedaba cubierto solo por la planilla en juego. Esa ronda
+gasto DOS filas -- una roja y una verde -- sin tocar ninguna de sus dos ramas, y
+el defecto era decidible con algebra. Se saco a `decidirTecho` y se mide aca.
+Lo que sigue afuera: el `mult` y el reparto por categoria.
 
 Uso:
     python dev/cordura_b2_offline.py
@@ -256,7 +262,93 @@ def probar_normalizador(fuente, fallos):
 
 
 # ---------------------------------------------------------------------------
-# ( 3 ) LA FUSION DE `sanity` SOBRE LOS 30 TIPOS
+# ( 3 ) EL TECHO DEL DISPARO: EL TOPE Y SU PISO      ( agregado en B2 r2 )
+# ---------------------------------------------------------------------------
+# ⚠⚠⚠ ESTE BLOQUE EXISTE PORQUE SU AUSENCIA COSTO UNA RONDA ENTERA.
+#
+# En B2 r1 la planilla tenia DOS filas sobre esta aritmetica y no toco ninguna
+# de las dos ramas:
+#
+#   · la 04 puso `santope 1` y disparo UN `sound` esperando que el tope
+#     recortara. Con un solo cobro `mayor == total`, asi que `techo >= total` y
+#     el recorte no puede ocurrir NUNCA. La fila era imposible de pasar.
+#   · la 06 puso un Yurei y disparo UNA puerta esperando ver el piso. Cobro a
+#     408 u, la caida bajo el 15 a 2,02, y `2,02 > 6` es falso: el piso tampoco
+#     se activo. La fila salio verde sin medir lo que decia medir.
+#
+# Las dos afirmaban lo CONTRARIO sobre el mismo `math.max`, salieron de la misma
+# ronda, y ninguna herramienta lo dijo -- porque la aritmetica vivia adentro de
+# `cobrarCordura`, que pide `player.GetAll` y no se puede correr aca. Por eso se
+# saco a `decidirTecho`: para que esto sea un control offline y no una sorpresa.
+#
+# *Una propiedad que se puede decidir con algebra no deberia esperar a una
+# planilla en juego para descubrirse.*
+def probar_techo(fuente, fallos):
+    cuerpo = extraer(fuente, "decidirTecho")
+    if not cuerpo:
+        fallos.append("decidirTecho: no se pudo extraer del archivo real "
+                      "( ¿se volvio a meter adentro de cobrarCordura? ). "
+                      "Sin esto, el tope y su piso vuelven a estar cubiertos solo por la planilla.")
+        return
+
+    L = nuevo_lua()
+    L.execute(cuerpo.replace("local function decidirTecho", "function decidirTecho", 1))
+    f = L.globals().decidirTecho
+
+    # ( total, mayor, tope ) -> ( techo, escala ), y por que.
+    casos = [
+        # -- LA PROPIEDAD QUE COSTO LA FILA 04. Un solo cobro: mayor == total.
+        (3.0,  3.0,  1.0, 3.0,  1.0, "un solo cobro de 3 con tope 1: el tope NO puede morder"),
+        (15.0, 15.0, 6.0, 15.0, 1.0, "Yurei, una puerta en el epicentro: el piso paga los 15"),
+        (2.02, 2.02, 6.0, 6.0,  1.0, "Yurei a 408 u: la caida lo bajo a 2,02 y el piso ni se entera"),
+        (6.0,  6.0,  6.0, 6.0,  1.0, "Oni, un solo sound: 6 contra tope 6, justo sin recorte"),
+        # -- APILAMIENTO, que es lo que el tope vino a acotar.
+        (10.0, 6.0,  6.0, 6.0,  0.6, "Oni, sound + prop ( 6 + 4 ): recorta a 6"),
+        (5.0,  3.0,  6.0, 6.0,  1.0, "normal, sound + prop ( 3 + 2 ): por debajo del tope"),
+        (8.0,  2.0,  3.0, 3.0,  0.375, "Poltergeist, 4 throws de 2 con tope 3: la fila 04 nueva"),
+        (17.0, 15.0, 6.0, 15.0, 15.0 / 17.0, "Yurei: puerta de 15 + un knock; el piso levanta el techo a 15"),
+        # -- DEGENERADOS.
+        (5.0,  2.0,  0.0, 2.0,  0.4, "tope 0: el piso sigue siendo el techo, no se anula el cobro"),
+        (0.0,  0.0,  6.0, 6.0,  1.0, "total 0: no divide por cero"),
+    ]
+
+    for total, mayor, tope, techoEsp, escalaEsp, porque in casos:
+        techo, escala = f(total, mayor, tope)
+
+        if abs(techo - techoEsp) > 1e-9:
+            fallos.append(f"decidirTecho({total}, {mayor}, {tope}) dio techo {techo}, "
+                          f"se esperaba {techoEsp} -- {porque}")
+
+        if abs(escala - escalaEsp) > 1e-9:
+            fallos.append(f"decidirTecho({total}, {mayor}, {tope}) dio escala {escala}, "
+                          f"se esperaba {escalaEsp} -- {porque}")
+
+    # ⚠ LA INVARIANTE, APARTE DE LOS CASOS. Un caso se puede satisfacer por
+    # accidente; esto barre el espacio y dice la propiedad entera: **con un solo
+    # cobro el recorte no existe**. Es la frase que la fila 04 necesitaba y no
+    # tenia.
+    for n in range(1, 61):
+        v = n * 0.5
+        for tope in (0.0, 0.5, 1.0, 3.0, 6.0, 100.0):
+            _, escala = f(v, v, tope)   # total == mayor  <=>  un solo cobro
+            if escala != 1.0:
+                fallos.append(f"decidirTecho({v}, {v}, {tope}) recorto ( escala {escala} ). "
+                              "Con un solo cobro `mayor == total` y el recorte tiene que ser "
+                              "imposible: si esto cambia, la fila 04 de la planilla cambia con el.")
+                return
+
+    # Y la de al lado: el techo NUNCA baja del mayor individual, o sea que un
+    # cobro individual no se puede recortar por debajo de si mismo.
+    for total, mayor, tope in [(10, 6, 6), (8, 2, 3), (17, 15, 6), (5, 2, 0), (100, 99, 1)]:
+        techo, _ = f(float(total), float(mayor), float(tope))
+        if techo < mayor - 1e-9:
+            fallos.append(f"decidirTecho({total}, {mayor}, {tope}) dio un techo {techo} POR DEBAJO "
+                          f"del mayor individual {mayor}: el piso dejo de ser piso.")
+            return
+
+
+# ---------------------------------------------------------------------------
+# ( 4 ) LA FUSION DE `sanity` SOBRE LOS 30 TIPOS
 # ---------------------------------------------------------------------------
 def cargar_flags(texto_flags=None):
     """Ejecuta ghost_types.lua + ghost_flags.lua de verdad y devuelve el runtime."""
@@ -415,6 +507,7 @@ def main():
 
     probar_caida(fuente, fallos)
     probar_normalizador(fuente, fallos)
+    probar_techo(fuente, fallos)
     probar_fusion(fallos)
 
     print("CORDURA B2 -- ejercicio offline sobre el codigo real")
@@ -426,6 +519,7 @@ def main():
     if not fallos:
         print("  ok  la caida ( meseta, borde, punto medio, monotonia, degenerados )")
         print("  ok  el normalizador ( las cuatro formas del tercer retorno, y el pct sobrevive )")
+        print("  ok  el techo ( 10 casos + la invariante: con UN solo cobro el tope no puede morder )")
         print("  ok  la fusion ( los 30 con sanity, Oni x2, Yurei per.door 15, Phantom 0,5 %/s, sin alias )")
         print()
         print("FALLOS: 0")
