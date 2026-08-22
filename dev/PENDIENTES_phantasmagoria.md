@@ -422,6 +422,35 @@ oye.
 *Una mecánica de descubrimiento que depende de datos por tipo necesita un piso que no dependa de
 ellos, o algunos tipos simplemente no tienen juego.*
 
+#### ⚠ CORRECCIÓN DEL AUTOR (2026-08-22), y acota bastante lo de arriba
+
+> *«No necesariamente se usan esas evidencias para saber cuál es el cuarto: algunos usan el crucifijo,
+> otros revisan que ese es el lado donde más pasa el fantasma usando los sensores de movimiento y
+> sonido, algunos revisan usando los ítems cursed como el espejo (que ya tenemos realmente, es
+> funcional, tiene modelo y funcionalidad para graficar un cuarto y verlo en el espejo). Pero sí, no
+> estoy equivocado en la frase "las evidencias las da el tipo", porque cada fantasma genera evidencias
+> distintas.»*
+
+**Tiene razón, y yo había juntado dos ejes que son distintos.** Lo correcto:
+
+| eje | de quién depende | ejemplos |
+|---|---|---|
+| **EVIDENCIA** — qué tipo de fantasma es | **del TIPO** | orbes, huellas UV, temperatura bajo cero |
+| **LOCALIZACIÓN** — dónde vive | **NO del tipo** | crucifijo, sensores de movimiento y sonido, el espejo, dónde se concentran los eventos |
+
+Las dos frases eran ciertas a la vez y yo las mezclé: *«las evidencias las da el tipo»* (sí) no
+implica *«el cuarto sólo se encuentra con evidencia»* (no).
+
+**Y el piso que yo proponía construir ya está a medio construir**: `lua/autorun/client/phantasmagoria_mirror.lua`
+existe, el espejo es funcional y ya sabe graficar un cuarto. O sea que hay al menos un localizador
+independiente del tipo **hoy**.
+
+Lo que queda en pie del punto original, más chico y más preciso: **cuando se escriba el sesgo de la
+evidencia hacia el ancla, hay que preguntarse por los localizadores primero** — porque son los que no
+dependen del tipo y son los que garantizan que el loop no se corte. El sesgo de orbes y huellas es
+*sabor*; los sensores, el crucifijo y el espejo son *el piso*. **Y el piso ya existe: hay que
+conectarlo al ancla, no inventarlo.**
+
 ### El cuarto que se mueve
 
 Es una perilla (intervalo en segundos, **0 = nunca**), y en las dificultades altas se enciende. Dos
