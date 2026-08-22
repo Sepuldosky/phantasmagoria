@@ -61,8 +61,75 @@ la cacería dura 15 s con 5 s de gracia — o sea 10 s de peligro real, y la wik
 dice que el fantasma "puede ni siquiera llegar a la posicion del jugador". La
 duracion es un dial de JUSTICIA antes que de dificultad.
 
-LO QUE LA FUENTE CONTESTA ( y como cambia lo que yo habia escrito )
---------------------------------------------------------------------
+SEGUNDA FUENTE ( azsry/phasmophobia_mechanics, 2021 — traida por el autor )
+----------------------------------------------------------------------------
+https://github.com/azsry/phasmophobia_mechanics  ·  rama stable, versions/stale
+
+⚠ ESTA DESACTUALIZADA Y HAY QUE USARLA ASI: sus DURACIONES ( 25 / 35 / 50 s ) las
+**pisa** la tabla de la wiki de arriba, que es mas nueva y ademas tiene el eje de
+tamaño de mapa. Lo que esta fuente aporta y la otra no es el MECANISMO — como
+empieza una cacería, y con que numeros.
+
+⭐⭐⭐ Y EL MECANISMO NO ES UN UMBRAL: ES UN DADO SOBRE UN RELOJ DE OCIO.
+
+    · el fantasma tiene un RELOJ DE OCIO de 2 a 6 s, que se resortea cada vez
+      que vuelve al estado ocioso
+    · cuando ese reloj vence, TIRA UN DADO:
+         si  25 < cordura promedio + multiplicador del tipo < 50   ->  1 en 6
+         si       cordura promedio + multiplicador del tipo <= 25  ->  1 en 4
+    · y usa el PROMEDIO de los jugadores, no el individual — que es exactamente
+      lo que §19.9.1 ya pedia para gamemode
+
+Esto **cambia el diseño de C y lo mejora**, y hay que entenderlo antes de escribir:
+
+  · **No hay acantilado.** El umbral deja de ser una linea que se cruza y pasa a
+    ser una BANDA con dos probabilidades. Un jugador a 49 de cordura no cae en
+    una cacería garantizada: entra en una loteria mas lenta.
+  · **La histeresis vuelve a no hacer falta, por una segunda razon.** Aunque la
+    cordura oscile alrededor de 50, el dado solo se tira cada 2-6 s y sale 1 de
+    cada 6. No hay parpadeo que tapar.
+  · **El suspenso es el punto.** Un umbral duro es predecible: el jugador aprende
+    el numero y juega contra el numero. Un dado sobre un reloj hace que la
+    cacería sea *probable* y no *puntual*, que es lo que la vuelve terror en vez
+    de aritmetica. *Un gatillo determinista se aprende una vez; uno probabilistico
+    se teme siempre.*
+  · ⚠ **Los dos numeros de la banda ( 25 y 50 ) son de Phasmophobia, no nuestros.**
+    Phantasmagoria ya tiene su propio numero por tipo — `hunt.threshold` en
+    ghost_types.lua, con el Spirit en 50 y el Demon en 70 —, asi que la banda hay
+    que expresarla EN TERMINOS DE ESE UMBRAL y no pegando el 25 y el 50. Lo
+    natural: `umbral` y `umbral / 2` como los dos escalones, o un segundo campo.
+    **Lo vota el autor**, y va escrito con la linea de la fuente al lado.
+  · Las dos probabilidades ( 1/6 y 1/4 ) y el rango del reloj ( 2-6 s ) van como
+    perillas, no como constantes.
+
+⚠⚠ Y HAY UNA TRAMPA DE MEDICION QUE ESTO TRAE Y QUE HAY QUE RESOLVER EN LA
+PLANILLA, NO DESPUES: **un mecanismo probabilistico no se puede verificar con una
+corrida.** Una fila que diga «bajá la cordura y mirá si caza» sale verde o roja
+por suerte. Hacen falta las dos mitades:
+    · un CONTADOR en el reporte — cuantas veces se tiro el dado, cuantas salio, y
+      la proporcion observada contra la esperada ( es el mismo problema que ya
+      resolvio el `chanceNeeded` de la planilla del hunt directo: conteo con N
+      declarado, 10 tiradas por rama )
+    · y una PERILLA DE CERTEZA para las filas que no vienen a medir el dado sino
+      lo que pasa despues ( la duracion, la gracia, el enfriamiento ): algo como
+      `phantasmagoria_hunt_dado 0` = siempre sale, para poder medir las fases sin
+      esperar a la suerte. *Una fila que depende de un sorteo no es una fila.*
+
+OTRAS DOS COSAS QUE ESTA FUENTE CONFIRMA, Y VALEN
+--------------------------------------------------
+· **El 525 u de nuestro codigo sale de aca**: la fuente dice que el drenaje
+  aplica «within 10m of the player», y 10 m x 52,5 = 525 u — el mismo numero que
+  imprime hoy el motivo `ningun fantasma a 525 u`. La conversion 1 m = 52,5 u
+  queda confirmada por un tercero.
+· **El Phantom drena el DOBLE** ( 0,4 contra 0,2 del resto ), y nuestro
+  `sanity.presence = 0.5` esta en el mismo espiritu. Pero lo que importa es la
+  CONDICION, y es distinta de la que escribimos: la fuente dice
+  **«if the ghost is VISIBLE, or is in hunting phase»** — no «si se esta
+  manifestando». Ver el bloque de sueltos, abajo: esto le puede dar sujeto HOY a
+  la fila 07.
+
+LO QUE LA PRIMERA FUENTE CONTESTA ( y como cambia lo que yo habia escrito )
+----------------------------------------------------------------------------
 (A) EL LAZO DE REALIMENTACION: mi planteo estaba mal. Yo decia que la presencia
     drena 3,5x en hunt ( 0,350 %/s contra 0,100 — medido en B1 ) y que por eso el
     fantasma no saldria mas del hunt. **Falso, porque la cacería no sigue a la
@@ -99,11 +166,15 @@ LO QUE LA FUENTE CONTESTA ( y como cambia lo que yo habia escrito )
 
 LO QUE LA FUENTE **NO** CONTESTA — y hay que decidirlo o preguntarlo
 --------------------------------------------------------------------
-(D) ⚠ EL ENFRIAMIENTO NO TIENE NUMERO. El autor dijo que existe; la imagen que
-    trajo no lo trae. **Preguntarlo antes de escribir**, o buscarlo en la wiki y
-    citar la linea. NO INVENTARLO: un numero de gameplay sin fuente y sin voto es
-    exactamente lo que este taller intenta no producir. Mientras tanto va como
-    perilla con un default declarado como PROVISORIO en el propio comentario.
+(D) EL ENFRIAMIENTO: **25 SEGUNDOS**, y ya tiene fuente ( ver el bloque de abajo ).
+    ⚠⚠ PERO LEER LA LINEA COMPLETA ANTES DE IMPLEMENTARLA: *«After KILLING A
+    PLAYER, the ghost will teleport back to their favourite room, and reset to
+    idle phase. They cannot initiate hunting phase for the next 25 seconds.»* O
+    sea que en la fuente los 25 s cuelgan de **la muerte**, no del final de
+    cualquier cacería. Que una cacería que se agoto por reloj tenga o no
+    enfriamiento **no lo dice esa linea**, y hay que decidirlo con el nombre
+    puesto — no deducirlo. *Un numero citado fuera de su condicion es un numero
+    inventado con cita.*
 
 (E) GMOD NO TIENE NI DIFICULTAD NI TAMAÑO DE MAPA, asi que la tabla de nueve
     celdas **no se puede portar tal cual**: sus dos ejes no existen acá. Es el
@@ -224,6 +295,18 @@ LO QUE QUEDO SUELTO DE B2 ( no bloquea C, conviene barrerlo de paso )
   pasa a ser MAS importante, no menos.
 · Fila 07 (c): girarse y volver a leer, para que el motivo de `presencia_tipo`
   CAMBIE. Un motivo que no cambia con la escena no esta midiendo la escena.
+  ⭐⭐ Y ADEMAS: ESA FILA PUEDE TENER SUJETO HOY. Se registro INACTIVA porque
+  `PHANTASMAGORIA.EstaManifestado` no existe ( §22 sin escribir ), y su motivo lo
+  dice. Pero la fuente de 2021 no habla de manifestacion: dice **«if the ghost is
+  VISIBLE, or is in hunting phase, and is within 10m»**. Y `phantom_Visible`
+  **SI EXISTE** — es autoritativo, lo escribe `phantom_SetVisible` en
+  server_cloak.lua y tiene un solo escritor. O sea que la condicion de la fuente
+  es implementable AHORA, con lo que hay.
+  ⚠ Es una DECISION del autor y no un arreglo: «visible» y «manifestandose» no son
+  lo mismo, y §22.10 eligio la segunda. Cambiar la condicion le da vida al rasgo
+  tres tajadas antes de tiempo, pero lo aleja de lo que el diseño propio escribio.
+  Lo que NO se puede hacer es cambiarla en silencio: si entra, entra con el motivo
+  diciendo cual de las dos condiciones esta usando.
 · LA DECISION DEL AUTOR: `piso` o 6 duro en `decidirTecho`. Ya hay numero en juego
   ( los 15 % del Yurei enteros ) y control offline. Si elige el 6 duro se cambia
   el `math.max( tope, mayor )` por `tope`, y el offline grita hasta que se

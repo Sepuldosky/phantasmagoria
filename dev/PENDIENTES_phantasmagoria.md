@@ -85,3 +85,83 @@ Queda anotado y **no se persigue**. Si vuelve a aparecer con la consola limpia y
 medio, entonces sí es un defecto: el override se lee de un global (`PHANTASMAGORIA.TypeOverride`) y
 tiene un solo lector, así que sería fácil de acorralar. *Una anomalía que no se reproduce no es un
 defecto, pero tampoco es nada: es una anotación con fecha.*
+
+---
+
+## 3. ⭐⭐ Un MENÚ propio en el spawnmenu — y la dificultad que le falta a la cacería
+
+**Pedido por el autor el 2026-08-22**, mirando el panel de VJ Base: un desplegable de dificultad
+(*Neanderthal −99 %* … *Extinction +900 %*) más categorías con las perillas del addon.
+
+> *«¿Por qué no tenemos un menú propio de Phantasmagoria? Donde podamos aplicar dificultad in-game
+> así como VJ tiene opciones de lo mismo, incluso nos sirve para más cosas como perillas de nuestros
+> cvars.»*
+
+### El censo, que es lo que decide si vale la pena
+
+| | |
+|---|---|
+| convars del addon | **85** |
+| `FCVAR_ARCHIVE` | **84 de 85** |
+| integración con el spawnmenu | **cero** — ni un `PopulateToolMenu` en todo el árbol |
+| familias | `ghost_*` **57** · `sanity_*` **25** · sueltas 3 |
+| con registro compartido | **30** (`PHANTASMAGORIA.PerillasCordura`, sólo la cordura) |
+
+Ochenta y cinco perillas archivadas y **ninguna forma de verlas que no sea la consola**. Que
+`phantasmagoria_cordura_fabrica --decir` haya tenido que existir —y que la r3 de B1 se haya
+invalidado entera por un `regendelay` en 30— **es el síntoma de esto**, no un accidente.
+
+### ⭐ Y no es adorno: es el eje que le falta a la tajada C
+
+La tabla de duraciones de la wiki está indexada por **dificultad × tamaño de mapa**, y GMod no tiene
+ninguno de los dos. En el prompt de C eso obligó a *colapsar* la tabla a un solo número elegido a
+dedo. **Con un selector de dificultad, el eje existe y la tabla se porta entera.** Es el mismo
+problema del Yurei (§1): un dato de la fuente que no se puede expresar porque falta el eje — sólo que
+éste **sí** se puede construir.
+
+*La dificultad es un PRESET que escribe las perillas; las perillas siguen siendo la verdad.* Por eso
+no hay retrabajo: C escribe las perillas, el menú después escribe presets adentro de ellas.
+
+### ⚠⚠⚠ La trampa tiene nombre y este taller ya la pagó
+
+**El spawnmenu se arma en `OnGamemodeLoaded`, ANTES de que los módulos booteen en `Initialize`, y
+`ToolMenu:Init()` lee `GetTools()` UNA SOLA VEZ.** Registrar tarde **no se dibuja nunca**, y el modo
+de falla es el peor de todos: la categoría sale **vacía pero presente** — parece instalada y no hace
+nada. Ver la memoria `spawnmenu-se-arma-antes-del-boot`. Cualquier diseño de este menú arranca por
+ahí o repite el defecto.
+
+### ⚠ Las 84 son de SERVIDOR, así que el panel no puede escribirlas directo
+
+Son `game lua_server`. Un panel de cliente **no** las puede tocar con `ConCommand`: hace falta un
+`net` con **chequeo de admin en el servidor** — que es exactamente por qué el panel de VJ abre con
+*«Only admins can use this menu!»*. Y el servidor **no confía en el valor del cliente**: lo valida y
+lo recorta contra el `min`/`max` que la propia convar ya declara.
+
+### ⚠⚠ Y el preset choca de frente con `phantasmagoria_cordura_fabrica`
+
+Ese comando existe para contestar *«las 30 perillas están EN FABRICA»*, y **es la primera línea del
+P0 de todas las planillas de la cordura**. Un preset de dificultad que mueva treinta perillas de un
+saque va a hacer que `--decir` liste treinta movidas, y **el P0 de cada planilla se pone rojo por
+funcionar bien**. Hay que resolverlo antes de escribir el preset, no después:
+
+- o el `fabrica` aprende el concepto de **estado con nombre** (*«en el preset Difícil, 30 de 30
+  coinciden»*), y el P0 pasa a exigir *un estado conocido* en vez de *fábrica*;
+- o los presets se declaran **incompatibles con correr planillas**, y el menú lo dice en pantalla.
+
+La primera es más trabajo y es la correcta. *Un instrumento que existe para detectar perillas movidas
+no puede quedarse mudo el día que mover perillas se vuelve una función del producto.*
+
+### Cómo se construye, para que no envejezca
+
+**No pegando 85 filas a mano.** Ése es el defecto de B1 r3 otra vez: una lista pegada a mano cubre lo
+que estaba el día que se escribió. El menú tiene que ser un **lector de un registro**, igual que
+`PerillasCordura` — cada `CreateConVar` se registra con su metadata (categoría, etiqueta, tipo,
+mín/máx, y si es de tres estados) y el panel **dibuja lo que el registro enumere**. Así una perilla
+nueva aparece en el menú sin que nadie toque el menú, y una que se borra desaparece sola.
+
+### Orden recomendado
+
+**C primero, menú después** — pero **las perillas nuevas de C nacen con metadata**, para que el menú
+sea después un lector y no una transcripción. Hacerlo al revés significa construir el panel alrededor
+de convars que C está por agregar, o sea hacerlo dos veces.
+
