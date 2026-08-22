@@ -335,3 +335,116 @@ Es la diferencia entre que el corral sea algo que el jugador **sufre** y algo qu
 **caza**. Y no cuesta un sistema nuevo: cuesta que tres productores de evidencia consulten un ancla
 que ya va a existir.
 
+---
+
+## 4. ⭐⭐ La TEMPERATURA como evidencia, y el cuarto favorito como *loop de juego*
+
+**Pedido por el autor el 2026-08-22**, continuando el cuarto favorito (§3):
+
+> *«Otra evidencia sobre el cuarto favorito es la temperatura. Tenemos a StormFox para eso, pero digo
+> que eso es "compatible": mejor es hacer que nosotros mismos "sintamos" el frío, tipo que salga una
+> nube chiquita de la cabeza del jugador a unos pocos centímetros de la cara. El equipamiento simula
+> mejor la temperatura en vez de medirla realmente como lo es con StormFox. En todo lado del mapa
+> fluctúa de 10-25 °C; en la habitación del fantasma está cerca de 10 por unos minutos y luego baja
+> hasta bajo cero, −3 o −4 (siempre debería ser más fría aunque no sea bajo 0). Esa es la evidencia de
+> que ese es el cuarto (…) aunque esas evidencias las da el tipo de ghost: no todos tienen temperatura
+> baja u orbes. También, en algunas dificultades el cuarto favorito cambia cada cierto tiempo.»*
+
+### ⭐ La línea ya estaba dibujada, y esto cae del otro lado
+
+`ghost_flags.lua:110` ya se ocupó del tema y decidió **la mitad que NO se escribía**:
+
+> *«temperatura — Hantu y nadie más (:199, :202). Los doce tipos con evidence "freezing" son
+> EVIDENCIA, no evento: no cuentan como sostenedores. Singleton real — no se crea el rasgo hasta que
+> haya un segundo tipo.»*
+
+O sea que el archivo ya separó **temperatura como EVENTO** (el poder del Hantu — un singleton, no se
+escribe) de **temperatura como EVIDENCIA** (doce sostenedores en la fuente — sin portar). Lo que el
+autor propone es exactamente el segundo, que quedó anotado y nunca se hizo. **No hay conflicto: hay
+una mitad esperando.**
+
+### ⭐⭐ «Simular en vez de medir» no es un atajo: es la arquitectura correcta
+
+Y ya tiene precedente en este addon — `IsPlayerLit` de B2 distingue *«medí que está a oscuras»* de
+*«no pude leer nada»*, y esa distinción decidía un tercio del drenaje. Lo mismo acá:
+
+- una función propia, `PHANTASMAGORIA.TemperaturaEn( pos )`, que devuelve **valor + motivo**;
+- **StormFox como MODULADOR del ambiente, nunca como fuente de verdad.**
+
+⚠⚠ Y hay dos razones duras, no de gusto. **(1)** Un tercero no puede ser dependencia de un loop
+central: si StormFox no está, la evidencia desaparece; si cambia, se rompe sin avisar. *El engine
+también es un tercero, y un addon ajeno lo es más.* **(2)** Si StormFox manda, **no se puede
+garantizar la invariante que el propio autor pide** — *«siempre debería ser más fría aunque no sea
+bajo 0»* —, porque el ambiente lo decide otro.
+
+### La curva, y la invariante que una planilla sí puede exigir
+
+| | |
+|---|---|
+| ambiente | fluctúa **10-25 °C** |
+| cuarto, primeros minutos | cerca de **10 °C** |
+| cuarto, después de la rampa | **−3 / −4 °C** |
+| **invariante** | **el cuarto < el ambiente SIEMPRE**, incluso a mitad de rampa |
+
+Esa última fila es la que vale para un check: no depende del reloj ni de la posición, así que una fila
+la puede exigir sin esperar a que la rampa termine. *Un criterio que sólo se cumple al final de una
+rampa no se puede correr; uno que se cumple en todo punto, sí.*
+
+⚠ Y la rampa es un **TERCER reloj** que se compone con el retraso de spawn y con la fase de
+preparación (§3). Tres esperas encadenadas. El reporte tiene que imprimir **el total**, no los tres
+sumandos por separado.
+
+### ⚠⚠ La nube de vaho es de CLIENTE, y no puede saber dónde está el cuarto
+
+Si el cliente calcula la temperatura, necesita el ancla — y entonces **cualquiera con un dump de Lua
+encuentra el cuarto favorito en diez segundos**, que es todo el misterio del juego regalado. El
+servidor manda **la lectura en tu posición** y nada más; el cliente sólo dibuja el vaho.
+
+Es la misma decisión que *«el equipamiento simula en vez de medir»*, aplicada a la red: **el cliente
+recibe un síntoma, nunca la causa.**
+
+### ⚠⚠⚠ El agujero del loop, y hay que taparlo antes de escribir la primera evidencia
+
+El autor tiene razón en que las evidencias las da el tipo (*«no todos tienen temperatura baja u
+orbes»*). Pero eso abre un hueco que en Phasmophobia no existe:
+
+- allá cada fantasma tiene **3 evidencias de un pool de 7**, así que siempre hay tres caminos;
+- acá el pool implementado son **orbes, huellas UV y (con esto) temperatura** — tres. Un tipo cuyas
+  tres evidencias canónicas sean otras tres queda con **CERO**, y su cuarto favorito es
+  **indescubrible**. El loop no se degrada: se corta.
+
+**La red de contención no cuesta un sistema nuevo**: los eventos paranormales ya tienen epicentro
+(B2), y el ancla va a existir. Que los eventos **se concentren cerca del ancla** da un indicio
+**independiente del tipo** — la casa te dice dónde vive aunque no tengas ni un instrumento. Es lo que
+en Phasmophobia hace que puedas encontrar el cuarto sin evidencia: el fantasma vuelve ahí y se le
+oye.
+
+*Una mecánica de descubrimiento que depende de datos por tipo necesita un piso que no dependa de
+ellos, o algunos tipos simplemente no tienen juego.*
+
+### El cuarto que se mueve
+
+Es una perilla (intervalo en segundos, **0 = nunca**), y en las dificultades altas se enciende. Dos
+cosas al escribirlo:
+
+1. **Mover el ancla mueve el corral** y, si la evidencia se sesga hacia él, mueve toda la evidencia.
+   No es un cambio cosmético: es el mundo reacomodándose.
+2. **El reporte tiene que decir cuándo se movió y adónde.** Sin eso, *«no encuentro nada»* y *«se
+   movió hace diez segundos»* se leen igual — y el jugador (y el que prueba) culpan al instrumento.
+
+### La configuración por mapa
+
+> *«Que en el menú podamos guardar configuraciones sobre el spawn según el mapa: interior, exterior o
+> mixto; por defecto interior, y si no logra encontrar dónde esconderse pasa a exterior.»*
+
+Buena, y encaja con §3. Persiste en `data/phantasmagoria/mapas/<mapa>.json`. Dos advertencias:
+
+- ⚠ **El fallback interior → exterior TIENE QUE DECIRLO.** En un mapa mayormente exterior vas a caer
+  al fallback siempre, y sin el aviso nunca te enterás de que la búsqueda interior falló — ni de si
+  falló porque no hay interiores o porque el selector de conectividad (§3) rechazó a todos los
+  candidatos. Son dos causas distintas con arreglos distintos.
+- ⚠ **Una configuración que se guarda sola persiste un error.** Si una elección mala queda escrita en
+  el `.json`, vuelve en cada sesión de ese mapa. El reporte tiene que decir **de dónde salió el valor
+  vigente** — default, archivo guardado, o elección manual de esta sesión — exactamente como
+  `anclaDe` distingue `"spawn"` de `"mano"`.
+
