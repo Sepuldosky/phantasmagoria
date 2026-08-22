@@ -229,3 +229,109 @@ diagnosticar.*
    `despertadas FORZADAS` en el motor de eventos: *cuando un contador tiene dos escritores y uno es el
    operador, no acredita al otro.*
 
+#### El CUARTO FAVORITO — la idea del autor (2026-08-22), y qué le cambiaría
+
+> *«Mejor una perilla para que spawnee dentro de los x minutos (1-10, mejor no inmediato porque al
+> iniciar un server o singleplayer cargan más cosas). Antes de spawnear se debe elegir en el navmesh
+> el "cuarto favorito" (interior o exterior; el exterior debería ser un área circular favorita
+> haciendo trace al cielo para confirmar, interior debería hacer trace a las paredes y techo). Por eso
+> el fantasma spawnea en su cuarto favorito y genera su corral ahí para que no se vaya tan lejos, que
+> hasta el momento tenemos el corral en 1500 u. Luego de spawnear se aplica la fase de preparación.»*
+
+La idea es buena y además **es canónica**: la fuente de 2021 dice que tras matar, el fantasma
+*«will teleport back to their favourite room, and reset to idle phase»* — o sea que el cuarto favorito
+no es decoración de spawn, es **el ancla del ciclo de ocio entero**, y por ahí toca la tajada C.
+
+##### ⭐⭐⭐ Lo primero: el cuarto favorito YA EXISTE y se llama `ancla`
+
+`server_leash.lua` ya tiene la correa (`phantasmagoria_ghost_leashradius` = **1500 u**, bien
+recordado) y ya guarda un `ancla` con un campo `anclaDe` que hoy vale `"spawn"` o `"mano"`. **Lo que
+la idea propone no es un sistema nuevo: es un tercer valor de ese campo** — `"cuarto favorito"` — y
+una forma deliberada de elegirlo en vez de *«donde lo pusieron»*.
+
+Eso cambia el tamaño del trabajo por completo, y hay que aprovecharlo: nada de un detector de cuartos
+nuevo. *Un mecanismo que ya existe con el nombre equivocado se renombra, no se reescribe.*
+
+##### ⚠⚠⚠ Y hay una restricción dura que el propio archivo documenta
+
+`server_leash.lua` avisa que un ancla en **un bolsillo huérfano del navmesh** hace que la correa
+clampee destinos inalcanzables, `SetupPathShell` devuelva `blocked4` una y otra vez, y
+`term_ConsecutivePathFailures` dispare **`overrideVeryStuck` a los 5 fallos**, en bucle.
+
+O sea que el selector **no puede elegir "un área interior linda"**: tiene que elegir una
+**bien conectada**. El criterio no es estético, es de navegación:
+
+- que el área tenga vecinos alcanzables (no una isla),
+- y que un porcentaje declarado del corral de 1500 u sea **navegable desde ahí**.
+
+*Un cuarto favorito mal elegido no queda feo: rompe la navegación y dispara el rescate de emergencia
+en bucle.* Esa comprobación va **antes** de aceptar el candidato, y el reporte tiene que decir cuántos
+candidatos se descartaron y por qué.
+
+##### Interior / exterior: `HitSky` es exacto, no una heurística
+
+El `TraceResult` de GMod trae **`HitSky`**. Un trace hacia arriba que golpea cielo da la respuesta
+sin estimar alturas ni contar paredes. Es mejor que "trace al techo y mido la distancia", que falla en
+naves grandes y en atrios. Dos salvedades para escribir en el comentario: los **skybox 3D**, y las
+áreas techadas por un `func_brush` sin material de cielo.
+
+##### ⚠ El "cuarto" no es una primitiva del navmesh — y no hace falta que lo sea
+
+Un `CNavArea` es un rectángulo, y un cuarto son muchas áreas. Detectar cuartos de verdad (flood-fill
+con altura de techo parecida, sin saltos) es un proyecto entero. **Pero la correa ya es un punto más
+un radio**, así que el cuarto favorito puede ser simplemente **el ancla**, y lo único que cambia entre
+interior y exterior es el **radio** (afuera conviene más grande: no hay paredes que acoten) y el sesgo
+de la elección. Recomiendo empezar así y dejar el detector de cuartos anotado como una mejora futura.
+
+##### ⚠⚠ Por qué el exterior importa de verdad, y no es un caso de borde
+
+En `gm_flatgrass` o `gm_construct` **casi todo es exterior**. Un selector que sólo acepte interior no
+encuentra sujeto en la mitad de los mapas donde esto se va a usar — y el modo de falla es el de
+siempre en este taller: **el auto-spawn no dispara y no dice por qué**, que se lee igual que "está
+apagado". Si no hay candidato, tiene que gritarlo con el conteo de lo que descartó.
+
+##### ⚠ Tu instinto del "respiro" es correcto, pero el mecanismo es otro
+
+El riesgo real al arrancar no es la carga: es que **el navmesh puede no existir**. El addon ya lo sabe
+— `phantasmagoria_trucktv_plan.lua` chequea `navmesh.IsLoaded()` e intenta `navmesh.Load()`. Si el
+único freno es un temporizador, en un mapa sin navmesh **esperás diez minutos y falla en silencio**.
+
+**Separar las dos preguntas**: *«¿puedo?»* (navmesh cargado, hay candidato conectado) se contesta
+apenas arranca y **habla al toque si la respuesta es no**; *«¿cuándo?»* (el temporizador) es para la
+sorpresa, no para la seguridad. *Un temporizador que además hace de precondición convierte un
+"no puedo" en un "todavía no".*
+
+##### ⚠ Un retraso aleatorio vuelve la función imposible de probar
+
+Si el spawn cae en un punto sorteado entre 1 y 10 minutos, **ninguna fila de planilla lo puede medir**
+sin esperar diez minutos y rezar. Que sean **dos perillas (mín y máx) y que `mín == máx` sea legal**:
+así el juego tiene su sorpresa y la planilla tiene su determinismo. Es la misma solución que la
+perilla de certeza del dado en la tajada C.
+
+##### ⚠⚠ Los dos retrasos se COMPONEN, y la suma puede exceder la sesión
+
+Spawn a los 1-10 min **+** fase de preparación de 5 min (Amateur) = hasta **15 minutos** hasta la
+primera cacería posible. En una sesión de sandbox eso es *nunca*. Dos consecuencias:
+
+- el preset de dificultad tiene que fijar **los dos números juntos**, no uno;
+- y el reporte tiene que imprimir **el total y el momento estimado**, no los dos sumandos por
+  separado. *Dos esperas que se suman y se reportan aparte se leen como la mitad de lo que son.*
+
+Además: el reloj **no** cuenta desde la carga del mapa. Cargás el mapa, te vas diez minutos, y el
+fantasma aparece y caza sin que nadie lo vea. Cuenta desde el **primer jugador vivo**.
+
+##### ⭐⭐ Y la mejora que de verdad le agregaría: que el cuarto favorito sea DESCUBRIBLE
+
+En Phasmophobia el cuarto favorito no es un detalle interno: **es lo que el jugador está buscando**.
+Es donde se concentran las lecturas, y encontrarlo es media partida.
+
+Phantasmagoria ya tiene con qué — `phantasmagoria_evidencia.lua` maneja `Orbs`, `OrbEmitters` y
+`UVPrints`. Si el ancla pasa a ser un cuarto favorito de verdad, **la evidencia debería sesgarse hacia
+él**: más orbes ahí, más huellas ahí, más eventos ahí. Con eso el corral deja de ser una restricción
+técnica (*«que no se vaya lejos»*) y se convierte en **una mecánica** (*«hay un lugar de esta casa que
+es suyo, y encontrarlo es el juego»*).
+
+Es la diferencia entre que el corral sea algo que el jugador **sufre** y algo que el jugador
+**caza**. Y no cuesta un sistema nuevo: cuesta que tres productores de evidencia consulten un ancla
+que ya va a existir.
+
